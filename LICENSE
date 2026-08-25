@@ -1,0 +1,95 @@
+                                  LICENSE
+
+This tree contains two layers of authorship.
+
+  * Thomas -- a compiler and runtime for a language compatible with the one
+    described in "Dylan(TM) an object-oriented dynamic language" (Apple
+    Computer Eastern Research and Technology, April 1992) -- written in
+    Scheme at Digital Equipment Corporation's Cambridge Research Laboratory
+    by Matt Birkholz, Jim Miller and Ron Weiss, and released in 1992 under
+    the notice reproduced in full below.
+
+  * src/ -- a translation of Thomas from Scheme into Common Lisp.
+    (Thomas's own Scheme sources, which lived in a directory of the same
+    name, are not part of this tree.)
+
+    Copyright 2026 Blake McBride.
+
+    The translation is a derivative work of Thomas.  The Digital Equipment
+    Corporation terms below govern the use, modification and distribution
+    of the whole of it, and this copyright notice claims authorship of the
+    translation only; it grants no rights beyond those Digital granted.
+
+Also in this tree, and covered by the same notice: dylan-examples.dyl,
+examples-from-book.text, README.thomas, DIFFERENCES, RELEASE, and the three
+transcripts in src/reference/.
+
+                            WHAT THIS MEANS
+
+The following is an informational summary.  It does not modify, qualify or
+add to the terms below, which are the operative ones.
+
+Digital's notice permits use, copying and modification, and permits
+distribution to third parties who agree to abide by the same notice, but
+only where the software is "not offered for sale or transferred for
+compensation".  That restriction on selling means the notice does not meet
+the Open Source Definition or the Free Software Definition, and it is not
+compatible with the GPL or with permissive licenses such as MIT, BSD or
+Apache.  The software is source-available and freely redistributable, not
+open source.
+
+The notice requires that both the copyright notice and the permission
+notice appear in all copies, derivative works and modified versions, and
+any portions thereof.  They appear at the head of every source file in
+this tree as well as in this file; keep them there.
+
+Placing any part of this tree under a different license would require
+permission from the present owner of Digital's copyright, by way of the
+Compaq (1998) and Hewlett-Packard (2002) acquisitions and the 2015
+Hewlett-Packard split.
+
+Trademark, separately from copyright: the 1992 authors named the system
+Thomas rather than Dylan on purpose, writing in README.thomas that "Thomas
+is NOT
+Dylan(TM).  We have not received approval for the use of the trademark."
+The Common Lisp translation in src/ names its package and its entry points
+Dylan.  Nothing in the notice below bears on trademark either way.
+
+                     DIGITAL EQUIPMENT CORPORATION NOTICE
+
+             Copyright 1992 Digital Equipment Corporation
+                        All Rights Reserved
+
+Permission to use, copy, and modify this software and its documentation is
+hereby granted only under the following terms and conditions.  Both the
+above copyright notice and this permission notice must appear in all copies
+of the software, derivative works or modified versions, and any portions
+thereof, and both notices must appear in supporting documentation.
+
+Users of this software agree to the terms and conditions set forth herein,
+and hereby grant back to Digital a non-exclusive, unrestricted, royalty-free
+right and license under any changes, enhancements or extensions made to the
+core functions of the software, including but not limited to those affording
+compatibility with other hardware or software environments, but excluding
+applications which incorporate this software.  Users further agree to use
+their best efforts to return to Digital any such changes, enhancements or
+extensions that they make and inform Digital of noteworthy uses of this
+software.  Correspondence should be provided to Digital at:
+
+			Director, Cambridge Research Lab
+			Digital Equipment Corp
+			One Kendall Square, Bldg 700
+			Cambridge MA 02139
+
+This software may be distributed (but not offered for sale or transferred
+for compensation) to third parties, provided such third parties agree to
+abide by the terms and conditions of this notice.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND DIGITAL EQUIPMENT CORP. DISCLAIMS ALL
+WARRANTIES WITH REGARD TO THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS.   IN NO EVENT SHALL DIGITAL EQUIPMENT
+CORPORATION BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS
+ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS
+SOFTWARE.

@@ -1,0 +1,261 @@
+-*-Indented-Text-*-
+
+              Dylan in Common Lisp
+
+This is a Common Lisp implementation of the language described in "Dylan(TM)
+an object-oriented dynamic language" (Apple Computer Eastern Research and
+Technology, April 1992).
+
+It is a translation of Thomas -- the Dylan(TM)-compatible compiler and
+runtime that Digital Equipment Corporation's Cambridge Research Lab wrote in
+Scheme against that book -- into Common Lisp.  The compiler now emits Common
+Lisp rather than Scheme, and the runtime is a Common Lisp program.  Every
+file says which file of Thomas it came from, and the correspondence is
+tabulated below.
+
+This directory replaced Thomas's own src/, portable/ and kits/ directories,
+which have been removed, and took the name src/ from the first of them.  The
+file correspondence below records where each file came from, and the three
+transcripts those kits produced are kept in reference/.  What is left outside
+this directory is the documentation (../README.md, ../README.thomas,
+../DIFFERENCES, ../RELEASE, ../LICENSE) and the examples
+(../dylan-examples.dyl, ../examples-from-book.text).  ../README.thomas is
+the 1992 Thomas README, and still describes the Scheme directory layout as
+it stood then.
+
+It is developed and tested on SBCL.  Nothing in it is SBCL-specific except
+two optional uses of SB-EXT (weak pointers and weak hash tables), both of
+which have portable fallbacks in compat.lisp.
+
+                             RUNNING IT
+
+    $ sbcl
+    * (load "load-dylan.lisp")
+    * (dylan:rep)
+
+    Entering Dylan read-eval-print-loop.
+    Exit by typing "dylan:done"
+
+    ? (define-method double ((n <number>)) (+ n n))
+
+    ;Value: double
+
+    ? (double 21)
+
+    ;Value: 42
+
+    ? dylan:done
+
+There are three ways to use it, as in the original:
+
+  a) Compiler.  Load "load-compiler.lisp".  This provides
+
+        (DYLAN:COMPILE-TO-FILE <file-name> . expressions) compiles the Dylan
+      EXPRESSIONS and writes the resulting Lisp program to <FILE-NAME>.
+
+        (DYLAN:COMPILE-FILE input output) compiles the INPUT file of Dylan
+      expressions into the OUTPUT file.  (DYLAN:COMPILE-FILE shadows the
+      Common Lisp symbol of that name.)
+
+      The expressions COMPILE-TO-FILE is handed must be Dylan forms, whose
+      symbols are interned in the DYLAN package -- what DYLAN::DYLAN-READ
+      produces.  COMPILE-FILE reads its input that way for you.
+
+  b) Runtime execution.  Load "load-runtime.lisp".  The output of the
+     Dylan compiler can then be LOADed and run.
+
+  c) Interactive environment.  Load "load-dylan.lisp".  This gives you
+
+        (DYLAN:REP) starts a read-eval-print loop that uses a Dylan
+      evaluator instead of a Lisp one.  Errors your Dylan code does not
+      trap reach the Lisp debugger.
+
+        (DYLAN:EMPTY-ENVIRONMENT!) forgets the module variables created by
+      previous DYLAN:REP interactions.
+
+To run the regression test, load "full-test.lisp" and call
+(DYLAN:TEST-EXAMPLES); it reads ../dylan-examples.dyl and prints a
+transcript to compare against reference/MIT.output.  See reference/README.
+
+                          FILE CORRESPONDENCE
+
+The names in the right-hand column are Thomas's Scheme files -- the ones
+this translation was made from.  They are paths within Thomas's own tree,
+not within this one, and they no longer exist here.
+
+  package.lisp             new -- the DYLAN package
+  globals.lisp             new -- special proclamations for the runtime's
+                             global variables, which nearly every file
+                             refers to before its definer is loaded
+  compat.lisp              portable/*.scm and kits/MIT/mit-specific.scm:
+                             populations, weak tables, escape continuations,
+                             numbers, sorting, the Dylan reader and printer,
+                             and the condition-system interface
+  support.lisp             src/support.scm
+  comp-util.lisp           src/comp-util.scm
+  compiler.lisp            src/compiler.scm
+  comp-method.lisp         src/comp-method.scm
+  comp-class.lisp          src/comp-class.scm
+  comp-sf.lisp             src/comp-sf.scm
+  comp-exc.lisp            src/comp-exc.scm
+  class.lisp               src/class.scm
+  generic.lisp             src/generic.scm
+  class-structure.lisp     src/class-structure.scm
+  runtime-*.lisp           src/runtime-*.scm
+  runtime-extensions.lisp  the language extensions the MIT kit added
+  rep.lisp                 src/portable-rep.scm
+  full-test.lisp           full-test.scm
+  load-dylan.lisp          src/load-*.scm and the kits' loaders
+  load-compiler.lisp       src/load-compiler.scm
+  load-runtime.lisp        src/load-runtime.scm
+
+                        HOW THE TRANSLATION WORKS
+
+Naming.  A colon cannot appear in a Common Lisp symbol without escaping, so
+the two prefixes the Scheme used became:
+
+    dylan:X    ->  dylan/X    names visible to compiled Dylan code.  These
+                             are VARIABLES holding Dylan-callable
+                             procedures, which take the two extra leading
+                             arguments (multiple-values and next-method).
+    dylan::X   ->  dylan%X    names used by the runtime library and by the
+                             compiler's output, but not available from
+                             Dylan.  Ordinary Lisp calling conventions.
+
+Dylan's division operator therefore lives in the variable DYLAN// and its
+/= in DYLAN//=.  Likewise implementation-specific:X became
+implementation-specific/X, and the internal compiler temporaries that were
+spelled !HANDLER-CASE:EXIT and the like are now !HANDLER-CASE/EXIT.
+
+Truth.  Thomas was developed on MIT CScheme 7.2, in which #F and '() are
+the same object -- generic.scm even remarks on it.  The class heterarchy
+has no <boolean>; false is simply an instance of <empty-list> (see GET-TYPE
+in runtime-top.lisp).  Common Lisp's NIL therefore models that
+false/empty-list object exactly, and T models #T.  This is what makes the
+translation of the truth-testing code completely mechanical.
+
+Records.  Every record type is statically known, so
+portable/record.scm is gone and the six record types are DEFSTRUCTs with
+the accessor names the rest of the system already used (slot.getter,
+class.slots, instance.data, and so on).  Update these with SETF rather than
+the old set-...! procedures.
+
+Continuations.  CALL-WITH-CURRENT-CONTINUATION is used only to escape
+-- BIND-EXIT, HANDLER-CASE, MEMBER? and the test harness -- so it became a
+CATCH/THROW pair, and DYNAMIC-WIND became UNWIND-PROTECT.
+
+Conditions.  The Scheme reflected the host Scheme's condition system into
+Dylan's.  Here the host is Common Lisp: DYLAN-CONDITION carries a message
+and a list of irritants, IMPLEMENTATION-SPECIFIC/CATCH-ALL-ERRORS is a
+HANDLER-BIND, and a Dylan handler that declines simply returns, so the
+remaining Lisp handlers run.
+
+Reading.  Dylan programs are read with the host reader.  Common Lisp's own
+reader cannot do the job: a colon is a package marker whose constituent
+trait no readtable may change, and Dylan writes its keywords with a
+trailing colon (foo:); nor does Common Lisp know #t and #f.  compat.lisp
+therefore contains a small reader for Dylan's surface syntax.  A Dylan
+keyword foo: is read as the Common Lisp keyword :FOO, and KEYWORD? is
+KEYWORDP; every other identifier is interned in the DYLAN package with its
+case folded up.
+
+Printing.  For the same reasons there is a printer of its own: NIL prints
+as (), T as #t, :FOO as foo:, and floats in the Scheme style (9. rather
+than 9.0).  PP pretty-prints Dylan; LISP-PP pretty-prints the compiler's
+Lisp output.
+
+Module variables.  In the Scheme a Dylan module variable and a Dylan
+lexical variable of the same name both compiled to the same Scheme symbol,
+and the lexical one shadowed the global.  A Common Lisp global has to be
+proclaimed special, which would have turned every like-named lexical
+binding into a dynamic one, so module variable X is emitted as !MODULE/X/
+and the compiler makes the shadowing explicit (see REALLY-COMPILE in
+compiler.lisp and NAME->MODULE-VARIABLE in comp-util.lisp).
+
+Generated code.  BEGIN became PROGN, SET! became SETQ, dotted lambda lists
+became &REST, and LETREC became LET plus SETQ.  Scheme's CASE became a COND
+over MEMBER: it compares with EQV? -- Common Lisp's EQL -- and Common Lisp's
+CASE would read a clause whose key list is (t) or (otherwise) as the
+default.  Compiled Dylan binds more variables than it always uses, so
+IMPLEMENTATION-SPECIFIC/EVAL muffles the host compiler's style warnings.
+
+                    DIFFERENCES FROM THE SCHEME VERSION
+
+The regression suite (../dylan-examples.dyl) produces the same values as
+reference/MIT.output except for these, all of which ../README.thomas already
+describes as implementation-dependent:
+
+  * PRINT and WRITE-LINE return their argument.  MIT CScheme returned an
+    unspecified object and printed it as #[...]; Gambit and Scheme->C
+    returned #F.  The three reference transcripts disagree with each other
+    here.
+
+  * Object printed representations (#[dylan-class <window>] and the like)
+    of course differ, as the original output file notes.
+
+  * One error message reads ";Error: Error: IF: invalid syntax ..." where
+    the MIT transcript has a single "Error:".  DYLAN%ERROR prepends
+    "Error: " to the message exactly as mit-specific.scm's dylan::error
+    did, and full-test then prepends ";Error: "; the MIT transcript appears
+    to predate that prefix.  Scheme->C's transcript differs again.
+
+  * The compiler's echo of the input wraps lines differently, because the
+    line breaking is the host pretty printer's.
+
+Two limitations are new:
+
+  * A Dylan variable may not be named T, NIL or PI (nor anything else
+    CONSTANTP answers true for).  T and NIL are read as #t and #f, and
+    constants cannot be bound; VARIABLE->NAME renames the rest.
+
+  * kits/MIT/restart-example.dyl did not run, and was removed with the rest
+    of the kit: it is written against MIT Scheme's condition system by way
+    of the SCHEME-PROCEDURE extension.  The Common Lisp equivalent of that
+    extension is LISP-PROCEDURE, and the example would have to be rewritten
+    against Common Lisp's conditions.
+
+                       BUGS FIXED IN TRANSLATION
+
+Four latent bugs in the Scheme had to be repaired, because Common Lisp
+either catches them at compile time or does not share the accident that hid
+them.  Each site carries a comment.
+
+  * class.scm called MAKE-SINGLETON-GETTER and MAKE-SINGLETON-SETTER with
+    one argument too few.  The missing argument is the specializer for the
+    accessors, which for a singleton is the singleton itself.
+
+  * class.scm's REMOVE-THIS-SLOT-ONLY!, and runtime-functions.scm's
+    SLOT-VALUE and (SETTER SLOT-VALUE), applied VECTOR-SET! and VECTOR-REF
+    directly to a singleton, an instance and a class.  That worked only
+    because MIT Scheme records were vectors; the corresponding data vectors
+    are what was meant.
+
+  * runtime-functions.scm called the getter and setter of a virtual slot as
+    if they were plain Scheme procedures, without the two extra arguments
+    of the Dylan calling convention.  They go through DYLAN-CALL now.
+
+  * runtime-collections-array.scm's ELEMENT applied DYLAN:ERROR directly to
+    its arguments, which would have passed the message as the
+    multiple-values argument.
+
+Several other oddities were preserved deliberately, each with an "N.B."
+comment saying so: DYLAN:MIN and DYLAN:MAX compare against their first
+argument rather than the running extremum; ELEMENT looks for the symbol
+`default' or the list (default:) rather than the keyword default:, so its
+default: argument is never found; FIND-PAIR tests the head of the original
+list rather than of the tail it is walking; and CHECK-HANDLED-KEYWORDS
+stops without validating when it meets a method taking !rest.
+
+                              COPYRIGHT
+
+The original Thomas system is Copyright 1992 Digital Equipment Corporation;
+this Common Lisp translation is Copyright 2026 Blake McBride and is a
+derivative work of it.  Digital's terms govern the whole, and its notice
+appears at the head of every file here, as it did on every file of the
+Scheme original.  The full text, together with a summary of what it permits
+and what it does not, is in ../LICENSE.
+
+In brief: it allows use, modification, and redistribution at no charge to
+recipients who accept the same terms, but not sale or transfer for
+compensation -- so it is source-available rather than open source, and is
+not compatible with the GPL or with MIT/BSD/Apache.

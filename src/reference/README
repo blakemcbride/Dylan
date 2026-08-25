@@ -1,0 +1,33 @@
+-*-Indented-Text-*-
+
+              Reference transcripts
+
+These are the transcripts the three original Scheme implementations of
+Thomas produced from ../../dylan-examples.dyl, kept as the regression
+baseline for the Common Lisp version.  They came from
+
+    kits/MIT/dylan-examples.output      -> MIT.output
+    kits/gambit/dylan-examples.output   -> gambit.output
+    kits/scc/dylan-examples.output      -> scc.output
+
+before those directories were removed.  MIT.output is the one the Common
+Lisp version is compared against: MIT CScheme was the platform Thomas was
+developed on, and it is the Scheme whose treatment of #F and '() the class
+heterarchy assumes.
+
+To regenerate the Common Lisp transcript:
+
+    $ sbcl
+    * (load "load-dylan.lisp")
+    * (load "full-test.lisp")
+    * (dylan:test-examples)
+
+Compare it against MIT.output from the "(test ..." line onwards, ignoring
+#[...] object representations and blank lines.  As of the translation the
+two agree on every value except the handful of differences listed under
+"DIFFERENCES FROM THE SCHEME VERSION" in ../README -- and the gambit and
+scc transcripts are kept here because they disagree with MIT.output, and
+with each other, on exactly those points.
+
+The head of each file carries the Digital Equipment Corporation copyright
+notice that applies to all of Thomas.  See ../../LICENSE.

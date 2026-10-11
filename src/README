@@ -214,42 +214,6 @@ Two limitations are new:
     extension is LISP-PROCEDURE, and the example would have to be rewritten
     against Common Lisp's conditions.
 
-                       BUGS FIXED IN TRANSLATION
-
-Four latent bugs in the Scheme had to be repaired, because Common Lisp
-either catches them at compile time or does not share the accident that hid
-them.  Each site carries a comment.
-
-  * class.scm called MAKE-SINGLETON-GETTER and MAKE-SINGLETON-SETTER with
-    one argument too few.  The missing argument is the specializer for the
-    accessors, which for a singleton is the singleton itself.
-
-  * class.scm's REMOVE-THIS-SLOT-ONLY!, and runtime-functions.scm's
-    SLOT-VALUE and (SETTER SLOT-VALUE), applied VECTOR-SET! and VECTOR-REF
-    directly to a singleton, an instance and a class.  That worked only
-    because MIT Scheme records were vectors; the corresponding data vectors
-    are what was meant.
-
-  * runtime-functions.scm called the getter and setter of a virtual slot as
-    if they were plain Scheme procedures, without the two extra arguments
-    of the Dylan calling convention.  They go through DYLAN-CALL now.
-
-  * runtime-collections-array.scm's ELEMENT applied DYLAN:ERROR directly to
-    its arguments, which would have passed the message as the
-    multiple-values argument.
-
-Several other bugs in the Scheme have since been fixed too, each marked
-with an "N.B." comment: DYLAN:MIN and DYLAN:MAX compared against their first
-argument rather than the running extremum; ELEMENT looked for the symbol
-`default' or the list (default:) rather than the keyword default:, so its
-default: argument was never found; FIND-PAIR tested the head of the original
-list rather than of the tail it was walking; and CHECK-HANDLED-KEYWORDS
-stopped without validating when it met a method taking !rest.  And the
-last method of a generic dispatch checked the keywords again against its
-own alone, so a keyword meant for a more specific method was rejected once
-that method passed control on with NEXT-METHOD; it now trusts the generic
-function's check against all the applicable methods.
-
                               COPYRIGHT
 
 The original Thomas system is Copyright 1992 Digital Equipment Corporation;

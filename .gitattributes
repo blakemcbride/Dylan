@@ -1,0 +1,5 @@
+# GitHub language statistics.  These files carry an Emacs "-*- Scheme -*-"
+# mode line from 1992, which GitHub's detector would otherwise follow.
+*.dyl                linguist-language=Dylan
+src/reference/*      linguist-documentation
+manual/**            linguist-documentation

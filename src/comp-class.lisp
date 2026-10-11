@@ -149,20 +149,25 @@
              ;; Didn't go through values ...
              ,(if (null bound-names)
                   `(funcall !bind-body (dylan%list !first-value))
-                  (let* ((first (car all))
-                         (restriction (funcall ->restriction first))
-                         (call `(funcall !bind-body !first-value
-                                         ,@(mapcar (lambda (name)
-                                                     (declare (ignore name))
-                                                     nil)
-                                                   (cdr bound-names))
-                                         ,@(if rest-name '('()) '()))))
-                    (if restriction
+                  ;; Only one value: the other variables are bound to #f,
+                  ;; and are type-checked like the first.
+                  (let ((call `(funcall !bind-body !first-value
+                                        ,@(mapcar (lambda (name)
+                                                    (declare (ignore name))
+                                                    nil)
+                                                  (cdr bound-names))
+                                        ,@(if rest-name '('()) '()))))
+                    (if (null restricted)
+                        call
                         `(progn
-                           (dylan%type-check !first-value
-                                             ,(funcall ->name first))
-                           ,call)
-                        call))))))))
+                           ,@(mapcar (lambda (entry)
+                                       `(dylan%type-check
+                                         ,(if (= (funcall ->offset entry) 0)
+                                              '!first-value
+                                              nil)
+                                         ,(funcall ->name entry)))
+                                     restricted)
+                           ,call)))))))))
 
 ;;; Compiling the BIND form
 
@@ -173,7 +178,7 @@
         (forms (cdr e)))
     (if (null bindings)
         (if (null forms)
-            (funcall continue compiled-sharp-f bound-vars)
+            (funcall continue compiled-sharp-f module-vars)
             (funcall really-compile `(begin ,@forms)
                      module-vars bound-vars multiple-values? continue))
         (progn
@@ -201,9 +206,9 @@
                     '!multi-value
                     nil)
                 (lambda (compiled-init new-mods)
-                  (let ((bound-names (mapcar #'variable->name bound-names))
+                  (let ((bound-names (mapcar #'variable->lexical bound-names))
                         (rest-name (and rest-name
-                                        (variable->name rest-name))))
+                                        (variable->lexical rest-name))))
                     (funcall
                      really-compile
                      `(bind ,(cdr bindings) ,@forms)
@@ -293,7 +298,10 @@
                                              multiple-values? continue)
   (declare (ignore compiler multiple-values?)) ; No sub-compilations or
                                         ; reductions
-  (must-be-list-of-length e 2 "DEFINE-GENERIC-FUNCTION: invalid syntax")
+  (must-be-list-of-at-least-length e 2
+                                   "DEFINE-GENERIC-FUNCTION: invalid syntax")
+  ;; Keyword options after the parameter list are accepted and ignored.
+  (validate-keywords (cddr e) t #'dylan%error)
   (parse-define-generic-function
    (car e) (cadr e) (cddr e)
    (lambda (name reqs rest keys)
@@ -321,7 +329,7 @@
           '(:getter :setter :type :init-value :init-function :init-keyword
             :required-init-keyword :allocation)
           #'dylan%error)
-         (let ((getter
+         (let* ((getter
                  (dylan%find-keyword
                   pairs :getter
                   (lambda ()
@@ -331,8 +339,8 @@
                (setter
                  (dylan%find-keyword
                   pairs :setter (lambda ()
-                                  (if default-getter
-                                      `(setter ,default-getter)
+                                  (if (variable-name? getter)
+                                      `(setter ,getter)
                                       nil))))
                (type (dylan%find-keyword pairs :type (lambda () '<object>)))
                (has-initial-value? t))
@@ -445,7 +453,7 @@
                                     ',name
                                     (dylan%list ,@superclasses)
                                     (dylan%list ,@getter-code))))
-                             ,@add-slot-calls
+                             ,@(reverse add-slot-calls)
                              ,(funcall set '!class)
                              ',name)))))
                  (make-add-slot-call
@@ -466,7 +474,8 @@
      (lambda (supers mod-vars)
        (labels ((walk (getter-code slots-left mod-vars)
                   (if (null slots-left)
-                      (generate-define-class (car e) supers getter-code slots
+                      (generate-define-class (car e) supers
+                                             (reverse getter-code) slots
                                              bound-vars mod-vars compiler
                                              continue)
                       (module-refs (slot.getter (car slots-left))

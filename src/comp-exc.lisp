@@ -117,7 +117,9 @@
                          (type (car protection))
                          (keywords (cdr protection))
                          (condition (dylan%find-keyword keywords :condition
-                                                        (lambda () nil))))
+                                                        (lambda () nil)))
+                         (condition (and condition
+                                         (variable->lexical condition))))
                     (funcall
                      really-compile
                      (if forms `(begin ,@forms) nil) module-vars

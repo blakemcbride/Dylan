@@ -85,6 +85,13 @@
   #+sbcl (sb-ext:make-weak-pointer object)
   #-sbcl (list object))
 
+(defun globally-special-p (symbol)
+  "True if SYMBOL is proclaimed special (or global), so that binding it
+would not make a lexical variable."
+  #+sbcl (and (member (sb-int:info :variable :kind symbol) '(:special :global))
+              t)
+  #-sbcl (boundp symbol))
+
 (defun make-population* ()
   (%make-population))
 

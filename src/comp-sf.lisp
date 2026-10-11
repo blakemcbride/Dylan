@@ -63,8 +63,8 @@
             (funcall
              continue
              `(let ((!saved-value ,value-code))
-                (setq ,(if (member name bound-vars)
-                           name
+                (setq ,(if (member (name->lexical name) bound-vars)
+                           (name->lexical name)
                            (name->module-variable name))
                       !saved-value)
                 !saved-value)
@@ -268,7 +268,7 @@
     (let ((vars (mapcar (lambda (x)
                           (unless (variable-name? (car x))
                             (dylan%error "FOR -- illegal variable name" x e))
-                          (variable->name (car x)))
+                          (variable->lexical (car x)))
                         bindings))
           (inits (mapcar #'cadr bindings))
           (steps (mapcar #'caddr bindings)))
@@ -285,8 +285,25 @@
                  (compile-forms
                   end-test module-vars inner-bound compiler multiple-values?
                   (lambda (end-code module-vars)
-                    (funcall continue
-                             `(do ,(mapcar #'list vars init-code step-code)
-                                  ,end-code
-                                ,@body-code)
-                             module-vars)))))))))))))
+                    ;; Scheme's DO, which makes fresh bindings for each
+                    ;; iteration (CL's DO assigns to one set of bindings,
+                    ;; which closures would share).  The steps are
+                    ;; evaluated in the iteration's scope and passed on
+                    ;; through temporaries.
+                    (let ((temps (loop for i from 1 to (length vars)
+                                       collect (new-name "!for/" (princ-to-string i) "/"))))
+                      (funcall continue
+                               `(block !for
+                                  (let ,(mapcar #'list temps init-code)
+                                    (tagbody
+                                     !for/top
+                                       (let ,(mapcar #'list vars temps)
+                                         (when ,(car end-code)
+                                           (return-from !for
+                                             (progn ,@(or (cdr end-code)
+                                                          (list nil)))))
+                                         ,@body-code
+                                         (setq ,@(mapcan #'list
+                                                         temps step-code)))
+                                       (go !for/top))))
+                               module-vars))))))))))))))

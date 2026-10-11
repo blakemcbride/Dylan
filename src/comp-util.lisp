@@ -85,6 +85,25 @@ any other constant."
               (t dylan-variable)))
       (name->setter (cadr dylan-variable))))
 
+;;; Dylan lexical variables are bound under the Lisp name VARIABLE->NAME
+;;; gives them, unless that name is a constant or a special variable --
+;;; most often one of the runtime's own DYLAN/X globals, since a Dylan
+;;; variable named LIST is DYLAN/LIST.  Binding a special would make the
+;;; Dylan binding dynamic and replace the runtime's value for its extent,
+;;; so such variables get a name of their own instead.  Every binding site
+;;; and every reference goes through VARIABLE->LEXICAL, and BOUND-VARS
+;;; holds these lexical names.
+
+(defun name->lexical (name)
+  (if (or (member name dylan%predefined-variables)
+          (constantp name)
+          (globally-special-p name))
+      (new-name "!local/" name "/")
+      name))
+
+(defun variable->lexical (dylan-variable)
+  (name->lexical (variable->name dylan-variable)))
+
 ;;; Module (that is, global) variables get a name of their own, so that a
 ;;; Dylan module variable can never be captured by -- or capture -- a Dylan
 ;;; lexical variable of the same name.  In the Scheme both were simply the
@@ -158,13 +177,14 @@ prefixes the runtime reserves for itself."
 variables.  VARIABLE is the variable name, CORE is a procedure to generate
 the main body."
   (let* ((name (variable->name variable))
-         (hidden? (member name bound-vars)))
+         (hidden? (member (name->lexical name) bound-vars)))
     (funcall
      continue
      (if hidden?
-         `(let ((!old-value (,(name->module-getter name))))
-            ,(funcall core '!old-value
-                      (lambda (val) `(,(name->module-setter name) ,val))))
+         ;; The getter is called at each reference, not once beforehand:
+         ;; CORE may read the variable again after setting it.
+         (funcall core `(,(name->module-getter name))
+                  (lambda (val) `(,(name->module-setter name) ,val)))
          (let ((global (name->module-variable name)))
            (funcall core global (lambda (val) `(setq ,global ,val)))))
      (add-module-variable name hidden? module-vars))))
@@ -173,7 +193,7 @@ the main body."
 ;;; and the (updated) module variables.
 
 (defun add-variable (name bound-vars module-vars)
-  (if (or (member name bound-vars)
+  (if (or (member (name->lexical name) bound-vars)
           (member name dylan%predefined-variables))
       module-vars
       (adjoin name module-vars #'member)))

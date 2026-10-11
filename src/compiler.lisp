@@ -473,13 +473,14 @@ FILE-NAME."
        ;; symbol and the lexical one shadowed the global.  Here the module
        ;; variable has a name of its own, so the shadowing is explicit.
        (let* ((name (variable->name e))
+              (lexical (name->lexical name))
               (new-mod-vars (add-variable name bound-vars module-vars)))
          (funcall continue
-                  (if (and (not (member name bound-vars))
-                           (member name new-mod-vars))
-                      `(dylan%free-variable-ref ,(name->module-variable name)
-                                                ',name)
-                      name)
+                  (cond ((member lexical bound-vars) lexical)
+                        ((member name new-mod-vars)
+                         `(dylan%free-variable-ref
+                           ,(name->module-variable name) ',name))
+                        (t name))
                   new-mod-vars)))
       ((symbolp e) (dylan%error "illegal Dylan variable" e))
       (binding
@@ -533,10 +534,12 @@ FILE-NAME."
 
 (defun compile-and-form (forms module-vars bound-vars really-compile
                          multiple-values? continue)
-  (when (null forms) (dylan%error "AND must have forms"))
-  (compile-forms forms module-vars bound-vars really-compile multiple-values?
-                 (lambda (code mod-vars)
-                   (funcall continue `(and ,@code) mod-vars))))
+  (if (null forms)
+      (funcall continue t module-vars)  ; (and) is true
+      (compile-forms forms module-vars bound-vars really-compile
+                     multiple-values?
+                     (lambda (code mod-vars)
+                       (funcall continue `(and ,@code) mod-vars)))))
 
 (defun compile-begin-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
@@ -557,7 +560,7 @@ FILE-NAME."
     (must-be-list-of-length var 1 "BIND-EXIT bad variable")
     (unless (variable-name? (car var))
       (dylan%error "BIND-EXIT -- bad variable name" var forms))
-    (let ((name (variable->name (car var))))
+    (let ((name (variable->lexical (car var))))
       (funcall
        really-compile
        `(begin ,@forms)
@@ -619,19 +622,26 @@ FILE-NAME."
         (dylan%error "DOTIMES -- invalid variable" var forms))
       (unless (or (null (cddr v/c/r)) (null (cdddr v/c/r)))
         (dylan%error "DOTIMES -- bad syntax"))
-      (let ((name (variable->name var)))
+      (let ((name (variable->lexical var)))
         (compile-forms
          forms module-vars (cons name bound-vars) really-compile nil
          (lambda (body-forms module-vars)
-           (compile-forms
-            (list count-form result)
-            module-vars bound-vars really-compile multiple-values?
-            (lambda (c/r-code module-vars)
-              (funcall continue
-                       `(dylan%dotimes ,(car c/r-code)
-                                       (lambda () ,(cadr c/r-code))
-                                       (lambda (,name) ,@body-forms))
-                       module-vars)))))))))
+           (funcall
+            really-compile count-form module-vars bound-vars nil
+            (lambda (count-code module-vars)
+              ;; As in Common Lisp, the result form sees the variable,
+              ;; bound to the number of iterations.
+              (funcall
+               really-compile result module-vars (cons name bound-vars)
+               multiple-values?
+               (lambda (result-code module-vars)
+                 (funcall continue
+                          `(dylan%dotimes ,count-code
+                                          (lambda (,name)
+                                            (declare (ignorable ,name))
+                                            ,result-code)
+                                          (lambda (,name) ,@body-forms))
+                          module-vars)))))))))))
 
 ;;; COMPILE-FOR-FORM is in the file comp-sf.lisp
 
@@ -640,7 +650,8 @@ FILE-NAME."
   (must-be-list-of-at-least-length forms 2 "FOR-EACH: bad syntax")
   (dolist (binding (car forms))
     (must-be-list-of-length binding 2 "FOR-EACH: bad binding"))
-  (let ((names (mapcar #'car (car forms)))
+  (let ((names (mapcar (lambda (binding) (variable->lexical (car binding)))
+                       (car forms)))
         (collections (mapcar #'cadr (car forms)))
         (end-test-and-return-vals (cadr forms))
         (forms (cddr forms)))
@@ -656,15 +667,23 @@ FILE-NAME."
            (lambda (compiled-forms module-vars)
              (funcall
               continue
+              ;; When the end test succeeds, the iteration function answers
+              ;; a list holding a thunk for the result forms, which
+              ;; DYLAN%FOR-EACH calls.  The thunk's parameter is named so
+              ;; as not to shadow the caller's multiple-values variable,
+              ;; which the result forms are compiled to deliver to.
               `(dylan%for-each
-                (lambda (!multiple-values !dylan/next-method ,@names)
-                  (declare (ignorable !multiple-values !dylan/next-method))
+                (lambda (!for-each/multiple-values !dylan/next-method ,@names)
+                  (declare (ignorable !for-each/multiple-values
+                                      !dylan/next-method))
                   ,(if (null end-test-and-return-vals)
                        `(progn ,@compiled-forms nil)
                        `(if ,(car compiled-et)
-                            (dylan%list ,@(if (null (cdr compiled-et))
-                                              (list compiled-sharp-f)
-                                              (cdr compiled-et)))
+                            (dylan%list
+                             (lambda ()
+                               ,@(if (null (cdr compiled-et))
+                                     (list compiled-sharp-f)
+                                     (cdr compiled-et))))
                             (progn ,@compiled-forms nil))))
                 ,@compiled-collections)
               module-vars)))))))))
@@ -730,7 +749,7 @@ FILE-NAME."
 (defun compile-until-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
   (declare (ignore multiple-values?))
-  (must-be-list-of-at-least-length forms 2 "UNTIL: bad syntax")
+  (must-be-list-of-at-least-length forms 1 "UNTIL: bad syntax")
   (compile-forms forms module-vars bound-vars really-compile nil
                  (lambda (forms module-vars)
                    (funcall continue
@@ -772,7 +791,7 @@ FILE-NAME."
 
 (defun compile-while-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "UNTIL: bad syntax")
+  (must-be-list-of-at-least-length forms 1 "WHILE: bad syntax")
   (compile-forms forms module-vars bound-vars really-compile
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)

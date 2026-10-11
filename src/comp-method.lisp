@@ -189,78 +189,88 @@
 (defun compile-method-form (e mod-vars bound-vars compiler
                             multiple-values? continue)
   (declare (ignore multiple-values?))   ; No reductions
-  (must-be-list-of-at-least-length e 2 "METHOD -- invalid syntax")
+  (must-be-list-of-at-least-length e 1 "METHOD -- invalid syntax")
   (let ((params (car e))
         (forms (cdr e)))
     (parse-method-parameter-list
      params '!next-method
      (lambda (reqs next rest keys)
-       (flet ((lambda-list (req-names)
-                `(!multi-values ,next ,@req-names
-                  ,@(cond (rest (list '&rest rest))
-                          (keys (list '&rest '!keys))
-                          (t '())))))
-         (let ((req-names (mapcar #'car reqs))
-               (req-restrictions (mapcar #'cadr reqs))
-               (key-name (if rest rest '!keys)))
-           (compile-forms
-            req-restrictions mod-vars bound-vars compiler nil
-            (lambda (restrictions mod-vars)
-              (flet ((generate (mod-vars validation-code)
-                       (funcall
-                        continue
-                        `(dylan%make-method
-                          (dylan%make-param-list
-                           (dylan%list
-                            ,@(mapcar (lambda (name code)
-                                        `(dylan%list ',name ,code))
-                                      req-names restrictions))
-                           ',next ',rest
-                           ',(if (consp keys) (mapcar #'car keys) keys))
-                          (lambda ,(lambda-list req-names)
-                            (declare (ignorable !multi-values ,next
-                                                ,@req-names
-                                                ,@(if rest (list rest) '())
-                                                ,@(if (and (not rest) keys)
-                                                      (list '!keys)
-                                                      '())))
-                            ,@validation-code))
-                        mod-vars)))
-                (compile-forms
-                 forms mod-vars
-                 (append (list next) req-names (if rest (list rest) '())
-                         (if (consp keys) (mapcar #'cadr keys) '())
-                         bound-vars)
-                 compiler '!multi-values
-                 (lambda (body-forms mod-vars)
-                   (cond
-                     ((not keys) (generate mod-vars body-forms))
-                     ((eq keys t)
-                      (generate mod-vars
-                                `((dylan%keyword-validate ,next ,key-name t)
-                                  ,@body-forms)))
-                     (t
-                      (compile-let*-forms
-                       (mapcar #'cadr keys) (mapcar #'caddr keys) mod-vars
-                       (append (list next) req-names
-                               (if rest (list rest) '()) bound-vars)
-                       compiler nil
-                       (lambda (defaults mod-vars)
-                         (generate
-                          mod-vars
-                          `((dylan%keyword-validate
-                             ,next ,key-name
-                             ,(if rest t `',(mapcar #'car keys)))
-                            (let* (,@(mapcar
-                                      (lambda (var key default)
-                                        `(,var
-                                          (dylan%find-keyword
-                                           ,key-name ',key
-                                           (lambda () ,default))))
-                                      (mapcar #'cadr keys)
-                                      (mapcar #'car keys)
-                                      defaults))
-                              ,@body-forms))))))))))))))))))
+       (let ((next (variable->lexical next))
+             (rest (and rest (variable->lexical rest)))
+             (keys (if (consp keys)
+                       (mapcar (lambda (key)
+                                 (list* (car key)
+                                        (variable->lexical (cadr key))
+                                        (cddr key)))
+                               keys)
+                       keys)))
+        (flet ((lambda-list (req-names)
+                 `(!multi-values ,next ,@req-names
+                   ,@(cond (rest (list '&rest rest))
+                           (keys (list '&rest '!keys))
+                           (t '())))))
+          (let* ((req-names (mapcar (lambda (req) (variable->lexical (car req)))
+                                    reqs))
+                 (req-restrictions (mapcar #'cadr reqs))
+                 (key-name (if rest rest '!keys)))
+            (compile-forms
+             req-restrictions mod-vars bound-vars compiler nil
+             (lambda (restrictions mod-vars)
+               (flet ((generate (mod-vars validation-code)
+                        (funcall
+                         continue
+                         `(dylan%make-method
+                           (dylan%make-param-list
+                            (dylan%list
+                             ,@(mapcar (lambda (name code)
+                                         `(dylan%list ',name ,code))
+                                       req-names restrictions))
+                            ',next ',rest
+                            ',(if (consp keys) (mapcar #'car keys) keys))
+                           (lambda ,(lambda-list req-names)
+                             (declare (ignorable !multi-values ,next
+                                                 ,@req-names
+                                                 ,@(if rest (list rest) '())
+                                                 ,@(if (and (not rest) keys)
+                                                       (list '!keys)
+                                                       '())))
+                             ,@validation-code))
+                         mod-vars)))
+                 (compile-forms
+                  forms mod-vars
+                  (append (list next) req-names (if rest (list rest) '())
+                          (if (consp keys) (mapcar #'cadr keys) '())
+                          bound-vars)
+                  compiler '!multi-values
+                  (lambda (body-forms mod-vars)
+                    (cond
+                      ((not keys) (generate mod-vars body-forms))
+                      ((eq keys t)
+                       (generate mod-vars
+                                 `((dylan%keyword-validate ,next ,key-name t)
+                                   ,@body-forms)))
+                      (t
+                       (compile-let*-forms
+                        (mapcar #'cadr keys) (mapcar #'caddr keys) mod-vars
+                        (append (list next) req-names
+                                (if rest (list rest) '()) bound-vars)
+                        compiler nil
+                        (lambda (defaults mod-vars)
+                          (generate
+                           mod-vars
+                           `((dylan%keyword-validate
+                              ,next ,key-name
+                              ,(if rest t `',(mapcar #'car keys)))
+                             (let* (,@(mapcar
+                                       (lambda (var key default)
+                                         `(,var
+                                           (dylan%find-keyword
+                                            ,key-name ',key
+                                            (lambda () ,default))))
+                                       (mapcar #'cadr keys)
+                                       (mapcar #'car keys)
+                                       defaults))
+                               ,@body-forms)))))))))))))))))))
 
 (defun compile-let*-forms (names forms module-vars bound-vars
                            compiler multiple-values? continue)
@@ -291,7 +301,7 @@
                                        !next next-method ,@so-far)))
                             (t (push (car so-far) result)
                                (pop so-far)))))))
-    (must-be-list-of-at-least-length e 3 "DEFINE-METHOD -- invalid syntax")
+    (must-be-list-of-at-least-length e 2 "DEFINE-METHOD -- invalid syntax")
     (let ((name (car e))
           (params (cadr e))
           (forms (cddr e)))
@@ -331,7 +341,8 @@
     (dolist (binding bindings)
       (must-be-list-of-at-least-length binding 3
                                        "BIND-METHODS -- illegal binding syntax"))
-    (let ((names (mapcar #'car bindings))
+    (let ((names (mapcar (lambda (binding) (variable->lexical (car binding)))
+                         bindings))
           (methods (mapcar (lambda (binding)
                              `(method ,(cadr binding) ,@(cddr binding)))
                            bindings)))

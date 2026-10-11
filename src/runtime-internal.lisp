@@ -66,7 +66,7 @@ continuations, so a CATCH/THROW pair suffices."
   ;; Used for the DOTIMES special form
   (loop for n from 0
         do (if (>= n count)
-               (return (funcall result-fn))
+               (return (funcall result-fn n))
                (funcall fn n))))
 
 (defun dylan%while (test thunk)
@@ -112,7 +112,6 @@ initial NIL next-method argument."
     (unless (subclass? (get-type collection) <collection>)
       (dylan-call dylan/error "for-each -- not a collection" collection)))
   (collections-iterate fn
-                       (lambda (result)
-                         (and result (lambda () (car result))))
+                       (lambda (result) (and result (car result)))
                        nil
                        collections))

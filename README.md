@@ -98,9 +98,7 @@ are in `src/compat.lisp`, with portable fallbacks.
 
 ## Testing
 
-`src/reference/` holds the transcripts the three original Scheme
-implementations produced from `dylan-examples.dyl`, the examples extracted
-from the Dylan book. To regenerate this implementation's transcript:
+`dylan-examples.dyl` holds the examples from the Dylan book. To run them:
 
 ```console
 $ cd src
@@ -109,76 +107,71 @@ $ sbcl --eval '(load "load-dylan.lisp")' \
        --eval '(dylan:test-examples)'
 ```
 
-It reproduces `src/reference/MIT.output` value for value, apart from a
-handful of differences — chiefly the return value of `print`, on which the
-three reference transcripts disagree with each other, and floats printed as
-the manual prints them (`9.0` where MIT Scheme wrote `9.`). The full list
-is under "Differences from the Scheme version" in
+The expected results are in `src/reference/`, the transcripts Thomas
+produced from the same file in 1992. Where the two disagree, the manual
+decides; the few remaining differences are listed in
 [`src/README`](src/README).
 
-## How the translation works
+## Differences from the 1992 manual
 
-The details are in [`src/README`](src/README); the load-bearing decisions are
-these.
+The standard is the manual itself (an annotated copy is in
+`manual/Dylan-1992/`). Thomas's own 1992 list is in
+[`DIFFERENCES`](DIFFERENCES); several of its items — `#key` and `#rest`,
+sealed and abstract classes, collection alignment for tables, the full set
+of character names — are no longer differences.
 
-**`NIL` is both false and the empty list.** Thomas was developed on MIT
-CScheme 7.2, in which `#f` and `'()` are the same object — `generic.scm`
-remarks on it — and the class heterarchy has no `<boolean>`: false is an
-instance of `<empty-list>`. Common Lisp's `NIL` therefore models Thomas's
-false/empty-list object exactly, which is what makes the truth-testing code
-a mechanical translation rather than a redesign.
+**Not implemented**
 
-**Naming.** A colon cannot appear in a Common Lisp symbol without escaping,
-so the two prefixes the Scheme used became:
+- **Modules.** There is one module. The manual leaves module operations to
+  the programming environment, and none are provided.
+- **Read-only module variables.** Not enforced: `set!` on a variable made
+  by `define-class` or `define-generic-function` succeeds.
+- **`remove-slot`** and **`(setter direct-superclasses)`**.
+- **Virtual slots as "filtered slots"** (pp. 58–59). A virtual slot cannot
+  use `next-method` to reach a hidden slot in the same object.
+- **Ranges with `by: 0`**, such as `(range from: 1 by: 0 size: 3)`, are an
+  error.
 
-| Scheme | Common Lisp | |
-|---|---|---|
-| `dylan:X` | `dylan/X` | visible to compiled Dylan code; variables holding procedures that take the two extra leading arguments of the Dylan calling convention |
-| `dylan::X` | `dylan%X` | internal to the runtime and the compiler's output; ordinary Lisp calling conventions |
+**Different behavior**
 
-**Records → `defstruct`.** Every record type is statically known, so the
-Scheme's runtime record package is gone and the six types are structures
-with the accessor names the rest of the system already used.
+- **Symbol case** is not remembered: `'FooBar` prints as `foobar`. Symbols,
+  keywords and variable names are case-insensitive, as in the manual.
+- **Reserved names.** Variables may not begin with `!` or `dylan/`; the
+  compiler uses those names.
+- **`define-generic-function` options** are checked for keyword/value form
+  and otherwise ignored.
+- **Backquote.** The manual's section on it did not survive, so `` ` ``,
+  `,` and `,@` follow the usual Lisp rules, nesting included.
+- **`map-into`** passes the target's elements to the function, as the
+  manual's example does, though its prose names only the sources.
+- **Irrational functions** (`sqrt`, `exp`, the trigonometric functions)
+  answer floats for exact arguments, as in Common Lisp and the manual's
+  examples.
 
-**Escaping only.** `call-with-current-continuation` is used only to escape
-— `bind-exit`, `handler-case`, `member?`, the test harness — so it became
-`catch`/`throw`, and `dynamic-wind` became `unwind-protect`.
+**Additions**
 
-**Its own reader and printer.** Common Lisp's reader cannot read Dylan: a
-colon is a package marker whose constituent trait no readtable may change,
-and Dylan writes keywords with a trailing colon (`foo:`). Nor does it know
-`#t`, `#f`, `#key` and `#rest`, and it would read the symbols `t` and `nil`
-as true and false. And Dylan wants `()`, `#t` and `foo:` on output where
-Lisp would print `NIL`, `T` and `:FOO`.
+- `display`, `newline`, `print` and `write-line` (from Thomas).
+- `pp` pretty-prints a Dylan object.
+- `lisp-variable` and `lisp-procedure` reach Common Lisp values and
+  functions from Dylan.
 
-**Module variables are renamed.** In Scheme a Dylan module variable and a
-Dylan lexical of the same name were one symbol, and shadowing came free. A
-Common Lisp global must be proclaimed special, which would have made every
-like-named lexical binding dynamic, so a module variable `X` is emitted as
-`!MODULE/X/` and the compiler does the shadowing explicitly.
-
-**Generated code.** `BEGIN` → `PROGN`, `SET!` → `SETQ`, dotted lambda lists
-→ `&REST`, `LETREC` → `LET` plus `SETQ`. Scheme's `CASE` became a `COND`
-over `MEMBER`: it compares with `EQV?` — Common Lisp's `EQL` — and Common
-Lisp's `CASE` would read a clause whose key list is `(t)` as the default.
+How the Scheme was turned into Common Lisp — naming, the treatment of
+false and the empty list, the reader and printer — is described in
+[`src/README`](src/README).
 
 ## Repository layout
 
 | | |
 |---|---|
 | `src/` | the implementation — 36 files, ~12,000 lines |
-| `src/README` | the full translation notes |
-| `src/reference/` | the three 1992 Scheme transcripts, kept as the regression baseline |
+| `src/README` | the translation notes, and which file came from which Thomas file |
+| `src/reference/` | Thomas's 1992 transcripts of the examples, the regression baseline |
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
 | `examples-from-book.text` | the raw extraction those were edited from |
 | `README.thomas` | the original 1992 Thomas README |
-| `DIFFERENCES` | how the language here differs from the book |
+| `DIFFERENCES` | Thomas's 1992 list of differences from the book |
 | `RELEASE` | the 1992 release notes |
 | `LICENSE` | Digital's notice, and what it permits |
-
-Thomas's own Scheme tree — its `src/`, `portable/` and `kits/` directories —
-is no longer here; `src/README` tabulates which Common Lisp file came from
-which Scheme one.
 
 ## License
 

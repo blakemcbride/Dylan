@@ -410,11 +410,10 @@
            (size (length vector-value)))
       (if (and (>= index 0) (< index size))
           (aref vector-value index)
-          ;; N.B. as in the Scheme, the keyword looked for here is the LIST
-          ;; (default:) rather than the keyword itself, so the default:
-          ;; value is never found.
+          ;; N.B. the Scheme looked for the LIST (default:) rather than the
+          ;; keyword itself, so the default: value was never found; fixed.
           (dylan%find-keyword
-           rest '(:default)
+           rest :default
            (lambda ()
              (dylan-call
               dylan/error

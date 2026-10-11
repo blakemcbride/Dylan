@@ -298,7 +298,7 @@
   ;; Note that the Scheme walked the method list with a named LET whose
   ;; recursive call appeared in only one of the COND branches: on meeting a
   ;; method that takes !rest or unrestricted !key it simply stopped, never
-  ;; reaching the validation below.  That control flow is preserved here.
+  ;; reaching the validation below.  Fixed: every method is now examined.
   (let ((all-!rest? t)
         (any-!key? nil)
         (keywords '()))
@@ -309,12 +309,10 @@
                  (rest? (param-list.rest? param-list)))
             (when (or (not rest?) keys) (setf all-!rest? nil))
             (cond ((or rest? (and keys (not (consp keys))))
-                   (setf any-!key? t)
-                   (return nil))
+                   (setf any-!key? t))
                   ((consp keys)
-                   (setf keywords (append keys keywords))
-                   (pop methods))
-                  (t (return nil))))
+                   (setf keywords (append keys keywords))))
+            (pop methods))
           (return
             (cond (all-!rest? 'ok)
                   (any-!key? (dylan%keyword-validate t non-req-args t))

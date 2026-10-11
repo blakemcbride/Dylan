@@ -334,8 +334,8 @@
       (loop for rest-list = list then (cdr rest-list)
             do (cond ((null rest-list) (return nil))
                      ;; N.B. the Scheme tested (car LIST) rather than
-                     ;; (car REST-LIST) here.  Preserved as it was.
-                     ((not (consp (car list)))
+                     ;; (car REST-LIST) here; fixed.
+                     ((not (consp (car rest-list)))
                       (return (dylan-call dylan/error
                                           "find-pair -- list element not a pair"
                                           (car rest-list))))

@@ -177,7 +177,7 @@ Thomas's own Scheme tree — its `src/`, `portable/` and `kits/` directories —
 is no longer here; `src/README` tabulates which Common Lisp file came from
 which Scheme one.
 
-## Bugs fixed, and bugs kept
+## Bugs fixed
 
 Four latent bugs in the Scheme had to be repaired, because Common Lisp
 either catches them at compile time or does not share the accident that hid
@@ -187,11 +187,12 @@ vectors), virtual-slot accessors called without the Dylan calling
 convention, and an error procedure applied directly to its arguments. Each
 site carries a comment.
 
-Several other oddities were preserved deliberately, each with an `N.B.`
-comment saying so — `min` and `max` comparing against their first argument
+Several other Scheme bugs have since been fixed as well, each marked with
+an `N.B.` comment — `min` and `max` comparing against their first argument
 rather than the running extremum, `element` looking for the wrong keyword so
-its `default:` is never found, and a couple more. They are listed in
-[`src/README`](src/README).
+its `default:` was never found, `find-pair` checking the wrong list element,
+and keyword checking in generic dispatch stopping early at a `!rest` method.
+They are listed in [`src/README`](src/README).
 
 ## License
 

@@ -170,22 +170,22 @@
    at-least-one-real
    (lambda (real1 &rest others)
      ;; N.B. the Scheme compared REAL1 rather than MIN-SO-FAR here (and
-     ;; likewise in DYLAN/MAX below); the behaviour is preserved.
+     ;; likewise in DYLAN/MAX below); fixed.
      (let ((min-so-far real1))
        (dolist (x others min-so-far)
          (setf min-so-far
-               (if (dylan-call dylan/binary< real1 x) real1 x)))))))
+               (if (dylan-call dylan/binary< min-so-far x) min-so-far x)))))))
 
 (defparameter dylan/max
   (dylan%function->method
    at-least-one-real
    (lambda (real1 &rest others)
      ;; N.B. as in DYLAN/MIN, the Scheme compared REAL1 rather than
-     ;; MAX-SO-FAR.
+     ;; MAX-SO-FAR; fixed.
      (let ((max-so-far real1))
        (dolist (x others max-so-far)
          (setf max-so-far
-               (if (not (dylan-call dylan/binary< real1 x)) real1 x)))))))
+               (if (not (dylan-call dylan/binary< max-so-far x)) max-so-far x)))))))
 
 (defun reduce (l fn init-value)
   (let ((value init-value))

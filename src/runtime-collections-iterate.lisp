@@ -471,8 +471,8 @@ runs out before the DONE? test causes an exit."
     (let* ((default-marker (cons 1 2))
            ;; N.B. the Scheme looked for the symbol `default' rather than
            ;; the keyword `default:', so the default: argument was in fact
-           ;; never found.  Preserved as it was.
-           (default (dylan%find-keyword rest 'default
+           ;; never found; fixed.
+           (default (dylan%find-keyword rest :default
                                         (lambda () default-marker))))
       (do ((state (dylan-call dylan/initial-state exp-coll)
                   (dylan-call dylan/next-state exp-coll state)))

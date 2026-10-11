@@ -351,9 +351,9 @@
           (char string-value index)
           ;; N.B. the Scheme passed the LIST (default:) as the keyword to
           ;; look for rather than the keyword itself, so the default: value
-          ;; was never found.  Preserved as it was.
+          ;; was never found; fixed.
           (dylan%find-keyword
-           rest '(:default)
+           rest :default
            (lambda ()
              (dylan-call
               dylan/error

@@ -238,13 +238,13 @@ them.  Each site carries a comment.
     its arguments, which would have passed the message as the
     multiple-values argument.
 
-Several other oddities were preserved deliberately, each with an "N.B."
-comment saying so: DYLAN:MIN and DYLAN:MAX compare against their first
-argument rather than the running extremum; ELEMENT looks for the symbol
+Several other bugs in the Scheme have since been fixed too, each marked
+with an "N.B." comment: DYLAN:MIN and DYLAN:MAX compared against their first
+argument rather than the running extremum; ELEMENT looked for the symbol
 `default' or the list (default:) rather than the keyword default:, so its
-default: argument is never found; FIND-PAIR tests the head of the original
-list rather than of the tail it is walking; and CHECK-HANDLED-KEYWORDS
-stops without validating when it meets a method taking !rest.
+default: argument was never found; FIND-PAIR tested the head of the original
+list rather than of the tail it was walking; and CHECK-HANDLED-KEYWORDS
+stopped without validating when it met a method taking !rest.
 
                               COPYRIGHT
 

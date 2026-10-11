@@ -163,7 +163,7 @@
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 &rest others)
-     (every (lambda (x) (eq obj1 x)) others))))
+     (every (lambda (x) (id? obj1 x)) others))))
 
 (defparameter dylan/min
   (dylan%function->method
@@ -244,6 +244,8 @@
                   (class.slots class))
              keywords)))
     (dylan%keyword-validate nil rest t)
+    (when (class.abstract? class)
+      (dylan-call dylan/error "make -- cannot instantiate this class" class))
     ;; MIT Scheme's (MAKE-VECTOR n) left the elements #F, and the slot
     ;; initialisation relies on that for the slots it does not touch.
     (let ((instance-data (make-array (class.instance-data-size class)
@@ -350,13 +352,22 @@
 
 ;;; Class stuff
 
+;;; Chapter 11: all-superclasses, direct-superclasses and slot-descriptors
+;;; answer an empty sequence for a sealed class.
+
 (defparameter dylan/all-superclasses
   (dylan%generic-fn 'all-superclasses one-class
                     (lambda (class)
-                      (map-over-all-superclasses! class #'identity))))
+                      (if (class.sealed? class)
+                          '()
+                          (map-over-all-superclasses! class #'identity)))))
 
 (defparameter dylan/direct-superclasses
-  (dylan%generic-fn 'direct-superclasses one-class #'class.superclasses))
+  (dylan%generic-fn 'direct-superclasses one-class
+                    (lambda (class)
+                      (if (class.sealed? class)
+                          '()
+                          (class.superclasses class)))))
 
 (defparameter dylan/direct-subclasses
   (dylan%generic-fn 'direct-subclasses one-class
@@ -379,7 +390,11 @@
   (dylan%generic-fn 'object-class one-object #'get-type))
 
 (defparameter dylan/slot-descriptors
-  (dylan%generic-fn 'slot-descriptors one-class #'class.slots))
+  (dylan%generic-fn 'slot-descriptors one-class
+                    (lambda (class)
+                      (if (class.sealed? class)
+                          (vector)
+                          (class.slots class)))))
 
 (defparameter dylan/slot-getter
   (dylan%generic-fn 'slot-getter one-slot #'slot.getter))
@@ -578,10 +593,12 @@
    'applicable-method?
    (make-param-list `((fn ,<function>)) nil t nil)
    (lambda (fn &rest args)
+     ;; METHOD-APPLICABLE? answers a list of specificities; Dylan wants #t.
      (cond ((dylan%generic-function? fn)
-            (any? (lambda (method) (method-applicable? method args))
-                  (generic-function.methods fn)))
-           ((dylan%method? fn) (method-applicable? fn args))
+            (and (any? (lambda (method) (method-applicable? method args))
+                       (generic-function.methods fn))
+                 t))
+           ((dylan%method? fn) (and (method-applicable? fn args) t))
            (t nil)))))
 
 (defparameter dylan/apply

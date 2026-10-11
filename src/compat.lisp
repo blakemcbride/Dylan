@@ -70,20 +70,15 @@
 ;;; A population is a collection of objects with the property that an
 ;;; object which becomes garbage is no longer a member.  They hold the
 ;;; direct instances and the direct subclasses of a class.  Members are
-;;; added at the front, and mapping runs front to back; the Scheme original
-;;; behaves the same way.
+;;; kept in a weak EQ hash table, each with a serial number, so adding one
+;;; costs constant time; mapping runs newest first, as in the Scheme.
+;;; Without weak tables (other than SBCL) members are simply never dropped.
 
 (defstruct (population (:constructor %make-population ())
                        (:print-object print-opaque-object))
-  (entries '() :type list))              ; list of weak pointers
-
-(defun weak-value (wp)
-  #+sbcl (sb-ext:weak-pointer-value wp)
-  #-sbcl (car wp))
-
-(defun make-weak (object)
-  #+sbcl (sb-ext:make-weak-pointer object)
-  #-sbcl (list object))
+  (table #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized nil)
+         #-sbcl (make-hash-table :test 'eq))
+  (serial 0 :type fixnum))
 
 (defun globally-special-p (symbol)
   "True if SYMBOL is proclaimed special (or global), so that binding it
@@ -95,37 +90,32 @@ would not make a lexical variable."
 (defun make-population* ()
   (%make-population))
 
-(defun population-live-entries (population)
-  "Drop the weak pointers whose referents have been reclaimed, and return
-what is left."
-  (let ((live (remove-if-not (lambda (wp) (weak-value wp))
-                             (population-entries population))))
-    (setf (population-entries population) live)
-    live))
+(defun population-members (population)
+  "The live members, newest first.  The list holds them strongly, so none
+can vanish while a caller walks it."
+  (let ((pairs '()))
+    (maphash (lambda (object serial) (push (cons serial object) pairs))
+             (population-table population))
+    (mapcar #'cdr (sort pairs #'> :key #'car))))
 
 (defun add-to-population! (population object)
-  (unless (dolist (wp (population-live-entries population) nil)
-            (when (eq (weak-value wp) object) (return t)))
-    (push (make-weak object) (population-entries population)))
+  (let ((table (population-table population)))
+    (unless (nth-value 1 (gethash object table))
+      (setf (gethash object table) (incf (population-serial population)))))
   population)
 
 (defun remove-from-population! (population object)
-  (setf (population-entries population)
-        (remove-if (lambda (wp)
-                     (let ((v (weak-value wp)))
-                       (or (null v) (eq v object))))
-                   (population-entries population)))
+  (remhash object (population-table population))
   population)
 
 (defun map-over-population (population procedure)
   "Collect PROCEDURE's values over the live members, as a list."
-  (mapcar (lambda (wp) (funcall procedure (weak-value wp)))
-          (population-live-entries population)))
+  (mapcar procedure (population-members population)))
 
 (defun map-over-population! (population procedure)
   "Apply PROCEDURE to each live member for effect."
-  (dolist (wp (population-live-entries population) t)
-    (funcall procedure (weak-value wp))))
+  (mapc procedure (population-members population))
+  t)
 
 ;;;; One-dimensional tables
 ;;;

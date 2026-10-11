@@ -164,3 +164,29 @@
   (make-dylan-class '<keyword> (list <object>) '() nil))
 (defparameter <character>               ; Instantiable
   (make-dylan-class '<character> (list <object>) '() nil))
+
+;;;; Abstract and sealed classes
+;;;
+;;; ABSTRACT? marks the classes the default MAKE cannot instantiate: the
+;;; manual's abstract classes, and the built-in classes whose instances are
+;;; Lisp objects and that have no MAKE method of their own.  The sealed
+;;; classes are the manual's (chapters 12 and 14).
+
+(dolist (class (list <condition> <serious-condition> <error> <warning>
+                     <restart>
+                     <number> <real> <rectangular-complex> <rational>
+                     <integer> <ratio> <float> <single-float> <double-float>
+                     <extended-float>
+                     <collection> <explicit-key-collection>
+                     <mutable-collection> <sequence>
+                     <mutable-explicit-key-collection> <mutable-sequence>
+                     <function> <method> <class> <slot-descriptor>
+                     <symbol> <keyword> <character>))
+  (setf (class.abstract? class) t))
+
+(dolist (class (list <complex> <real> <rectangular-complex> <rational>
+                     <integer> <ratio> <float> <single-float> <double-float>
+                     <extended-float>
+                     <simple-object-vector> <unicode-string> <byte-string>
+                     <list> <pair> <empty-list>))
+  (setf (class.sealed? class) t))

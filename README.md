@@ -90,9 +90,10 @@ $ sbcl --eval '(load "src/load-runtime.lisp")' --eval '(load "program.lisp")'
 ## Requirements
 
 SBCL, which is what it is developed and tested on (currently 2.6.3).
-Nothing is SBCL-specific except two uses of `SB-EXT` — weak pointers for
-populations and weak hash tables for the method tables — and both have
-portable fallbacks in `src/compat.lisp`.
+Nothing is SBCL-specific except weak hash tables (`SB-EXT`), used for
+class populations and the method tables, and one `SB-INT` query that the
+compiler uses to tell whether a symbol is a special variable. All of them
+are in `src/compat.lisp`, with portable fallbacks.
 
 ## Testing
 

@@ -327,8 +327,10 @@
 
 (defparameter dylan/seal
   (dylan%generic-fn 'seal one-class
+                    ;; Sealing also makes the class read-only (chapter 11).
                     (lambda (class)
                       (setf (class.sealed? class) t)
+                      (setf (class.read-only? class) t)
                       class)))
 
 (defparameter dylan/remove-slot nil)

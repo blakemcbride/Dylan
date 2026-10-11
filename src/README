@@ -24,8 +24,8 @@ the 1992 Thomas README, and still describes the Scheme directory layout as
 it stood then.
 
 It is developed and tested on SBCL.  Nothing in it is SBCL-specific except
-two optional uses of SB-EXT (weak pointers and weak hash tables), both of
-which have portable fallbacks in compat.lisp.
+weak hash tables (SB-EXT) and one SB-INT query for whether a symbol is a
+special variable, all in compat.lisp with portable fallbacks.
 
                              RUNNING IT
 

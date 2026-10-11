@@ -64,7 +64,11 @@
 (declaim (special <object>))
 
 (declaim (inline id?))
-(defun id? (object-1 object-2) (eq object-1 object-2))
+(defun id? (object-1 object-2)
+  ;; EQL, not EQ: numbers and characters that are the same value are the
+  ;; same object in Dylan, but need not be EQ in Common Lisp (floats and
+  ;; bignums, for instance).
+  (eql object-1 object-2))
 
 (defun dylan%false-fn () nil)
 
@@ -96,7 +100,8 @@
   read-only?
   abstract?                             ; Is the class abstract?
   specificity                           ; Longest path from root.
-  specificity-token)                    ; Unique to a specificity labeling.
+  specificity-token                     ; Unique to a specificity labeling.
+  (precedence-list nil))                ; Cached; see CLASS-PRECEDENCE-LIST
 
 ;;;; Lisp structure for representing Dylan singletons
 
@@ -173,59 +178,142 @@
              (slot.init-keyword slot) (slot.required-init-keyword slot)
              (slot.allocation slot) inherited? data-location))
 
-(defun combine-slots (class slots new-getter-fns)
-  (let ((class-data-index -1)
+;;; The class whose own slot is the one CLASS has for GETTER: CLASS itself
+;;; if the slot is not inherited, otherwise the most specific of the
+;;; origins found through its direct superclasses.
+
+(defun slot-origin (class getter)
+  (let ((slot (same-slot-getter-in-slot-vector->slot getter (class.slots class))))
+    (if (and slot (not (slot.inherited? slot)))
+        class
+        (let ((origins
+                (loop for super in (class.superclasses class)
+                      when (same-slot-getter-in-slot-vector->slot
+                            getter (class.slots super))
+                        collect (slot-origin super getter))))
+          (or (find-if (lambda (origin)
+                         (every (lambda (other) (subclass? origin other))
+                                origins))
+                       origins)
+              (car origins))))))
+
+(defun combine-slots (class superclasses new-getter-fns)
+  "Merge the slots CLASS inherits from SUPERCLASSES (in order), and give
+CLASS its own accessor methods for each of them.  Answers a vector of the
+slot vector, the class-data size and the instance-data size."
+  (let ((entries '())                   ; (slot . origin), newest first
+        (class-data-index -1)
         (instance-data-index -1))
-    (labels
-        ((figure-slot-data-location (slot)
-           (case (slot.allocation slot)
-             ((class constant) (slot.data-location slot))
-             ((instance)
-              (incf instance-data-index)
-              (unless (= instance-data-index (slot.data-location slot))
+    ;; First decide which slot descriptor CLASS inherits for each getter.
+    ;; The same slot reached along two paths is inherited once; where one
+    ;; path has overridden it (its origin is a subclass of the other's),
+    ;; the more specific slot wins; otherwise the two must be identical.
+    (dolist (super superclasses)
+      (loop for slot across (class.slots super)
+            when slot
+              do (let* ((getter (slot.getter slot))
+                        (origin (slot-origin super getter))
+                        (entry (find getter entries
+                                     :key (lambda (e) (slot.getter (car e))))))
+                   (cond ((null entry) (push (cons slot origin) entries))
+                         ((member getter new-getter-fns)) ; Being overridden
+                         ((or (eq origin (cdr entry))
+                              (subclass? (cdr entry) origin)))
+                         ((subclass? origin (cdr entry))
+                          (setf (car entry) slot
+                                (cdr entry) origin))
+                         (t (test-that-all-slots-for-this-getter-are-identical
+                             slot getter (list (car entry))))))))
+    ;; Then lay out the data.  CLASS always gets accessor methods of its
+    ;; own: a slot's offset in CLASS may differ from its offset in a
+    ;; superclass, and a superclass's method could otherwise be the most
+    ;; specific one that applies.  (The Scheme added them only when the
+    ;; offset differed from the first superclass's, so a getter from
+    ;; another inheritance path could win and read the wrong offset.)
+    (flet ((figure-slot-data-location (slot)
+             (case (slot.allocation slot)
+               ((class constant) (slot.data-location slot))
+               ((instance)
+                (incf instance-data-index)
                 (add-method (slot.getter slot)
                             (make-instance-getter class instance-data-index
                                                   (slot.debug-name slot)))
                 (when (slot.setter slot)
                   (add-method (slot.setter slot)
                               (make-instance-setter class instance-data-index
-                                                    (slot.type slot)))))
-              instance-data-index)
-             ((each-subclass)
-              (incf class-data-index)
-              (unless (= class-data-index (slot.data-location slot))
+                                                    (slot.type slot))))
+                instance-data-index)
+               ((each-subclass)
+                (incf class-data-index)
                 (add-method (slot.getter slot)
                             (make-each-subclass-getter class class-data-index
                                                        (slot.debug-name slot)))
                 (when (slot.setter slot)
                   (add-method (slot.setter slot)
                               (make-each-subclass-setter class class-data-index
-                                                         (slot.type slot)))))
-              class-data-index)
-             ((virtual) nil)))
-         (combine-two-slotlists (a b)
-           ;; NOTE: Question 8 resolved here by using EQ on the superclass
-           ;; slot getter functions.
-           (let ((slots a)
-                 (getters (mapcar #'slot.getter a)))
-             (dolist (this-slot b slots)
-               (let ((this-getter (slot.getter this-slot)))
-                 (if (member this-getter getters) ; Slot already inherited?
-                     (unless (member this-getter new-getter-fns)
-                                        ; Not being overridden?
-                       (test-that-all-slots-for-this-getter-are-identical
-                        this-slot this-getter slots)) ; Must be identical
-                     (progn
-                       (push (copy-slot this-slot t
-                                        (figure-slot-data-location this-slot))
-                             slots)
-                       (push this-getter getters))))))))
+                                                         (slot.type slot))))
+                class-data-index)
+               ((virtual) nil))))
       (let ((final-slot-list
-              (reverse (cl:reduce #'combine-two-slotlists slots
-                                  :initial-value '()))))
+              (mapcar (lambda (entry)
+                        (let ((slot (car entry)))
+                          (copy-slot slot t (figure-slot-data-location slot))))
+                      (reverse entries))))
         (vector (coerce final-slot-list 'simple-vector)
                 (+ 1 class-data-index)
                 (+ 1 instance-data-index))))))
+
+;;; The class precedence list, computed as CLOS does: a topological sort of
+;;; the class and its superclasses that keeps each class before its direct
+;;; superclasses and those in their declared order, breaking ties in favour
+;;; of the candidate with a direct subclass furthest along the list so far.
+
+(defun compute-class-precedence-list (class)
+  (let ((classes '()))
+    (labels ((collect (c)
+               (unless (member c classes)
+                 (push c classes)
+                 (mapc #'collect (class.superclasses c)))))
+      (collect class))
+    (let ((constraints '()))            ; (before . after)
+      (dolist (c classes)
+        (loop for before in (cons c (class.superclasses c))
+              for after in (class.superclasses c)
+              do (push (cons before after) constraints)))
+      (let ((result '())
+            (remaining (reverse classes)))
+        (loop while remaining
+              do (let ((candidates
+                         (remove-if (lambda (c)
+                                      (find-if (lambda (constraint)
+                                                 (and (eq (cdr constraint) c)
+                                                      (member (car constraint)
+                                                              remaining)))
+                                               constraints))
+                                    remaining)))
+                   (when (null candidates)
+                     (dylan-call dylan/error
+                                 "inconsistent class precedence"
+                                 (class.debug-name class)))
+                   (let ((next
+                           (if (null (cdr candidates))
+                               (car candidates)
+                               (or (dolist (c result nil) ; most recent first
+                                     (let ((hit (find-if
+                                                 (lambda (candidate)
+                                                   (member candidate
+                                                           (class.superclasses c)))
+                                                 candidates)))
+                                       (when hit (return hit))))
+                                   (car candidates)))))
+                     (push next result)
+                     (setf remaining (remove next remaining)))))
+        (reverse result)))))
+
+(defun class-precedence-list (class)
+  (or (class.precedence-list class)
+      (setf (class.precedence-list class)
+            (compute-class-precedence-list class))))
 
 (defun recompute-class-specificities! ()
   (let ((new-token (cons 'specificity 'token)))
@@ -274,6 +362,9 @@
     (dylan-call dylan/error "must specify at least one superclass"))
   (unless (unique? superclasses #'member)
     (dylan-call dylan/error "multiple inheritance from identical superclasses"))
+  (dolist (superclass superclasses)
+    (when (class.sealed? superclass)
+      (dylan-call dylan/error "cannot subclass a sealed class" superclass)))
   (let* ((the-class
            (make-class name                     ; debug-name
                        (make-population*)       ; instances
@@ -288,11 +379,9 @@
                        nil                      ; specificity
                        nil))                    ; specificity-token
          (combined-slots
-           (combine-slots the-class
-                          (mapcar (lambda (class)
-                                    (coerce (class.slots class) 'list))
-                                  superclasses)
-                          new-getter-fns))
+           (progn
+             (class-precedence-list the-class) ; Signals if inconsistent
+             (combine-slots the-class superclasses new-getter-fns)))
          (slots (aref combined-slots 0))
          (class-data-size (aref combined-slots 1))
          (instance-data-size (aref combined-slots 2)))
@@ -462,16 +551,11 @@ appear only once, even if multiple inheritance makes a non-tree."
                  (push this-subclass already-seen)))))
 
 (defun map-over-all-superclasses! (class fn)
-  (loop with superclasses = (class.superclasses class)
-        with already-seen = (list class)
-        do (if (null superclasses)
-               (return (reverse already-seen))
-               (let* ((this-class (car superclasses))
-                      (new-ones (set-difference (class.superclasses this-class)
-                                                already-seen #'member)))
-                 (funcall fn this-class)
-                 (setf superclasses (append (cdr superclasses) new-ones))
-                 (push this-class already-seen)))))
+  "Call FN on each superclass of CLASS, once each, in precedence order, and
+answer the class precedence list."
+  (let ((precedence-list (class-precedence-list class)))
+    (mapc fn (cdr precedence-list))
+    (copy-list precedence-list)))
 
 (defun add-slot-to-class! (class new-slot)
   (case (slot.allocation new-slot)
@@ -613,8 +697,15 @@ appear only once, even if multiple inheritance makes a non-tree."
              (lambda (class test)
                (if test
                    (add-a-slot class
+                               ;; A class slot's storage stays with its
+                               ;; owner, whose class data has already grown
+                               ;; by now, so subclasses share the owner's
+                               ;; location rather than computing one.
                                (copy-slot new-slot t
-                                          (figure-data-location class allocation))
+                                          (if (eq allocation 'class)
+                                              (slot.data-location new-slot)
+                                              (figure-data-location
+                                               class allocation)))
                                #'class.slots #'set-class-slots!
                                #'add-slot-to-class!)
                    (conflict-test class (copy-slot new-slot t 0))))

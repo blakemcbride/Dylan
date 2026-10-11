@@ -337,15 +337,13 @@
                    do (if (and (consp specificities-1) (consp specificities-2))
                           (let ((specificity-1 (car specificities-1))
                                 (specificity-2 (car specificities-2)))
-                            (cond ((eq specificity-1 specificity-2)
+                            (cond ((eql specificity-1 specificity-2)
                                    (pop specificities-1) (pop specificities-2))
                                   ((eq t specificity-1) (return t))
                                   ((eq t specificity-2) (return nil))
                                   ((> specificity-1 specificity-2) (return t))
-                                  ((< specificity-1 specificity-2) (return nil))
-                                  (t (pop specificities-1)
-                                     (pop specificities-2))))
-                          (return t)))))))
+                                  (t (return nil))))
+                          (return nil)))))))
 
 (defun find-applicable-method-specificities (methods arguments)
   "Return a list of (specificities . method) for each applicable method in
@@ -392,12 +390,16 @@ instead."
 (defun match-specializer? (object specializer)
   "Return NIL if OBJECT doesn't match SPECIALIZER.  Else, return the
 specificity of the match.  A high specificity indicates a very specific
-match.  A specificity of T indicates an exact match of a singleton."
+match.  A specificity of T indicates an exact match of a singleton.  A
+class's specificity is measured by its position in the class precedence
+list of OBJECT's class (the Scheme used the class's depth below <object>,
+which disagrees with the precedence order under multiple inheritance)."
   (cond ((singleton? specializer)
          (and (id? object (singleton.object specializer)) t))
         ((class? specializer)
-         (and (subclass? (get-type object) specializer)
-              (class.specificity specializer)))
+         (let* ((precedence-list (class-precedence-list (get-type object)))
+                (position (position specializer precedence-list)))
+           (and position (- (length precedence-list) position))))
         (t (dylan-call dylan/error
                        "match-specializer? -- weird specializer"
                        specializer))))

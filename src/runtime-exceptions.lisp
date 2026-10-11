@@ -164,9 +164,9 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 (defparameter dylan/error            ; NOT continuable
   (make-dylan-callable
    (lambda (&rest args)
-     (dylan-call dylan/signal
-                 (make-default-condition args <simple-error> 'error))
-     (dylan-call dylan/error "error -- attempt to return from error"))))
+     (let ((condition (make-default-condition args <simple-error> 'error)))
+       (dylan-call dylan/signal condition)
+       (implementation-specific/return-from-error condition)))))
 
 (defparameter dylan/cerror           ; OK to continue
   (make-dylan-callable

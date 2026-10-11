@@ -276,31 +276,37 @@ can vanish while a caller walks it."
              ((dylan%method? object) (out "#[method]"))
              (t (out "#[compiled-procedure]"))))
       ((floatp object) (write-string (dylan-float-string object) stream))
+      ((complexp object)
+       (out "#c(")
+       (rec (realpart object))
+       (write-char #\Space stream)
+       (rec (imagpart object))
+       (write-char #\) stream))
       (t (princ object stream)))
     object))
 
 (defun dylan-float-string (x)
-  "A float the way Scheme writes one: 9. rather than 9.0, .5 rather than
-0.5, and no exponent marker for the default float format."
-  (let* ((*read-default-float-format* (type-of x))
-         (string (princ-to-string x))
-         (n (length string)))
-    (when (and (> n 2) (string= ".0" string :start2 (- n 2)))
-      (setf string (subseq string 0 (1- n))
-            n (1- n)))
-    (cond ((and (> n 1) (string= "0." string :end2 2)) (subseq string 1))
-          ((and (> n 2) (string= "-0." string :end2 3))
-           (concatenate 'string "-" (subseq string 2)))
-          (t string))))
+  "A float as Common Lisp writes one with double-float the default format:
+9.0, 0.5, 1.0e20 -- the form the manual's examples show (9.0 in chapter
+10), where Thomas wrote Scheme's 9. and .5.  Other float formats keep
+their exponent marker (1.5f0), so that they read back as themselves."
+  (let ((*read-default-float-format* 'double-float))
+    (prin1-to-string x)))
 
 (defun char-name-or-self (ch)
+  "The manual's character names (chapter 3) where there is one."
   (case ch
     (#\Space "space")
     (#\Newline "newline")
     (#\Tab "tab")
-    (#\Rubout "delete")
+    (#\Rubout "rubout")
+    (#\Page "page")
+    (#\Backspace "backspace")
+    (#\Return "return")
     (#\Nul "null")
-    (t (string ch))))
+    (t (if (graphic-char-p ch)
+           (string ch)
+           (or (char-name ch) (string ch))))))
 
 (defun dylan-write (object &optional (stream *standard-output*))
   (let ((*dylan-print-escape* t)) (dylan-print object stream)))
@@ -383,6 +389,9 @@ consuming it, or NIL at end of file."
                  ((char= ch #\;)
                   (loop for c = (read-char stream nil nil)
                         until (or (null c) (char= c #\Newline))))
+                 ((and (char= ch #\#) (eql (peek-dylan-second-char stream) #\|))
+                  (read-char stream) (read-char stream)
+                  (skip-dylan-block-comment stream))
                  (t (return ch)))))
 
 (defun read-dylan-string (stream)
@@ -452,7 +461,15 @@ consuming it, or NIL at end of file."
         (if (and (> n 1) (char= #\: (char token (1- n))))
             (intern (canonicalize-string-for-symbol (subseq token 0 (1- n)))
                     :keyword)
-            (intern (canonicalize-string-for-symbol token) :dylan)))))
+            (dylan-symbol (canonicalize-string-for-symbol token))))))
+
+(defun dylan-symbol (name)
+  "The Dylan symbol named NAME (already canonicalized).  T and NIL are
+ordinary symbols in Dylan, but in this package they would be Common Lisp's
+T and NIL -- #t and #f -- so they get lower-case names of their own."
+  (if (member name '("T" "NIL") :test #'string=)
+      (intern (string-downcase name) :dylan)
+      (intern name :dylan)))
 
 (defun read-dylan-token (stream)
   (let ((token (with-output-to-string (out)
@@ -496,16 +513,67 @@ introduces the tail of a dotted list."
                (if tail (setf (cdr tail) cell) (setf head cell))
                (setf tail cell))))))))
 
+(defun read-dylan-token-string (stream)
+  (with-output-to-string (out)
+    (loop for ch = (peek-char nil stream nil nil)
+          until (dylan-delimiter-char-p ch)
+          do (write-char (read-char stream) out))))
+
+(defun skip-dylan-block-comment (stream)
+  "Skip the rest of a #| ... |# comment, which may nest (chapter 3)."
+  (loop with depth = 1
+        for ch = (read-char stream nil nil)
+        do (cond ((null ch) (error "End of file inside a #| comment."))
+                 ((and (char= ch #\|) (eql (peek-char nil stream nil nil) #\#))
+                  (read-char stream)
+                  (when (zerop (decf depth)) (return)))
+                 ((and (char= ch #\#) (eql (peek-char nil stream nil nil) #\|))
+                  (read-char stream)
+                  (incf depth)))))
+
+(defun read-dylan-radix-number (stream radix)
+  (let* ((token (read-dylan-token-string stream))
+         (value (let ((*read-base* radix)
+                      (*readtable* (copy-readtable nil)))
+                  (and (every (lambda (ch)
+                                (or (digit-char-p ch radix)
+                                    (member ch '(#\+ #\- #\/))))
+                              token)
+                       (ignore-errors (read-from-string token))))))
+    (if (rationalp value)
+        value
+        (error "Bad radix ~a number in Dylan input: ~a" radix token))))
+
 (defun read-dylan-sharp (stream)
   (read-char stream)                    ; the #
   (let ((ch (read-char stream nil nil)))
     (case ch
       ((nil) (error "End of file after # in Dylan input."))
-      ((#\t #\T) t)
-      ((#\f #\F) nil)
       ((#\\) (read-dylan-character stream))
       ((#\() (coerce (read-dylan-list stream #\)) 'simple-vector))
-      (t (error "Unknown # syntax #~a in Dylan input." ch)))))
+      ((#\x #\X) (read-dylan-radix-number stream 16))
+      ((#\o #\O) (read-dylan-radix-number stream 8))
+      ((#\b #\B) (read-dylan-radix-number stream 2))
+      ((#\c #\C)
+       ;; A complex number, written as Common Lisp writes one: #c(1 2).
+       (unless (eql (read-char stream nil nil) #\()
+         (error "Bad #c syntax in Dylan input."))
+       (let ((parts (read-dylan-list stream #\))))
+         (unless (and (= (length parts) 2) (every #'realp parts))
+           (error "Bad #c syntax in Dylan input."))
+         (complex (first parts) (second parts))))
+      (t
+       ;; #t, #f, and the parameter-list tokens #key, #rest and #next
+       ;; (chapter 3), which are read as the !key, !rest and !next that
+       ;; the compiler uses for them.
+       (let ((name (concatenate 'string (string ch)
+                                (read-dylan-token-string stream))))
+         (cond ((string-equal name "t") t)
+               ((string-equal name "f") nil)
+               ((member name '("key" "rest" "next") :test #'string-equal)
+                (dylan-symbol (canonicalize-string-for-symbol
+                               (concatenate 'string "!" name))))
+               (t (error "Unknown # syntax #~a in Dylan input." name))))))))
 
 (defun read-dylan-object (stream)
   (let ((ch (skip-dylan-whitespace stream)))
@@ -531,15 +599,51 @@ introduces the tail of a dotted list."
 ;;; the host is Common Lisp.  DYLAN-CONDITION carries a message and a list
 ;;; of irritants, exactly as MIT Scheme's simple errors did.
 
+;;; An error message is a format string and its arguments (chapter 13's
+;;; <simple-error>; the manual's examples use Common Lisp's directives).
+;;; ~A and ~S print an argument as Dylan's DISPLAY and WRITE do, ~D as
+;;; DISPLAY, ~% and ~& start a line and ~~ is a tilde; any other directive is
+;;; left as it is.  Arguments no directive consumes follow the message, as
+;;; the runtime's own MIT-style error calls (message, then irritants)
+;;; expect.
+
+(defun dylan-format-message (control arguments)
+  (with-output-to-string (out)
+    (let ((args arguments)
+          (n (length control))
+          (i 0))
+      (loop while (< i n)
+            do (let ((ch (char control i)))
+                 (if (and (char= ch #\~) (< (1+ i) n))
+                     (let ((directive (char-downcase (char control (1+ i)))))
+                       (case directive
+                         ((#\a #\d) (if args
+                                        (dylan-display (pop args) out)
+                                        (write-string "~a" out)))
+                         ((#\s) (if args
+                                    (dylan-write (pop args) out)
+                                    (write-string "~s" out)))
+                         ((#\%) (terpri out))
+                         ((#\&) (fresh-line out))
+                         ((#\~) (write-char #\~ out))
+                         (t (write-char ch out)
+                            (write-char (char control (1+ i)) out)))
+                       (incf i 2))
+                     (progn (write-char ch out) (incf i)))))
+      (dolist (arg args)
+        (write-char #\Space out)
+        (dylan-write arg out)))))
+
 (define-condition dylan-condition (error)
   ((message :initarg :message :initform "" :reader dylan-condition-message)
    (irritants :initarg :irritants :initform '()
               :reader dylan-condition-irritants))
   (:report (lambda (condition stream)
-             (write-string (dylan-condition-message condition) stream)
-             (dolist (irritant (dylan-condition-irritants condition))
-               (write-char #\Space stream)
-               (dylan-write irritant stream)))))
+             (write-string "Error: " stream)
+             (write-string (dylan-format-message
+                            (dylan-condition-message condition)
+                            (dylan-condition-irritants condition))
+                           stream))))
 
 (define-condition unhandled-dylan-condition (error)
   ((dylan-condition :initarg :dylan-condition :reader unhandled-dylan-condition-object))
@@ -554,7 +658,7 @@ native Lisp one.")
 ;;; The compiler's own error procedure (dylan::error in the Scheme).
 
 (defun dylan%error (string &rest args)
-  (error 'dylan-condition :message (concatenate 'string "Error: " string)
+  (error 'dylan-condition :message string
                           :irritants args))
 
 ;;;; The implementation-specific interface used by runtime-exceptions
@@ -575,22 +679,28 @@ native Lisp one.")
 
 (defun implementation-specific/induce-error (format-string format-args)
   (error 'dylan-condition
-         :message (concatenate 'string "Error: " format-string)
+         :message format-string
          :irritants format-args))
 
 (defun implementation-specific/induce-type-error (value class-name)
   (error 'dylan-condition
-         :message "Error:"
-         :irritants (list value '|is not an instance of| class-name)))
+         :message "~s is not an instance of ~a"
+         :irritants (list value class-name)))
+
+(defun implementation-specific/return-from-error (dylan-condition)
+  "Chapter 13: if a handler returns from ERROR, error bombs directly to the
+debugger -- without signalling again, which would only find the same
+handlers."
+  (invoke-debugger
+   (make-condition 'dylan-condition
+                   :message "a handler returned from ERROR, which may not return:"
+                   :irritants (list dylan-condition))))
 
 (defun implementation-specific/signal-unhandled-dylan-condition (dylan-condition)
   (error 'unhandled-dylan-condition :dylan-condition dylan-condition))
 
 (defun implementation-specific/warning (format-string format-args)
-  (warn "~a~{ ~a~}"
-        format-string
-        (mapcar (lambda (x) (with-output-to-string (s) (dylan-write x s)))
-                format-args)))
+  (warn "~a" (dylan-format-message format-string format-args)))
 
 (defun implementation-specific/catch-all-errors (handler thunk)
   ;; A handler that returns normally declines, and the condition goes on to

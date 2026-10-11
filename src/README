@@ -157,11 +157,14 @@ trailing colon (foo:); nor does Common Lisp know #t and #f.  compat.lisp
 therefore contains a small reader for Dylan's surface syntax.  A Dylan
 keyword foo: is read as the Common Lisp keyword :FOO, and KEYWORD? is
 KEYWORDP; every other identifier is interned in the DYLAN package with its
-case folded up.
+case folded up, except that the symbols t and nil get lower-case names, so
+as not to be Common Lisp's T and NIL.  #key, #rest and #next are read as
+the !key, !rest and !next the compiler uses; #x, #o, #b, #c(...) and nested
+#| ... |# comments are read as in Common Lisp.
 
 Printing.  For the same reasons there is a printer of its own: NIL prints
-as (), T as #t, :FOO as foo:, and floats in the Scheme style (9. rather
-than 9.0).  PP pretty-prints Dylan; LISP-PP pretty-prints the compiler's
+as (), T as #t, :FOO as foo:, and floats as the manual shows them (9.0,
+0.5).  PP pretty-prints Dylan; LISP-PP pretty-prints the compiler's
 Lisp output.
 
 Module variables.  In the Scheme a Dylan module variable and a Dylan
@@ -182,13 +185,15 @@ IMPLEMENTATION-SPECIFIC/EVAL muffles the host compiler's style warnings.
                     DIFFERENCES FROM THE SCHEME VERSION
 
 The regression suite (../dylan-examples.dyl) produces the same values as
-reference/MIT.output except for these.  The first is where the manual and
-Scheme disagree, and the manual is followed:
+reference/MIT.output except for these.  The first two are where the manual
+and Scheme disagree, and the manual is followed:
 
-  * SQRT, EXP, the trigonometric functions and their kin are as defined in
-    Common Lisp (chapter 14 of the manual), so of a rational argument they
-    answer a single-float: (sqrt 2) is 1.4142135, not 1.4142135623730951,
-    and (sqrt 25) is 5., not 5.
+  * Floats print as the manual's examples print them: 9.0 and 0.5 where MIT
+    Scheme wrote 9. and .5.  Numbers read as in Common Lisp, so 3. is the
+    integer 3.
+
+  * SQRT is as defined in Common Lisp (chapter 14), so (sqrt 25) is 5.0,
+    not Scheme's exact 5.
 
 The rest ../README.thomas already describes as implementation-dependent:
 
@@ -200,21 +205,10 @@ The rest ../README.thomas already describes as implementation-dependent:
   * Object printed representations (#[dylan-class <window>] and the like)
     of course differ, as the original output file notes.
 
-  * One error message reads ";Error: Error: IF: invalid syntax ..." where
-    the MIT transcript has a single "Error:".  DYLAN%ERROR prepends
-    "Error: " to the message exactly as mit-specific.scm's dylan::error
-    did, and full-test then prepends ";Error: "; the MIT transcript appears
-    to predate that prefix.  Scheme->C's transcript differs again.
-
   * The compiler's echo of the input wraps lines differently, because the
     line breaking is the host pretty printer's.
 
-Two limitations are new:
-
-  * A Dylan variable may not be named T or NIL, which are read as #t and
-    #f.  Other names Common Lisp could not bind -- PI and the other
-    constants, and the runtime's own special variables -- are renamed by
-    the compiler (VARIABLE->LEXICAL, VARIABLE->NAME).
+One limitation is new:
 
   * kits/MIT/restart-example.dyl did not run, and was removed with the rest
     of the kit: it is written against MIT Scheme's condition system by way

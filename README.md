@@ -40,7 +40,7 @@ Exit by typing "dylan:done"
 
 ? (norm (make <point> x: 3 y: 4))
 
-;Value: 5.
+;Value: 5.0
 
 ? (map (curry + 1) '(3 4 5))
 
@@ -49,10 +49,10 @@ Exit by typing "dylan:done"
 ? dylan:done
 ```
 
-Note that `(sqrt 25)` answers the float `5.`, not an exact `5`: the manual
+Note that `(sqrt 25)` answers the float `5.0`, not an exact `5`: the manual
 defines `sqrt`, `exp`, the trigonometric functions and their kin "as in
-Common Lisp", so an irrational function of a rational answers a
-single-float. Rationals are otherwise exact, as in Common Lisp.
+Common Lisp", and its examples show them answering double-floats.
+Rationals are otherwise exact, as in Common Lisp.
 
 ## Using it
 
@@ -111,10 +111,10 @@ $ sbcl --eval '(load "load-dylan.lisp")' \
 
 It reproduces `src/reference/MIT.output` value for value, apart from a
 handful of differences — chiefly the return value of `print`, on which the
-three reference transcripts disagree with each other, and the precision of
-irrational functions of exact arguments, where the manual follows Common
-Lisp rather than Scheme. The full list is under "Differences from the
-Scheme version" in [`src/README`](src/README).
+three reference transcripts disagree with each other, and floats printed as
+the manual prints them (`9.0` where MIT Scheme wrote `9.`). The full list
+is under "Differences from the Scheme version" in
+[`src/README`](src/README).
 
 ## How the translation works
 
@@ -147,8 +147,9 @@ with the accessor names the rest of the system already used.
 **Its own reader and printer.** Common Lisp's reader cannot read Dylan: a
 colon is a package marker whose constituent trait no readtable may change,
 and Dylan writes keywords with a trailing colon (`foo:`). Nor does it know
-`#t` and `#f`. And Dylan wants `()`, `#t`, `foo:` and `9.` on output where
-Lisp would print `NIL`, `T`, `:FOO` and `9.0`.
+`#t`, `#f`, `#key` and `#rest`, and it would read the symbols `t` and `nil`
+as true and false. And Dylan wants `()`, `#t` and `foo:` on output where
+Lisp would print `NIL`, `T` and `:FOO`.
 
 **Module variables are renamed.** In Scheme a Dylan module variable and a
 Dylan lexical of the same name were one symbol, and shadowing came free. A

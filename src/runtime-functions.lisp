@@ -128,20 +128,21 @@
                                      nil nil nil)
                     #'generic-function.methods))
 
-;;; The hyperbolic functions are Common Lisp's (chapter 14).
+;;; The hyperbolic functions are Common Lisp's (chapter 14), with exact
+;;; arguments made double-floats as for the others in runtime-methods.lisp.
 
 (defparameter dylan/acosh
-  (dylan%generic-fn 'acosh one-number #'acosh))
+  (dylan%generic-fn 'acosh one-number (inexact-function #'acosh)))
 (defparameter dylan/asinh
-  (dylan%generic-fn 'asinh one-number #'asinh))
+  (dylan%generic-fn 'asinh one-number (inexact-function #'asinh)))
 (defparameter dylan/atanh
-  (dylan%generic-fn 'atanh one-number #'atanh))
+  (dylan%generic-fn 'atanh one-number (inexact-function #'atanh)))
 (defparameter dylan/cosh
-  (dylan%generic-fn 'cosh one-number #'cosh))
+  (dylan%generic-fn 'cosh one-number (inexact-function #'cosh)))
 (defparameter dylan/sinh
-  (dylan%generic-fn 'sinh one-number #'sinh))
+  (dylan%generic-fn 'sinh one-number (inexact-function #'sinh)))
 (defparameter dylan/tanh
-  (dylan%generic-fn 'tanh one-number #'tanh))
+  (dylan%generic-fn 'tanh one-number (inexact-function #'tanh)))
 
 (defparameter dylan/add-slot
   (dylan%generic-fn 'add-slot
@@ -191,8 +192,9 @@
                     (lambda (magnitude angle)
                       (if (eql angle 0)
                           magnitude
-                          (complex (* magnitude (cos angle))
-                                   (* magnitude (sin angle)))))))
+                          (let ((m (->inexact-argument magnitude))
+                                (a (->inexact-argument angle)))
+                            (complex (* m (cos a)) (* m (sin a))))))))
 
 (defparameter dylan/make-rectangular
   (dylan%generic-fn 'make-rectangular two-reals

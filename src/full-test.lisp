@@ -47,10 +47,9 @@
 (in-package #:dylan)
 
 (defun display-simple-condition (condition)
-  (dylan-display (dylan-call dylan/condition-format-string condition))
-  (dolist (arg (dylan-call dylan/condition-format-arguments condition))
-    (dylan-display " ")
-    (dylan-write arg)))
+  (dylan-display (dylan-format-message
+                  (dylan-call dylan/condition-format-string condition)
+                  (dylan-call dylan/condition-format-arguments condition))))
 
 (defun display-condition (condition)
   (terpri)

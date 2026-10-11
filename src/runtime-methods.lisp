@@ -333,23 +333,47 @@
                                (ignore-errors (= number (ffloor number))))))))
 
 ;;; Chapter 14: abs, the trigonometric and hyperbolic functions, exp, log,
-;;; expt and sqrt are as defined in Common Lisp -- so, for instance, the
-;;; square root of an exact non-negative number is a float, and an
-;;; irrational function of a rational answers a single-float.  (The Scheme
-;;; followed Scheme, where (sqrt 25) is an exact 5.)
+;;; expt and sqrt are as defined in Common Lisp -- so the square root of an
+;;; exact number is a float, even (sqrt 25).  The manual's own examples
+;;; (chapters 4, 10 and 17) show these functions answering double-floats
+;;; for exact arguments, (sqrt 2) being 1.4142135623730951, so exact
+;;; arguments are made double-floats first: Common Lisp's rule with
+;;; double-float as the default format.  (The Scheme followed Scheme, where
+;;; (sqrt 25) is an exact 5.)
+
+(defun ->inexact-argument (number)
+  (typecase number
+    (rational (float number 1d0))
+    ((complex rational) (coerce number '(complex double-float)))
+    (t number)))
+
+(defun inexact-function (fn)
+  (lambda (&rest numbers) (apply fn (mapcar #'->inexact-argument numbers))))
 
 (defparameter dylan/abs (dylan%generic-fn 'abs one-number #'abs))
-(defparameter dylan/sin (dylan%generic-fn 'sin one-number #'sin))
-(defparameter dylan/cos (dylan%generic-fn 'cos one-number #'cos))
-(defparameter dylan/tan (dylan%generic-fn 'tan one-number #'tan))
-(defparameter dylan/asin (dylan%generic-fn 'asin one-number #'asin))
-(defparameter dylan/acos (dylan%generic-fn 'acos one-number #'acos))
-(defparameter dylan/atan (dylan%generic-fn 'atan one-number #'atan))
-(defparameter dylan/atan2 (dylan%generic-fn 'atan2 two-numbers #'atan))
-(defparameter dylan/exp (dylan%generic-fn 'exp one-number #'exp))
-(defparameter dylan/log (dylan%generic-fn 'log one-number #'log))
-(defparameter dylan/expt (dylan%generic-fn 'expt two-numbers #'expt))
-(defparameter dylan/sqrt (dylan%generic-fn 'sqrt one-number #'sqrt))
+(defparameter dylan/sin (dylan%generic-fn 'sin one-number (inexact-function #'sin)))
+(defparameter dylan/cos (dylan%generic-fn 'cos one-number (inexact-function #'cos)))
+(defparameter dylan/tan (dylan%generic-fn 'tan one-number (inexact-function #'tan)))
+(defparameter dylan/asin
+  (dylan%generic-fn 'asin one-number (inexact-function #'asin)))
+(defparameter dylan/acos
+  (dylan%generic-fn 'acos one-number (inexact-function #'acos)))
+(defparameter dylan/atan
+  (dylan%generic-fn 'atan one-number (inexact-function #'atan)))
+(defparameter dylan/atan2
+  (dylan%generic-fn 'atan2 two-numbers (inexact-function #'atan)))
+(defparameter dylan/exp (dylan%generic-fn 'exp one-number (inexact-function #'exp)))
+(defparameter dylan/log (dylan%generic-fn 'log one-number (inexact-function #'log)))
+(defparameter dylan/expt
+  ;; Exact for an exact base and integer power, as in Common Lisp.
+  (dylan%generic-fn 'expt two-numbers
+                    (lambda (base power)
+                      (if (and (rationalp base) (integerp power))
+                          (expt base power)
+                          (expt (->inexact-argument base)
+                                (->inexact-argument power))))))
+(defparameter dylan/sqrt
+  (dylan%generic-fn 'sqrt one-number (inexact-function #'sqrt)))
 
 (defparameter dylan/modulo
   (dylan%generic-fn

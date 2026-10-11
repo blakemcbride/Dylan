@@ -72,6 +72,23 @@
   (when (gethash variable *read-only-variables*)
     (dylan-call dylan/error "variable is read-only" name)))
 
+(defun dylan%check-generic-function-definition (generic-function name
+                                                nrequired keys rest?)
+  "Signal an error unless a DEFINE-GENERIC-FUNCTION of NAME with this
+parameter list is consistent with the existing GENERIC-FUNCTION."
+  (let ((data (generic-function-data generic-function))
+        (keys (guarantee-keys keys)))
+    (flet ((same-keys? (a b)
+             (cond ((or (null a) (null b)) (and (null a) (null b)))
+                   ((or (vectorp a) (vectorp b)) (and (vectorp a) (vectorp b)))
+                   (t (and (subsetp a b) (subsetp b a))))))
+      (unless (and (= nrequired (generic-function-data.nrequired data))
+                   (eq rest? (generic-function-data.rest? data))
+                   (same-keys? keys (generic-function-data.keys data)))
+        (dylan-call dylan/error
+                    "define-generic-function -- inconsistent with the existing generic function"
+                    name)))))
+
 (defun dylan%call/cc (receiver)
   "Used for BIND-EXIT and HANDLER-CASE.  Dylan only ever escapes with its
 continuations, so a CATCH/THROW pair suffices."

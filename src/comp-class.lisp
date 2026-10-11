@@ -315,8 +315,14 @@
                          "define-generic-function -- already has a value"
                          ',name ,ref ',reqs ',rest ',keys)
              (progn
-               ,(funcall set `(dylan%create-generic-function
-                               ',name ,(length reqs) ',keys ,(if rest t nil)))
+               ;; Chapter 6: an existing generic function is kept, with
+               ;; its methods, if the definition is consistent with it.
+               (if (dylan%generic-function? ,ref)
+                   (dylan%check-generic-function-definition
+                    ,ref ',name ,(length reqs) ',keys ,(if rest t nil))
+                   ,(funcall set `(dylan%create-generic-function
+                                   ',name ,(length reqs) ',keys
+                                   ,(if rest t nil))))
                (dylan%make-variable-read-only
                 ',(name->module-variable (variable->name name)))
                ',name)))))))

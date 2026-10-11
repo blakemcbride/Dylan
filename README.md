@@ -145,8 +145,6 @@ tables, the full set of character names — are no longer differences.
   so they cannot name variables. Every other name is allowed.
 - **Modules** are declared as design note 32 describes; the 1992 manual
   left that to the programming environment.
-- **`define-generic-function` options** are checked for keyword/value form
-  and otherwise ignored.
 - **Backquote.** The manual's section on it did not survive, so `` ` ``,
   `,` and `,@` follow the usual Lisp rules, nesting included.
 - **`map-into`** passes the target's elements to the function, as the

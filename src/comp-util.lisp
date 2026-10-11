@@ -128,9 +128,10 @@ current module: see comp-module.lisp."
   (intern (symbol-name symbol) :keyword))
 
 (defun dylan-special-name? (x)
-  "Dylan's #rest and friends are simulated with !rest, so variable names
-beginning with \"!\" are precluded, as are those beginning with the two
-prefixes the runtime reserves for itself."
+  "Is X one of the compiler's own names?  Dylan's #rest and friends are
+read as !rest and so on, and the runtime's names begin DYLAN/ or DYLAN%.
+A Dylan program cannot write such a name: the reader gives a symbol that
+looks like one a name of its own (see DYLAN-USER-SYMBOL)."
   (and (symbolp x)
        (not (null x))
        (let* ((string (symbol-name x))

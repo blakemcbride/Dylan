@@ -140,8 +140,9 @@ tables, the full set of character names — are no longer differences.
 
 **Different behavior**
 
-- **Reserved names.** Variables may not begin with `!` or `dylan/`; the
-  compiler uses those names.
+- **`!key`, `!rest` and `!next`** are read as `#key`, `#rest` and `#next`,
+  as in Thomas, whose programs (the book's examples among them) use them;
+  so they cannot name variables. Every other name is allowed.
 - **Modules** are declared as design note 32 describes; the 1992 manual
   left that to the programming environment.
 - **`define-generic-function` options** are checked for keyword/value form

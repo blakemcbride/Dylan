@@ -874,7 +874,7 @@
                (lambda (class string)
                  (declare (ignore class))
                  (remember-spelling
-                  (dylan-symbol (canonicalize-string-for-symbol string))
+                  (dylan-user-symbol (canonicalize-string-for-symbol string))
                   (copy-seq string)))))
   (add-method dylan/as
               (dylan%function->method

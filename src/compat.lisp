@@ -509,7 +509,7 @@ consuming it, or NIL at end of file."
                (intern (canonicalize-string-for-symbol name) :keyword)
                name))
             (remember-spelling
-             (dylan-symbol (canonicalize-string-for-symbol token))
+             (dylan-user-symbol (canonicalize-string-for-symbol token))
              token)))))
 
 (defun dylan-symbol (name)
@@ -519,6 +519,27 @@ T and NIL -- #t and #f -- so they get lower-case names of their own."
   (if (member name '("T" "NIL") :test #'string=)
       (intern (string-downcase name) :dylan)
       (intern name :dylan)))
+
+;;; The compiler names its own variables !X, DYLAN/X, DYLAN%X and X@MODULE.
+;;; So that a Dylan program may use any name, a symbol it writes that looks
+;;; like one of those is a different symbol here, its name prefixed with
+;;; %%; so is one already beginning with %%, which keeps the mapping one
+;;; to one.  The symbol still prints as written (chapter 15).  The
+;;; exceptions are !key, !rest and !next, which Thomas programs (the book's
+;;; examples among them) write for #key, #rest and #next.
+
+(defun dylan-user-symbol (name)
+  "The Dylan symbol a program means by NAME (already canonicalized)."
+  (dylan-symbol
+   (if (or (and (> (length name) 0) (char= (char name 0) #\!)
+                (not (member name '("!KEY" "!REST" "!NEXT") :test #'string=)))
+           (and (>= (length name) 6)
+                (or (string= "DYLAN/" name :end2 6)
+                    (string= "DYLAN%" name :end2 6)))
+           (and (>= (length name) 2) (string= "%%" name :end2 2))
+           (find #\@ name))
+       (concatenate 'string "%%" name)
+       name)))
 
 (defun read-dylan-token (stream)
   (let ((token (with-output-to-string (out)

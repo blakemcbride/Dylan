@@ -164,8 +164,8 @@ first entered in is remembered and used to print it (chapter 15); a
 compiled file records the spellings of its symbols.  #key, #rest and #next are read as
 the !key, !rest and !next the compiler uses; #x, #o, #b, #c(...), nested
 #| ... |# comments and backquote (`, ",", ",@") are read as in Common
-Lisp.  The manual's section on backquote did not survive, so backquote
-follows the usual Lisp semantics, nesting included.
+Lisp.  Chapter 3 defers backquote to a separate section the manual does
+not contain, so it follows the usual Lisp semantics, nesting included.
 
 Printing.  For the same reasons there is a printer of its own: NIL prints
 as (), T as #t, :FOO as foo:, floats as the manual shows them (9.0,

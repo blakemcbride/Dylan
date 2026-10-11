@@ -145,8 +145,9 @@ tables, the full set of character names — are no longer differences.
   so they cannot name variables. Every other name is allowed.
 - **Modules** are declared as design note 32 describes; the 1992 manual
   left that to the programming environment.
-- **Backquote.** The manual's section on it did not survive, so `` ` ``,
-  `,` and `,@` follow the usual Lisp rules, nesting included.
+- **Backquote.** Chapter 3 defers it to "a separate section of this
+  manual" that the manual does not contain, so `` ` ``, `,` and `,@` follow
+  the usual Lisp rules, nesting included.
 - **`map-into`** passes the target's elements to the function, as the
   manual's example does, though its prose names only the sources.
 - **Irrational functions** (`sqrt`, `exp`, the trigonometric functions)

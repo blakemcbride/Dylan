@@ -1,0 +1,38 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="00-intro.html">Previous chapter:   Design Note Format</A><P>
+<TITLE>Dylan Design Notes: #1: Collection Class-For-Copy        (Clarification)</TITLE>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#1: Collection Class-For-Copy        (Clarification)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note clarifies that class-for-copy of a collection must 
+return a mutable collection.
+<P>
+<HR>
+<P>
+Replace the definition of class-for-copy on <a href="../book.annotated/ch12.html#class-for-copy1">page 100 of the Dylan 
+manual</a> with the following:
+<PRE>
+class-for-copy   collection  =&gt;  class        [G.F. Method]
+</PRE>
+class-for-copy returns an appropriate collection class for creating 
+mutable copies of the argument.  For collections that are already 
+mutable, the collection's actual class is generally the most 
+appropriate, so the &lt;object&gt; method of class-for-copy can be used.  
+The class-for-copy value of a sequence should be a subclass of 
+&lt;sequence&gt;, and the class-for-copy value of an explicit-keycollection should be a subclass of &lt;explicit-key-collection&gt;.  In 
+all cases, the class-for-copy value must be a mutable collection.
+<P>
+<HR>
+<P>
+Notes:
+<P>
+The restriction on class-for-copy for collections is needed to keep 
+the collection protocol relatively simple.
+<P>
+Implementations do not need to check for this explicitly.  Many 
+built-in functions will, however, break if the restriction is not 
+observed.
+<P><A NAME="NEXT" HREF="02-default-keyword.html">Next chapter:  #2: First, Second, Third, Last Default                (Addition)</A>

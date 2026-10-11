@@ -1,0 +1,423 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="25-exit-extent.html">Previous chapter:  #25: Exit Extent        (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+<TITLE>Dylan Design Notes: #26: New Iteration Protocol     (Change)</TITLE>
+<H1>#26: New Iteration Protocol     (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This Design Note specifies a revised iteration protocol for Dylan.  The 
+new iteration protocol is complex, but allows better performance than the 
+original specification.  Note that the iteration protocol is intended to 
+be used primarily by creators of new collection classes, rather than by 
+users of collections.  In practice, most iterations will be hidden inside 
+for and the other standard iteration functions.
+<HR>
+Remove the following functions from the language.
+<PRE>
+<a href="../book.annotated/ch12.html#initial-state0">initial-state</a>
+<a href="../book.annotated/ch12.html#next-state0">next-state</a>
+<a href="../book.annotated/ch12.html#current-element0">current-element</a>
+<a href="../book.annotated/ch12.html#copy-state0">copy-state</a>
+<a href="../book.annotated/ch12.html#current-key0">current-key</a>
+<a href="../book.annotated/ch12.html#final-state0">final-state</a>
+<a href="../book.annotated/ch12.html#previous-state0">previous-state</a>
+</PRE> 
+Add the following functions to the language:
+<PRE>
+forward-iteration-protocol collection  [Generic  Function]
+        #values (initial-state          &lt;object&gt;)
+                (limit                  &lt;object&gt;)
+                (next-state             &lt;function&gt;)
+                (finished-state?        &lt;function&gt;)
+                (current-key            &lt;function&gt;)
+                (current-element        &lt;function&gt;)
+                (current-element-setter &lt;function&gt;)
+                (copy-state             &lt;function&gt;)
+</PRE>
+The values returned by this function are used to implement iteration over 
+the collection argument.  Only the collection argument this function was 
+called with may be used as the collection argument to functions returned 
+by this function.  Only the initial-state object and state objects 
+returned by the next-state and copy-state functions may be used as the 
+state argument to functions returned by this function.  Only the limit 
+object may be used as the limit argument to the finished-state? function.
+<PRE>
+initial-state
+</PRE>
+The initial iteration state object.
+<PRE>
+limit
+</PRE>
+A value that may be used by the finished-state?  function to determine 
+whether the iteration has been completed.
+<PRE>
+next-state collection state =&gt; new-state
+</PRE>
+This function steps the iteration by producing a new state from the 
+associated collection  and state.  The next-state function may or may not 
+modify the state  argument; it is an error to use a state value after it 
+has been passed to the associated next-state function.  The copy-state 
+function provides a mechanism for saving a particular state in an 
+iteration for later resumption.  
+<P><PRE>
+finished-state? collection state limit =&gt; boolean
+</PRE>
+This function returns #t if the iteration of the collection has been 
+completed, i.e., there are no other elements of the collection to 
+consider.  It returns #f otherwise.  It is an error to use a finished 
+state in a call to the associated next-state, current-element, 
+current-key or current-element-setter functions.
+<PRE>
+current-key collection state =&gt; key
+</PRE>
+This function returns the unique key associated with state in the 
+collection.  If the current-key function were called once with each state  
+value produced during an iteration over a collection, the resulting 
+sequence of values would contain every key from the collection exactly 
+once.
+<PRE>
+current-element collection state =&gt; element 
+</PRE>
+This function returns the element of collection currently indicated
+by state.
+<P><PRE>
+current-element-setter collection state value =&gt; value
+</PRE>
+This function sets the element of collection  indicated by state  to 
+value  and returns value.  If the collection is not mutable, i.e. is not 
+a generalized instance of &lt;mutable-collection&gt;, this function instead 
+signals an error.
+<PRE>
+copy-state collection state =&gt; new-state
+</PRE>
+This function returns a state which represents the same point in the 
+iteration over collection  as is represented by state.  
+<PRE>
+backward-iteration-protocol collection  [Generic  Function]
+        #values (final-state            &lt;object&gt;)
+                (limit                  &lt;object&gt;)
+                (previous-state         &lt;function&gt;)
+                (finished-state?        &lt;function&gt;)
+                (current-key            &lt;function&gt;)
+                (current-element        &lt;function&gt;)
+                (current-element-setter &lt;function&gt;)
+                (copy-state             &lt;function&gt;)
+</PRE>
+Some collection classes that are stable under iteration additionally 
+support the ability to iterate in the reverse of the natural order, by 
+providing a method on the generic function backward-iteration-protocol.  
+The values returned by this function are analogous to the corresponding 
+values returned by forward-iteration-protocol, except that the 
+final-state object indicates the last element in the collection and the 
+previous-state returns a state for the preceding element.
+<P>
+Reworked examples appear below.
+<h3>
+Example from p.123
+</h3><PRE>
+define method do1 (f :: &lt;function&gt;, c :: &lt;collection&gt;)
+  let (init, limit, next, end?, key, elt) = 
+forward-iteration-protocol(c);
+  for (state = init then next(c, state),
+            until end?(c, state, limit))
+    f(elt(c, state));
+  end for;
+end method do1;
+</PRE><h3>
+Examples from p.125
+</h3><PRE>
+define method key-sequence (c :: &lt;collection&gt;)
+  let (init, limit, next, end?, key, elt) = 
+forward-iteration-protocol(c);
+  for (result = #() then pair(key(c, state), result),
+            state = init then next(c, state),
+            until end?(c, state, limit))
+  finally
+    result
+  end for;
+end method key-sequence;
+
+define method do-with-keys
+                (f :: &lt;function&gt;, c :: &lt;explicit-key-collection&gt;)
+  let (init, limit, next, end?, key, elt) = 
+forward-iteration-protocol(c);
+  for (state = init then next(c, state),
+            until end?(c, state, limit))
+         f(key(c, state), elt(c, state));
+  end for;
+end method do-with-keys;
+</PRE><h3>
+Examples from p.126
+</h3><PRE>
+define method do-with-keys (f :: &lt;function&gt;, c :: &lt;sequence&gt;)
+  let (init, limit, next, end?, key, elt) = 
+forward-iteration-protocol(c);
+  for (key :: &lt;integer&gt; from 0,
+            state = init then next(c, state),
+            until end?(c, state, limit))
+         f(key, elt(c, state));
+  end for;
+end method do-with-keys;
+
+define constant no-default = pair(#f, #f);
+
+define method element (c :: &lt;explicit-key-collection&gt;, elt-key,
+                                  #key default: default (no-default))
+  let (init, limit, next, end?, key, elt) = 
+forward-iteration-protocol(c);
+  for (state = init then next(c, state),
+            until (end?(c, state, limit) | (key(c, state) = elt-key)))
+  finally
+         if (!end?(c, state, limit)) elt(c, state);
+         else if (default == no-default) error(...);
+           else default;
+      end if;
+    end if;
+  end for;
+end method element;
+
+define method element (c :: &lt;sequence&gt;, elt-key,
+                                  #key default: default (no-default))
+  let (init, limit, next, end?, key, elt) = 
+forward-iteration-protocol(c);
+  for (index from 0,
+            state = init then next(c, state),
+            until (end?(c, state, limit)) | (index == elt-key)))
+  finally
+    if (!end?(c, state, limit)) elt(c, state);
+    else if (default == no-default) error(...);
+           else default;
+      end if;
+    end if;
+  end for;
+end method element;
+</PRE>
+<h3>
+Examples from p.128
+</h3>
+<PRE>
+define method element-setter
+                (c :: &lt;mutable-sequence&gt;, elt-key :: &lt;integer&gt;, new-value)
+  let (init, limit, next, end?, key, elt, setter)
+                = forward-iteration-protocol(c);
+  for (index :: &lt;integer&gt; from 0,
+            state = init then next(c, state),
+            until ((index == elt-key) | end?(c, state, limit)))
+  finally
+    if (end?(c, state, limit)) error(...);
+    else setter(c, state, new-value);
+    end if;
+  end for;
+end method element-setter;
+
+define method element-setter
+                (c :: &lt;mutable-explicit-key-collection&gt;, elt-key, new-value)
+  let (init, limit, next, end?, key, elt, setter)
+                = forward-iteration-protocol(c);
+  for (state = init then next(c, state),
+            until (end?(c, state, limit) | (key(c, state) = elt-key)))
+  finally
+         if (end?(c, state, limit)) error(...);
+         else setter(c, state, new-value);
+         end if;
+  end for;
+end method element-setter;
+</PRE><h3>
+Examples from p.129
+</h3><PRE>
+define method do2 (f :: &lt;function&gt;, c1 :: &lt;collection&gt;, c2 :: 
+&lt;collection&gt;)
+  let keys = intersection(key-sequence(c1), key-sequence(c2));
+  let (init, limit, next, end?, key, elt)
+                = forward-iteration-protocol(keys);
+  for (state = init then next(keys, state),
+            until end?(keys, state, limit))
+    let key = elt(keys, state);
+    f(c1[key], c2[key]);
+  end for;
+end method do2;
+
+define method do2 (f :: &lt;function&gt;, c1 :: &lt;sequence&gt;, c2 :: &lt;sequence&gt;)
+  let (init1, limit1, next1, end1?, key1, elt1)
+                = forward-iteration-protocol(c1);
+  let (init2, limit2, next2, end2?, key2, elt2)
+                = forward-iteration-protocol(c2);
+  for (state1 = init1 then next1(c1, state1),
+            state2 = init2 then next2(c2, state2),
+            until (end1?(c1, state1, limit1) | end2?(c2, state2, limit2)))
+    f(elt1(c1, state1), elt2(c2, state2));
+  end for;
+end method do2;
+</PRE><h3>
+Examples from p.130
+</h3><PRE>
+define method map-into1 (target :: &lt;mutable-collection&gt;,
+                                    f :: &lt;function&gt;,
+                                    source :: &lt;collection&gt;)
+  let keys = intersection(key-sequence(target), key-sequence(source));
+  let (init, limit, next, end?, key, elt)
+                = forward-iteration-protocol(keys);
+  for (state = init then next(keys, state),
+            until end?(keys, state, limit))
+    let key = elt(keys, state);
+    target[key] := f(source[key]);
+  end for;
+end method map-into1;
+
+define method map-into1 (target :: &lt;mutable-sequence&gt;,
+                                    f :: &lt;function&gt;,
+                                    source :: &lt;sequence&gt;)
+  let (init1, limit1, next1, end1?, key1, elt1, setter)
+                = forward-iteration-protocol(target);
+  let (init2, limit2, next2, end2?, key2, elt2)
+                = forward-iteration-protocol(source);
+  for (state1 = init1 then next1(target, state1),
+            state2 = init2 then next2(source, state2),
+            until (end1?(target, state1, limit1) |
+              end2?(source, state2, limit2)))
+    setter(target, state1, f(elt2(source, state2)));
+  end for;
+end method map-into1;
+</PRE><h3>
+Some new examples, for &lt;list&gt; and &lt;vector&gt;:</h3>
+<PRE>
+define method forward-iteration-protocol (c :: &lt;vector&gt;)
+
+  local method next-state(c, s :: &lt;integer&gt;) =&gt; s :: &lt;integer&gt;;
+          s + 1;
+        end method;
+  local method finished-state?(c, s :: &lt;integer&gt;, l :: &lt;integer&gt;)
+          s &gt;= l;
+        end method;
+  local method current-key(c, s :: &lt;integer&gt;) =&gt; k :: &lt;integer&gt;;
+          s;
+        end method;
+  local method current-element(c :: &lt;vector&gt;, s :: &lt;integer&gt;)
+          c[s];
+        end method;
+  local method current-element-setter(c :: &lt;vector&gt;,
+                                      s :: &lt;integer&gt;,
+                                      e)
+          c[s] := e;
+        end method;
+  local method copy-state(c, s :: &lt;integer&gt;) =&gt; s :: &lt;integer&gt;;
+          s;
+        end method;
+  values(0,     # initial state
+         size(c),       # limit
+         next-state,
+         finished-state?,
+         current-key,
+         current-element,
+         current-element-setter,
+         copy-state);
+end method;
+
+define method backward-iteration-protocol (c :: &lt;vector&gt;)
+  local method previous-state(c, s :: &lt;integer&gt;) =&gt; s :: &lt;integer&gt;;
+          s - 1;
+        end method;
+  local method finished-state?(c, s :: &lt;integer&gt;, l :: &lt;integer&gt;)
+          s &lt; 0;
+        end method;
+  local method current-key(c, s :: &lt;integer&gt;) =&gt; k :: &lt;integer&gt;;
+          s;
+        end method;
+  local method current-element(c :: &lt;vector&gt;, s :: &lt;integer&gt;)
+          c[s];
+        end method;
+  local method current-element-setter(c :: &lt;vector&gt;,
+                                      s :: &lt;integer&gt;,
+                                      e)
+          c[s] := e;
+        end method;
+  local method copy-state(c, s :: &lt;integer&gt;) =&gt; s :: &lt;integer&gt;;
+          s;
+        end method;
+  values(size(c) - 1,   # final state
+         0,     # limit (not used)
+         previous-state,
+         finished-state?,
+         current-key,
+         current-element,
+         current-element-setter,
+         copy-state);
+end method;
+
+define method forward-iteration-protocol (c :: &lt;list&gt;)
+  local method next-state(c, s :: &lt;list&gt;) =&gt; s :: &lt;list&gt;;
+          tail(s);
+        end method;
+  # This assumes a dotted list is not valid as a sequence
+  local method finished-state?(c, s :: &lt;list&gt;, l :: &lt;list&gt;)
+          s == l;
+        end method;
+  # Use this one to make a dotted list a valid sequence
+  local method alternate-finished-state?(c, s :: &lt;list&gt;, l)
+          not(instance?(s, &lt;pair&gt;));
+        end method;
+  local method current-key(c :: &lt;list&gt;, s :: &lt;list&gt;) =&gt; k :: &lt;integer&gt;;
+          local method search(l :: &lt;list&gt;, k :: &lt;integer&gt;)
+            if (l == s) k; else search(tail(l), k + 1); end if;
+          end method;
+          search(c, 0);
+        end method;
+  local method current-element(c, s :: &lt;list&gt;)
+          head(s);
+        end method;
+  local method current-element-setter(c, s :: &lt;list&gt;, e)
+          head(s) := e;
+        end method;
+  local method copy-state(c, s :: &lt;list&gt;) =&gt; s :: &lt;list&gt;;
+          s;
+        end method;
+  values(c,     # initial state
+         #(),   # limit
+         next-state,
+         finished-state?,
+         current-key,
+         current-element,
+         current-element-setter,
+         copy-state);
+end method;
+</PRE>
+# lists do not support backward-iteration-protocol
+<HR>
+<h3>
+Notes
+</h3>
+The new iteration protocol allows better code quality achieved more 
+easily for iterations where there is sufficient type and sealing 
+information present to allow the various parts of the protocol to be 
+inlined, because the type of the state is not a union type.
+<P>
+The new iteration protocol allows better performance for iterations that 
+have insufficient type and sealing information present to be inlined.
+<P>
+The limit value, which is used as the limit argument to the 
+finished-state? function, allows those collections for which it is 
+appropriate to do so to compute some value once when the protocol 
+functions are determined, rather than recomputing it for each call to the 
+finished-state? function.  For some collections it might be the size, 
+while others might ignore this argument.  This is increased overhead for 
+<tt>&lt;list&gt;</tt> iteration (except when the iteration protocol functions end up 
+inlined), but decreased overhead for<tt> &lt;simple-object-vector&gt;</tt> iteration, especially when the iteration protocol functions end up inlined.  In some cases an optimizing compiler could get the same effect in the inlined 
+case through common subexpression removal, but this proposal is also 
+concerned with the efficiency of the non-inlined case.
+<P>
+The iteration protocol functions receive the logically redundant 
+collection and limit arguments so that these functions do not have to be 
+closures, which are more expensive than simple methods both to make and 
+to call in many implementations.  This is a compromise of elegance for 
+the sake of efficiency.  The state argument would also be logically 
+redundant if the copy-state function did not exist, or if it returned a 
+new set of functions instead of a state.
+<P>
+In addition, a function that tests for the end of an iteration seems more 
+aesthetic than the magical #f value specified in the Dylan book.
+
+
+<P><A NAME="NEXT" HREF="27-mappers.html">Next chapter:  #27: Pseudo-Generic Mappers     (Change)</A>

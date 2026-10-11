@@ -1,0 +1,279 @@
+{
+  "manifest": {
+    "book.annotated/annotated-manual.html": {
+      "archive_url": "https://web.archive.org/web/20000617132725id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/annotated-manual.html",
+      "bytes": 5652
+    },
+    "book.annotated/acknowledgments.html": {
+      "archive_url": "https://web.archive.org/web/20000617100128id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/acknowledgments.html",
+      "bytes": 1715
+    },
+    "book.annotated/ch1.html": {
+      "archive_url": "https://web.archive.org/web/20000617164616id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch1.html",
+      "bytes": 6715
+    },
+    "book.annotated/ch10.html": {
+      "archive_url": "https://web.archive.org/web/20000617200455id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch10.html",
+      "bytes": 21305
+    },
+    "book.annotated/ch11.html": {
+      "archive_url": "https://web.archive.org/web/20000602213404id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch11.html",
+      "bytes": 16554
+    },
+    "book.annotated/ch13.html": {
+      "archive_url": "https://web.archive.org/web/20000709213354id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch13.html",
+      "bytes": 36435
+    },
+    "book.annotated/ch14.html": {
+      "archive_url": "https://web.archive.org/web/20000712232551id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch14.html",
+      "bytes": 14062
+    },
+    "book.annotated/ch17.html": {
+      "archive_url": "https://web.archive.org/web/20000617231549id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch17.html",
+      "bytes": 4977
+    },
+    "book.annotated/ch18.html": {
+      "archive_url": "https://web.archive.org/web/20000618023726id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch18.html",
+      "bytes": 397
+    },
+    "book.annotated/ch2.html": {
+      "archive_url": "https://web.archive.org/web/20000618061226id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch2.html",
+      "bytes": 7954
+    },
+    "book.annotated/ch3.html": {
+      "archive_url": "https://web.archive.org/web/20000525032710id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch3.html",
+      "bytes": 14102
+    },
+    "book.annotated/ch4.html": {
+      "archive_url": "https://web.archive.org/web/20000602234323id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch4.html",
+      "bytes": 7343
+    },
+    "book.annotated/ch5.html": {
+      "archive_url": "https://web.archive.org/web/20000530005658id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch5.html",
+      "bytes": 6252
+    },
+    "book.annotated/ch6.html": {
+      "archive_url": "https://web.archive.org/web/20000709222210id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/ch6.html",
+      "bytes": 48256
+    },
+    "book.annotated/copyright.html": {
+      "archive_url": "https://web.archive.org/web/20000618124206id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/copyright.html",
+      "bytes": 2387
+    },
+    "book.annotated/foreword.html": {
+      "archive_url": "https://web.archive.org/web/20000618153416id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/foreword.html",
+      "bytes": 3937
+    },
+    "book.annotated/index.html": {
+      "archive_url": "https://web.archive.org/web/20000618182530id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/index.html",
+      "bytes": 29230
+    },
+    "book.annotated/preface.html": {
+      "archive_url": "https://web.archive.org/web/20000603004140id_/http://www.basistech.com/tree/dylan/prefix-dylan/book.annotated/preface.html",
+      "bytes": 15933
+    },
+    "book.annotated/ch12.html": {
+      "archive_url": "https://web.archive.org/web/20251002160358id_/http://lispm.de/docs/prefix-dylan/book.annotated/ch12.html",
+      "bytes": 77859
+    },
+    "book.annotated/ch15.html": {
+      "archive_url": "https://web.archive.org/web/20251002154607id_/http://lispm.de/docs/prefix-dylan/book.annotated/ch15.html",
+      "bytes": 2509
+    },
+    "book.annotated/ch16.html": {
+      "archive_url": "https://web.archive.org/web/20251002154142id_/http://lispm.de/docs/prefix-dylan/book.annotated/ch16.html",
+      "bytes": 1971
+    },
+    "book.annotated/ch7.html": {
+      "archive_url": "https://web.archive.org/web/20251002155139id_/http://lispm.de/docs/prefix-dylan/book.annotated/ch7.html",
+      "bytes": 3064
+    },
+    "book.annotated/ch8.html": {
+      "archive_url": "https://web.archive.org/web/20251002160253id_/http://lispm.de/docs/prefix-dylan/book.annotated/ch8.html",
+      "bytes": 19379
+    },
+    "book.annotated/ch9.html": {
+      "archive_url": "https://web.archive.org/web/20251002155848id_/http://lispm.de/docs/prefix-dylan/book.annotated/ch9.html",
+      "bytes": 7411
+    },
+    "book.annotated/figures/conditions-aa.gif": {
+      "archive_url": "https://web.archive.org/web/20251002164747id_/http://lispm.de/docs/prefix-dylan/book.annotated/figures/conditions-aa.gif",
+      "bytes": 10449
+    },
+    "book.annotated/figures/numbers-aa.gif": {
+      "archive_url": "https://web.archive.org/web/20251002183932id_/http://lispm.de/docs/prefix-dylan/book.annotated/figures/numbers-aa.gif",
+      "bytes": 11245
+    },
+    "book.annotated/figures/small-cover.gif": {
+      "archive_url": "https://web.archive.org/web/20221112084831id_/http://lispm.de/docs/prefix-dylan/book.annotated/figures/small-cover.gif",
+      "bytes": 2076
+    },
+    "book.annotated/footnotes.html": {
+      "archive_url": "https://web.archive.org/web/20251002161421id_/http://lispm.de/docs/prefix-dylan/book.annotated/footnotes.html",
+      "bytes": 6710
+    },
+    "design-notes/03-make-class.html": {
+      "archive_url": "https://web.archive.org/web/20251002155525id_/http://lispm.de/docs/prefix-dylan/design-notes/03-make-class.html",
+      "bytes": 5371
+    },
+    "design-notes/04-no-class-mods.html": {
+      "archive_url": "https://web.archive.org/web/20251002152136id_/http://lispm.de/docs/prefix-dylan/design-notes/04-no-class-mods.html",
+      "bytes": 1805
+    },
+    "design-notes/05-type-system.html": {
+      "archive_url": "https://web.archive.org/web/20251002162446id_/http://lispm.de/docs/prefix-dylan/design-notes/05-type-system.html",
+      "bytes": 4825
+    },
+    "design-notes/06-limited-types.html": {
+      "archive_url": "https://web.archive.org/web/20251002154422id_/http://lispm.de/docs/prefix-dylan/design-notes/06-limited-types.html",
+      "bytes": 7554
+    },
+    "design-notes/07-union-types.html": {
+      "archive_url": "https://web.archive.org/web/20251002155847id_/http://lispm.de/docs/prefix-dylan/design-notes/07-union-types.html",
+      "bytes": 3184
+    },
+    "design-notes/08-ambig-methods.html": {
+      "archive_url": "https://web.archive.org/web/20251002162409id_/http://lispm.de/docs/prefix-dylan/design-notes/08-ambig-methods.html",
+      "bytes": 3185
+    },
+    "design-notes/09-punt-slot-desc.html": {
+      "archive_url": "https://web.archive.org/web/20251002151907id_/http://lispm.de/docs/prefix-dylan/design-notes/09-punt-slot-desc.html",
+      "bytes": 1851
+    },
+    "design-notes/13-types-survive.html": {
+      "archive_url": "https://web.archive.org/web/20251002155845id_/http://lispm.de/docs/prefix-dylan/design-notes/13-types-survive.html",
+      "bytes": 2332
+    },
+    "design-notes/17-define-like-bind.html": {
+      "archive_url": "https://web.archive.org/web/20251002152209id_/http://lispm.de/docs/prefix-dylan/design-notes/17-define-like-bind.html",
+      "bytes": 2487
+    },
+    "design-notes/19-top-level-defns.html": {
+      "archive_url": "https://web.archive.org/web/20251002160245id_/http://lispm.de/docs/prefix-dylan/design-notes/19-top-level-defns.html",
+      "bytes": 5928
+    },
+    "design-notes/20-setter-syntax.html": {
+      "archive_url": "https://web.archive.org/web/20251002152917id_/http://lispm.de/docs/prefix-dylan/design-notes/20-setter-syntax.html",
+      "bytes": 1910
+    },
+    "design-notes/21-result-types.html": {
+      "archive_url": "https://web.archive.org/web/20251002161411id_/http://lispm.de/docs/prefix-dylan/design-notes/21-result-types.html",
+      "bytes": 8472
+    },
+    "design-notes/23-defines-make-constants.html": {
+      "archive_url": "https://web.archive.org/web/20251002152722id_/http://lispm.de/docs/prefix-dylan/design-notes/23-defines-make-constants.html",
+      "bytes": 1956
+    },
+    "design-notes/24-divide-by-zero-error.html": {
+      "archive_url": "https://web.archive.org/web/20251002153058id_/http://lispm.de/docs/prefix-dylan/design-notes/24-divide-by-zero-error.html",
+      "bytes": 976
+    },
+    "design-notes/31-method-specificity.html": {
+      "archive_url": "https://web.archive.org/web/20251002162637id_/http://lispm.de/docs/prefix-dylan/design-notes/31-method-specificity.html",
+      "bytes": 14318
+    },
+    "design-notes/32-modules.html": {
+      "archive_url": "https://web.archive.org/web/20251002164817id_/http://lispm.de/docs/prefix-dylan/design-notes/32-modules.html",
+      "bytes": 14212
+    },
+    "design-notes/33-source-file-headers.html": {
+      "archive_url": "https://web.archive.org/web/20251002153115id_/http://lispm.de/docs/prefix-dylan/design-notes/33-source-file-headers.html",
+      "bytes": 4249
+    },
+    "design-notes/35-punt-transcendentals.html": {
+      "archive_url": "https://web.archive.org/web/20251002153721id_/http://lispm.de/docs/prefix-dylan/design-notes/35-punt-transcendentals.html",
+      "bytes": 1785
+    },
+    "design-notes/36-punt-trivial-log-ops.html": {
+      "archive_url": "https://web.archive.org/web/20251002153356id_/http://lispm.de/docs/prefix-dylan/design-notes/36-punt-trivial-log-ops.html",
+      "bytes": 1170
+    },
+    "design-notes/37-variadic-operators.html": {
+      "archive_url": "https://web.archive.org/web/20251002181714id_/http://lispm.de/docs/prefix-dylan/design-notes/37-variadic-operators.html",
+      "bytes": 4805
+    },
+    "book.annotated/figures/collections-aa.gif": {
+      "archive_url": "https://web.archive.org/web/20241003140941id_/http://lispm.de/docs/prefix-dylan/book.annotated/figures/collections-aa.gif",
+      "bytes": 20514
+    },
+    "design-notes/01-class-for-copy.html": {
+      "archive_url": "https://web.archive.org/web/20251002191000id_/http://lispm.de/docs/prefix-dylan/design-notes/01-class-for-copy.html",
+      "bytes": 1624
+    },
+    "design-notes/02-default-keyword.html": {
+      "archive_url": "https://web.archive.org/web/20251002153815id_/http://lispm.de/docs/prefix-dylan/design-notes/02-default-keyword.html",
+      "bytes": 2039
+    },
+    "design-notes/10-element-setter.html": {
+      "archive_url": "https://web.archive.org/web/20251002155225id_/http://lispm.de/docs/prefix-dylan/design-notes/10-element-setter.html",
+      "bytes": 1203
+    },
+    "design-notes/11-last-setter.html": {
+      "archive_url": "https://web.archive.org/web/20251002155051id_/http://lispm.de/docs/prefix-dylan/design-notes/11-last-setter.html",
+      "bytes": 2067
+    },
+    "design-notes/12-size-setter.html": {
+      "archive_url": "https://web.archive.org/web/20251002154252id_/http://lispm.de/docs/prefix-dylan/design-notes/12-size-setter.html",
+      "bytes": 2016
+    },
+    "design-notes/14-union-duplicates.html": {
+      "archive_url": "https://web.archive.org/web/20251002155449id_/http://lispm.de/docs/prefix-dylan/design-notes/14-union-duplicates.html",
+      "bytes": 1348
+    },
+    "design-notes/15-replace-subseq.html": {
+      "archive_url": "https://web.archive.org/web/20251002165015id_/http://lispm.de/docs/prefix-dylan/design-notes/15-replace-subseq.html",
+      "bytes": 2290
+    },
+    "design-notes/16-list-issues.html": {
+      "archive_url": "https://web.archive.org/web/20251002152024id_/http://lispm.de/docs/prefix-dylan/design-notes/16-list-issues.html",
+      "bytes": 5502
+    },
+    "design-notes/18-member-test-arg.html": {
+      "archive_url": "https://web.archive.org/web/20251002161754id_/http://lispm.de/docs/prefix-dylan/design-notes/18-member-test-arg.html",
+      "bytes": 2273
+    },
+    "design-notes/22-bnf-for-infix.html": {
+      "archive_url": "https://web.archive.org/web/20251002164046id_/http://lispm.de/docs/prefix-dylan/design-notes/22-bnf-for-infix.html",
+      "bytes": 26229
+    },
+    "design-notes/25-exit-extent.html": {
+      "archive_url": "https://web.archive.org/web/20251002153237id_/http://lispm.de/docs/prefix-dylan/design-notes/25-exit-extent.html",
+      "bytes": 5608
+    },
+    "design-notes/26-iteration-protocol.html": {
+      "archive_url": "https://web.archive.org/web/20251002152318id_/http://lispm.de/docs/prefix-dylan/design-notes/26-iteration-protocol.html",
+      "bytes": 17310
+    },
+    "design-notes/27-mappers.html": {
+      "archive_url": "https://web.archive.org/web/20251002161742id_/http://lispm.de/docs/prefix-dylan/design-notes/27-mappers.html",
+      "bytes": 7565
+    },
+    "design-notes/28-first-etc-are-functions.html": {
+      "archive_url": "https://web.archive.org/web/20251002154450id_/http://lispm.de/docs/prefix-dylan/design-notes/28-first-etc-are-functions.html",
+      "bytes": 1995
+    },
+    "design-notes/30-make-range.html": {
+      "archive_url": "https://web.archive.org/web/20251002154830id_/http://lispm.de/docs/prefix-dylan/design-notes/30-make-range.html",
+      "bytes": 989
+    },
+    "design-notes/34-select-ordering.html": {
+      "archive_url": "https://web.archive.org/web/20251002151655id_/http://lispm.de/docs/prefix-dylan/design-notes/34-select-ordering.html",
+      "bytes": 1401
+    },
+    "design-notes/00-intro.html": {
+      "archive_url": "https://web.archive.org/web/20251002152049id_/http://lispm.de/docs/prefix-dylan/design-notes/00-intro.html",
+      "bytes": 5223
+    },
+    "design-notes/home.html": {
+      "archive_url": "https://web.archive.org/web/20251002155023id_/http://lispm.de/docs/prefix-dylan/design-notes/home.html",
+      "bytes": 12753
+    }
+  },
+  "failed": {
+    "book.annotated/contents.html": "HTTP Error 403: Access Forbidden",
+    "book.annotated/figures/conditions-big.gif": "HTTP Error 404: NOT FOUND",
+    "book.annotated/figures/cover.gif": "HTTP Error 404: NOT FOUND",
+    "book.annotated/figures/numbers-big.gif": "HTTP Error 404: NOT FOUND",
+    "design-notes/29-for-loops.html": "HTTP Error 404: NOT FOUND"
+  }
+}

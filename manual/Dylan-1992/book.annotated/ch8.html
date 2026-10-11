@@ -1,0 +1,298 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch7.html">Previous chapter:  Assignment</A><P>
+<title>Dylan manual: Conditionals, Flow of Control, and Evaluation</title>
+<H2>8. Conditionals, Flow of Control, and Evaluation</H2><p>
+The following syntax forms, functions, and objects are used in performing tests and conditional operations in Dylan.<p>
+<A NAME="condtf"><b>True and False<p>
+</b>In Dylan, there is a single object that counts as false.  This object is indicated by the syntax '<b>#f' <A href="footnotes.html#fn17">FN17</A> </b>.  All other values are considered true for the sake of true/false testing.  The canonical true object, indicated by the syntax '<b>#t</b>', can be used for clarity of code.<p>
+Throughout the manual, the phrases true, false, returns true, and returns false are used.  Its important to remember that returns true does not necessarily mean returns the object #t.  It simply means returns any object besides #f.  Sometimes for efficiency, debuggability, or informational value, some value besides #t is returned.<p>
+<PRE>
+<b><A NAME="t1">#t</A><A HREF="ch3.html#t0">[return to first citation]</A></b>		[Object]
+</PRE>
+This is the canonical true value.  In Dylan, all objects besides #f count as true, not just #t.<p>
+<PRE>
+<b><A NAME="f1">#f</A><A HREF="ch3.html#f0">[return to first citation]</A></b>		[Object]
+</PRE>
+This is the only false value.<p>
+<PRE>
+<b><A NAME="not0">not</A></b>   <i>thing</i>   ==>  <i>boolean</i>	[Function]
+</PRE>
+Returns true if <i>thing</i> is #f; otherwise returns false.<p></A>
+<A NAME="condex"><b>Conditional Execution<p>
+</b>The following syntax forms are used to perform conditional execution.<p>
+<PRE>
+<b><A NAME="if1">if</A><A HREF="ch2.html#if0">[return to first citation]</A></b>   <i>test consequent alternate</i>   ==>  <i>values</i>	[Special Form]
+</PRE>
+if evaluates <i>test</i>.  If <i>test</i> evaluates to a true value, <i>consequent</i> is evaluated.  If <i>test</i> evaluates to #f (the only false value), then <i>alternate</i> is evaluated <A href="footnotes.html#fn18">FN18</A> .<p>
+The values of the <i>consequent</i> or <i>alternate</i> form (whichever is evaluated) are returned.<p>
+<PRE>
+<i>? </i><tt>(define-method test ((thing &lt;object&gt;))</tt>
+  <tt>  (if thing</tt>
+  <tt>      #t</tt>
+  <tt>      #f))</tt>
+<i>test
+?</i> <tt>(test 'hello)</tt>
+<i>#t
+?</i> <tt>(test #t)</tt>
+<i>#t
+?</i> <tt>(test #f)</tt>
+<i>#f
+
+?</i> <tt>(define-method double-negative ((num &lt;number&gt;))
+</tt>  <tt>   (if (&lt; num 0)
+</tt>  <tt>       (+ num num)
+</tt>  <tt>       num))</tt>
+<i>double-negative
+?</i> <tt>(double-negative 11)</tt>
+<i>11
+?</i> <tt>(double-negative -11)</tt>
+<i>-22</i>
+</PRE>
+To place multiple forms in the <i>consequent</i> or <i>alternate</i> section of an if statement, group the forms with begin.<p>
+<PRE>
+<i>? </i><tt>(define-method show-and-tell ((thing &lt;object&gt;))
+</tt>  <tt>   (if thing
+         (begin
+            (print thing)
+            #t)
+         #f))
+</tt><i>show-and-tell
+?</i> <tt>(show-and-tell "hello")
+</tt><i>hello
+#t</i>
+</PRE>
+<PRE>
+<b><A NAME="when0">when</A></b>   <i>test  form1 form2...</i>   ==>  <i>values</i>	[Macro]
+</PRE>
+when evaluates <i>test</i>.  If <i>test</i> evaluates to a true value, all the <i>forms</i> are run, and the values of the last <i>form</i> are returned.  If <i>test</i> evaluates to #f, then none of the <i>forms</i> are run and #f is returned.<p>
+If there are no <i>forms</i>, then #f is returned.<p>
+<PRE><tt>(when (bonus-illuminated? pinball post)
+    (add-bonus-score current-player 100000))
+</tt></PRE>
+<PRE>
+<b><A NAME="unless0">unless</A></b>   <i>test  form1 form2... </i>  ==>  <i>values</i>	[Macro]
+</PRE>
+unless evaluates <i>test</i>.  If <i>test</i> evaluates to a true value, then none of the <i>forms</i> are evaluated and #f is returned.  If <i>test</i> evaluates to #f, then all the <i>forms</i> are evaluated and the values of the last <i>form</i> are returned.<p>
+If there are no <i>forms</i>, then #f is returned.<p>
+<PRE><tt>(unless (detect-gas? nose)
+    (light match))
+</tt></PRE>
+<PRE>
+<b><A NAME="cond0">cond</A></b>	(<i>test1 consequent1a consequent1b</i> ...)	[Macro]
+	(<i>test2 consequent2a consequent2b</i> ...) ...
+==>  <i>values</i>
+</PRE>
+cond evaluates the <i>tests</i> in order.  If a <i>test</i> returns true, the corresponding <i>consequent-
+forms</i> are evaluated and the values of the last one are returned.  Subsequent <i>tests</i> are not evaluated.<p>
+If there are no <i>consequent</i> forms in the <i>test</i> that succeeds, then the first value of the <i>test</i> is returned.<p>
+If no <i>test</i> is true, then cond returns #f.<p>
+<PRE><tt>(cond ((&lt; new-position old-position)
+         "the new position is less")
+       ((= new-position old-position)
+        "the positions are equal")
+       (else: "the new position is greater"))
+</tt></PRE>
+It is common for the last <i>test-and-consequent</i> clause of a cond statement to be an otherwise clause.  In this case, the convention is to use the keyword else: or the canonical true value #t to indicate a <i>test</i> that will always be true.<p>
+<PRE>
+<b><A NAME="case0">case</A></b>	<i>target-form</i>	[Macro]
+	(<i>match-list1 consequent1a consequent1b</i> ...)
+	(<i>match-list2 consequent2a consequent2b</i> ...) ...
+==><i>  values</i>
+</PRE>
+Each <i>match-list</i> must be a list of objects <A href="footnotes.html#fn19">FN19</A>   or the keyword else:, or the value #t. The elements of the <i>match-list</i> are not evaluated.<p>
+When the case form is entered, the <i>target-form</i> is evaluated, generating a <b>target value</b>.  The <i>match-lists</i> are then searched for an object which matches the target value.  If a match is found, the corresponding <i>consequent</i> forms are evaluated and the values of the last <i>consequent</i> are returned.  If there are no <i>consequent</i> forms in the matching clause, then #f is returned.<p>
+The match objects are compared to the target value with id?.  Because id? is used, and because the match objects must be compile-time constants, the match objects will usually be numbers, characters, symbols, or keywords.<p>
+It is an error if the same <i>match</i> appears in more than one <i>match-list</i>.<p>
+As a special case, the keyword else: or the value #t may appear instead of a match-list.  This clause will be considered a match if no other match is found.<p>
+If there is no matching clause, an error is signaled.  Because an else: clause matches when no other clause matches, a case form that includes an else: clause will never signal an error for failure to match.<p>
+<PRE><tt>(case (career-choice student)
+   ((art music drama)
+    (print "Dont quit your day job.")
+   ((literature history linguistics)
+    (print "That really is fascinating."))
+   ((science math engineering)
+    (print "Say, can you fix my VCR?"))
+   (else: "I wish you luck."))
+</tt></PRE>
+<b>See Also: <a href="../design-notes/34-select-ordering.html">Dylan Design Notes: Select Ordering (Clarification)</a></b><p>
+<PRE>
+<b><A NAME="select0">select</A></b>	<i>target-form test</i>   	[Macro]
+	(<i>match-list1 consequent1a consequent1b</i> ...)
+	(<i>match-list2 consequent2a consequent2b</i> ...) ...
+==><i>  values</i>
+</PRE>
+select is structurally similar to case.  It differs in two respects:<p>
+<UL>
+<LI>	A <i>test</i> function is supplied, which is used to compare the target object to the match objects.
+<LI>	Each element in a <i>match-list</i> is evaluated to produce a match object
+</UL>
+The equivalent to a Common Lisp typecase statement can be synthesized in Dylan by using select with a test of instance?<p>
+<PRE><tt>(select my-object instance?
+  ((&lt;window&gt; &lt;view&gt; &lt;rectangle&gt;) "its a graphic object")
+  ((&lt;number&gt; &lt;list&gt; &lt;sequence&gt;) "its something computational")
+  (else: "Dont know what it is"))
+</tt></PRE>
+<PRE>
+<b><A NAME="or0">or</A></b>   <i> form1 form2...</i>   ==><i>  values</i>	[Macro]
+</PRE>
+or evaluates the <i>forms</i> one at a time, from left to right.  If any <i>form</i> besides the last one returns true as its first value, or immediately returns that value and does not evaluate any of the subsequent <i>forms</i>.  If all the <i>forms</i> but the last one return #f, then or returns all the values of the last <i>form</i>.<p>
+<PRE>
+<b><A NAME="and0">and</A></b>   <i> form1 form2...</i>   ==><i>  values</i>	[Macro]
+</PRE>
+and evaluates the <i>forms</i> from left to right until one of them returns #f, or until all the <i>forms</i> are evaluated.  and returns #f if any but the last <i>form</i> returns #f as its first value; otherwise it returns all the values of the last <i>form</i>.  Once one of the <i>forms</i> returns #f, none of the subsequent forms are evaluated.<p>
+<PRE>
+<b><A NAME="begin1">begin</A><A HREF="ch2.html#begin0">[return to first citation]</A></b>   <i> form1 form2...</i>   ==><i>  values</i>	[Special Form]
+</PRE>
+begin executes the <i>forms</i> sequentially.   The values of the last <i>form</i> are returned.  If there are no <i>forms</i>, #f is returned.<p>
+Many special forms (for example, bind and method) contain an implicit begin around their bodies. Programs only need to use begin explicitly in situations where a single form is expected, for example, in the consequent or alternate clause of an if statement.<p>
+<PRE>
+<i>? </i><tt>(if #t
+</tt>  <tt>    (print "it was true")
+</tt>  <tt>    #t
+</tt>  <tt>    #f)</tt>
+<i>error:  too many arguments to if.
+?</i> <tt>(if #t
+</tt>  <tt>    (begin (print "it was true")
+</tt>  <tt>           #t)
+</tt>  <tt>    #f)</tt>
+<i>"it was true"
+#t</i></A>
+</PRE>
+<A NAME="iterconstr"><b>Iteration Constructs</b><p>
+<b>See Also: <a href="https://web.archive.org/web/20000617132725/http://www.basistech.com/tree/dylan/prefix-dylan/design-notes/29-for-loops.html">Dylan Design Notes: For Loops (Change)</a></b><P> 
+<PRE>
+<b><A NAME="for0">for</A>	</b>((<i>var1 init1 step1</i>) 	[Macro]
+ (<i>var2 init2 step2</i>) ...)
+(<i>end-test result1 result2</i>...) 
+<i>body-form1 body-form2</i>...
+==>  <i>values</i>
+</PRE>
+for is a general iteration macro.<p>
+Each (<i>var init step</i>) is called a variable clause.  Each variable clause controls one variable through the iteration.  A single pass through the iteration involves binding the <i>vars</i> to new values, evaluating the <i>end-test</i>, and then (if the <i>end-test</i> evaluates to #f) evaluating the <i>body-forms</i>.  If <i>end-test</i> evaluates to true, the loop exits and the values produced by the evaluation of the <i>result</i> forms, if any, are returned.  If there are no <i>result </i>forms, #f is returned.<p>
+The <i>inits</i> are evaluated to produce the values for the initial bindings of the <i>vars</i>.  They are evaluated in a scope that does not include any of the iteration variables.  The <i>steps</i> are evaluated to produce the values for the new bindings of the <i>vars</i> each time through the loop.  The <i>steps</i> are evaluated in a scope that includes the previous values of each <i>var</i>.<p>
+The <i>body-forms</i> are used to produce side effects.  It is common to write for statements that do not have any body forms.  The following definition of factorial, for example, relies entirely on the variable clauses, end test, and result.<p>
+<PRE><tt>  (define-method factorial ((n &lt;integer&gt;))
+     (for ((i n (- i 1))   ;variable clause 1
+           (v 1 (* v i)))  ;variable clause 2
+          ((&lt;= i 0) v))    ;end test and result
+</tt></PRE>
+<PRE>
+<b><A NAME="for-each0">for-each</A></b>	((<i>var1 collection1</i>) 	[Macro]
+	 (<i>var2 collection2</i>) ...)
+	(<i>end-test result1 result2...</i>) 
+	<i>body-form1 body-form2...
+</i>==><i>  values</i>
+</PRE>
+for-each is used for iterating over the elements of one or more collections.  Collections are described in a separate section of this document.<p>
+At the outset, each <i>collection </i>is evaluated and should yield a collection.  Then the iteration begins.<p>
+At the start of each pass through the iteration, each <i>var</i> is bound to the next element of the corresponding collection.  If any collection is exhausted (contains no more elements), then the iteration is complete and for-each returns #f.  Otherwise, the <i>end-test</i> is evaluated.  If the <i>end-test</i> is true, the <i>results</i> are evaluated in order and the values of the last <i>result </i>are returned by for-each; if there are no <i>results</i>, #f<i> </i>is returned.  If the <i>end-test</i> evaluates to #f, then the <i>body-forms</i> are evaluated, in order, and the iteration proceeds through another pass.<p>
+The <i>end-test</i>, <i>results</i>, and <i>body-forms</i> are evaluated in an environment in which the <i>vars</i> contain the most recent elements of the collections.<p>
+This example returns the first even number in a sequence, or #f if none of the numbers are even.<p>
+<PRE><tt>(define-method first-even ((s &lt;sequence&gt;))
+  (for-each ((number s))
+            ((even? number) number)
+                             ; No body forms needed
+     ))
+</tt></PRE>
+This example takes a sequence of cities, and schedules an Olympic game in each one at 4-year intervals.<p>
+<PRE><tt>(define-method schedule-olympic-games ((cities &lt;sequence&gt;)
+                                       (start-year &lt;number&gt;))
+   (for-each ((year (range from: start-year by: 4))
+              (city cities))
+             ()              ; No end test needed.
+      (schedule-game city year)))
+</tt></PRE>
+<PRE>
+<b><A NAME="dotimes0">dotimes</A></b>   (<i>var count</i> <i>result</i>) <i> form1 form2...</i>  ==><i> </i>  <i>values</i>	[Macro]
+</PRE>
+dotimes begins by evaluating <i>count-form</i>, which should evaluate to an integer, called the count. It then evaluates the <i>body</i> forms once for each integer from zero (inclusive) to the count (exclusive).  If the count was negative or zero, the <i>body</i> forms are not evaluated at all.  When the iteration is complete, the <i>result</i> form is evaluated and the values produced are returned.  <i>result</i> is optional; if there is no <i>result</i> form, then dotimes returns #f.<p>
+<PRE>
+<i>?</i> <tt>(begin
+    (dotimes (i 6) (print "bang!"))
+    (print "click!"))</tt>
+<i>bang!
+bang!
+bang!
+bang!
+bang!
+bang!
+click!
+</PRE>
+<PRE>
+</i></PRE>
+<b><A NAME="while0">while</A></b>   <i>test</i>  <i>form1 form2...</i>   ==><i>  </i>#f	[Macro]<p>
+while evaluates the <i>forms</i> over and over until the <i>test</i> returns false.<p>
+Each pass through the loop begins by evaluating <i>test</i>.  If <i>test</i> evaluates to a true value, the <i>forms</i>  are evaluated and the looping continues.  If <i>test</i> evaluates to #f, the loop terminates and while returns #f.<p>
+<PRE>
+<b><A NAME="until0">until</A></b>   <i>test</i>  <i>form1 form2... </i>  ==><i>  </i>#f	[Macro]
+</PRE>
+until evaluates the <i>forms</i> over and over until the <i>test</i> returns true.<p>
+Each pass through the loop begins by evaluating <i>test</i>.  If <i>test</i> evaluates to #f, the <i>forms</i>  are evaluated and the looping continues.  If <i>test</i> evaluates to a true value, the loop terminates and until returns #f.<p></A>
+<b>See Also:<a href="../design-notes/25-exit-extent.html"> Dylan Design Notes: Exit Extent (Change)</a></b><p> 
+<A NAME="simpexit"><b>Simple Exits</b><p>
+<PRE>
+<b><A NAME="bind-exit1">bind-exit</A><A HREF="ch2.html#bind-exit0">[return to first citation]</A></b>   (<i>exit-variable</i>)<i> form1 form2...</i>   ==><i>  values</i>	[Special Form]
+</PRE>
+binds <i>exit-variable </i>to an <b>exit procedure</b>, and executes <i>forms</i>.  If the exit procedure is never called, a <b>normal exit</b> occurs and the values of the last <i>form</i> are returned by bind-exit; if there are no <i>forms</i>, #f is returned. <A href="footnotes.html#fn20">FN20</A> <p>
+At any point in time before the last <i>form</i> returns, the exit procedure can be called.  Calling the exit procedure has the effect of immediately exiting the bind-exit.  The exit procedure accepts any number of arguments.  These arguments are used as the return values of bind-exit.  Calling an exit procedure is known as performing a <b>non-local exit</b>.<p>
+<i>exit-variable</i> should be a variable name.  It is bound as a lexical variable within the bind-exit form.<p>
+The exit procedure is a first-class value.  Specifically, it can be passed as an argument to functions, stored in data structures, etc.  Its use is not restricted to the lexical body of the bind-exit form.  However, the exit procedure is valid only for the dynamic extent of the bind-exit form.  It is an error to call an exit procedure after the bind-exit form that created it returns. <A href="footnotes.html#fn21">FN21</A> <p>
+The following example shows how bind-exit is used to generate an escape procedure, which is used to terminate a loop.  The function returns the first even number in a sequence.  (An alternate definition of first-even is given in the description of for-each.)<p>
+<PRE>
+<i>?</i><tt> (define-method first-even ((seq &lt;sequence&gt;))
+    (bind-exit (exit)
+      (do (method (item)
+             (when (even? item)
+               (exit item)))
+           seq)))
+</tt><i>first-even
+?</i><tt> (first-even '(1 3 5 4 7 9 10))
+</tt><i>4</i>
+</PRE>
+<PRE>
+<b><A NAME="unwind-protect1">unwind-protect</A><A HREF="ch2.html#unwind-protect0">[return to first citation]</A></b>   <i>protected-form cleanup-form1 cleanup-form2...</i>   	[Macro]
+==><i>  values</i>
+</PRE>
+unwind-protect executes the <i>protected-form</i> and then the <i>cleanup-forms</i>.  The <i>cleanup-forms</i>  are guaranteed to be evaluated, even if the <i>protected-forms</i>  are terminated by a non-local exit.<p>
+In the case of a normal exit, unwind-protect returns the values returned by the <i>protected-form</i>.<p></A>
+<A NAME="eval"><b>Evaluation</b><p>
+<PRE>
+<b><A NAME="quote1">quote</A><A HREF="ch2.html#quote0">[return to first citation]</A></b>   <i>object</i>   ==><i>  object</i>	[Special Form]
+</PRE>
+quote returns <i>object</i>.  <i>object</i> is not evaluated.<p>
+quote is usually abbreviated with the reader macro '.<p>
+<PRE>
+<i>?</i> <tt>+
+</tt><i>{the generic function +}
+?</i> <tt>'+
+</tt><i>+
+?</i> <tt>(quote +)
+</tt><i>+
+?</i> <tt>''+
+</tt><i>(quote +)
+?</i> <tt>(+ 10 10)
+</tt><i>20
+?</i> '(+ 10 10)
+<i>(+ 10 10)
+?</i> <tt>(quote (+ 10 10))
+</tt><i>(+ 10 10)
+</PRE>
+<PRE>
+</i></PRE>
+<b><A NAME="apply1">apply</A><A HREF="ch2.html#apply0">[return to first citation]</A></b>   <i>function</i> #rest <i>args</i>   ==><i>  values</i>	[Function]<p>
+apply calls <i>function</i> with <i>args</i> as the arguments.  The last <i>arg</i> must be a sequence.  The elements of the sequence are spread out and taken as individual arguments to <i>function</i>.<p>
+<PRE>
+<i>?</i> <tt>(apply + 1 '(2 3))
+</tt><i>6
+?</i> <tt>(+ 1 2 3)
+</tt><i>6
+?</i> <tt>(define math-functions (list + * / ))
+</tt><i>math-functions
+?</i> <tt>math-functions
+</tt><i>({method +} {method *} {method /} {method })
+?</i> <tt>(first math-functions)
+</tt><i>{method +}
+?</i> <tt>(apply (first math-functions) 1 2 '(3 4))
+</tt><i>10
+</i></PRE>
+<p></A><P><A NAME="NEXT" HREF="ch9.html">Next chapter:  Equality and Magnitude Comparisons</A>

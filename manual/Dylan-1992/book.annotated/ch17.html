@@ -1,0 +1,80 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch16.html">Previous chapter:  Characters</A><P>
+<title>Dylan manual: Functional Operations</title>
+<H2>17. Functional Operations</H2><p>
+The following operations are used to create new functions from other functions or objects.  Often the Dylan compiler will have special knowledge of these operations, to allow for efficient in-line compilation.<p>
+<PRE>
+<b><A NAME="compose0">compose</A></b>   <i>function1 </i>#rest <i>more-functions</i>   ==><i>  function</i>	[Method]
+</PRE>
+When called with just a single argument, compose returns that argument.<p>
+When called with two arguments, compose returns a function that applies the second function to its arguments and then applies the first function to the (single) result value.  Thus, cadr could be expressed (compose car cdr).<p>
+With three or more arguments, compose composes pairs of argument functions, until a single composite function is obtained.  (Because functional composition is associative, the order in which this is performed is unimportant.)<p>
+<PRE>
+<i>? </i><tt>(define-method sum ((numbers &lt;sequence&gt;))
+</tt>      <tt>(reduce1 + numbers))
+</tt><i>sum
+? </i><tt>(define-method square ((x &lt;number&gt;)) (* x x))
+</tt><i>square
+? </i><tt>(define-method square-all ((coords &lt;sequence&gt;)) 
+      (map square coords)
+</tt><i>square-all
+? </i><tt>(define distance (compose sqrt sum square-all))</tt><i>
+distance
+? </i><tt>(distance '(3 4 5))
+</b><i>7.0710678118654755</i>
+</PRE>
+<PRE>
+<b><A NAME="complement0">complement</A></b>   <i>predicate</i>   ==><i>  function</i>	[Method]
+</PRE>
+complement returns a function that applies <i>predicate </i> to its arguments.  If the <i>predicate </i>returns #f, the complement returns #t; otherwise, the complement returns #f. For example, odd? could be defined as (complement even?).<p>
+<PRE>
+<i>? </i><tt>(map female? (list michelle arnold roseanne))</tt><i>
+(#t #f #t)
+? </i><tt>(map (complement female?) (list michelle arnold roseanne))</tt><i>
+(#f #t #f)</i>
+</PRE>
+<PRE>
+<b><A NAME="disjoin0">disjoin</A>   </b><i>predicate1</i> #rest <i>more-predicates</i>   ==><i>  function</i>	[Method]
+</PRE>
+disjoin returns a single function, termed the disjunction of its argument functions.  The disjunction accepts any number of arguments and operates by applying the predicates, in order, to the arguments.  If any of the predicates returns true, the remaining predicates (if any) are not applied, and the true result is returned.  Otherwise, all the predicates will be applied, and #f returned.<p>
+A disjunction is similar to an or expression of calls to the predicates.<p>
+<PRE>
+<b><A NAME="conjoin0">conjoin</A>   </b><i>predicate1 </i>#rest <i>more-predicates</i>   ==><i>  function</i>	[Method]
+</PRE>
+conjoin returns a single function, termed the conjunction of its argument functions.  The conjunction accepts any number of arguments and operates by applying the predicates, in order, to the arguments.  If any of the predicates returns #f, the remaining predicates (if any) are not applied and #f is immediately returned.  Otherwise, all the predicates will be applied, and the result of the last application is returned.<p>
+A conjunction is similar to an and expression of calls to the predicates.<p>
+<PRE>
+<b><A NAME="curry0">curry</A>   </b><i>function </i>#rest<i> curried-args</i>   ==><i>  new-function</i>	[Method]
+</PRE>
+curry returns a function that applies <i>function</i> to <i>curried-args</i> plus its own arguments, in that order.  For example (curry id? 'x) is a predicate that tests for identity with the symbol x; (curry + 1) is an incrementing function; (curry &gt; 6) is a predicate that returns true for values less than 6; (curry concatenate "set-") is a function that concatenates the string "set-" to any additional sequences it is passed.<p>
+<PRE>
+<i>?</i> <tt>(map (curry + 1) '(3 4 5))</tt>
+<i>(4 5 6)</i>
+</PRE>
+<PRE>
+<b><A NAME="rcurry0">rcurry</A></b>   <i>function </i>#rest <i>curried-args</i>   ==><i>  new-function</i>	[Method]
+</PRE>
+rcurry (right curry) operates just like curry, except it allows the rightmost arguments of <i>function </i>to be specified in advance, rather than the leftmost arguments.  For example, (rcurry &gt; 6) is a predicate that returns true for values greater than 6.<p>
+<PRE>
+<i>?</i> <tt>(define yuppify (rcurry concatenate ", ayup"))
+</tt><i>yuppify
+?</i> <tt>(yuppify "I'm from New Hampsha")
+</tt><i>"I'm from New Hampsha, ayup"
+</PRE>
+<PRE>
+</i></PRE>
+<PRE>
+<b><A NAME="always0">always</A>   </b><i>object</i>   ==><i>  function</i>	[Method]
+</PRE>
+always returns a function that can be called with any number of arguments.  The function ignores its arguments and always returns <i>object</i>.<p>
+<PRE>
+<i>? </i><tt>((always 1) 'x 'y 'z)
+</tt><i>1
+?</i> <tt>((always #t) #f #f)
+</b><i>#t</i>
+</PRE>
+<p>
+<p>
+<p>
+<P><A NAME="NEXT" HREF="ch18.html">Next chapter:  Miscellaneous Operations</A>
+

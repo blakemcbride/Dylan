@@ -1,0 +1,58 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch6.html">Previous chapter:  Introduction to Functions and Classes</A><P>
+<title>Dylan manual: Assignment</title>
+<H2>7. Assignment<p></H2>
+The Dylan special form set! is used to set variables to new values.  It can also be used as alternate syntax for calling setter functions and macros.<p>
+<PRE>
+<b><A NAME="set!1">set!</A><A HREF="ch2.html#set!0">[return to first citation]</A></b>   <i>place new-value</i>   ==>  <i>new-value</i>	[Special Form]
+</PRE>
+set! stores <i>new-value</i> in <i>place</i>.  Subsequent evaluations of <i>place</i> will yield <i>new-value</i>.  set! returns <i>new-value</i>.<p>
+<i>place</i> can be a variable name or it can be a list whose first element is a symbol.  If <i>place</i> does not have one of these formats, an error is signaled at compile-time.<p>
+If <i>place</i> is a variable name, then <i>new-value</i> is stored in the corresponding variable (which may be a lexical or module variable).  An error is signaled if there is no lexical or module variable corresponding to the <i>place</i> at the time set! is executed.<p>
+(The following example uses a function %set-element.  The function does not actually exist in Dylan.  It is meant to indicate a primitive, implementation-dependent operation for setting an element of a collection.)<p>
+<PRE>
+<i>? </i><tt>(define foo 10)
+</tt><i>10
+?</i> <tt>foo</tt>             <tt>;this is a variable
+</tt><i>10                </i><tt>;this is the variables contents</tt><i>
+?</i> <tt>(set! foo (+ 10 10))
+</tt><i>20
+?</i> <tt>foo
+</tt><i>20
+?</i> <tt>(setter element)</tt>                   <tt>;this is a variable
+</tt><i>{generic function (setter element)}  </i><tt>;the variables contents
+</tt><i>?</i> <tt>(set! (setter element) %set-element)
+</tt><i>{primitive function %set-element}
+?</i> <tt>(id? (setter element) %set-element)</tt>
+<i>#t</i>
+</PRE>
+If <i>place</i> is not a variable name, then it should have the syntax of a call to a function.  This is called the <tt>extended form</tt> of set!.  In this case, the function call indicates an accessible location.  The call to set! should change what future accesses of the location will return.
+<PRE>
+<i>? </i><tt>(define foo (vector 'a 'b 'c 'd))
+</tt><i>foo
+?</i> <tt>foo</tt>
+<i>#(a b c d)
+?</i> <tt>(element foo 2)</tt>
+<i>c
+?</i> <tt>(set! (element foo 2) 'sea)</tt>
+<i>sea
+?</i> <tt>(element foo 2)
+</tt><i>sea
+?</i> <tt>foo</tt>
+</b><i>#(a b sea d)</i>
+</PRE>
+In the general case,<p>
+<PRE><tt>(set! (symbol arg1...argn) new-value)
+</tt></PRE>
+means roughly<p>
+<PRE><tt>((setter symbol) arg1...argn new-value)
+</tt></PRE>
+(The meaning is actually somewhat more complicated than this, because set! guarantees that the new-value is returned, regardless of what is returned by the setter function.)<p>
+In the example above<p>
+<PRE><tt>(set! (element foo 2) 'sea)
+</tt></PRE>
+is equivalent to<p>
+<PRE><tt>((setter element) foo 2 'sea)</tt>
+</PRE>
+<P><A NAME="NEXT" HREF="ch8.html">Next chapter:  Conditionals, Flow of Control,
+and Evaluation</A>

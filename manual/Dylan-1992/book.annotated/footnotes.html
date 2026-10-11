@@ -1,0 +1,160 @@
+<meta charset="utf-8">
+<dl>
+<a name="fn1"> <dt>FN1<dd></a>
+Other notable Lisp systems that use generic functions are CLOS (Common Lisp
+Object System), Oak Lisp, and EuLisp.
+
+<a name="fn2"> <dt>FN2<dd></a>
+The term interpreter is used, even though most implementations of Dylan are
+expected to be compiled.  In most cases, an interpreter will be implemented
+by compiling Dylan expressions and immediately executing the compiled code.
+
+<a name="fn3"><dt>FN3<dd></a>
+A heterarchyalso called a directed acyclic graph (DAG)is like a hierarchy,
+except that nodes can have multiple parents.  Dylan classes are in a
+heterarchy because Dylan supports multiple inheritance.
+
+<a name="fn4"><dt>FN4<dd></a>
+A future version of Dylan may support Algol-like or other syntaxes in
+addition to Lisp syntax.
+
+<a name="fn5"><dt>FN5<dd></a>
+This is the same approach used by the Macintosh file system.
+
+<a name="fn6"><dt>FN6<dd></a>
+Three notable exceptions to the terminal question mark convention are <, >,
+and =.
+
+<a name="fn7"><dt>FN7<dd></a>
+The term syntax form describes both special forms and macros.  They are
+equivalent to macros and operators in other languages.
+
+<a name="fn8"><dt>FN8<dd></a>
+Setter variables are not normally used for holding simple values like this.
+However, nothing in the language semantics prevents such uses.  The example
+is given here, because a more realistic example would require more of the
+language than has been introduced so far.
+
+<a name="fn9"><dt>FN9<dd></a>
+define cannot be used to create lexical variables, as it can in Scheme.  In
+Dylan, even if define appears inside another definition, the define still
+creates a module variable.
+
+<a name="fn10"><dt>FN10<dd></a>
+Other types may be supported in the future.
+
+<a name="fn11"><dt>FN11<dd></a>
+In the general case, reflective operations can be used to defeat module
+encapsulation.  For example, a programmer can trace from an instance to its
+class by calling object-class on the instance, even if the implementor of
+the class did not export the variable containing the class.  This problem
+can sometimes be solved by the proper use of sealing, which blocks many
+reflective operations.
+
+<a name="fn12"><dt>FN12<dd></a>
+In practice, an implementation may place a reasonable limit on the number of
+arguments that may be passed to any function.
+
+<a name="fn13"><dt>FN13<dd></a>
+For example, Self, and to some degree, CLOS.
+
+<a name="fn14"><dt>FN14<dd></a>
+The forms in this list will usually be module variables but are not required
+to be.  An element in the superclass list can be any form that evaluates to
+a class.
+
+<a name="fn15"><dt>FN15<dd></a>
+The exact mechanism by which an indirect instance might be returned is not
+specified in this document.
+
+<a name="fn16"><dt>FN16<dd></a>
+The error also might be signaled by the <object> method on initialize.  This
+issue is pending.
+
+<a name="fn17"><dt>FN17<dd></a>
+This is in sharp distinction to some other dialects of Lisp, in which the
+empty-list () and the false value are the same object.
+
+<a name="fn18"><dt>FN18<dd></a>
+The alternate clause is not optional in Dylan.
+
+<a name="fn19"><dt>FN19<dd></a>
+Note: this differs from Common Lisp, where an atom may be used in place of a
+keylist of one element.
+
+<a name="fn20"><dt>FN20<dd></a>
+bind-exit is similar to the catch and throw mechanism of Common Lisp, except
+that it has a functional interface.
+
+<a name="fn21"><dt>FN21<dd></a>
+The dynamic extent restriction means that Dylan exit procedures are a subset
+of Schemes continuations.
+
+<a name="fn22"><dt>FN22<dd></a>
+Trichotomy also implies antisymmetry [if (binary< a b), then (not (binary< b
+a))] and antireflexivity [if (id? a b), then (not (binary< a b))].  It also
+implies commutativity for binary= [if (binary= a b), then (binary= b a)].
+
+<a name="fn23"><dt>FN23<dd></a>
+The trichotomy rule does not hold for IEEE floating-point comparisons.  IEEE
+requires all comparison operations to return false if one of the operands is
+a NaN.  This means that the generic Dylan equality and magnitude predicates
+will not be IEEE compliant.
+
+<a name="fn24"><dt>FN24<dd></a>
+At an implementation level, this will usually mean that the objects are
+pointers to the same storage or are the same immediate value.  An extension
+is made for built-in number classes and characters.  Because these objects
+are not mutable (i.e., cannot be changed), two with the same value will
+always be the same (and will thus be indistinguishable to programs).
+
+<a name="fn25"><dt>FN25<dd></a>
+This function accepts only two arguments because of the potential for
+misunderstanding the meaning for more than two arguments.  With more than
+two arguments, its not clear whether /= should return true if any two
+arguments are not equal, or if none of the arguments are equal.
+
+<a name="fn26"><dt>FN26<dd></a>
+When methods are called directly, the method special form corresponds to the
+lambda special form of Lisp and to blocks in Smalltalk.
+
+<a name="fn27"><dt>FN27<dd></a>
+Another way to think of next-method is that it runs the method that would
+have been run if the current method did not exist.
+
+<a name="fn28"><dt>FN28<dd></a>
+A method may be removed from a generic function if it is proved that it will
+never be called.  This will be the case if any of the objects on which the
+method specializes are garbage collected.
+
+<a name="fn29"><dt>FN29<dd></a>
+Note that the pointer from a class to its subclasses is through a weak link,
+so subclasses may be garbage collected if there are no other references to
+them.
+
+<a name="fn30"><dt>FN30<dd></a>
+That is, no more than two implementations are required for a function that
+operates on both keys and elements.
+
+<a name="fn31"><dt>FN31<dd></a>
+These definitions are simplified slightly for expository purposes.
+
+<a name="fn32"><dt>FN32<dd></a>
+The two calling possibilities are described as tail-recursive to ensure that
+all values returned by the call are returned by the handler.  Not returning
+all the values could interfere with the conditions recovery protocol.  A
+handler that really knows what it is doing could use a non-tail-recursive
+call, but anything that knows what its doing in this situation is probably
+unmodular.  Note that a handler might not know the full recovery protocol,
+because the conditions class might be a subclass of the handlers expected
+type.
+
+<a name="fn33"><dt>FN33<dd></a>
+This is necessary to keep restart handlers available to other condition
+handlers.
+
+<a name="fn34"><dt>FN34<dd></a>
+With one exception: comparison operations may not behave in IEEE fashion when performed on NaNs.
+</dl>
+
+

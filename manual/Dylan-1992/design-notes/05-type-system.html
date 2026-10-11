@@ -1,0 +1,97 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="04-no-class-mods.html">Previous chapter:  #4: No Incremental Class Modifications        (Change)</A><P>
+<TITLE>Dylan Design Notes: #5: Regularization of the Type System        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#5: Regularization of the Type System        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note outlines a more expressive type system for Dylan.  
+Not all types in Dylan are classes.  For example, singleton types 
+are not classes.  The new type system allows for a variety of 
+types, including classes and singleton types, and also provides a 
+framework for introducing additional types that are not classes.
+<P>
+See<a href="06-limited-types.html"> Dylan Design Note #6: Limited Types</a>, and <a href="07-union-types.html">Dylan Design Note #7: 
+Union Types</a> for descriptions of new Dylan types that are not 
+classes.
+<P>
+<HR>
+<P>
+Add a new abstract class, &lt;type&gt;, to be the class of all objects 
+that represent types, i.e. obey the type protocol described below.  
+<a href="../book.annotated/ch6.html#funclass">&lt;class&gt; and &lt;singleton&gt;</a> are subclasses of &lt;type&gt; and behave the 
+same as before.
+<P>
+An object can be an instance of an indefinite number of types, but 
+<a href="../book.annotated/ch11.html#object-class0">object-class</a> always returns a class.  The object is not an instance 
+of any subclass of that class but it can be an instance of subtypes 
+of that class that are not themselves classes.
+<P>
+The type protocol comprises the following:
+<UL>
+<LI> any type can be used as a parameter <a href="../book.annotated/ch6.html#special">specializer</a>
+<LI> (<a href="../book.annotated/ch11.html#instance?0">instance?</a> object type ) tests type membership
+<LI> (subtype? type1 type2 ) tests type inclusion
+<LI> (make type ...) makes an instance (only allowed if the type is 
+instantiable)
+<LI> Type objects are immutable
+<LI> If two type objects are equivalent and are not classes, it is 
+unspecified whether they are <a href="../book.annotated/ch9.html#id?0">id?</a>.
+</UL>
+<P>
+The function subtype? replaces the existing function <a href="../book.annotated/ch11.html#subclass?0">subclass?</a>.  It 
+is mathematically a partial ordering.  Type t1 is a subtype of type 
+t2, i.e. (subtype? t1 t2) =&gt; true, if it is impossible to encounter 
+an object that is an instance of t1 but not an instance of t2.  
+Every type is a subtype of itself.  subtype? on classes is defined 
+by inheritance.  If x is an object and t is a type, (subtype? 
+(singleton x) t) iff (instance? x t).  Each proposed new type 
+includes detailed rules for the behavior of subtype?.
+<P>
+<HR>
+<P><h3>
+Notes:</h3>
+<P>
+We made this change because the existing Dylan type system was not 
+sufficiently expressive for some of the things we want to do.  The 
+two main needs for more expressive types are for documentation of 
+the programmer's intent, and to enable more compiler optimization, 
+especially for numeric code.  It would also be nice if the return 
+type(s) of every function described in the Dylan book could be 
+described in Dylan's type system; this is currently not the case.
+<P>
+This change was based on the following principles:
+<UL>
+<LI> All Dylan types may be used as method parameter specializers.
+<LI> All Dylan types are represented by first-class, anonymous 
+objects.
+<LI> All operations on types are well-defined (for example, there is 
+no Common Lisp-like freedom for subclass? to return "don't know" 
+instead of an answer).
+<LI> We should add as few new names to Dylan as possible.
+</UL>
+<P>
+We needed to define the basic structure of types before we could 
+coherently propose adding new types.  The class &lt;type&gt; exists 
+because every protocol should have a corresponding abstract class 
+so a method can be specialized to objects that support that 
+protocol.  It makes sense to rename subclass? to subtype? for 
+consistency.  The last bullet in the type protocol extends the 
+existing statement <a href="../book.annotated/ch11.html#singleton2">(page 97)</a> about singletons.
+<P>
+This design note does not define explicitly how users can define 
+their own non-class types.  However, if the relevant classes and 
+generic functions are not sealed, a user can define a subclass of 
+&lt;type&gt; with methods for instance?, subtype?, and make.  This 
+supports the entire Type Protocol with the exception of specializers; we could require specializers of user-defined classes 
+to be implemented entirely in terms of the generic functions 
+instance? and subtype?.  However, this design note does not require 
+this.
+<P><A NAME="NEXT" HREF="06-limited-types.html">Next chapter:  #6: Limited Types        (Addition)</A>
+
+
+
+

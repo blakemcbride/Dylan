@@ -1,0 +1,87 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch8.html">Previous chapter:  Conditionals, Flow of Control, and Evaluation</A><P>
+<title>Dylan manual: Equality and Magnitude Comparisons</title>
+<H2>9. Equality and  <A NAME="Magnitude Comparison0">Magnitude Comparison</A>s</H2><p>
+Dylan provides an identity function, as well as a group of equality and magnitude <A NAME="comparison0">comparison</A> functions that can be extended for user classes.  The methods =, /=, <, >, <=, and >= are defined in terms of binary= and binary&lt;.  By extending the behavior of binary= and binary<, programs can extend the behavior of the six methods.<p>
+For the protocol to work, all methods on binary= and binary&lt; must preserve the following properties:<p>
+<DL COMPACT>
+<DT>Identity:<DD>If (id? a b), then (binary= a b).
+<DT>Transitivity: <DD>If (binary&lt; a b) and (binary&lt; b c), then (binary&lt; a c).
+<DT><DD>If (binary= a b) and (binary= b c), then (binary= a c).
+<DT>Trichotomy: <DD>Exactly one of: (binary&lt; a b), (binary= a b), 
+</DL>
+(binary&lt; b a) always holds (on the assumption that these two operations are defined for the objects in question).  <A href="footnotes.html#fn22">FN22</A> , <A href="footnotes.html#fn23">FN23</A> <p>
+In addition, classes which provide their own definition of binary= should provide a definition for =hash, if instances of the class will be used as keys in = hash tables.<p>
+<b>See Also:  <a href="../design-notes/37-variadic-operators.html">Dylan Design Notes: Variadic Operators (Change)</a></b><p>
+<A NAME="eqcomp"><b><A NAME="Equality Comparison0">Equality Comparison</A>s</b><p>
+<PRE>
+<b><A NAME="id?0">id?</A></b>   <i>object1 object2</i> #rest <i>objects</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+id? returns true if <i>object1</i>, <i>object2</i>, and all the <i>objects </i>are all identical.  Otherwise, it returns false.<p>
+Objects are considered identical if they are computationally equivalent.  That is, there is no way for any possible Dylan program to distinguish them. <A href="footnotes.html#fn24">FN24</A> <p>
+<PRE>
+<b><A NAME="=0">=</A></b>   <i>object1 object2</i> #rest <i>objects</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+= returns true if every <i>object</i> is binary= to every other <i>object</i>.  Otherwise, = returns false.<p>
+= is not guaranteed to return (for example, when called on circular structures or unbounded structures).<p>
+= is a method, so you cant add other methods to it.  To extend the protocol, define methods on binary=.<p>
+<PRE>
+<b><A NAME="/=0">/=</A></b>   <i>object1 object2</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+/= calls binary= on <i>object1</i> and <i>object2</i>.  Returns true if binary= returns false <A href="footnotes.html#fn25">FN25.<p>
+/= is a method, so you cant add other methods to it.  To extend the protocol, define methods on binary=.<p></A>
+<PRE>
+<b><A NAME="binary=0">binary=</A><A HREF="ch12.html#binary=1">[next citation]</A></b>   <i>object1 object2</i>   ==><i>  boolean</i>	[Generic Function]
+</PRE>
+binary= is called by = and other comparison predicates.  Programs should not normally call this function directly.<p>
+The predefined methods on binary= behave as follows:<p>
+<UL>
+<LI>	Collections are equal if they have the same keys and if the values of corresponding keys are =.  Keys are considered the same if they match according to the test used by the element method of the collection.  If the collections use a different test, then an error is signaled.  For example, an error would be signaled when trying to compare an = hash-table with an id? hash-table.  An error would not be signaled when comparing a sequence and an id? hash-table.<p>
+	This implies that the collections are the same size.  For sequences, this means that elements at the same position are =.<p>
+<LI>	Dotted lists are equal if the elements are equal and if the final cdrs are equal.<p>
+<LI>	Built-in numbers are compared by mathematical value.<p>
+<LI>	Other objects are compared with id?.
+</UL>
+If you define a method on binary= for a class of objects that you expect to use as keys in = tables, you must also define a corresponding method on =hash.  The details are described in the section on collections.<p>
+<PRE>
+<b><A NAME="=hash0">=hash</A></b>   <i>object</i>   ==><i>  integer</i>	[Generic Function]
+</PRE>
+returns a <A NAME="hash-code0">hash-code</A> for <i>object</i>.  If you define any methods for binary= and wish to use objects affected by that definition as keys in = tables, then you must define corresponding methods for =hash.<p>
+The rule is that if two objects are =, then they must generate the same hash code when passed to =hash.<p>
+The value returned by =hash must be a integer.<p></A>
+<b>See Also:  <a href="../design-notes/37-variadic-operators.html">Dylan Design Notes: Variadic Operators (Change)</a></b><p>
+<A NAME="magcomp"><b>Magnitude Comparisons</b><p>
+<PRE>
+<b><A NAME="<0"><</A></b>   <i>object1 object2</i> #rest <i>objects</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+<  compares the <i>objects</i> two at a time with binary&lt;.  If each <i>object</i> is less than the one to its right, < returns true.  Otherwise < returns false.<p>
+< is a method, so you cannot add other methods to it.  To extend the protocol, define methods on binary&lt;.<p>
+<PRE>
+<b><A NAME=">0">></A> </b>  <i>object1 object2</i> #rest <i>objects</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+> compares the <i>objects</i> two at a time with binary&lt; (with appropriate argument reordering).  If each <i>object</i> is greater than the one to its right, > returns true.  Otherwise, > returns false.<p>
+> is a method, so you cannot add other methods to it.  To extend the protocol, define methods on binary&lt;.<p>
+<PRE>
+<b><A NAME="<=0"><=</A></b>   <i>object1 object2</i> #rest <i>objects</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+<= compares the <i>objects</i> two at a time with binary&lt; (with appropriate argument reordering).  If each <i>object</i> is less than or equal to the one to its right, <= returns true.  Otherwise, <= returns false.<p>
+<= is a method, so you cannot add other methods to it.  To extend the protocol, define methods on binary&lt;.<p>
+<PRE>
+<b><A NAME=">=0">>=</A></b>   <i>object1 object2</i> #rest <i>objects</i>   ==><i>  boolean</i>	[Method]
+</PRE>
+>= compares the <i>objects</i> two at a time with binary&lt;.  If each <i>object</i> is greater than or equal to the one to its right, >= returns true.  Otherwise, >= returns false.<p>
+>= is a method, so you cannot add other methods to it.  To extend the protocol, define methods on binary&lt;.<p>
+<PRE>
+</PRE>
+<b><A NAME="binary<0">binary&lt;</A><A HREF="ch12.html#binary&lt;1">[next citation]</A></b>   <i>object1 object2</i>   ==><i>  boolean</i>	[Generic Function]
+Called by <, >, and other functions.  Programs should not call this function directly.<p>
+The predefined methods on binary&lt; behave as follows:<p>
+<UL>
+<LI> Built-in real numbers are compared by mathematical value.
+<LI> Characters are compared by the ordinal value of the underlying character set.  Character case is significant.
+<LI> Strings are compared lexicographically, using binary&lt; on corresponding elements.  If one string is a strict prefix of the other, the shorter string is considered the smaller one.
+</UL>
+<p>
+<p></A>
+
+<P><A NAME="NEXT" HREF="ch10.html">Next chapter:  Functions</A>

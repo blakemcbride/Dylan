@@ -1,0 +1,172 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="20-setter-syntax.html">Previous chapter:  #20: New Syntax for Setter Variables        (Change)</A><P>
+<TITLE>Dylan Design Notes: #21: Result Type Declarations        (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#21: Result Type Declarations        (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note introduces a way to declare the result types of 
+methods and generic functions.  This addition is intended to make 
+code more self-documenting and allow for better compiler 
+optimization.  Type declarations will be checked at run time unless 
+they can be proven at compile time to be satisfied always.
+<P>
+<HR>
+<P>
+<a href="../book.annotated/ch6.html#define-method2">Parameter lists</a> are extended to include value declarations, which 
+must come at the end of the parameter list and are separated from the 
+parameters by #values.  Value declarations are of the form {variable-name | (variable-name type-expression)}.
+<P>
+At the time a function is <a href="../book.annotated/ch5.html#modadd">defined</a>, each value declaration's type-expression is evaluated to produce a value type.   If type-expression  
+is not specified for a particular value declaration, the value type 
+defaults to &lt;object&gt;.  When the function is invoked, each value 
+returned must be an instance of the corresponding value type, or else 
+an error of type &lt;type-error&gt; will be signaled.
+<PRE>
+? (define-method plus (x y #values (total &lt;integer&gt;)) (+ x y))
+? (plus 22 3)
+25
+? (plus 1.5 7)
+;type-error
+</PRE>
+The variable-name never comes into scope; it exists only for 
+documentation and for syntactic consistency with parameters.  It is 
+valid for the same variable name to be used in both one parameter and 
+one value declaration in the same parameter list.
+<PRe>
+(define-method always (object #values function)
+   (method (#rest ignored 
+            #values (object (object-type object)))
+      object))
+</PRE>
+The last value declaration can be preceded by #rest to indicate a 
+variable number of values returned.  A rest value declaration is a 
+value declaration preceded by #rest.  A required value declaration is 
+a value declaration not preceded by #rest.  
+<P>
+If fewer values are returned by the function's body (or by the 
+applicable method if the function is a generic function) than the 
+number of required value declarations in the function's parameter 
+list, the missing values are defaulted to #f and returned.  If #f is 
+not an instance of the corresponding value type, an error of type 
+&lt;type-error&gt; will be signaled.
+<P>
+If a function does not have a rest value declaration, and more values 
+are returned by the function's body (or by the applicable method if 
+the function is a generic function) than the number of required value 
+declarations in the function's parameter list, the extra values are 
+discarded and not returned.
+<P>
+The value type in a rest value declaration is the type of each one of 
+the remaining individual values, not the type of a conceptual 
+sequence of multiple values.
+<PRe>
+(define numbers (method ((start &lt;integer&gt;) (count &lt;integer&gt;)
+                         #values (end &lt;integer&gt;)
+                                 #rest (number &lt;integer&gt;))
+  (bind ((end (+ start count)))
+    (apply values end (range from: start through: (- end 1))))))
+</PRE>
+If a parameter list does not contain #values, it defaults to #values 
+#rest (x &lt;object&gt;), i.e. the function can return any number of values 
+of any type.
+<P>
+Generic functions can have value declarations in the parameter list 
+used in define-generic-function.  The values returned by the generic 
+function will be instances of the value types.  
+<PRe>
+(define-generic-function floor/ ((numerator &lt;real&gt;) 
+                                 (denominator &lt;real&gt;)
+                                 #values (quotient &lt;integer&gt;)
+                                         (remainder &lt;real&gt;)))
+
+(define-method floor/ ((numerator &lt;small-integer&gt;)
+                       (denominator &lt;small-integer&gt;)
+                       #values  (quotient &lt;integer&gt;)                 
+                                (remainder &lt;small-integer&gt;))
+  ...)
+</PRe>
+Rather than adding run-time checking to the generic function 
+dispatch, the parameter list congruency rules are augmented to 
+require each method added to the generic function to have congruent 
+value declarations, defined as follows.  add-method, define-method, 
+define-class, etc. signal an error if this requirement is violated.
+<P>
+If the generic function's parameter list does not contain a rest 
+value declaration:
+<UL>
+<LI>        The method's parameter list must not contain a rest value 
+declaration.
+<LI>        The two parameter lists must contain the same number of 
+required value declarations.
+<LI>        Each value type in the method's parameter list must be a 
+subtype of the corresponding value type in the generic function's 
+parameter list.
+</UL>
+If the generic function's parameter list contains a rest value 
+declaration:
+<UL>
+<LI>        The method's parameter list is permitted, but not required, to 
+contain a rest value declaration.
+<LI>        The method's parameter list must contain at least as many 
+required value declarations as the generic function's parameter list.
+<LI>        Each value type in the method's parameter list must be a 
+subtype of the corresponding value type in the generic function's 
+parameter list.  If the method has a rest value type, it corresponds 
+to the generic function's rest value type.  If the method has more 
+required value types than the generic function, the extra ones 
+correspond to the generic function's rest value type.
+</UL>
+If a generic function is implicitly defined by define-method or  
+define-class, its value declarations default to #values #rest (x 
+&lt;object&gt;) which imposes no restrictions on its methods.
+<P>
+<HR>
+<P>
+The two reasons for the change are to make more compiler optimization 
+possible by giving the compiler more information about types, and to 
+make code more readable, again by supplying more information about 
+types.
+<P>
+We chose the syntax to be as consistent as possible with the rest of 
+Dylan.  We included variable names in the value declarations, rather 
+than using type-expressions alone, because names are useful to reduce 
+confusion when there is more than one value, and because it makes the 
+syntax consistent between the "parameters" and "values" portions of a 
+parameter-list.  In any case these variable names have no effect on 
+the runtime.  We are considering changes to this syntax in the 
+future.
+<P>
+The type in a value declaration is called a "value type" rather than 
+a "value specializer" so no one thinks it somehow affects method 
+dispatch.
+<P>
+The semantics are incontrovertible, except for the question of 
+whether returning a different number of values than declared should 
+do what is proposed, return exactly that many values, or signal an 
+error.  Returning the declared number of values, as proposed, 
+potentially allows a more efficient implementation because the caller 
+does not have to check the number of values and the callee does not 
+have to return a value count.
+<P>
+The parameter list congruency rules ensure that the number and types 
+of values returned by a method are valid for the generic function.  A 
+method can have stronger constraints on its values than the generic 
+function as a whole, if desired, and can return additional values 
+specific to that method if the generic function allows it with a rest 
+value declaration (which is the default).
+<P>
+If a generic function is implicitly defined by define-method,  
+define-class, or define-slot, it is not given any value declarations.  
+A programmer who wants value declarations on a generic function can 
+write an explicit define-generic-function.  In any case it is 
+important for all implicit definitions of generic functions to be 
+consistent in this respect.
+<P>
+Because of the way the values declaration defaults, this proposal 
+does not change the behavior of any program that could be written in 
+Dylan before this feature was added.
+<P><A NAME="NEXT" HREF="22-bnf-for-infix.html">Next chapter:  #22: BNF for Infix Dylan        (Change)</A>

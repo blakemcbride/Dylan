@@ -1,0 +1,35 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="33-source-file-headers.html">Previous chapter:  #33: Headers for Dylan Source Files     (Addition)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #34: Select Ordering    (Clarification)</TITLE>
+<H1>#34: Select Ordering    (Clarification)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note specifies the order of evaluation for the select 
+statement.
+<HR>
+Specify that <a href="../book.annotated/ch8.html#select0">select</a> clauses are tested in order, until one is found which 
+produces a match, in which case the following clauses are not tested.  
+Since testing stops when the first match is found, it is irrelevant 
+whether the test function would also have returned true if called on 
+later match-list elements of the same clause or on match-list elements of 
+later clauses.
+<P>
+The match-object expressions in the clauses are evaluated in order.  Once 
+a match is found, the following match-object expressions, in this and 
+subsequent clauses, are not evaluated at all.
+<HR><h3>
+Example:</h3>
+<PRE>
+select (x instance?)
+  &lt;integer&gt; =&gt; "It's an integer";
+  &lt;number&gt; =&gt; "Fractional number";
+  otherwise  "Not a number!"
+end select
+</PRE>
+
+<P><A NAME="NEXT" HREF="35-punt-transcendentals.html">Next chapter:  #35: Remove Transcendental Functions    (Change)</A>

@@ -1,0 +1,59 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="10-element-setter.html">Previous chapter:  #10: Element-Setter Signals Error        (Clarification)</A><P>
+<TITLE>Dylan Design Notes: #11: Last-Setter        (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#11: Last-Setter        (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note adds a specification for the generic function last-setter, consistent with the setters for first, second, third, and 
+element.
+<P>
+<HR>
+<P>
+Specify the generic function <a href="../book.annotated/ch12.html#last0">last-setter</a>, as follows:
+<PRE>
+last-setter mutable-sequence new-value =&gt; new-value [Generic Function]
+</PRE>
+Replaces the last element of mutable-sequence with new-value.  new-value must obey any type restrictions for elements of mutable-sequence.  An error is signaled if mutable-sequence is empty or 
+unbounded.
+<PRE>
+? (define my-list (list 1 2 3))
+;unspecified
+? my-list
+1 2 3
+? (set! (last my-list) 4)
+4
+? my-list
+1 2 4
+? (define my-empty-vector (vector))
+;unspecified
+? my-empty-vector
+#()
+? (set! (last my-empty-vector) 0)
+;error
+</PRE>
+<HR>
+<P>
+Notes:
+<P>
+The following is a portable implementation:
+<PRE>
+(define-method last-setter ((s &lt;mutable-sequence&gt;) new)
+  (case (size s)
+    ((0 #f)       ;check for empty or unbounded sequence
+     (error "last-setter of empty sequence ~S" s))
+    (else: (bind ((first-state (initial-state s)))
+             (bind-methods ((loop (trail advance)
+                              (bind ((next (next-state s advance))
+                                     (trail (next-state s trail)))
+                                (if next
+                                  (loop trail next)
+                                  (set! (current-element s trail)
+                                        new)))))
+               (loop (initial-state s)
+                     (next-state s first-state)))))))
+</PRE>
+<P><A NAME="NEXT" HREF="12-size-setter.html">Next chapter:  #12: Size-Setter for Stretchy Sequences        (Addition)</A>

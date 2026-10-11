@@ -1,0 +1,38 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="22-bnf-for-infix.html">Previous chapter:  #22: BNF for Infix Dylan        (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+</PRE>
+<TITLE>Dylan Design Notes: #23: Defining Forms Make Constants      (Change)</TITLE>
+<H1>#23: Defining Forms Make Constants      (Change)</H1>
+<PRE>
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note makes define-method more consistent with 
+define-generic-function.  It also provides general declarative forms for 
+defining constants and variables.
+<HR>
+Rename <a href="../book.annotated/ch4.html#define1">define</a> to define-constant.
+<P>
+Specify that<a href="../book.annotated/ch6.html#define-generic-function2"> define-generic-function</a>, <a href="../book.annotated/ch6.html#define-class2"> define-class</a>, define-constant, and <a href="../book.annotated/ch6.html#define-method2"> define-method</a> all create read-only variables.  These variables cannot be 
+assigned new values. 
+<P>
+In addition, specify a new defining form, define-variable, which creates 
+variables that are not read-only.  define-variable has the same syntax as 
+define-constant.  There is no return value specified for define-variable.
+<HR>
+<h3>
+Notes
+</h3>
+In the Dylan book's definition of define-method, the statement "If the 
+module variable variable-name is not already defined, it is first defined 
+(as with define) ..." implies that define-method does not create 
+read-only variables, which would be inconsistent with 
+define-generic-function.  This Design Note clears up that inconsistency.
+<P>
+In addition, the Dylan book specifies that define-generic-function and 
+define-class create read-only variables.  However, it does not specify a 
+declarative way to create read-only variables in the general case.
+
+<P><A NAME="NEXT" HREF="24-divide-by-zero-error.html">Next chapter:  #24: Divide by Zero Signals Error       (Clarification)</A>

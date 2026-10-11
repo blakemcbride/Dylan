@@ -1,0 +1,163 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="24-divide-by-zero-error.html">Previous chapter:  #24: Divide by Zero Signals Error       (Clarification)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #25: Exit Extent        (Change)</TITLE>
+<H1>#25: Exit Extent        (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+Interactions between bind-exit and unwind-protect are complicated, 
+especially when a non-local exit is taken during the execution of an 
+unwind-protect cleanup form.  This design note replaces bind-exit and 
+unwind-protect with a new block construct, and clarifies Dylan's 
+behavior.
+<HR>
+On<a href="../book.annotated/ch8.html#simpexit"> page 71 and 72</a> of the Dylan manual, replace bind-exit and 
+unwind-protect with the following block construct.  Change all references 
+to bind-exit and/or unwind-protect to refer to block as necessary 
+throughout the manual.
+<P><PRE>
+block ([exit-var]) exprs  [cleanup cleanup-clauses]   [Special Form]
+
+=&gt; values
+</PRE>
+block executes the exprs in sequence, and then the optional 
+cleanup-clauses.  Normally, the value returned by block is the value of 
+the last expr.  If there are no exprs, #f is returned.
+<P>
+If exit-var is provided, exit-var is bound to an exit procedure during 
+the execution of the exprs and cleanup-clauses.  At any point in time 
+before the last cleanup-clause returns, the exit procedure can be called.  
+Calling the exit procedure has the effect of immediately terminating the 
+execution of exprs.  The exit procedure accepts any number of arguments.  
+These arguments are used as the return values of block.  Calling an exit 
+procedure is known as performing a non-local exit.
+<P>
+Generally, the cleanup-clauses are guaranteed to be executed.  Even if 
+one of the exprs is terminated by a non-local exit out of the block, the 
+cleanup-clauses  are executed before the non-local exit can complete.  
+For example, the following code fragment ensures that files are closed 
+even in the case of an error causing a non-local exit:
+<PRE>
+block (return)
+  open-files();
+  ...
+  if (error)
+    return(#f);
+  end if;
+  ...
+  result
+cleanup
+  close-files();
+end block
+</PRE>
+However, if one of the cleanup-clauses is terminated by a non-local exit 
+out of the block, any following cleanup-clauses within the same block are 
+not executed.
+<h3>
+Restrictions on the use of exit procedures
+</h3>
+The exit procedure is a first-class object.  Specifically, it can be 
+passed as an argument to functions, stored in data structures, etc.  Its 
+use is not restricted to the lexical body of the establishing block (the 
+block in which that exit procedure was established).  However, invocation 
+of the exit procedure is valid only during the execution of the 
+establishing block.  It is an error to invoke an exit procedure after its 
+establishing block has returned, or after execution of the establishing 
+block has been terminated by a non-local exit.
+<P>
+In the following example, the block establishes an exit procedure and 
+binds bar to that exit procedure.  The block returns an anonymous method 
+containing bar, which is then bound to foo.  Calling the foo method is an 
+error because it is no longer valid to invoke bar after its establishing 
+block returns.
+<PRE>
+? define foo
+    block (bar)
+       method (n) bar(n);
+    end block;
+  end foo.
+? foo(5)
+error or other undefined consequences
+</PRE>
+When an exit procedure is called, it initiates a non-local exit out of 
+its establishing block.  Before the non-local exit can complete, however, 
+the cleanup clauses of intervening blocks (blocks that have been entered, 
+but not exited, since the establishing block was entered) must be 
+executed, beginning with the most recently entered intervening block.   
+Once the cleanup clauses of an intervening block have been executed, it 
+is an error to invoke the exit procedure established by that block.  
+Finally, the cleanup clauses of the establishing block are executed, 
+further invocation of the exit procedure becomes invalid, and the 
+establishing block returns with the values that were passed to the exit 
+procedure.
+<P>
+During the process of executing the cleanup clauses of the intervening 
+blocks, any valid exit procedure may be invoked and may interrupt the 
+current non-local exit.
+<HR>
+<h3>
+Examples
+</h3>
+The following expression is valid and returns 1.  The call to two does 
+not complete because it is interrupted by a non-local exit when the 
+cleanup is executed.
+<PRE>
+block (one)
+  block (two)
+    two(2);
+  cleanup
+    one(1);
+  end;
+  3
+end
+</PRE>
+The following expression is valid and returns 2.  The exit procedure 
+bound to exit is still valid when the cleanup is executed.
+<PRE>
+block (exit)
+  exit(1);
+cleanup
+  exit(2);
+end
+</PRE>
+The following expression returns 1 rather than 2.  The second cleanup is 
+never executed.
+<PRE>
+block (exit)
+  3;
+cleanup
+  exit(1);
+  exit(2);
+end
+</PRE>
+The following expression returns 2.  Nesting the blocks ensures that both 
+cleanups will be executed.
+<PRE>
+block (exit)
+  block ()
+    3;
+  cleanup
+    exit(1);
+  end;
+cleanup
+  exit(2);
+end
+</PRE>
+The following expression is valid and returns 3.  The call to one does 
+not destroy information needed to invoke two.
+<PRE>
+block (one)
+  block (two)
+    one(1);
+  cleanup
+    two(2);
+  end;
+  3
+end
+</PRE>
+
+<P><A NAME="NEXT" HREF="26-iteration-protocol.html">Next chapter:  #26: New Iteration Protocol     (Change)</A>

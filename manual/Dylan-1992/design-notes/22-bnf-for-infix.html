@@ -1,0 +1,631 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="21-result-types.html">
+ Previous chapter:  #21: Result Type Declarations (Addition)</A>
+<P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #22: BNF for Infix Dylan        (Change)</TITLE>
+<H1>#22: BNF for Infix Dylan        (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This document presents a preliminary specification of the lexical and 
+syntactic aspects of  Dylan.
+<HR>
+<h3>
+Lexical notes
+</h3>
+In the lexical grammar, the various elements that come together on the 
+right-hand sides of rules must not be separated by white-space, because 
+the end result will be a single <a href="22-bnf-for-infix.html#token">token</a>. This is in contrast to the phrase 
+grammar, where each element is already a complete <a href="22-bnf-for-infix.html#token">token</a> or a series of 
+complete tokens.
+<P>
+Arbitrary white-space is permitted between tokens, but it is required 
+only as necessary to separate tokens that might otherwise blend together.
+<P>
+Case is not significant except within character and string literals. The 
+grammars do not reflect this, using one case or the other, but it is 
+still true.
+<P>
+Bracket-style comments may be nested.
+<P>
+Note: In this grammar, the suffix OPT means that the element is optional.
+
+<H2>LEXICAL GRAMMAR</H2>
+<H3>GENERAL</H3>
+<a name="token">token</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>
+        <a href="22-bnf-for-infix.html#literal">literal</a>
+        <a href="22-bnf-for-infix.html#binary-operator">binary-operator</a>
+        <a href="22-bnf-for-infix.html#punctuation">punctuation</a>
+</PRE>
+<a name="symbolcaps">SYMBOL</a>:
+<PRE>
+        any <a href="22-bnf-for-infix.html#symbol">symbol</a> that is not also a <a href="22-bnf-for-infix.html#reserved-word">reserved-word</a>
+        <b>`</b>  <a href="22-bnf-for-infix.html#symbol">symbol</a>  <b>`</b>
+        <b>`</b>  <a href="22-bnf-for-infix.html#operator">operator</a>  <b>`</b>
+</PRE>
+<a name="keyword">keyword</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbol">symbol</a>  <b>:</b>
+</PRE>
+<a name="literal">literal</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#number">number</a>
+        <a href="22-bnf-for-infix.html#character-literal">character-literal</a>
+        <a href="22-bnf-for-infix.html#string-literal">string-literal</a>
+        <b>#`</b>  <a href="22-bnf-for-infix.html#symbol">symbol</a>  <b>`</b>
+        <b>#`</b>  <a href="22-bnf-for-infix.html#operator">operator</a>  <b>`</b>
+</PRE>
+<a name="binary-operator">binary-operator</a>:
+<PRE>
+        any <a href="22-bnf-for-infix.html#operator">operator</a> that is not also <a href="22-bnf-for-infix.html#punctuation">punctuation</a>
+</PRE>
+<a name="punctuation">punctuation</a>:
+<PRE>
+        one of  <b>( ) , . ; [ ] { } :: - ~ = == =&gt; #( #[</b>
+        <b>#t</b>
+        <b>#f</b>
+        <b>#next</b>
+        <b>#rest</b>
+        <b>#key</b>
+</PRE>
+<a name="comment">comment</a>:
+<PRE>
+        <b># </b>  ...the rest of the line
+        <b>##</b>  ...the rest of the line
+        <b>#{</b>  ...everything even across lines... <b>#}</b>
+</PRE>
+
+
+<H3>OPERATORS</H3>
+<a name="initial-character">initial-character</a>:
+<PRE>
+        one of  <b>! &amp; * + / &lt; = &gt; ? | ^ $ % @ _</b>
+</PRE>
+<a name="noninitial-character">noninitial-character</a>:
+<PRE>
+        one of  <b>- ~</b>
+</PRE>
+<a name="operator-character">operator-character</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#initial-character">initial-character</a>
+        <a href="22-bnf-for-infix.html#noninitial-character">noninitial-character</a>
+</PRE>
+<a name="operator-name">operator-name</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#initial-character">initial-character</a>
+        <a href="22-bnf-for-infix.html#operator-name">operator-name</a>  <a href="22-bnf-for-infix.html#operator-character">operator-character</a>
+</PRE>
+<a name="operator">operator</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#operator-name">operator-name</a>
+        one of  <b>- ~ :=</b>
+</PRE>
+
+
+<H3>SYMBOLS</H3>
+<a name="alphanumeric-character">alphanumeric-character</a>:
+<PRE>
+        one of  <b>a b c d e f g h i j k l m n o p q r s t u v w x y z
+                0 1 2 3 4 5 6 7 8 9</b>
+</PRE>
+<a name="symbol-name">symbol-name</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#alphanumeric-character">alphanumeric-character</a>
+        <a href="22-bnf-for-infix.html#symbol-name">symbol-name</a>  <a href="22-bnf-for-infix.html#alphanumeric-character">alphanumeric-character</a>
+        <a href="22-bnf-for-infix.html#symbol-name">symbol-name</a>  <a href="22-bnf-for-infix.html#operator-character">operator-character</a>
+        <a href="22-bnf-for-infix.html#operator-name">operator-name</a>  <a href="22-bnf-for-infix.html#symbol-name">symbol-name</a>
+</PRE>
+<a name="symbol">symbol</a>:
+<PRE>
+        any <a href="22-bnf-for-infix.html#symbol-name">symbol-name</a> that is not also a <a href="22-bnf-for-infix.html#number">number</a>
+</PRE>
+<a name="reserved-word">reserved-word</a>:
+<PRE>
+        one of <b>above, begin, below, block, by, case, class, cleanup,
+        constant, define, else, end, exception, finally, for, from,
+        generic, handler, if, in, instance, let, local, method,
+        otherwise, select, slot, subclass, then, to, unless, until,
+        variable, virtual, while</b>
+</PRE>
+
+
+<H3>NUMBERS</H3>
+<a name="number">number</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#integer">integer</a>
+        <a href="22-bnf-for-infix.html#ratio">ratio</a>
+        <a href="22-bnf-for-infix.html#floating-point">floating-point</a>
+</PRE>
+<a name="integer">integer</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#binary-integer">binary-integer</a>
+        <a href="22-bnf-for-infix.html#octal-integer">octal-integer</a>
+        <a href="22-bnf-for-infix.html#sign">sign</a>OPT  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>
+        <a href="22-bnf-for-infix.html#hex-integer">hex-integer</a>
+</PRE>
+<a name="binary-integer">binary-integer</a>:
+<PRE>
+        <b>#b</b>  <a href="22-bnf-for-infix.html#binary-digit">binary-digit</a>
+        <a href="22-bnf-for-infix.html#binary-integer">binary-integer</a>  <a href="22-bnf-for-infix.html#binary-digit">binary-digit</a>
+</PRE>
+<a name="octal-integer">octal-integer</a>:
+<PRE>
+        <b>#o</b>  <a href="22-bnf-for-infix.html#octal-digit">octal-digit</a>
+        <a href="22-bnf-for-infix.html#octal-integer">octal-integer</a>  <a href="22-bnf-for-infix.html#octal-digit">octal-digit</a>
+</PRE>
+<a name="decimal-integer">decimal-integer</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#decimal-digit">decimal-digit</a>
+        <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>  <a href="22-bnf-for-infix.html#decimal-digit">decimal-digit</a>
+</PRE>
+<a name="hex-integer">hex-integer</a>:
+<PRE>
+        <b>#x</b>  <a href="22-bnf-for-infix.html#hex-digit">hex-digit</a>
+        <a href="22-bnf-for-infix.html#hex-integer">hex-integer</a>  <a href="22-bnf-for-infix.html#hex-digit">hex-digit</a>
+</PRE>
+<a name="binary-digit">binary-digit</a>:
+<PRE>
+        one of  <b>0 1</b>
+</PRE>
+<a name="octal-digit">octal-digit</a>:
+<PRE>
+        one of  <b>0 1 2 3 4 5 6 7</b>
+</PRE>
+<a name="decimal-digit">decimal-digit</a>:
+<PRE>
+        one of  <b>0 1 2 3 4 5 6 7 8 9</b>
+</PRE>
+<a name="hex-digit">hex-digit</a>:
+<PRE>
+        one of  <b>0 1 2 3 4 5 6 7 8 9 A B C D E F</b>
+</PRE>
+<a name="ratio">ratio</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#sign">sign</a>OPT  <a	href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>  /  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>
+</PRE>
+<a name="floating-point">floating-point</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#sign">sign</a>OPT  <a	href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>OPT  <b>.</b>  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>  <a href="22-bnf-for-infix.html#exponent">exponent</a>OPT
+        <a href="22-bnf-for-infix.html#sign">sign</a>OPT  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>  <b>.</b>  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>OPT  <a href="22-bnf-for-infix.html#exponent">exponent</a>OPT
+        <a href="22-bnf-for-infix.html#sign">sign</a>OPT  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>  <a href="22-bnf-for-infix.html#exponent">exponent</a>
+</PRE>
+<a name="exponent">exponent</a>:
+<PRE>
+        <b>E</b>  <a href="22-bnf-for-infix.html#sign">sign</a>OPT  <a href="22-bnf-for-infix.html#decimal-integer">decimal-integer</a>
+</PRE>
+<a name="sign">sign</a>:
+<PRE>
+        one of  <b>+ -</b>
+</PRE>
+
+
+<H3>CHARACTER AND STRING LITERALS</H3>
+<a name="character-literal">character-literal</a>:
+<PRE>
+        <b>'</b>  <a href="22-bnf-for-infix.html#normal-character">normal-character</a>  <b>'</b>
+        <b>'\</b>  <a href="22-bnf-for-infix.html#special-character">special-character</a>  <b>'</b>
+</PRE>
+<a name="normal-character">normal-character</a>:
+<PRE>
+        any printing character (including space) except for  <b>'</b>  or  <b>\</b>
+</PRE>
+<a name="special-character">special-character</a>:
+<PRE>
+        one of  <b>' \ b f n r t</b>
+</PRE>
+<a name="string-literal">string-literal</a>:
+<PRE>
+        <b>"</b>  <a href="22-bnf-for-infix.html#more-string">more-string</a>
+</PRE>
+<a name="more-string">more-string</a>:
+<PRE>
+        <b>"</b>
+        <a href="22-bnf-for-infix.html#normal-string-character">normal-string-character</a>  <a href="22-bnf-for-infix.html#more-string">more-string</a>
+        <b>\</b> <a href="22-bnf-for-infix.html#special-string-character">special-string-character</a>  <a href="22-bnf-for-infix.html#more-string">more-string</a>
+</PRE>
+<a name="normal-string-character">normal-string-character</a>:
+<PRE>
+        any printing character (including space) except for  <b>"</b>  or  <b>\</b>
+</PRE>
+<a name="special-string-character">special-string-character</a>:
+<PRE>
+        one of  <b>" \ b f n r t</b>
+</PRE>
+
+
+<H2>PHRASE GRAMMAR</H2>
+<H3>PROGRAM STRUCTURE</H3>
+<a name="dylan-program">dylan-program</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#body">body</a>
+</PRE>
+<a name="body">body</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#constituents">constituents</a>  <b>;</b>OPT
+</PRE>
+<a name="constituents">constituents</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#constituent">constituent</a>
+        <a href="22-bnf-for-infix.html#constituents">constituents</a>  <b>;</b>  <a href="22-bnf-for-infix.html#constituent">constituent</a>
+</PRE>
+<a name="constituent">constituent</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#defining-form">defining-form</a>
+        <a href="22-bnf-for-infix.html#local-declaration">local-declaration</a>
+        <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="defining-form">defining-form</a>:
+<PRE>
+        <b>define  class</b>  <a href="22-bnf-for-infix.html#class-definition">class-definition</a>
+        <b>define  constant</b>  <a href="22-bnf-for-infix.html#bindings">bindings</a>
+        <b>define  generic</b>  <a href="22-bnf-for-infix.html#generic-function-definition">generic-function-definition</a>
+        <b>define  method</b>  <a href="22-bnf-for-infix.html#named-method">named-method</a>
+        <b>define  variable</b>  <a href="22-bnf-for-infix.html#bindings">bindings</a>
+</PRE>
+<a name="local-declaration">local-declaration</a>:
+<PRE>
+        <b>let</b>  <a href="22-bnf-for-infix.html#bindings">bindings</a>
+        <b>let  handler</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>=</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>let  handler</b>  <b>(</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT  <b>)  =</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>local</b>  <a href="22-bnf-for-infix.html#local-methods">local-methods</a> 
+</PRE>
+<a name="bindings">bindings</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#variables">variables</a>  <b>=</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>(</b>  <a href="22-bnf-for-infix.html#variables">variables</a>  <b>)  =</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="variables">variables</a>:
+<PRE>
+        <b>#rest</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#variable">variable</a>
+        <a href="22-bnf-for-infix.html#variable">variable</a>  <b>,</b>  <a href="22-bnf-for-infix.html#variables">variables</a>
+</PRE>
+<a name="variable">variable</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>::</b>  <a href="22-bnf-for-infix.html#operand">operand</a>
+</PRE>
+<a name="local-methods">local-methods</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#local-method">local-method</a>
+        <a href="22-bnf-for-infix.html#local-methods">local-methods</a>  <b>,</b>  <a href="22-bnf-for-infix.html#local-method">local-method</a>
+</PRE>
+<a name="local-method">local-method</a>:
+<PRE>
+        <b>method</b>OPT  <a href="22-bnf-for-infix.html#named-method">named-method</a>
+</PRE>
+
+
+<H3>EXPRESSIONS</H3>
+<a name="expression">expression</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>
+        <a href="22-bnf-for-infix.html#operand">operand</a>
+        <a href="22-bnf-for-infix.html#operand">operand</a>  <a href="22-bnf-for-infix.html#binop-series">binop-series</a>
+</PRE>
+<a name="binop-series">binop-series</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#binop">binop</a>  <a href="22-bnf-for-infix.html#operand">operand</a>
+        <a href="22-bnf-for-infix.html#binop-series">binop-series</a>  <a href="22-bnf-for-infix.html#binop">binop</a>  <a href="22-bnf-for-infix.html#operand">operand</a>
+</PRE>
+<a name="binop">binop</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#binary-operator">binary-operator</a>
+        <b>-</b>
+        <b>==</b>
+</PRE>
+<a name="operand">operand</a>:
+<PRE>
+        <b>-</b>  <a href="22-bnf-for-infix.html#operand">operand</a>
+        <b>~</b>  <a href="22-bnf-for-infix.html#operand">operand</a>
+        <a href="22-bnf-for-infix.html#leaf">leaf</a>
+</PRE>
+<a name="leaf">leaf</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#constant">constant</a>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#leaf">leaf</a>  <b>[</b>  <a href="22-bnf-for-infix.html#arguments">arguments</a>OPT  <b>]</b>
+        <a href="22-bnf-for-infix.html#leaf">leaf</a>  <b>(</b>  <a href="22-bnf-for-infix.html#arguments">arguments</a>OPT  <b>)</b>
+        <a href="22-bnf-for-infix.html#anonymous-method">anonymous-method</a>
+        <a href="22-bnf-for-infix.html#leaf">leaf</a>  <b>.</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <b>(</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>)</b>
+        <a href="22-bnf-for-infix.html#statement">statement</a>
+</PRE>
+<a name="arguments">arguments</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#argument">argument</a>
+        <a href="22-bnf-for-infix.html#arguments">arguments</a>  <b>,</b>  <a href="22-bnf-for-infix.html#argument">argument</a>
+</PRE>
+<a name="argument">argument</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>OPT  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="property-list">property-list</a>:
+<PRE>
+        <b>,</b>  <a href="22-bnf-for-infix.html#keyword">keyword</a>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#property-list">property-list</a>  <b>,</b>  <a href="22-bnf-for-infix.html#keyword">keyword</a>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="return-type-list">return-type-list</a>:
+<PRE>
+        <b>#rest</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#expression">expression</a>  <b>,</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#expression">expression</a>  <b>,</b>  <a href="22-bnf-for-infix.html#return-type-list">return-type-list</a>
+</PRE>
+
+
+<H3>CONSTANTS</H3>
+<a name="constant">constant</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#literal">literal</a>
+        <b>#t</b>
+        <b>#f</b>
+        <b>#(</b>  <a href="22-bnf-for-infix.html#dotted-list">dotted-list</a>  <b>)</b>
+        <b>#(</b>  <a href="22-bnf-for-infix.html#bare-literals">bare-literals</a>OPT  <b>)</b>
+        <b>#[</b>  <a href="22-bnf-for-infix.html#bare-literals">bare-literals</a>OPT  <b>]</b>
+</PRE>
+<a name="dotted-list">dotted-list</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#bare-literals">bare-literals</a>  <b>.</b>  <a href="22-bnf-for-infix.html#bare-literal">bare-literal</a>
+</PRE>
+<a name="bare-literals">bare-literals</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#bare-literal">bare-literal</a>
+        <a href="22-bnf-for-infix.html#bare-literals">bare-literals</a>  <b>,</b>  <a href="22-bnf-for-infix.html#bare-literal">bare-literal</a>
+</PRE>
+<a name="bare-literal">bare-literal</a>:
+<PRE>
+        <b>(</b>  <a href="22-bnf-for-infix.html#dotted-list">dotted-list</a>  <b>)</b>
+        <b>(</b>  <a href="22-bnf-for-infix.html#bare-literals">bare-literals</a>OPT  <b>)</b>
+        <b>[</b>  <a href="22-bnf-for-infix.html#bare-literals">bare-literals</a>OPT  <b>]</b>
+        <a href="22-bnf-for-infix.html#constant">constant</a>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>
+</PRE>
+
+
+<H3>STATEMENTS</H3>
+<a name="statement">statement</a>:
+<PRE>
+        <b>begin</b>  <a href="22-bnf-for-infix.html#body">body</a>OPT  <b>end</b>
+        <b>block  (</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>  <a href="22-bnf-for-infix.html#block-epilog">block-epilog</a>OPT  <b>end</b>  <b>block</b>OPT
+        <b>case</b>  <a href="22-bnf-for-infix.html#condition-body">condition-body</a>  <b>end</b>  <b>case</b>OPT
+        <b>if  (</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>  <a href="22-bnf-for-infix.html#else-part">else-part</a>OPT  <b>end</b>  <b>if</b>OPT
+        <b>for  (</b>  <a href="22-bnf-for-infix.html#for-header">for-header</a>  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>OPT  <a href="22-bnf-for-infix.html#final-part">final-part</a>OPT  <b>end</b>  <b>for</b>OPT
+        <b>select  (</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <a href="22-bnf-for-infix.html#by-part">by-part</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#condition-body">condition-body</a>  <b>end</b>  <b>select</b>OPT
+        <b>unless  (</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>  <b>end</b>  <b>unless</b>OPT
+        <b>until  (</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>OPT  <b>end</b>  <b>until</b>OPT
+        <b>while  (</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>OPT  <b>end</b>  <b>while</b>OPT
+</PRE>
+<a name="block-epilog">block-epilog</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#exception-clauses">exception-clauses</a>OPT  <a href="22-bnf-for-infix.html#cleanup-part">cleanup-part</a>  <a href="22-bnf-for-infix.html#exception-clauses">exception-clauses</a>OPT
+        <a href="22-bnf-for-infix.html#exception-clauses">exception-clauses</a>
+</PRE>
+<a name="condition-body">condition-body</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#complete-condition-clauses">complete-condition-clauses</a>
+</PRE>
+<a name="for-header">for-header</a>:
+<PRE>
+        <b>until</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>while</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#for-clause">for-clause</a>
+        <a href="22-bnf-for-infix.html#for-clause">for-clause</a>  <b>,</b>  <a href="22-bnf-for-infix.html#for-header">for-header</a>
+</PRE>
+
+
+<H3>STATEMENT CLAUSES</H3>
+<a name="exception-clauses">exception-clauses</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#exception-clause">exception-clause</a>
+        <a href="22-bnf-for-infix.html#exception-clauses">exception-clauses</a>  <a href="22-bnf-for-infix.html#exception-clause">exception-clause</a>
+</PRE>
+<a name="exception-clause">exception-clause</a>:
+<PRE>
+        <b>exception</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <a href="22-bnf-for-infix.html#body">body</a>
+        <b>exception  (</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>
+        <b>exception  (</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>::</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>
+</PRE>
+<a name="condition-clauses">condition-clauses</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#complete-condition-clauses">complete-condition-clauses</a>
+        <a href="22-bnf-for-infix.html#incomplete-condition-clauses">incomplete-condition-clauses</a>
+</PRE>
+<a name="complete-condition-clauses">complete-condition-clauses</a>:
+<PRE>
+        <b>otherwise  =&gt;</b>OPT  <a href="22-bnf-for-infix.html#body">body</a>
+        <a href="22-bnf-for-infix.html#condition-clause">condition-clause</a>  <b>;</b>OPT
+        <a href="22-bnf-for-infix.html#condition-clause">condition-clause</a>  <b>;</b>  <a href="22-bnf-for-infix.html#condition-clauses">condition-clauses</a>
+</PRE>
+<a name="incomplete-condition-clauses">incomplete-condition-clauses</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#constituent">constituent</a>  <b>;</b>OPT
+        <a href="22-bnf-for-infix.html#constituent">constituent</a>  <b>;</b>  <a href="22-bnf-for-infix.html#condition-clauses">condition-clauses</a>
+</PRE>
+<a name="condition-clause">condition-clause</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#expression">expression</a>  <b>=&gt;</b>  <a href="22-bnf-for-infix.html#constituent">constituent</a>
+        <a href="22-bnf-for-infix.html#expression">expression</a>  <b>,</b>  <a href="22-bnf-for-infix.html#condition-clause">condition-clause</a>
+</PRE>
+<a name="for-clause">for-clause</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#variable">variable</a>  <b>=</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>then</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#variable">variable</a>  <b>in</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#variable">variable</a>  <b>from</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <a href="22-bnf-for-infix.html#to-part">to-part</a>OPT  <a href="22-bnf-for-infix.html#by-part">by-part</a>OPT
+</PRE>
+<a name="by-part">by-part</a>:
+<PRE>
+        <b>by</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="cleanup-part">cleanup-part</a>:
+<PRE>
+        <b>cleanup</b>  <a href="22-bnf-for-infix.html#body">body</a>
+</PRE>
+<a name="else-part">else-part</a>:
+<PRE>
+        <b>else</b>  <a href="22-bnf-for-infix.html#body">body</a>
+</PRE>
+<a name="final-part">final-part</a>:
+<PRE>
+        <b>finally</b>  <a href="22-bnf-for-infix.html#body">body</a>
+</PRE>
+<a name="to-part">to-part</a>:
+<PRE>
+        <b>to</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>above</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>below</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+
+
+<H3>CLASSES</H3>
+<a name="class-definition">class-definition</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbol">symbol</a>  <b>(</b>  <a href="22-bnf-for-infix.html#superclasses">superclasses</a>  <b>)</b>  <a href="22-bnf-for-infix.html#slot-specs">slot-specs</a>OPT  <b>end</b>  <b>class</b>OPT  <a href="22-bnf-for-infix.html#symbol">symbol</a>OPT
+</PRE>
+<a name="superclasses">superclasses</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#superclasses">superclasses</a>  <b>,</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="slot-specs">slot-specs</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#slot-spec">slot-spec</a>  <b>;</b>OPT
+        <a href="22-bnf-for-infix.html#slot-spec">slot-spec</a>  <b>;</b>  <a href="22-bnf-for-infix.html#slot-specs">slot-specs</a>
+</PRE>
+<a name="slot-spec">slot-spec</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#allocation">allocation</a>OPT  <b>slot</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>OPT  <a href="22-bnf-for-infix.html#slot-type">slot-type</a>OPT  <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT
+</PRE>
+<a name="allocation">allocation</a>:
+<PRE>
+        <b>instance</b>
+        <b>class</b>
+        <b>subclass</b>
+        <b>constant</b>
+        <b>virtual</b>
+</PRE>
+<a name="slot-type">slot-type</a>:
+<PRE>
+        <b>::</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+
+
+<H3>GENERIC FUNCTIONS</H3>
+<a name="generic-function-definition">generic-function-definition</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>(</b>  <a href="22-bnf-for-infix.html#gf-parameters">gf-parameters</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#gf-suffix">gf-suffix</a>
+</PRE>
+<a name="gf-suffix">gf-suffix</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT
+        <b>::</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT
+        <b>::  (</b>  <a href="22-bnf-for-infix.html#return-type-list">return-type-list</a>  <b>)</b>  <a href="22-bnf-for-infix.html#property-list">property-list</a>OPT
+        <b>::</b>  <a href="22-bnf-for-infix.html#return-type-list">return-type-list</a>
+</PRE>
+<a name="gf-parameters">gf-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#gf-positional-parameters">gf-positional-parameters</a>
+        <a href="22-bnf-for-infix.html#gf-positional-parameters">gf-positional-parameters</a>  <b>,</b>  <a href="22-bnf-for-infix.html#gf-rest-parameters">gf-rest-parameters</a>
+        <a href="22-bnf-for-infix.html#gf-rest-parameters">gf-rest-parameters</a>
+</PRE>
+<a name="gf-positional-parameters">gf-positional-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#gf-positional-parameters">gf-positional-parameters</a>  <b>,</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+</PRE>
+<a name="gf-rest-parameters">gf-rest-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#rest-parameter">rest-parameter</a>
+        <a href="22-bnf-for-infix.html#rest-parameter">rest-parameter</a>  <b>,  #key</b>  <a href="22-bnf-for-infix.html#gf-keyword-parameters">gf-keyword-parameters</a>OPT
+        <b>#key</b>  <a href="22-bnf-for-infix.html#gf-keyword-parameters">gf-keyword-parameters</a>OPT
+</PRE>
+<a name="gf-keyword-parameters">gf-keyword-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>
+        <a href="22-bnf-for-infix.html#gf-keyword-parameters">gf-keyword-parameters</a>  <b>,</b>  <a href="22-bnf-for-infix.html#keyword">keyword</a>
+</PRE>
+
+
+<H3>METHODS</H3>
+<a name="anonymous-method">anonymous-method</a>:
+<PRE>
+        <b>method</b>  <a href="22-bnf-for-infix.html#method-description">method-description</a>  <b>end</b>  <b>method</b>OPT
+</PRE>
+<a name="named-method">named-method</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <a href="22-bnf-for-infix.html#method-description">method-description</a>  <b>end</b>  <b>method</b>OPT  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>OPT
+</PRE>
+<a name="method-description">method-description</a>:
+<PRE>
+        <b>(</b>  <a href="22-bnf-for-infix.html#parameters">parameters</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#return-type">return-type</a>  <b>;</b>  <a href="22-bnf-for-infix.html#body">body</a>
+        <b>(</b>  <a href="22-bnf-for-infix.html#parameters">parameters</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#return-type">return-type</a>  <b>;</b>OPT
+        <b>(</b>  <a href="22-bnf-for-infix.html#parameters">parameters</a>OPT  <b>)</b>  <a href="22-bnf-for-infix.html#body">body</a>OPT
+</PRE>
+<a name="return-type">return-type</a>:
+<PRE>
+        <b>::</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <b>::</b>  <a href="22-bnf-for-infix.html#return-type-list">return-type-list</a>
+        <b>::  (</b>  <a href="22-bnf-for-infix.html#return-type-list">return-type-list</a>  <b>)</b>
+</PRE>
+<a name="parameters">parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#positional-parameters">positional-parameters</a>
+        <a href="22-bnf-for-infix.html#positional-parameters">positional-parameters</a>  <b>,</b>  <a href="22-bnf-for-infix.html#next-parameters">next-parameters</a>
+        <a href="22-bnf-for-infix.html#next-parameters">next-parameters</a>
+</PRE>
+<a name="positional-parameters">positional-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#positional-parameter">positional-parameter</a>
+        <a href="22-bnf-for-infix.html#positional-parameters">positional-parameters</a>  <b>,</b>  <a href="22-bnf-for-infix.html#positional-parameter">positional-parameter</a>
+</PRE>
+<a name="positional-parameter">positional-parameter</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>::</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+        <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>==</b>  <a href="22-bnf-for-infix.html#expression">expression</a>
+</PRE>
+<a name="next-parameters">next-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#next-parameter">next-parameter</a>
+        <a href="22-bnf-for-infix.html#next-parameter">next-parameter</a>  <b>,</b>  <a href="22-bnf-for-infix.html#rest-parameters">rest-parameters</a>
+        <a href="22-bnf-for-infix.html#rest-parameters">rest-parameters</a>
+</PRE>
+<a name="next-parameter">next-parameter</a>:
+<PRE>
+        <b>#next</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+</PRE>
+<a name="rest-parameters">rest-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#rest-parameter">rest-parameter</a>
+        <a href="22-bnf-for-infix.html#rest-parameter">rest-parameter</a>  <b>,  #key</b>  <a href="22-bnf-for-infix.html#keyword-parameters">keyword-parameters</a>OPT
+        <b>#key</b>  <a href="22-bnf-for-infix.html#keyword-parameters">keyword-parameters</a>OPT
+</PRE>
+<a name="rest-parameter">rest-parameter</a>:
+<PRE>
+        <b>#rest</b>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+</PRE>
+<a name="keyword-parameters">keyword-parameters</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#keyword-parameter">keyword-parameter</a>
+        <a href="22-bnf-for-infix.html#keyword-parameters">keyword-parameters</a>  <b>,</b>  <a href="22-bnf-for-infix.html#keyword-parameter">keyword-parameter</a>
+</PRE>
+<a name="keyword-parameter">keyword-parameter</a>:
+<PRE>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>
+        <a href="22-bnf-for-infix.html#keyword">keyword</a>  <a href="22-bnf-for-infix.html#symbolcaps">SYMBOL</a>  <b>(</b>  <a href="22-bnf-for-infix.html#expression">expression</a>  <b>)</b>
+</PRE>
+
+
+
+
+<P>
+<A NAME="NEXT" HREF="23-defines-make-constants.html">
+Next chapter:  #23: Defining Forms Make Constants      (Change)
+</A>

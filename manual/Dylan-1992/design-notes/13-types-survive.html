@@ -1,0 +1,62 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="12-size-setter.html">Previous chapter:  #12: Size-Setter for Stretchy Sequences        (Addition)</A><P>
+<TITLE>Dylan Design Notes: #13: Type Restrictions Survive Assignment        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#13: Type Restrictions Survive Assignment        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+When a parameter or local variable is specialized, its initial value 
+is required to be an instance of a certain type.  This design note 
+extends the type restriction to cover values later stored into the 
+specialized parameter or local variable.
+<P>
+<HR>
+<P>
+Specify that when a parameter or local variable is <a href="../book.annotated/ch6.html#special">specialized</a>, any 
+value stored into the parameter or local variable must be of the type 
+of the specializer.  Further specify that a type error is signaled if 
+any program attempts to store a value of the wrong type into a 
+specialized parameter or local variable.
+<P>
+The following example was legal in the previous Dylan specification.  
+In the new specification, it results in an error being signaled.
+<PRE>
+((method ((n &lt;integer&gt;))
+    (when (&lt; n 0)
+      (set! n #f))
+    n)
+ -50)
+</PRE>
+The code could be rewritten to legal Dylan as:
+<PRE>
+(method ((n &lt;integer&gt;))
+   (bind ((result n))
+     (when (&lt; result 0)
+       (set! result #f))
+    result)
+</PRE>
+or
+<PRE>
+(method ((n &lt;integer&gt;))
+   (if (&lt; n 0) #f n))
+</PRE>
+<HR>
+<P>
+Notes:
+<P>
+This change allows the type of the variable to be known at all times, 
+whether or not it has been assigned.   This information can 
+potentially help both programmers and compilers.  Programmers used to 
+static languages will expect this behavior and find it useful.
+<P>
+Run-time type checks need be inserted only on variable assignments 
+(fetches), rather than variable references (stores).  Because 
+references outnumber variable assignments in most programs, this 
+change might allow many type checks when referencing to be skipped.
+<P>
+A smart compiler can do the type-check at compile-time in many cases, 
+reporting errors at compile-time and generating better code.
+<P><A NAME="NEXT" HREF="14-union-duplicates.html">Next chapter:  #14: Union Allows Duplicates        (Clarification)</A>

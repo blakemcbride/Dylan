@@ -1,0 +1,44 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch4.html">Previous chapter:  Variables</A><P>
+<title>Dylan manual: Modules</title>
+<H2>5. Modules<p></H2>
+<b>See Also <a href="../design-notes/32-modules.html">Dylan Design Notes: Module Defining Forms (Addition)</b></a><p>
+Modules are used for creating large-scale variable namespaces.  Modules let you build programs and program segments that have private variables.  Only the variables you export are visible from outside the module.  <b><A NAME="Module Variables0">Module Variables</A></b> are similar to global variables, unit variables, and pool variables of other languages. module variables<p>
+Some languages have module systems with distinct support for exporting variables, functions, types, and classes. Dylan modules operate only on variables.  Because functions and classes are stored in variables, you can control access to them by controlling access to the variables that contain them.  If you export the variable containing a class or function, you have effectively exported the class or function.  If you do not export the variable, then you have effectively kept the class or function private. <A href="footnotes.html#fn11">FN11</A> <p>
+Dylan modules are manipulated by the programming environment, and by nonportable run-time operations.<p>
+<A NAME="modover"><b>Overview of Modules</b></a><p>
+A module gets its variables from two sources.  Variables can be created in the module, or they can be accessible through <b><A NAME="use0">use</A>ing</b> another module.  Variables accessible through using another module are sometimes called <b><A NAME="imported variables0">imported variables</A></b>.<p>
+The module system guarantees that there will never be an ambiguity between these two sources.  If a conflict arises when a module tries to create a new variable, use a new module, or export a variable, the conflict is resolved or the operation is canceled.<p>
+All the variables in a module are either <b><A NAME="unexported0">unexported</A></b> or <b><A NAME="export0">export</A>ed</b>.  Variables are initially unexported.  To make a variable accessible to other modules, it must be exported.  The exported variables make up the documented interface to the classes and functions of a module.<p>
+<A NAME="modrefvar"><b>References to Module Variables<p>
+</b>Dylan expressions are compiled in the context of a particular module.  When an expression is executed, the module is used to look up all the variables that do not have lexical definitions.  In the following example, the variables + and my-number would be looked up in the module in which the expression was compiled.  The variable x is a lexical variable, so it is not looked up in any module.  (bind is a special form, so it is treated specially by the compiler.  The interactions between special forms and macros and the module system will be described in a future version of Dylan.)<p>
+<PRE><tt>(bind ((x 10))
+  (+ x my-number))
+</tt></PRE>
+The module to use when compiling an expression is determined by the programming environment.<p>
+<A NAME="modadd"><b>Adding Variables to a Module</b></A><p>
+<b>See Also: <a href="../design-notes/04-no-class-mods.html">Dylan Design Notes: No Incremental Class Modifications (Change)</b></a><p>
+<b>See Also:<a href="../design-notes/21-result-types.html"> Dylan Design Notes: Result Type Declarations (Addition)</a></b><p>  
+<PRE>
+<b><A NAME="define2">define</A><A HREF="ch2.html#define0">[return to first citation]</A></b>                      [Macro]
+<b><A NAME="define-class1">define-class</A><A HREF="ch6.html#define-class2">[next citation]</A></b>                [Macro]
+<b><A NAME="define-generic-function1">define-generic-function</A><A HREF="ch6.html#define-generic-function2">[next citation]</A></b>   [Macro]
+<b><A NAME="define-method1">define-method</A><A HREF="ch6.html#define-method2">[next citation]</A></b>             [Macro]
+<b><A NAME="define-slot0">define-slot</A><A HREF="ch6.html#define-slot1">[next citation]</A></b>                 [Macro]
+</PRE>
+These macros all add variables to a module, provided the variable does not already exist.  They are described in detail in other sections of the manual.<p>
+These macros do not take an explicit module argument.  They operate on the module in which they are compiled.<p>
+define-class and define-generic-function create read-only variables.<p></A>
+<A NAME="moduse"><b>Using Modules</b></a><p>
+Using is the process whereby one module (the <b>target module</b>) imports the exported variables of another module (the <b>source module</b>).  Once a variable is imported, it appears in the target module just like variables that were created in the target module.<p>
+In the simplest case, all the exported variables of the source module are imported into the target module.  During normal program development, as variables are exported from the source module, they will be made available immediately in the target module.<p>
+The variables imported by the use operation can be restricted.  A specified list of variables can be excluded (and all others will be imported), or a specified list of variables can be imported (with all others excluded).<p>
+Variables can also be renamed in the process of importing them.  That is, a variable can have one name in the source module and another name in the target module.  Renaming occurs on a per-symbol basis, not on a per-variable-name basis.  That is, you can specify that the symbol foo should be remapped to the symbol bar; this specification would affect both a variable named foo as well as a variable named (setter foo).  In addition to renaming individual symbols, you can specify that all symbols should be prepended with a given string in the target module.<p>
+<A NAME="modrovar"><b><A NAME="Readonly Variables0">Readonly Variables</A></b></a><p>
+Module variables may be <b>read-only</b>.  A read-only variables cannot be assigned to a new value.  The object contained in the variable can still be modified, but the variable cannot be modified to contain a different object.<p>
+Readonly variables are created by define-class and define-generic-function.<p>
+
+<p>
+<p><P><A NAME="NEXT" HREF="ch6.html">Next chapter:  Introduction to Functions
+and Classes</A>
+

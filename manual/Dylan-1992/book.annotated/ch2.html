@@ -1,0 +1,71 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch1.html">Previous chapter:  Introduction</A><P>
+<title>Dylan manual: Language Overview</title>
+<H2>2. Language Overview</H2>
+<b>See Also: <a href="../design-notes/33-source-file-headers.html">Dylan Design Notes: Headers for Dylan Source Files</a></b><p>
+<P>
+Dylan is built around two central concepts:  <b><A NAME="objects0">objects</A></b> and <b><A NAME="functions0">functions</A></b>.<p>
+<b>Objects</b> are the data that exist in Dylan programs.  Objects are mapped into a <A NAME="class heterarchy0">class heterarchy</A>. <A href="footnotes.html#fn3">FN3</A>   The <b>class heterarchy</b> describes the inheritance relationships among <b><A NAME="class0">class</A>es</b>.  The class &lt;object&gt; is the root of the heterarchy.  Every class inherits from its <b><A NAME="direct superclass0">direct superclass</A>es</b> (except for &lt;object&gt; which has no superclasses).  Classes may also have <b><A NAME="subclass0">subclass</A>es</b>, which inherit from them, either directly or indirectly.  The <b><A NAME="superclass0">superclasses</A><A HREF="ch6.html#superclass1">[next citation]</A></b> of a class are the class itself, its direct superclasses, their direct superclasses, and so on back to the class &lt;object&gt;.<p>
+Every object in the Dylan world is a <b>direct</b> <b>instance</b> of exactly one class.  This class is referred to as the class of the instance.  For each object <i>O</i> that is a <A NAME="direct instance0">direct instance</A> of class <i>C</i>, the object <i>O </i>is also an <b><A NAME="indirect instance0">indirect instance</A></b> of all the superclasses of <i>C</i> (except <i>C</i> itself).  (It follows that every object in Dylan is an indirect instance of &lt;object&gt;.)  The term <b><A NAME="general instance0">general instance</A></b> means either a direct or indirect instance.<p>
+Dylan defines three categories of classes:<p>
+<DL COMPACT>
+<DT><b><A NAME="Abstract Class0">Abstract Class</A></b><DD>Used to define protocols shared by subclasses, but cannot be used as the first argument to make.abstract class
+<DT><b><A NAME="Instantiable Class0">Instantiable Class</A></b><DD>A class that can be used as the first argument to make.instantiable class
+<DT><b><A NAME="Sealed Class0">Sealed Class</A></b><DD>A class that cannot be subclassed.sealed class
+</DL>
+<b>Functions</b> are a class of objects used for performing actions in Dylan.  Functions correspond to the functions, procedures, methods, and messages of other languages.  Dylan supports two classes of functions:  methods and generic functions.<p>
+A <b><A NAME="method0">method</A><A HREF="ch2.html#method1">[next citation]</A></b> is a basic callable unit of code.  It contains a typed argument list and a code body.  The types in the argument list are called the <b><A NAME="specializer0">specializers</b></A> of the method.  A method can only be called with arguments that match the specializers of the argument list.  (In the most common case, the specializer is a class, and the corresponding argument must be a general instance of the class.)  When the specializers of a method match a set of arguments, the method is said to be <b><A NAME="applicable0">applicable</A></b> to the arguments.    If a method is called with inappropriate arguments, an error is signaled.<p>
+A <b><A NAME="generic function0">generic function</A></b> contains zero or more methods.  When a generic function is called, the arguments are compared to the specializers of all the methods in the generic function.  The method with the most appropriate specializers is run.  reference p. 53  In this way, a generic function chooses a method based on the classes and identities of its arguments.  This is the basic technique for object-oriented dispatch in Dylan.<p>
+In contrast to methods in other object-oriented languages, Dylan methods can be called directly.  They do not need to be added to generic functions.  Used this way, methods play the role of blocks in Smalltalk and closures in Lisp.<p>
+Classes and functions are themselves first-class objects, which can be manipulated by programs.<p>
+<A NAME="structure"><b>Structure of Dylan<p>
+</b>The Dylan language consists of a core language plus several libraries of useful functionality.  The core language is designed to be conceptually minimal, but not to be a useful or complete language.  Any useful program will probably use several of the libraries.<p>
+The Dylan core language consists of the literal constants and the following named entities:<p>
+<DL COMPACT>
+<DT><b><DD><A NAME="apply0">apply</A><A HREF="ch8.html#apply1">[next citation]</A>
+<DT><DD><A NAME="begin0">begin</A><A HREF="ch8.html#begin1">[next citation]</A>
+<DT><DD><A NAME="bind0">bind</A><A HREF="ch4.html#bind1">[next citation]</A>
+<DT><DD><A NAME="bind-exit0">bind-exit</A><A HREF="ch8.html#bind-exit1">[next citation]</A>
+<DT><DD><A NAME="bind-methods0">bind-methods</A><A HREF="ch10.html#bind-methods1">[next citation]</A>
+<DT><DD><A NAME="define0">define</A><A HREF="ch4.html#define1">[next citation]</A>
+<DT><DD><A NAME="define-class0">define-class</A><A HREF="ch5.html#define-class1">[next citation]</A>
+<DT><DD><A NAME="define-generic-function0">define-generic-function</A><A HREF="ch5.html#define-generic-function1">[next citation]</A>
+<DT><DD><A NAME="define-method0">define-method</A><A HREF="ch5.html#define-method1">[next citation]</A>
+<DT><DD><A NAME="if0">if</A><A HREF="ch8.html#if1">[next citation]</A>	
+<DT><DD> <A NAME="initialize0">initialize</A><A HREF="ch6.html#initialize1">[next citation]</A>
+<DT><DD><A NAME="make0">make</A><A HREF="ch6.html#make1">[next citation]</A>
+<DT><DD><A NAME="method1">method</A><A HREF="ch10.html#method2">[next citation]</A>
+<DT><DD><A NAME="quote0">quote</A><A HREF="ch8.html#quote1">[next citation]</A>
+<DT><DD><A NAME="set!0">set!</A><A HREF="ch7.html#set!1">[next citation]</A>
+<DT><DD><A NAME="setter0">setter</A><A HREF="ch3.html#setter1">[next citation]</A>
+<DT><DD><A NAME="slot-initialized?0">slot-initialized?</A><A HREF="ch6.html#slot-initialized1?">[next citation]</A>
+<DT><DD><A NAME="unwind-protect0">unwind-protect</A><A HREF="ch8.html#unwind-protect1">[next citation]</A>
+<DT><DD><A NAME="values0">values</A><A HREF="ch3.html#values1">[next citation]</A>
+</DL>
+</b>The libraries specified as part of the Dylan language are as follows:<p>
+<DL COMPACT>
+<dt>Extended Control Constructs<dd>
+provides several syntax forms that define handy notations for familiar control constructs such as conditionals and iteration.  Examples include when, or, and select.
+<DT>Function Meta-Operations<DD>
+provides reflective and manipulative operations on functions and methods.<p>
+<DT>Class Meta-Operations<DD>provides reflective and manipulative operations on classes.
+<DT>Comparisons <DD>provides operations that compare objects for identity, equality, or magnitude.
+<DT>Collections <DD>provides a rich library of classes of aggregate data structures.
+<DT>Conditions <DD>provides exception handling mechanisms.
+<DT>Numbers <DD>provides numbers.
+<DT>Symbol and Keyword Meta-Operations<DD>
+provides access to symbols and keywords by name.
+</DL>
+
+<P>
+
+<DL COMPACT>
+<DT>Character Operations <DD>provides a few operations specific to characters.
+<DT>Functional Operations<DD>provides several useful higher-order functions.
+<DT>Macros <DD>(not in the language specification yet) provides programmers the ability to define their own syntax forms.  This will be added.  We believe its design should be fully hygienic, yet easy to use and understand.
+</DL>
+A number of additional libraries are not defined by the language, but are provided by each implementation in a way consistent with the environment in which that implementation runs. This includes such facilities as the File System, User Interface, etc.<p>
+ <p>
+<p>
+<p></A><P><A NAME="NEXT" HREF="ch3.html">Next chapter:  Syntax and Semantics</A>
+

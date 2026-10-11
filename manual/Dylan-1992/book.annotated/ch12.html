@@ -1,0 +1,968 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch11.html">Previous chapter:  Classes</A><P>
+<title>Dylan manual: Collections</title>
+<H2>12. <A NAME="Collections0">Collections</A></H2><p>
+This section describes the design of the classes of aggregate data structures (collections).  In addition to the concrete classes provided by the Dylan language, the heterarchy for collection classes contains several abstract classes, each of which embodies some particular behavior, usually expressed as a protocol of generic functions.  Every subclass of an abstract class implements every generic function of the corresponding protocol.<p>
+The following diagram shows the collection class heterarchy.  Abstract classes are shown in italic and sealed classes are shown in bold.<p>
+<p>
+<IMG SRC="figures/collections-aa.gif" ALIGN=BOTTOM ALT="COLLECTIONS"> <P> Picture 1<p>
+<A NAME="funcollect"><b>Functions for Collections<p>
+</b>The Dylan run-time system provides default implementations for all of the functions described in this section.<p>
+<PRE>
+<b><A NAME="size0">size</A><A HREF="ch12.html#size1">[next citation]</A></b>   <i>collection</i>  ==>  <i>{integer or </i>#f<i>}</i>	[Generic Function]
+</PRE>
+size returns the number of keys contained in <i>collection</i>.  A default method is provided by the Dylan run-time system which simply counts while iterating through the collection.  size may return #f for collections of unbounded size.<p>
+<b>See Also:  <a href="../design-notes/01-class-for-copy.html">Dylan Design Notes: Collection Class-For-Copy (Clarification)</a></b><p> 
+<PRE>
+<b><A NAME="class-for-copy1">class-for-copy</A><A HREF="ch12.html#class-for-copy2">[next citation]</A></b><i>   mutable-collection</i>  ==>  <i>class</i>	[G.F. Method]
+</PRE>
+class-for-copy returns an appropriate collection class for creating mutable copies of the argument.  For collections that are already mutable, the collections actual class is generally the most appropriate, so the &lt;object&gt; method of class-for-copy can be used.  The class-for-copy value of a sequence should be a subclass of &lt;sequence&gt;, and the class-for-copy value of an explicit-key-collection should be a subclass of &lt;explicit-key-collection&gt;.<p>
+
+<PRE>
+<b><A NAME="empty?0">empty</A></b><i>   collection  </i>==><i>  boolean</i>	[Generic Function]
+</PRE>
+Returns #t if <i>collection</i> contains no elements, and #f otherwise.<p>
+<b>See Also: <a href="../design-notes/27-mappers.html">Dylan Design Notes: Psuedo-Generic Mappers</a></b><p>
+<PRE>
+<b><A NAME="do0">do</A></b><i>   procedure collection </i>#rest<i> more-collections </i>	[Generic Function]
+==><i>  false</i>
+</PRE>
+do applies <i>procedure</i> to corresponding elements of all the collections.  Returns #f.  If all the collections are sequences, do guarantees that they will be processed in their natural order.<p>
+<PRE>
+<i>?</i> <tt>(do (method (a b) (print (+ a b)))
+      '(100 100 200 200)
+</tt>     <tt> '(1 2 3 4))</tt>
+<i>101
+102
+203
+204
+#f</i>
+</PRE>
+<PRE>
+<b><A NAME="map0">map</A></b>   <i>procedure collection </i>#rest<i> more-collections</i>  	[Generic Function]
+==><i>  new-collection</i>
+</PRE>
+map creates a new collection whose elements are obtained by calling <i>procedure</i> on corresponding elements of all the collection arguments.  If all the collections are sequences, processing is performed in the natural order.<p>
+The default implementation of map returns a collection whose value is an instance of the class-for-copy value of <i>collection</i>.  More specific methods for map may choose to return a collection whose class is determined by different means.<p>
+<PRE>
+<i>?</i> <tt>(map +
+      '(100 100 200 200)
+</tt>     <tt> '(1 2 3 4))</tt>
+<i>(101 102 203 204)
+</PRE>
+<PRE>
+</i></PRE>
+<PRE>
+<b><A NAME="map-as0">map-as</A></b>   <i>class procedure collection </i>#rest<i> more-collections</i> 	[Generic Function]<p>
+==><i>  new-collection</i>	
+</PRE>
+map-as creates a new collection of class <i>class</i> whose elements are obtained by applying <i>procedure</i> to corresponding elements of the collection arguments.  <i>class</i>  must be a subclass of &lt;mutable-collection&gt; and acceptable as the required argument to make.  If all the collections are sequences (including the created collection), processing is done in the natural order.<p>
+<PRE>
+<i>?</i> <tt>(map-as &lt;vector&gt; +
+      '(100 100 200 200)
+</tt>     <tt> '(1 2 3 4))</tt>
+<i>#(101 102 203 204)</i>
+</PRE>
+<PRE>
+<b><A NAME="map-into0">map-into</A><A HREF="ch12.html#map-into1">[next citation]</A></b>	<i>mutable-collection procedure</i>	[Generic Function]
+<i>	collection </i>#rest<i> more-collections</i>  
+==><i> mutable-collection</i>
+</PRE>
+map-into returns the <i>mutable-collection</i> argument after modifying it by replacing its elements with the results of applying <i>procedure</i> to corresponding elements of <i>collection</i> and <i>more-collections</i>.  If <i>mutable-collection</i> and all the other collections are sequences, processing is done in the natural order.<p>
+<i>mutable-collection </i>may be the same as <i>collection</i> or any of the <i>more-collections</i>.<p>
+<PRE>
+<i>?</i> <tt>(define x '(100 100 200 200))</tt>
+<i>x
+?</i> <tt>(map-into x + '(1 2 3 4))</tt>
+<i>(101 102 203 204)
+?</i> <tt>x</tt>
+<i>(101 102 203 204)</i>
+</PRE>
+<PRE>
+<b><A NAME="any?0">any?</A></b><i>   procedure collection </i>#rest<i> more-collections  </i> 	[Generic Function]
+==><i>  value</i>
+</PRE>
+If <i>procedure</i> returns a value other than #f when applied to some group of corresponding elements of <i>collection</i> and <i>more-collections</i>, then any? returns the (first) value returned by <i>procedure</i>.  Otherwise, if <i>procedure</i> returns #f when applied to every such group, then any? returns #f.  If all the collection arguments are sequences, any? operates in natural order.  In all cases, any? stops on the first true value returned by <i>procedure</i>.<p>
+<PRE>
+<i>?</i> <tt>(any? &gt; '(1 2 3 4) '(5 4 3 2))</tt>
+<i>#t
+?</i> <tt>(any? even? '(1 3 5 7))</tt>
+<i>#f</i>
+</PRE>
+<PRE>
+<b><A NAME="every?0">every?</A></b><i>   procedure collection </i>#rest<i> more-collections </i>	[Generic Function]
+==><i>  boolean</i>
+</PRE>
+every? is similar to any?, but every? returns #f if <i>procedure</i> ever returns #f and otherwise returns #t.<p>
+<PRE>
+<i>?</i> <tt>(every? &gt; '(1 2 3 4) '(5 4 3 2))</tt>
+<i>#f
+?</i> <tt>(every? odd? '(1 3 5 7))</tt>
+<i>#t</i>
+</PRE>
+<PRE>
+<b><A NAME="reduce0">reduce</A></b><i>   procedure initial-value collection </i> ==><i>  value</i>	[Generic Function]
+</PRE>
+<i>procedure</i> is a binary function used to combine all the elements of <i>collection</i> into a single value.  If <i>collection</i> is empty, reduce returns <i>initial-value</i>; otherwise, <i>procedure</i> is applied to <i>initial-value</i> and the first element of <i>collection</i> to produce a new value.  If more elements remain in the <i>collection</i>, then <i>procedure</i> is called again, this time with the value from the previous application and the next element from <i>collection</i>.  This process continues until all elements of <i>collection</i> have been processed.  Processing is always done in the natural order for <i>collection</i>.<p>
+<PRE>
+<i>?</i> <tt>(define high-score 10)</tt>
+<i>high-score
+?</i> <tt>(reduce max high-score '(3 1 4 1 5 9))</tt>
+<i>10
+?</i> <tt>(reduce max high-score '(3 12 9 8 8 6))</tt>
+<i>12</i>
+</PRE>
+<PRE>
+<b><A NAME="reduce10">reduce1</A></b>   <i>procedure collection </i> ==><i>  value</i>	[Generic Function]
+</PRE>
+reduce1 is just like reduce, except that the first element of <i>collection</i> is taken as an initial value, and all the remaining elements of <i>collection</i> are processed as if by reduce.  (In other words, the first value isnt used twice.)  For unstable collections, first element effectively means an element chosen at random.  It is an error for <i>collection</i> to be an empty collection.  Processing is done in the natural order for <i>collection</i>.<p>
+<PRE>
+<i>?</i> <tt>(reduce1 + '(1 2 3 4 5))</tt>
+<i>15</i>
+</PRE>
+<PRE>
+<b><A NAME="member?0">member?</A><A HREF="ch12.html#member?1">[next citation]</A></b>   <i>value collection </i>#key<i> test </i> ==><i>  boolean</i>	[Generic Function]
+</PRE>
+member?  returns a true value if and only if <i>collection</i> contains <i>value</i> (as determined by <i>test</i>, which defaults to id?).  Methods for specific collection classes (most notably lists) may provide a more useful true value.  The <i>test</i> function may be non-commutative: it is always called with <i>value</i>  as its first argument and an element from <i>collection</i> as its second argument.<p>
+<PRE>
+<i>?</i> <tt>(define flavors #(chocolate pistachio pumpkin))</tt>
+<i>flavors
+?</i> <tt>(member? 'chocolate flavors)
+</tt><i>#t
+?</i> <tt>(member? 'banana flavors)</tt>
+<i>#f</i>
+</PRE>
+<PRE>
+<b><A NAME="find-key0">find-key</A></b>   <i>collection procedure </i>#key<i> skip failure </i> ==><i>  key</i>	[Generic Function]
+</PRE>
+This function returns a key value such that (<i>procedure</i> (element <i>collection key</i>)) is true.  If no element in the collection satisfies <i>procedure</i>, it returns <i>failure</i> (default #f).<p>
+The <i>skip</i> argument (default 0) indicates that the first <i>skip</i> matching elements should be ignored.  If <i>skip</i> or fewer elements of <i>collection</i> satisfy <i>predicate</i>, then <i>failure</i> is returned.<p>
+<PRE>
+<i>?</i> <tt>flavors</tt>
+<i>(chocolate pistachio pumpkin)
+?</i> <tt>(find-key flavors has-nuts?)
+</tt><i>1
+?</i> <tt>(element flavors 1)</tt>
+<i>pistachio</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="replace-elements!0">replace-elements!</A></b><i>   <DD>mutable-collection predicate 	</i>[Generic Function]<i>
+<DT><DD>new-value-fn </i>#key<i> count
+<DT></i>==>  <i>mutable-collection</i><DD>
+</DL>
+This function replaces those elements of <i>mutable-collection</i> for which <i>predicate</i> returns true.  The element are replaced with the value of calling <i>new-value-fn</i> on the element.  If <i>count</i> is specified, no more than <i>count</i> elements are replaced.<p>
+<PRE>
+<i>?</i> <tt>(define numbers (list 10 13 16 19))</tt>
+<i>numbers
+?</i> <tt>(replace-elements! numbers odd? double)</tt>
+<i>(10 26 16 38)</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="fill!0">fill!</A></b>   <i>mutable-collection value </i>#key<i> start end<DD></i>[Generic Function]
+</DL>
+fill! alters <i>mutable-collection</i> so that (element <i>mutable-collection key</i>) returns <i>value</i> for every <i>key</i>.<p>
+If <i>mutable-collection</i> is a mutable sequence, then <i>start</i> and <i>end</i> keywords may be specified to indicate that only a part of the sequence should be filled.  <i>start</i> is considered an inclusive bound and defaults to 0; <i>end</i> is an exclusive bound and defaults to the length of the sequence.<p>
+<PRE>
+<i>?</i> <tt>(define x (list 'a 'b 'c 'd 'e 'f))</tt>
+<i>x
+?</i> <tt>(fill! x 3 :start 2)</tt>
+<i>(a b 3 3 3 3)</i></A>
+</PRE>
+<A NAME="funcseq"><b>Functions for Sequences<p>
+</b>The Dylan run-time system provides default implementations for all of the functions described in this section.<p>
+In the following function descriptions, when a <i>test</i> argument is specified, the <i>test</i> argument may be non-commutative; it will always be called with its arguments in the same order as they appear in the sequence.<p>
+The default methods for add, <A NAME="add-new0">add-new</A><A HREF="ch12.html#add-new1">[next citation]</A>, <A NAME="remove0">remove</A><A HREF="ch12.html#remove1">[next citation]</A>, <A NAME="choose0">choose</A><A HREF="ch12.html#choose1">[next citation]</A>, <A NAME="choose-by0">choose-by</A><A HREF="ch12.html#choose-by1">[next citation]</A>, <A NAME="intersection0">intersection</A><A HREF="ch12.html#intersection1">[next citation]</A>, <A NAME="union0">union</A><A HREF="ch12.html#union1">[next citation]</A>, <A NAME="remove-duplicates0">remove-duplicates</A><A HREF="ch12.html#remove-duplicates1">[next citation]</A>, <A NAME="copy-sequence0">copy-sequence</A><A HREF="ch12.html#copy-sequence1">[next citation]</A>, <A NAME="concatenate0">concatenate</A><A HREF="ch12.html#concatenate1">[next citation]</A>, <A NAME="reverse0">reverse</A><A HREF="ch12.html#reverse1">[next citation]</A>, and <A NAME="sort0">sort</A><A HREF="ch12.html#sort1">[next citation]</A> all return new sequences that are instances of the <A NAME="class-for-copy2">class-for-copy</A><A HREF="ch12.html#class-for-copy3">[next citation]</A> of the primary sequence argument.  However, more specialized methods are permitted to choose a more appropriate result class; for example, copy-sequence of a range returns another range, even though the class-for-copy value of a range is the &lt;list&gt; class.<p>
+<DL COMPACT>
+<DT><b><A NAME="add0">add</A></b>   <i>sequence</i> <i>new-element </i> ==><i>  new-sequence<DD></i>[Generic Function]
+</DL>
+add returns a new sequence that contains <i>new-element</i> and all the elements of <i>sequence</i>.  The resultant sequences size is one greater than the size of <i>sequence</i>.  The resultant sequence shares no structure with <i>sequence</i>, and <i>sequence</i> will be unmodified.  The generic function add doesnt specify where the new element will be added, although individual methods may do so.<p>
+<PRE>
+<i>?</i> <tt>(define numbers '(3 4 5))</tt>
+<i>numbers
+?</i> <tt>(add numbers 1)
+</tt><i>(1 3 4 5)
+?</i> <tt>numbers</tt>
+<i>(3 4 5)</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="add!0">add!</A><A HREF="ch12.html#add!1">[next citation]</A></b>   <i>sequence1</i> <i>new-element </i> ==><i>  sequence2<DD></i>[Generic Function]
+</DL>
+add! returns a sequence made from <i>sequence</i> that includes <i>new-element</i>.  The result may or may not be id? to the original <i>sequence</i>.  The size of the resultant is one greater than the size of <i>sequence</i>.  <i>sequence</i> may be modified as a side effect of this operation.  The resultant sequence may share structure with <i>sequence</i>.<p>
+<PRE>
+<i>?</i> <tt>(define numbers (list 3 4 5))</tt>
+<i>numbers
+?</i> <tt>(add! numbers 1)
+</tt><i>(1 3 4 5)
+</i></PRE>
+<b><A NAME="add-new1">add-new</A><A HREF="ch12.html#add-new0">[return to first citation]</A></b>   <i>sequence</i> <i>new-element </i>#key<i> test </i> ==><i>  new-sequence	</i>[Generic Function]<p>
+If <i>new-element</i> is not already a member of <i>sequence</i> (as determined by the <i>test</i> function, which defaults to id?), then add-new operates just as add would.  If <i>new-element</i> is already a member of <i>sequence</i>, then <i>sequence</i> is returned.  <i>sequence</i> is never modified by this operation.  The <i>test</i> function may be non-commutative: it is always called with an element from <i>sequence</i> as its first argument and <i>new-element</i>  as its second argument.<p>
+<PRE>
+<i>?</i> <tt>(add-new '(3 4 5) 1)</tt>
+<i>(1 3 4 5)
+?</i> <tt>(add-new '(3 4 5) 4)</tt>
+<i>(3 4 5)</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="add-new!0">add-new!</A></b>   <i>sequence1</i> <i>new-element </i>#key<i> test </i> ==><i>  sequence2<DD></i>[Generic Function]
+</DL>
+If <i>new-element</i> is not already a member of <i>sequence</i> (as determined by the <i>test</i> function, which defaults to id?), then add-new! operates just as add! would.  If <i>new-element</i> is already a member of <i>sequence</i>, then <i>sequence</i> is returned.  <i>sequence</i> may be modified by this operation.  The <i>test</i> function may be non-commutative: it is always called with an element from <i>sequence</i> as its first argument and <i>new-element</i> as its second argument.<p>
+<PRE>
+<i>?</i> <tt>(add-new! (list 3 4 5) 1)</tt>
+<i>(1 3 4 5)
+?</i> <tt>(add-new! (list 3 4 5) 4)</tt>
+<i>(3 4 5)</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="remove1">remove</A><A HREF="ch12.html#remove0">[return to first citation]</A></b>   <i>sequence value </i>#key<i> test count</i>  ==><i>  new-sequence<DD></i>[Generic Function]
+</DL>
+remove returns a new sequence consisting of the elements of <i>sequence</i> not equal to <i>value</i>.  <i>test</i>, which defaults to id?, is a function which determines whether an element is equal to <i>value</i>.  If <i>count</i> is specified, then no more than <i>count</i> copies of <i>value</i> are removed (so additional elements equal to <i>value</i> might remain).  The resultant sequence may share no structure with <i>sequence</i> and <i>sequence</i> will not be modified by this operation.  The <i>test</i> function may be non-commutative: it is always called with an element from <i>sequence</i> as its first argument and <i>value</i>  as its second argument.<p>
+<PRE>
+<i>?</i> <tt>(remove '(3 1 4 1 5 9) 1)</tt>
+<i>(3 4 5 9)</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="remove!0">remove!</A><A HREF="ch12.html#remove!1">[next citation]</A></b>   <i>sequence1 value </i>#key<i> test count</i>  ==><i>  sequence2<DD></i>[Generic Function]
+</DL>
+remove! returns a sequence consisting of the elements of <i>sequence</i> which are not equal to <i>value</i>.  <i>test</i>, which defaults to id?, is a function which determines whether an element is equal to <i>value</i>.  If <i>count</i> is specified, then no more than <i>count</i> copies of <i>value</i> are removed (so additional elements equal to <i>value</i> might remain).  The resultant sequence may or may not be id? to <i>sequence</i> and may share structure with <i>sequence</i>.  <i>sequence</i> may be modified by this operation.  The <i>test</i> function may be non-commutative: it is always called with an element from <i>sequence</i> as its first argument and <i>value</i>  as its second argument.<p>
+<PRE>
+<i>?</i> <tt>(remove! (list 3 1 4 1 5 9) 1)</tt>
+<i>(3 4 5 9)</i>
+</PRE>
+<PRE>
+<b><A NAME="choose1">choose</A><A HREF="ch12.html#choose0">[return to first citation]</A></b>  <i> predicate sequence  </i>==>  <i>new-sequence</i>	[Generic Function]
+</PRE>
+choose<i> </i>returns a new sequence containing only those elements of <i>sequence</i> that satisfy <i>predicate</i>.<p>
+<PRE>
+<i>?</i> <tt>(choose even? '(3 1 4 1 5 9))</tt>
+<i>(4)</i>
+</PRE>
+<PRE>
+<b><A NAME="choose-by1">choose-by</A><A HREF="ch12.html#choose-by0">[return to first citation]</A></b><i>   predicate test-sequence value-sequence  </i>	[Generic Function]
+==> <i> new-sequence</i>
+</PRE>
+choose-by returns a new sequence formed of elements from <i>value-sequence</i> whose corresponding elements in <i>test-sequence</i> satisfy <i>predicate</i>.<p>
+<PRE>
+<i>?</i> <tt>(choose-by even? (range from: 1)
+                   '(a b c d e f g h i))
+</tt><i>(b d f h)</i>
+</PRE>
+<PRE>
+<b><A NAME="intersection1">intersection</A><A HREF="ch12.html#intersection2">[next citation]</A></b><i>   sequence1 sequence2 </i>#key<i> test  </i>	[Generic Function]
+==>  <i>new-sequence</i>
+</PRE>
+intersection<i> </i>returns a new sequence containing only those elements of <i>sequence1</i> that also appear in <i>sequence2</i>.  <i>test</i>, which defaults to id?, is used to determine whether an element appears in <i>sequence2</i>.  It is always called with an element of <i>sequence1</i>  as its first argument and an element from <i>sequence2</i>  as its second argument.  The order of elements in the result sequence is not specified.  The result sequence may or may not share structure with the argument sequences.<p>
+<PRE>
+<i>?</i> <tt>(intersection '(john paul george ringo)</tt>
+<tt>                '(richard george edward charles john))</tt>
+<i>(john george)</i>
+</PRE>
+<b>See Also: <a href="../design-notes/14-union-duplicates.html">Dylan Design Notes: Union Allows Duplicates (Clarification)</a></b><p>
+<PRE>
+<b><A NAME="union1">union</A><A HREF="ch12.html#union0">[return to first citation]</A></b><i>   sequence1 sequence2 </i>#key<i> test  </i>==>  <i>new-sequence</i>	[Generic Function]
+</PRE>
+union<i> </i>returns a new sequence containing all the elements of <i>sequence1</i> and <i>sequence2</i>, with no duplicates.  <i>test</i>, which defaults to id?, is used for all comparisons.  It is always called with an element from <i>sequence1</i>  as its first argument and an element from <i>sequence2</i>  as its second argument.  The order of elements in the result is not specified.  The result sequence may or may not share structure with the argument sequences.<p>
+<PRE>
+<i>?</i> <tt>(union '(butter flour sugar salt eggs)
+         '(eggs butter mushrooms onions salt))</tt>
+<i>(salt butter flour sugar eggs mushrooms onions)</i>
+</PRE>
+<PRE>
+<b><A NAME="remove-duplicates1">remove-duplicates</A><A HREF="ch12.html#remove-duplicates0">[return to first citation]</A></b>   <i>sequence </i>#key<i> test  </i>==>  <i>new-sequence</i>	[Generic Function]
+</PRE>
+This function returns a new sequence that contains all the unique elements from <i>sequence</i> but no duplicate elements.  The result shares no structure with <i>sequence</i>, and <i>sequence</i> will not be modified by the operation.  <i>test</i> , which defaults to id?, is the function used to determine whether one element is a duplicate of another.  The <i>test</i> argument may be non-commutative; it will always be called with its arguments in the same order as they appear in <i>sequence</i>.<p>
+<PRE>
+<i>?</i> <tt>(remove-duplicates '(spam eggs spam sausage spam spam spam))</tt>
+<i>(spam eggs sausage)</i>
+</PRE>
+<PRE>
+<b><A NAME="remove-duplicates!0">remove-duplicates!</A></b>   <i>sequence1 </i>#key<i> test  </i>==>  <i>sequence2</i>	[Generic Function]
+</PRE>
+This function returns a sequence that contains all the unique elements from <i>sequence</i>  but no duplicate elements.  The result may or may not share structure with <i>sequence</i>, the result may or may not be id? to <i>sequence</i>, and <i>sequence</i> may or may not be modified by the operation.  <i>test</i> , which defaults to id?, is the function used to determine whether one element is a duplicate of another.  The <i>test</i> argument may be non-commutative; it will always be called with its arguments in the same order as they appear in <i>sequence</i>.<p>
+<PRE>
+<i>?</i> <tt>(remove-duplicates! '(spam eggs spam sausage spam spam))</tt>
+<i>(spam eggs sausage)</i>
+</PRE>
+<PRE>
+<b><A NAME="copy-sequence1">copy-sequence</A><A HREF="ch12.html#copy-sequence2">[next citation]</A></b><i>   source </i>#key<i> start end  </i>==>  <i>new-sequence </i>	[Generic Function]
+</PRE>
+copy-sequence<i> </i>creates a new sequence containing the elements of <i>source</i> between <i>start</i> (default 0) and <i>end</i> (which defaults to the size of <i>source</i>).<p>
+<PRE>
+<i>?</i> <tt>(define hamlet '(to be or not to be))
+</tt><i>hamlet</i><tt>
+</tt><i>?</i> <tt>(id? hamlet (copy-sequence hamlet))
+</tt><i>#f
+?</i> <tt>(copy-sequence hamlet start: 2 end: 4)</tt>
+<i>(or not)</i>
+</PRE>
+<b>See Also: <a href="../design-notes/27-mappers.html">Dylan Design Notes: Psuedo-Generic Mappers</a></b><p>
+<DL COMPACT>
+<DT><b><A NAME="concatenate-as0">concatenate-as</A></b><i>   class sequence1 </i>#rest<i> more-sequences  <DD> </i>[Generic Function]
+<DT>==>  <i>new-sequence</i><DD>
+</DL>
+concatenate-as returns a new sequence, of class <i>class</i>, containing all the elements of all the sequences, in order.  <i>class</i> must be a subclass of &lt;mutable-sequence&gt; and acceptable as the required argument to make.<p>
+<PRE>
+<i>?</i> <tt>(concatenate-as &lt;string&gt; '(#\n #\o #\n) '(#\f #\a #t))
+</tt><i>"nonfat"
+?</i> <tt>(concatenate-as &lt;vector&gt; '(0 1 2) '(3 4 5) '(6 7 8))</tt>
+<i>#(0 1 2 3 4 5 6 7 8)</i>
+</PRE>
+<DL COMPACT>
+<DT><b><A NAME="concatenate1">concatenate</A><A HREF="ch12.html#concatenate0">[return to first citation]</A></b><i>   sequence1 </i>#rest<i> sequences  </i>==>  <i>new-sequence</i><DD> [Generic Function]
+</DL>
+concatenate<i> </i>returns a new sequence containing all the elements of all the sequences, in order.<p>
+<PRE>
+<i>?</i> <tt>(concatenate "low-" "calorie")
+</tt><i>"low-calorie"
+?</i> <tt>(concatenate '(0 1 2) '(3 4 5) '(6 7 8))</tt>
+<i>(0 1 2 3 4 5 6 7 8)</i>
+</PRE>
+<b>See Also: <a href="../design-notes/15-replace-subseq.html">Dylan Design Notes: Replace-Subsequence! Different Sizes (Change)</a></b><p>
+<PRE>
+<b><A NAME="replace-subsequence!0">replace-subsequence!</A></b><i>	mutable-sequence insert-sequence</i>	[Generic Function]<i>
+	</i>#key<i> start  
+</i>==>  <i>sequence</i>
+</PRE>
+This function overwrites elements of a subsequence of <i>mutable-sequence</i> with the corresponding elements of <i>insert-sequence</i>.  The subsequence to be overwritten begins at index <i>start</i> (default 0).  An error is signaled if <i>mutable-sequence</i> does not contain enough elements starting at <i>start</i> to accommodate all the elements of <i>sequence</i>.<p>
+<PRE>
+<i>?</i> <tt>(define phrase "I hate oatmeal.")
+</tt><i>phrase
+?</i> <tt>(replace-subsequence! phrase "like" start: 2)
+</tt><i>"I like oatmeal."
+</PRE>
+<PRE>
+</i></PRE>
+<b><A NAME="reverse1">reverse</A><A HREF="ch12.html#reverse2">[next citation]</A></b><i>   sequence  </i>==>  <i>new-sequence</i>	[Generic Function]<p>
+reverse<i> </i>creates a new sequence containing the same elements as <i>sequence</i>, but in reverse order.  The result is generally of the same class as the <i>sequence</i>  argument.<p>
+<PRE>
+<i>?</i> <tt>(define x '(bim bam boom))
+</tt><i>x
+?</i> <tt>(reverse x)
+</tt><i>(boom bam bim)
+?</i> <tt>x</tt>
+<i>(bim bam boom)</i>
+</PRE>
+<PRE>
+<b><A NAME="reverse!0">reverse!</A><A HREF="ch12.html#reverse!1">[next citation]</A></b><i>   sequence1  </i>==>  <i>sequence2</i>	[Generic Function]
+</PRE>
+reverse!<i> </i>returns a sequence containing the same elements as <i>sequence</i>, but in reverse order, possibly reusing <i>sequences</i> storage to hold the result.  Even if the storage is recycled, the result may or may not be id? to <i>sequence</i>.<p>
+<PRE>
+<i>?</i> <tt>(reverse! '(bim bam boom))</tt>
+<i>(boom bam bim)</i>
+</PRE>
+<PRE>
+<b><A NAME="sort1">sort</A><A HREF="ch12.html#sort0">[return to first citation]</A></b><i>   sequence </i>#key<i> test stable  </i>==>  <i>new-sequence</i>	[Generic Function]
+</PRE>
+sort<i> </i>returns a new sequence containing the elements of <i>sequence</i> sorted into ascending order.  <i>test</i>, which defaults to &lt;, is used to determine what an ascending order is.  If <i>stable</i> is supplied and not #f, a possibly slower algorithm will be used that will leave in their original order any two elements, <i>x</i> and <i>y</i>, such that <i>(test x y)</i> and <i>(test y x)</i> are both false.<p>
+<PRE>
+<i>?</i> <tt>(define numbers '(3 1 4 1 5 9))
+</tt><i>numbers</i><tt>
+</tt><i>?</i> <tt>(sort numbers)
+</tt><i>(1 1 3 4 5 9)
+?</i> <tt>numbers</tt>
+<i>(3 1 4 1 5 9)</i>
+</PRE>
+<PRE>
+<b><A NAME="sort!0">sort!</A><A HREF="ch12.html#sort!1">[next citation]</A></b><i>   sequence1 </i>#key<i> test stable  </i>==>  <i>sequence2</i>	[Generic Function]
+</PRE>
+This function is like sort, but may reuse the storage from <i>sequence</i> to form the result.  The result may or may not be id? to <i>sequence</i>.<p>
+<PRE>
+<i>?</i> <tt>(sort! '(3 1 4 1 5 9))</tt>
+<i>(1 1 3 4 5 9)</i>
+</PRE>
+<b>See Also: <a href="../design-notes/02-default-keyword.html">Dylan Design Notes: First, Second, Third, Last (Addition)</a></b><p>
+<b>See Also: <a href="../design-notes/28-first-etc-are-functions.html">Dylan Design Notes: First, Second, Third are Functions (Change)</a></b><p>
+<PRE>
+<b><A NAME="first0">first</A></b><i>   sequence  </i>==>  <i>value</i>	[Generic Function]
+<b><A NAME="second0">second</A></b><i>   sequence  </i>==>  <i>value</i>	[Generic Function]
+<b><A NAME="third0">third</A></b><i>   sequence  </i>==>  <i>value</i>	[Generic Function]
+</PRE>
+Each of these functions returns the indicated element of the sequence.<p>
+<PRE>
+<b><A NAME="(setter first)0">(setter first)</A></b><i>   sequence new-value  </i>==>  <i>new-value</i>	[Generic Function]
+<b><A NAME="(setter second)0">(setter second)</A></b><i>   sequence new-value  </i>==>   <i>new-value</i>	[Generic Function]
+<b><A NAME="(setter third)0">(setter third)</A></b><i>   sequence new-value  </i>==>  <i>new-value</i>	[Generic Function]
+</PRE>
+Each of these functions sets the indicated element of the sequence and returns the <i>new-value</i>.<p>
+<b>See Also: <a href="../design-notes/11-last-setter.html">Dylan Design Notes: Last-Setter (Addition)</a></b><p>
+<PRE>
+<b><A NAME="last0">last</A></b><i>   sequence  </i>==>  <i>value</i>	[Generic Function]
+</PRE>
+last returns the last element of <i>sequence</i>.  It is an error for <i>sequence</i> to be empty.  last of a sequence of unbounded size may or may not terminate.<p>
+<PRE>
+<i>?</i> <tt>(last '(emperor of china))</tt>
+<i>china</i>
+</PRE>
+<PRE>
+<b><A NAME="subsequence-position0">subsequence-position</A></b><i>   big pattern </i>#key<i> test count  </i>==>  <i>index</i>	[Generic Function]
+</PRE>
+This function searches <i>big</i> for a subsequence that is element-for-element equal to <i>pattern</i>, as determined by the <i>test</i> argument (which defaults to id?).  That is, <i>test</i> is applied to corresponding elements of the <i>pattern</i> and the subsequence of <i>big</i> to determine whether a match has occurred.  If <i>count</i> is specified, then the <i>count</i>th such subsequence is selected.  If a subsequence is found, returns the index at which the subsequence starts; otherwise, returns #f.<p>
+<PRE>
+<i>?</i> <tt>(subsequence-position "Ralph Waldo Emerson" "Waldo")</tt>
+<i>6 <A NAME="Wheres Waldo0">Wheres Waldo</A></i></A>
+</PRE>
+<b>See Also: <a href="../design-notes/27-mappers.html"> Dylan Design Notes: Psuedo-Generic Mappers (Change)</a></b><p>
+<A NAME="instcoll"><b>The Instantiable Collection Classes<p>
+</b>The Dylan language provides several standard instantiable collection classes, in addition to classes the user might wish to add.  Each provides unique capabilities, strengths, and weaknesses.<p>
+<PRE>
+<b><A NAME="array-class0">&lt;array&gt; </A></b>	[Instantiable Class]
+</PRE>
+This class supports constant time access to elements indexed (keyed) by a sequence of integers.  Arrays are stable under iteration.  make of &lt;array&gt; supports the keywords dimensions: and fill:.  dimensions: is required and must be a sequence of non-negative integers.  fill: (default #f) specifies the initial value to be placed in all elements of the array.<p>
+<PRE>
+<b><A NAME="byte-string-class0">&lt;byte-string&gt;</A></b>	[Sealed Instantiable Class]
+</PRE>
+This sealed subclass of &lt;vector&gt; provides efficient storage for elements that are eight-bit characters.  It also inherits lexicographic ordering from the &lt;string&gt; class.  make of &lt;byte-string&gt; supports the keywords size: and fill:.  size: (default 0) tells how large a &lt;byte-string&gt; to create; fill: specifies the initial value of every element.<p>
+<PRE>
+<b><A NAME="deque-class0">&lt;deque&gt;</A></b>	[Instantiable Class]
+</PRE>
+This subclass of &lt;mutable-sequence&gt; provides default implementation for double-ended queues.  make of &lt;deque&gt; supports the keywords size: and fill:.  size: (default 0) tells how large a &lt;deque&gt; to create; fill: (default #f) specifies the initial value of every element.<p>
+<PRE>
+<b><A NAME="list-class0">&lt;list&gt;</A></b>	[Sealed Instantiable Class]
+</PRE>
+This sealed subclass of &lt;sequence&gt; provides efficient support for linked lists.  make of &lt;list&gt; supports the keywords size: and fill:.  size: (default 0) tells how large a &lt;list&gt; to create; fill: (default #f) specifies the initial value of every element.<p>
+<b>See Also: <a href="../design-notes/30-make-range.html">Dylan Design Notes: Make Range (Change)</a></b><p>
+<PRE>
+<b><A NAME="range-class0">&lt;range&gt;</A></b>	[Instantiable Class]
+</PRE>
+A subclass of &lt;sequence&gt; that represents arithmetic sequences.  Some ranges can be infinitely large.  A &lt;range&gt; is normally created by a call to the range function, rather than by a direct call to make.<p>
+<PRE>
+<b><A NAME="simple-object-vector-class0">&lt;simple-object-vector&gt;</A></b>	[Sealed Instantiable Class]
+</PRE>
+This sealed subclass of &lt;vector&gt; supports elements of any class.  make of &lt;simple-object-vector&gt; supports the keywords size: and fill:.  size: (default 0) specifies the initial size of the &lt;simple-object-vector&gt; fill: (default #f) specifies the initial value of every element.<p>
+<PRE>
+<b><A NAME="stretchy-vector-class0">&lt;stretchy-vector&gt;</A></b>	[Instantiable Class]
+</PRE>
+This subclass of &lt;vector&gt; supports elements of any class, and has the property that it can grow and shrink to accommodate adding or removing elements.  make of &lt;stretchy-vector&gt; supports the keywords size:, fill:.  size: (default 0) tells how large a &lt;stretchy-vector&gt; to create; fill: (default #f) specifies the initial value of every element.<p>
+<PRE>
+<b><A NAME="string-class0">&lt;string&gt;</A></b>	[Instantiable Class]
+</PRE>
+A subclass of &lt;sequence&gt; whose elements are all characters.  &lt;string&gt; supports lexicographic comparison.  &lt;string&gt; has no direct instances; calling make on &lt;string&gt; will return an instance of a concrete subclass of &lt;string&gt;.<p>
+<PRE>
+<b><A NAME="table-class0">&lt;table&gt;</A></b>	[Instantiable Class]
+</PRE>
+Also called a hashtable, a table is an unordered mapping between arbitrary keys and elements.  Tables are the only predefined collections that are unstable under iteration.<p>
+<PRE>
+<b><A NAME="unicode-string-class0">&lt;unicode-string&gt;</A></b>	[Sealed Instantiable Class]
+</PRE>
+This sealed subclass of &lt;vector&gt; provides efficient storage for elements that are sixteen-bit Unicode characters.  It inherits lexicographic ordering from the &lt;string&gt; class.  make of &lt;unicode-string&gt; supports the keywords size: and fill:.  size: tells how large a &lt;unicode-string&gt; to create; fill: (default #\space) specifies the initial value of every element.<p>
+<PRE>
+<b><A NAME="vector-class0">&lt;vector&gt;</A></b>	[Instantiable Class]
+</PRE>
+Vectors are one-dimensional arrays and offer constant time random access to elements.  &lt;vector&gt; has no direct instances; calling make on &lt;vector&gt; returns an instance of &lt;simple-object-vector&gt;.<p></A>
+<A NAME="arrayops"><b>Operations on <A NAME="array0">Array</A>s</b><p>
+<PRE>
+<b><A NAME="aref0">aref</A></b><i>   array</i> #rest <i>indices</i>   ==><i>  element</i>	[Function]
+</PRE>
+aref accesses the element of <i>array</i> indicated by <i>indices</i>.  The number of <i>indices</i>  given must equal the rank of the array (the number of dimensions of the array).<p>
+An error is signaled if any index is out of bounds, or if there are the wrong number of indices.<p>
+<PRE>
+<i>?</i> <tt>(aref #(7 8 9) 1)</tt>
+<i>8</i>
+</PRE>
+<PRE>
+<b><A NAME="(setter aref)0">(setter aref)</A></b>   <i>array </i>#rest <i>indices-and-new-value</i>   ==><i>  new-value</i>	[Function]
+</PRE>
+(setter aref) sets the element of <i>array</i> indicated by <i>indices</i> to <i>new-value</i> and returns <i>new-value</i>.  The number of <i>indices</i>  given must equal the rank of the array (the number of dimensions of the array).<p>
+An error is signaled if any index is out of bounds, or if there are the wrong number of indices.<p>
+<PRE>
+<i>?</i> <tt>(set! (aref #(7 8 9) 1) 5)
+</tt><i>#(7 5 9)
+?</i> <tt>((setter aref) #(7 8 9) 1 5)</tt>
+<i>#(7 5 9)</i>
+</PRE>
+<PRE>
+<b><A NAME="dimensions0">dimensions</A></b>   <i>array</i>   ==><i>  sequence</i>	[Function]
+</PRE>
+This function returns the dimensions of <i>array</i>, as a sequence of integers.<p>
+<PRE>
+<i>?</i> <tt>(dimensions (make &lt;array&gt; dimensions: '(4 4)))</tt>
+<i>(4 4)</i>
+</PRE>
+<PRE>
+<b><A NAME="element0">element</A><A HREF="ch12.html#element1">[next citation]</A></b>   <i>array index-sequence </i>#key<i> default</i>  ==><i>  element</i>	[G.F. Method]
+</PRE>
+The method for &lt;array&gt; is equivalent to (apply aref <i>array index-sequence</i>), provided <i>index-sequence</i> specifies an array element within the bounds of <i>array</i>.  If <i>index-sequence</i> does not specify a valid array element in <i>array</i>, then <i>default</i> is returned if it was specified; otherwise, an error is signaled. <p>
+<PRE>
+<b><A NAME="(setter element)0">(setter element)</A><A HREF="ch12.html#(setter element)1">[next citation]</A></b><i>   array index-sequence new-value</i>  ==>  <i>new-value</i>	[G.F. Method]
+</PRE>
+This function is equivalent to
+<pre>
+(apply (setter aref)
+                <i>array
+</i>                (concatenate <i>index-sequence </i>(list <i>new-value</i>))
+</pre>
+An error is signaled if there is no such element in the array.<p></A>
+<b>See Also: <a href="../design-notes/12-size-setter.html">Dylan Design Notes: Size-Setter for Stretchy Sequences (Addition)</a></b><p>
+<A NAME="dequeops"><b>Operations on <A NAME="Deque0">Deque</A>s</b><p>
+<PRE>
+<b><A NAME="push0">push</A></b>   <i>deque new-value  </i>==> <i>deque</i>	[Generic Function]
+</PRE>
+push augments <i>deque</i> by adding <i>new-value</i> to the front of the deque.<p>
+<PRE>
+<b><A NAME="pop0">pop</A></b>   <i>deque new-value  </i>==> <i>first-element</i>	[Generic Function]
+</PRE>
+pop removes the first element from <i>deque</i> and returns it.<p>
+<PRE>
+<b><A NAME="push-last0">push-last</A></b>   <i>deque new-value  </i>==> <i>deque</i>	[Generic Function]
+</PRE>
+push-last augments <i>deque</i> by adding <i>new-value</i> to the end of the deque.<p>
+<PRE>
+<b><A NAME="pop-last0">pop-last</A></b>   <i>deque new-value  </i>==> <i>last-element</i>	[Generic Function]
+</PRE>
+pop-last removes the last element from <i>deque</i> and returns it.<p>
+<PRE>
+<b><A NAME="add!1">add!</A><A HREF="ch12.html#add!2">[next citation]</A></b><i>   deque new-value  </i>==> <i>deque</i>	[G.F. Method]
+</PRE>
+This method is the same as push.  That is, the result is id? to <i>deque</i>, and <i>deque</i> is destructively modified by this operation.<p>
+<PRE>
+<b><A NAME="remove!1">remove!</A><A HREF="ch12.html#remove!2">[next citation]</A></b><i>   deque value </i>#key<i> test count   </i>==> <i>deque</i>	[G.F. Method]
+</PRE>
+The result of remove! on a deque is id? to the <i>deque</i> argument.  <i>deque</i> is destructively modified by this operation.<p>
+<b>See Also:<a href="../design-notes/26-iteration-protocol.html"> Dylan Design Notes: New Iteration Protocol (Change)</a></b><p> 
+<PRE>
+<b><A NAME="previous-state0">previous-state</A><A HREF="ch12.html#previous-state1">[next citation]</A></b><i>   deque state   </i>==> <i>state</i>	[G.F. Method]
+</PRE>
+Deques support reversal of an iteration, through the use of previous-state.  Iteration is described at the end of this section.<p>
+<PRE>
+<b><A NAME="final-state0">final-state</A><A HREF="ch12.html#final-state1">[next citation]</A></b><i>   deque   </i>==> <i>state</i>	[G.F. Method]
+</PRE>
+By analogy with initial-state, final-state returns an iteration state appropriate for iterating backward through <i>deque</i>.  Iteration is described at the end of this section.<p></A>
+<b>See Also: <a href="../design-notes/16-list-issues.html">Dylan Design Notes: List Issues (Change)</a></b><p>
+<A NAME="listops"><b>Operations on Lists</b><p>
+The &lt;list&gt; class is partitioned into two subclasses, &lt;pair&gt; and &lt;empty-list&gt;.  The classes &lt;list&gt;, &lt;pair&gt;, and &lt;empty-list&gt; are sealed; users cannot create new subclasses of &lt;list&gt;.<p>
+<PRE>
+<b><A NAME="cons0">cons</A></b><i>   car cdr </i>==>  <i>pair	</i>[Method]
+</PRE>
+    cons<i> </i>creates a new pair whose car and cdr values are as indicated.<p>
+<PRE>
+     <i>?</i> <tt>(cons 1 2)
+    </tt><i>(1 . 2)
+     ?</i> <tt>(cons 1 '(2 3 4 5))</tt>
+    <i>(1 2 3 4 5)</i>
+</PRE>
+<PRE>
+<b><A NAME="list0">list</A></b>   #rest<i> args </i>==>  <i>list	</i>[Method]
+</PRE>
+list returns a list of the <i>args</i>, in order.<p>
+<PRE>
+     <i>?</i> <tt>(list 1 2 3)
+    </tt><i>(1 2 3)
+     ?</i> <tt>(list (+ 4 3) (- 4 3))</tt>
+    <i>(7 1)</i>
+</PRE>
+<PRE>
+<b><A NAME="list*0">list*</A></b>  #rest<i> args </i>==>  <i>list	</i>[Method]
+</PRE>
+This function is like list, except the last argument is used as the cdr of the last pair constructed.<p>
+<PRE>
+    <i>?</i> <tt>(list* 1 2 3 '(4 5 6))</tt>
+   <i>(1 2 3 4 5 6)</i>
+</PRE>
+<PRE>
+<b><A NAME="car0">car</A></b>   <i>list  </i>==>  <i>object	</i>[Method]
+</PRE>
+If <i>list</i> is a pair, this function returns the value of the car slot.  Otherwise, <i>list</i> is the empty list, and car returns the empty list.<p>
+<PRE>
+    <i>?</i> <tt>(car '(4 5 6))
+    </tt><i>4
+    ?</i> <tt>(car '())</tt>
+   <i>()</i>
+</PRE>
+<PRE>
+<b><A NAME="cdr0">cdr</A></b><i>   list  </i>==>  <i>object	</i>[Method]
+</PRE>
+If <i>list</i> is a pair, this function returns the value of the cdr slot.  Otherwise, <i>list</i> is the empty list, and cdr returns the empty list.<p>
+<PRE>
+    <i>?</i> <tt>(cdr '(4 5 6))
+   </tt><i>(5 6)
+    ?</i> <tt>(cdr '())
+   </tt><i>()</i>
+</PRE>
+<PRE>
+<b><A NAME="(setter car)0">(setter car)</A></b><i>   pair object  </i>==>  <i>object	</i>[Method]
+</PRE>
+This function sets the car of <i>pair</i> to contain <i>object</i> and returns <i>object</i>.<p>
+<PRE>
+    <i>?</i> <tt>(define x '(4 5 6))
+   </tt><i>(4 5 6)
+    ?</i> <tt>(set! (car x) 9)
+   </tt><i>9</i>
+</PRE>
+<PRE>
+<b><A NAME="(setter cdr)0">(setter cdr)</A></b><i>   pair object  </i>==>  <i>object	</i>[Method]
+</PRE>
+This function sets the cdr of <i>pair</i> to contain <i>object</i> and returns <i>object</i>.<p>
+<PRE>
+    <i>?</i> <tt>(define x '(4 5 6))
+   </tt><i>(4 5 6)
+    ?</i> <tt>(set! (cdr x) '(a b c))
+   </tt><i>(a b c)</i>
+</PRE>
+<PRE>
+<b><A NAME="caar0">caar</A></b>   <i>list</i>  ==>  <i>object</i>	[Method]<p>
+	<i>through</i>
+<b><A NAME="cdddr0">cdddr</A></b><i>   list </i>==>  <i>object</i>	[Method]<p>
+</PRE>
+These twelve functions offer a shorthand for compositions of car and cdr operations, for example, (caddr x) is equivalent to (car (cdr (cdr x))).<p>
+<PRE>
+<b><A NAME="(setter caar)0">(setter caar)</A></b><i>   pair object  </i>==>  <i>object</i>	[Method]
+	<i>through</i>
+<b><A NAME="(setter cdddr)0">(setter cdddr)</A></b>   <i>pair object </i> ==>  <i>object</i>	[Method]
+</PRE>
+These twelve functions offer a shorthand way to set a specified element of a list.<p>
+<PRE>
+<b><A NAME="add!2">add!</A><A HREF="ch12.html#add!3">[next citation]</A></b><i>   list element </i>==>  <i>pair</i>	[G.F. Method]
+</PRE>
+Equivalent to (cons <i>element list</i>).  That is, the result shares structure with <i>list</i> but will not be id? to <i>list.</i><p>
+<PRE>
+<b><A NAME="remove!2">remove!</A><A HREF="ch12.html#remove!3">[next citation]</A></b><i>   list element </i>#key<i> test count</i>==>  <i>list</i>	[G.F. Method]
+</PRE>
+remove! destructively modifies <i>list</i>.  The result is not necessarily id? to <i>list</i>.<p>
+<PRE>
+<b><A NAME="member?1">member?</A><A HREF="ch12.html#member?2">[next citation]</A></b><i>   object list </i>#key <i>test</i> <i>  </i>==>  <i>object</i>	[G.F. Method]
+</PRE>
+For lists, member? returns either #f or that tail of <i>list</i> whose car is <i>object,</i> as determined by <i>test</i>.<p>
+<PRE>
+<b><A NAME="size1">size</A><A HREF="ch12.html#size2">[next citation]</A></b><i>   list</i>  ==>  <i>{integer or #f}</i>	[G.F. Method]
+</PRE>
+For circular lists, size is guaranteed to terminate and return #f.  For non-circular lists, size returns an integer size value.<p>
+<PRE>
+<b><A NAME="append0">append</A></b><i>   list </i>#rest<i> more-lists </i>==>  <i>list</i>	[Generic Function]
+</PRE>
+This function is a list-only version of concatenate.  The result list shares structure with the last list argument.<p>
+<PRE>
+<b><A NAME="find-pair0">find-pair</A></b>   <i>item list </i>#key<i> test </i>==> <i> {pair or #f}</i>	[Generic Function]
+</PRE>
+Searches <i>list</i> for an element that is a pair, the car of which must be <i>item</i>.  If such a pair is found, it is returned; otherwise, find-pair returns #f.  <i>test</i>, which defaults to id?, is the comparison procedure to be used; <i>test</i> is always called with <i>item</i>  as its first argument and the car of an element of <i>list</i> as its second argument.  An error is signaled if any of the elements of <i>list</i> are not lists.<p></A>
+<b>See Also: <a href="https://web.archive.org/web/20000617132725/http://www.basistech.com/tree/dylan/prefix-dylan/design-notes/29-for-loops.html">Dylan Design Notes: For Loops (Change)</a></b><p>
+<b>See Also: <a href="../design-notes/30-make-range.html">Dylan Design Notes: Make Range (Change)</a></b><p>
+<A NAME="rangeops"><b>Operations on Ranges</b><p>
+<PRE>
+<b><A NAME="range0">range</A></b>   #key <i>from up-to through by size  </i>==>  <i>range</i>	[Generic Function]
+</PRE>
+Creates a range.  <i>from</i> (default 0) is the first value in the range.  <i>by</i> (default 1) is the step between consecutive elements of the range.  <p>
+<i>up-to</i> specifies an exclusive bound for the range; <i>through</i> specifies an inclusive bound; and <i>size</i> specifies the size of the range.  If more than one of these arguments is present, the resultant range is the largest range such that: (a) <i>up-to</i> is not in the range, and no values greater than <i>up-to</i> are in the range; (b) <i>through+by</i> is not in the range, and no values greater than <i>through+by </i> are in the range; and (c) the range contains no more than <i>size</i> elements.  If none of <i>up-to</i>, <i>through</i>, and <i>size</i> are specified, the resulting range is unbounded, and has infinitely many elements.<p>
+It is permissible to specify a range that runs from a higher value to a lower value by specifying a negative value for <i>by</i>.  In this case, the treatment of <i>size, through,</i> and <i>up-to</i> is still as described above, except that greater than should be replaced by less than, that is, <i>through</i> and <i>up-to</i> describe inclusive and exclusive lower bounds, respectively.<p>
+<b>See Also: <a href="../design-notes/18-member-test-arg.html">Dylan Design Notes: Member? Intersection Test Arg (Clarification)</a></b><p>
+<PRE>
+<b><A NAME="member?2">member?</A><A HREF="ch12.html#member?3">[next citation]</A></b>   <i>val range</i> ==>  <i>boolean	</i>[G.F. Method]
+</PRE>
+member? always terminates when given a range value, even if the range is unbounded.<p>
+<PRE>
+<b><A NAME="size2">size</A><A HREF="ch12.html#size3">[next citation]</A></b>   <i>range </i>==>  <i>size</i>	[G.F. Method]
+</PRE>
+For unbounded ranges, size always terminates and returns #f.  For finite ranges, size returns an integer.<p>
+<PRE>
+<b><A NAME="copy-sequence2">copy-sequence</A><A HREF="ch12.html#copy-sequence0">[return to first citation]</A></b>   <i>range </i>#key<i> start end </i>==>  <i>new-range	</i>[G.F. Method]
+</PRE>
+When applied to a range, copy-sequence returns another range, even though the class-for-copy of a range is the &lt;list&gt; class.<p>
+<PRE>
+<b><A NAME="binary=1">binary=</A><A HREF="ch9.html#binary=0">[return to first citation]</A></b>   <i>range1 range2 </i>==>  <i>boolean	</i>[G.F. Method]
+</PRE>
+When called with two ranges, binary= always terminates, even if one or both ranges are unbounded in size.<p>
+<PRE>
+<b><A NAME="reverse2">reverse</A><A HREF="ch12.html#reverse0">[return to first citation]</A></b><i>   range </i>==>  <i>new-range</i>	[G.F. Method]
+</PRE>
+Reversing a range produces another range.  An unbounded range cannot be reversed.<p>
+<PRE>
+<b><A NAME="reverse!1">reverse!</A><A HREF="ch12.html#reverse!2">[next citation]</A></b><i>   range </i>==>  <i>range</i>	[G.F. Method]
+</PRE>
+The result of reverse! on a range is id? to the <i>range</i> argument.  An unbounded range cannot be reversed.<p>
+<b>See Also: <a href="../design-notes/18-member-test-arg.html"> Dylan Design Notes: Member? Intersection Test Arg (Clarification)</a></b><p>
+<PRE>
+<b><A NAME="intersection2">intersection</A><A HREF="ch12.html#intersection0">[return to first citation]</A></b><i>   range1 range2 </i> ==>  <i>range</i>	[G.F. Method]
+</PRE>
+intersection applied to two ranges produces another range as its result.  This method on intersection always terminates, even if one or both ranges are unbounded in size.<p></A>
+<b>See Also: <a href="../design-notes/12-size-setter.html">Dylan Design Notes: Size-Setter for Stretchy Sequences (Addition)</a></b><p>
+<A NAME="stretchvecops"><b>Operations on <A NAME="stretchy-vector0">Stretchy Vector</A></b><p>
+<PRE>
+<b><A NAME="add!3">add!</A><A HREF="ch12.html#add!0">[return to first citation]</A></b><i> stretchy-vector  new-element  </i>==> <i>stretchy-vector</i>	[G.F. Method]
+</PRE>
+add!<i> </i>adds <i>new-element</i> at the end of <i>stretchy-vector</i>.  The result is id? to <i>stretchy-vector</i>, and <i>stretchy-vector</i> is destructively modified by this operation.<p>
+<PRE>
+<b><A NAME="remove!3">remove!</A><A HREF="ch12.html#remove!0">[return to first citation]</A></b><i>   stretchy-vector element </i>#key<i> test count  </i>==> <i>stretchy-vector</i>	[G.F. Method]
+</PRE>
+The result of remove! on a stretchy vector is id? to <i>stretchy-vector,</i> and <i>stretchy-vector</i> is destructively modified by this operation.<p></A>
+<A NAME="stringops"><b>Operations on <A NAME="String0">String</A>s</b><p>
+Strings support lexicographic ordering through a shared implementation of binary&lt;:<p>
+<PRE>
+<b><A NAME="binary<1">binary&lt;</A><A HREF="ch9.html#binary&lt;0">[return to first citation]</A></b>   <i>string1 string2 </i>==>  <i>boolean</i>	[G.F. Method]
+</PRE>
+When both arguments are strings, binary&lt; compares strings lexicographically, using binary&lt; on corresponding elements.  If one string is a strict prefix of the other, the shorter string is considered the smaller one.<p>
+For variations on string comparison (such as comparisons that ignore case), different comparison operators must be used.<p>
+<PRE>
+<b><A NAME="as-lowercase0">as-lowercase</A><A HREF="ch16.html#as-lowercase1">[next citation]</A></b><i>   string </i>==>  <i>new-string</i>	[G.F. Method]
+</PRE>
+This method is equivalent to (map as-lowercase <i>string</i>).<p>
+<PRE>
+<i>?</i> <tt>(define x "Van Gogh")
+</tt><i>x
+?</i> <tt>(as-lowercase x)
+</tt><i>"van gogh"
+</PRE>
+<PRE>
+</i></PRE>
+<b><A NAME="as-lowercase!0">as-lowercase!</A></b><i>   string </i>==>  <i>string</i>	[G.F. Method]<p>
+This method is equivalent to (map-into <i>string</i> as-lowercase <i>string</i>).<p>
+<PRE>
+<i>?</i> <tt>(define x "Van Gogh")
+</tt><i>x
+?</i> <tt>(as-lowercase! x)
+</tt><i>"van gogh"
+</PRE>
+<PRE>
+</i></PRE>
+<b><A NAME="as-uppercase0">as-uppercase</A><A HREF="ch16.html#as-uppercase1">[next citation]</A></b><i>   string </i>==>  <i>new-string</i>	[G.F. Method]<p>
+This method is equivalent to (map as-uppercase <i>string</i>).<p>
+<PRE>
+<i>?</i> <tt>(define x "Van Gogh")
+</tt><i>x
+?</i> <tt>(as-uppercase x)
+</tt><i>"VAN GOGH"
+</PRE>
+<PRE>
+</i></PRE>
+<b><A NAME="as-uppercase!0">as-uppercase!</A></b><i>   string </i>==>  <i>string</i>	[G.F. Method]<p>
+This method is equivalent to (map-into <i>string </i>as-uppercase <i>string</i>).<p>
+<PRE>
+<i>?</i> <tt>(define x "Van Gogh")
+</tt><i>x
+?</i> <tt>(as-uppercase x)
+</tt><i>"VAN GOGH"</i>
+</PRE>
+<A NAME="tableops"><b>Operations on <A NAME="table0">Table</A>s</b><P>
+Tables are stretchy, in that they allow the addition and removal of keys, but they are not stretchy sequences (because they are not sequences) and so do not support the functions described in the section on stretchy sequences.  &lt;table&gt; is the only predefined class that is stretchy but is not a stretchy sequence.
+<PRE>
+<b><A NAME="remove-key!0">remove-key!</A></b>   <i>table key  </i>==> <i>table</i>	[Generic Function]
+</PRE>
+remove-key! modifies <i>table</i> so that it no longer has a key equal to <i>key</i>.  Equality is determined by the tables test function.<p>
+<PRE>
+<b><A NAME="(setter element)1">(setter element)</A><A HREF="ch12.html#(setter element)2">[next citation]</A></b><i>   table key new-value</i>	[G. F. Method]
+</PRE>
+Even if no element with the given key exists, (setter element) for a table will add key and new-value to the table.<p>
+<PRE>
+<b><A NAME="map-into1">map-into</A><A HREF="ch12.html#map-into0">[return to first citation]</A></b>   <i>table procedure collection </i>#rest<i> more-collections</i>  	[G.F. Method]
+==><i>  table</i>	
+</PRE>
+Because tables are stretchy, the usual alignment requirement (described in the section on collection alignment) is relaxed when mapping into a table.  That is, the intersection of the key sequences for the source collections is first determined, and then <i> procedure</i> is called on the corresponding elements.  The result of each call to <i>procedure</i> is then stored into the <i>table</i>  argument with the corresponding key (possibly stretching the <i>table</i> in the process) using (setter element).  Other keys in <i>table</i> remain undisturbed. <p></A>
+<A NAME="vecops"><b>Operations on Vectors</b><p>
+<PRE>
+<b><A NAME="vector0">vector</A></b>   #rest<i> args </i>==>  <i>vector</i>	[Method]
+</PRE>
+This function returns a vector of the <i>args</i>, in order.<p>
+<PRE>
+<b><A NAME="element1">element</A><A HREF="ch12.html#element2">[next citation]</A></b><i>   vector index </i>#key<i> default </i>==>  <i>element</i>	[G.F. Method]
+</PRE>
+Each subclass of &lt;vector&gt; implements element in constant time.<p>
+<PRE>
+<b><A NAME="(setter element)2">(setter element)</A><A HREF="ch12.html#(setter element)3">[next citation]</A></b><i>   vector index new-element </i>==>  <i>new-element</i>	[G.F. Method]
+</PRE>
+Each subclass of &lt;vector&gt; implements (setter element) in constant time.<p>
+<b>See Also:<a href="../design-notes/26-iteration-protocol.html"> Dylan Design Notes: New Iteration Protocol (Change)</a></b><p> 
+<PRE>
+<b><A NAME="previous-state1">previous-state</A><A HREF="ch12.html#previous-state0">[return to first citation]</A></b><i>   vector state </i>==> <i>state</i>	[G.F. Method]
+</PRE>
+Vectors support reversal of an iteration, through the use of previous-state.  Iteration is described at the end of this section.<p>
+<PRE>
+<b><A NAME="final-state1">final-state</A><A HREF="ch12.html#final-state0">[return to first citation]</A></b><i>   vector </i>==> <i>state</i>	[G.F. Method]
+</PRE>
+By analogy with initial-state, final-state returns an iteration state appropriate for iterating backward through <i>vector</i>.  Iteration is described at the end of this section.<p></A>
+
+<A NAME="iterproto"><b>The <A NAME="Iteration Protocol0">Iteration Protocol</A><p>
+</b>All collections implement an <i>iteration protocol</i> that allows iteration to be specified abstractly.  Many higher level operations on collections can be defined in terms of only the iteration protocol.<p>
+The iteration protocol centers on the notion of a state object for an iteration.  Each collection class chooses its own most appropriate representation for an iteration state, and only the functions of the iteration protocol are affected by this choice.  For all collections, however, a state of #f is used to indicate that the iteration has completed, i.e., that there are no more elements left in the collection.<p>
+Use of the iteration protocol is based on the assumption that the collection over which iteration occurs remains static for the duration of the iteration.  That is, arbitrary changes to a mutable collection while an iteration is in progress may cause the iteration to produce incorrect results.<p>
+In general, two or more iterations over the same collection are not guaranteed to produce the same values in the same order, even if the collection is unaltered.<p>
+The iteration protocol consists of the following four functions:<p>
+<PRE>
+<b><A NAME="initial-state0">initial-state</A><A HREF="ch12.html#initial-state1">[next citation]</A></b>   <i>collection</i>  ==>  <i>state</i>	[Generic Function]
+</PRE>
+This function is used to start an iteration by creating an initial state object.  The resultant state object will be #f if and only if the collection is empty.<p>
+<PRE>
+<b><A NAME="next-state0">next-state</A><A HREF="ch12.html#next-state1">[next citation]</A></b>   <i>collection state</i>  ==>  <i>state</i>	[Generic Function]
+</PRE>
+This function steps the iteration by producing a new state from the collection and an existing state.<p>
+next-state may or may not modify the <i>state</i>  argument; it is an error to use a state value after it has been passed to next-state.  For programs which may wish to return to a particular state in an iteration, the function copy-state, described below, is provided.<p>
+next-state returns #f if and only if the iteration of the collection has been completed, i.e., there are no other elements of collection to consider.<p>
+<PRE>
+<b><A NAME="current-element0">current-element</A><A HREF="ch12.html#current-element1">[next citation]</A></b>   <i>collection state</i>  ==>  <i>element</i>	[Generic Function]
+</PRE>
+This function returns the element of the collection currently indicated by the state value.<p>
+An example of the use of the iteration protocol is the following definition of a single-argument version of the do function:<p>
+<PRE><tt>(define-method do1 (f (c &lt;collection&gt;))
+  (for ((state (initial-state c) (next-state c state)))
+       ((not state) #f)
+    (f (current-element c state))))
+</tt></PRE>
+<PRE>
+<b><A NAME="copy-state0">copy-state</A><A HREF="ch12.html#copy-state1">[next citation]</A></b>   <i>collection state</i>  ==>  <i>state</i>	[Generic Function]
+</PRE>
+This function returns a state which is equivalent to the given state for the collection.  The returned value will not be affected by subsequent calls to next-state which use the original state argument.  The returned value may or may not be the same as the argument state, depending on the implementation of next-state.<p></A>
+<A NAME="iterstab"><b><A NAME="Iteration Stability0">Iteration Stability</A> and <A NAME="Natural Order0">Natural Order</A><p>
+</b>A collection is <i>stable under iteration</i> if any two iterations over the collection are guaranteed to produce the same values in the same order (unless, of course, the collection has been modified).  A collection that is not stable under iteration is said to be <i>unstable under iteration</i>. <A NAME="stability, under iteration0">stability, under iteration</A> iteration stability<p>
+Collections in general are not required to be stable under iteration, although several important subclasses are so required.  In particular, sequences, described below, are required to be stable under iteration.<p>
+The order in which elements (and keys) are enumerated by the iteration protocol for a particular iteration is known as the natural order for that iteration over the collection.  If a collection is stable under iteration, then every iteration over that collection will have the same natural order, and we may speak of the natural order of the collection itself.  Most of the higher order operations described below are required to operate in natural order, usually for the purpose of understanding interactions among side effects. <p></A>
+<A NAME="collkeys"><b><A NAME="Collection Keys0">Collection Keys</A></b><p>
+All collections in Dylan are keyed collections, i.e., all collections can be viewed abstractly as partial functions that take keys to elements.  (This choice precludes pure sets from being considered collections, although it is straightforward simply to ignore the keys for a collection and consider it simply as a set of elements.)  The element function implements this partial mapping of keys to elements:<p>
+<PRE>
+<b><A NAME="element2">element</A><A HREF="ch12.html#element3">[next citation]</A></b>   <i>collection key </i>#key<i> default</i>  ==>  <i>element</i>	[Generic Function]
+</PRE>
+element returns the element associated with <i>key</i> in <i>collection</i>.  If no element is associated with <i>key</i>, then the behavior of element depends on whether it was called with a <i>default</i> argument: if a <i>default</i> argument was passed, its value is returned; otherwise, an error is signaled.<p>
+While all collections are required to implement element, they are not required to do so efficiently.  (A default implementation of element is provided by the Dylan run-time system; see the remarks at the end of this section.)<p>
+In addition, it is possible to obtain all the keys for a given collection, formed into a sequence collection:<p>
+<PRE>
+<b><A NAME="key-sequence0">key-sequence</A><A HREF="ch12.html#key-sequence1">[next citation]</A></b>   <i>collection</i>  ==>  <i>keys</i>	[Generic Function]
+</PRE>
+key-sequence returns a sequence containing the keys of <i>collection</i>.  Although elements may be duplicated in a collection, keys, by their nature, must be unique; two different elements in a collection may not share a common key, even though distinct keys may yield identical elements.<p>
+The order in which the keys from <i>collection</i> appear in the key sequence is unspecified if <i>collection</i> is unstable under iteration.  In particular, different calls to key-sequence with the same argument may yield differently ordered key sequences.  If <i>collection</i>  is stable under iteration, however, the resulting sequence of keys will be in the natural order for <i>collection</i>.<p>
+Iterating through a collection often involves examining keys as well as elements.  To allow some freedom of implementation, the protocol recognizes two strategies for associating keys with states of iteration:  explicitly or implicitly.  The distinction between these strategies gives rise to two covering subclasses of &lt;collection&gt;.  Every concrete subclass of &lt;collection&gt; must also be a subclass of either &lt;explicit-key-collection&gt; or &lt;sequence&gt; (or both):<p>
+<PRE>
+<b><A NAME="explicit-key-collection-class0">&lt;explicit-key-collection&gt;</A><A HREF="ch12.html#explicit-key-collection-class1">[next citation]</A></b><i>	</i>[Abstract Class]
+</PRE>
+Explicit-key-collections must implement the current-key generic function, an extension to the iteration protocol:<p>
+<b>See Also:<a href="../design-notes/26-iteration-protocol.html"> Dylan Design Notes: New Iteration Protocol (Change)</a></b><p> 
+<PRE>
+<b><A NAME="current-key0">current-key</A><A HREF="ch12.html#current-key1">[next citation]</A></b>   <i>explicit-key-collection state</i>  ==>  <i>key</i>	[Generic Function]
+</PRE>
+current-key returns the unique key associated with <i>state </i>in the <i>explicit-key-collection</i>.  If current-key were called once with each <i>state</i> value produced during an iteration over an <i>explicit-key-collection</i>, the resulting sequence of values would contain every key from the collection exactly once.<p>
+The Dylan run-time system provides the following default implementation of key-sequence for &lt;explicit-key-collection&gt;:<p>
+<PRE><tt>(define-method key-sequence ((c &lt;explicit-key-collection&gt;))
+  (for ((state (initial-state c) (next-state c state))
+        (keys  '()               (cons (current-key c state)
+                                       keys)))
+       ((not state) keys)))
+</tt></PRE>
+<PRE>
+<b><A NAME="sequence-class0">&lt;sequence&gt;</A><A HREF="ch12.html#sequence-class1">[next citation]</A></b>	[Abstract Class]
+</PRE>
+&lt;sequence&gt; is a subclass of &lt;collection&gt; whose keys are consecutive integers ranging from zero up to (but not including) the size of the sequence.  <p>
+Sequences must be stable under iteration, and the iteration order must match the order of keys.  Thus, the key associated with a sequences iteration state can be determined by keeping a counter in parallel with the iteration state, as in the next example.<p>
+Since every collection must be a sequence or an explicit-key-collection, it is always possible to keep track of keys during an iteration by defining appropriate methods on &lt;sequence&gt; and &lt;explicit-key-collection&gt;. <A href="footnotes.html#fn30">FN30</A>   For example, consider these two methods for a function that applies a function f to each key-and-element pair in a collection.  The method on &lt;explicit-key-collection&gt; uses current-key; the method on &lt;sequence&gt; keeps a counter alongside the state during the iteration:<p>
+<PRE><tt>(define-method do-with-keys (f (c &lt;explicit-key-collection&gt;))
+  (for ((state (initial-state c) (next-state c state)))
+       ((not state) #f)
+    (f (current-key c state) (current-element c state))))
+(define-method do-with-keys (f (c &lt;sequence&gt;))
+  (for ((state (initial-state c) (next-state c state))
+        (key   0                 (+ key 1)))
+       ((not state) #f)
+    (f key (current-element c state))))
+</tt></PRE>
+Similarly, the following inefficient, default methods for element are provided by the Dylan run-time system: <A href="footnotes.html#fn31">FN31</A> <p>
+<PRE><tt>(bind ((no-default (cons #f #f)))
+
+ (define-method element ((c &lt;explicit-key-collection&gt;) key
+                         #key (default no-default))
+  (for ((state (initial-state c) (next-state c state)))
+       ((or (not state) (= (current-key c state) key))
+        (if state (current-element c state)
+            (if (id? default no-default)
+                (error ...)
+                default)))))
+ (define-method element ((c &lt;sequence&gt;) key
+                         #key (default no-default))
+   (for ((state (initial-state c) (next-state c state))
+         (k     0                 (+ k 1)))
+        ((or (not state) (= k key))
+         (if state (current-element c state)
+             (if (id? default no-default)
+                 (error ...)
+                 default))))) )
+</tt></PRE>
+Collection classes that support a more random-access implementation of <A NAME="element3">element</A><A HREF="ch12.html#element4">[next citation]</A> provide their own, class-specific, implementations.  Note that, in the absence of such special implementations, element cannot be expected to perform efficiently.  Therefore, some consideration should be given to the wisdom of writing general methods that rely on element.  Similar remarks apply to <A NAME="(setter element)3">(setter element)</A><A HREF="ch12.html#(setter element)4">[next citation]</A>, described below. <p></A>
+<A NAME="mutable"><b>Mutability<p>
+</b>Some collections can be modified after they have been created; others cannot.  To allow methods to distinguish between mutable and immutable collections, the &lt;mutable-collection&gt; mixin class is provided:<p>
+<PRE>
+<b><A NAME="mutable-collection-class0">&lt;mutable-collection&gt;</A></b>	[Abstract Class]
+</PRE>
+This abstract subclass of &lt;collection&gt; contains collections that can be modified.  Every mutable collection is required to allow modification by implementing (setter current-element) and, optionally, (setter element):<p>
+<PRE>
+<b><A NAME="(setter current-element)0">(setter current-element)</A><A HREF="ch12.html#(setter current-element)1">[next citation]</A></b><i>   	</i>[Generic Function]<i>
+mutable-collection state new-value </i>==><i>  new-value</i>	
+</PRE>
+This function alters <i>mutable-collection</i> so that subsequent calls to current-element return <i>new-value</i> until <i>state</i> is advanced by next-state.<p>
+Although the general case of modifying a collection during iteration may cause the iteration to produce incorrect results or terminate prematurely, using (setter current-element) is guaranteed not to affect the iteration characterized by <i>state</i>. <p>
+If <i>mutable-collection</i> is an explicit-key-collection, then <i>mutable-collection</i> will subsequently produce <i>new-value</i> as the value of element when called with the current key value.  Similarly, if <i>mutable-collection</i> is a sequence and <i>state</i> is the result of having made <i>n</i> calls to next-state with <i>mutable-collection</i>, then <i>mutable-collection</i> will be modified so that (element<i> mutable-collection n</i>) subsequently returns <i>new-value</i>.<p>
+<b>See Also: <a href="../design-notes/10-element-setter.html">Dylan Design Notes: Element-Setter Signals Error (Clarification)</a></b><p>
+<PRE>
+<b> <A NAME="(setter element)4">(setter element)</A><A HREF="ch12.html#(setter element)0">[return to first citation]</A></b>   <i>mutable-collection key new-value</i>  <i>	</i>[Generic Function]
+==><i>  new-value</i><p>
+</PRE>
+This function alters <i>mutable-collection</i> so that the value associated with <i>key</i> subsequently will be <i>new-value</i>.<p>
+In general, it is an error to call (setter element) with a key that is not already a key to <i>collection</i>.  However, some collections may support an extended definition of (setter element) which would allow this to succeed.<p>
+The Dylan run-time system provides (inefficient) default implementations of (setter element) for sequences and for explicit-key-collections.<p>
+&lt;mutable-collection&gt; is mixed in with <A NAME="sequence-class1">&lt;sequence&gt;</A><A HREF="ch12.html#sequence-class0">[return to first citation]</A> and <A NAME="explicit-key-collection-class1">&lt;explicit-key-collection&gt;</A><A HREF="ch12.html#explicit-key-collection-class0">[return to first citation]</A>, respectively, to form the classes &lt;mutable-sequence&gt; and &lt;mutable-explicit-key-collection&gt;:<p>
+<PRE>
+<b><A NAME="mutable-sequence-class0">&lt;mutable-sequence&gt;</A></b>	[Abstract Class]
+</PRE>
+This class inherits from &lt;sequence&gt; and from &lt;mutable-collection&gt;.  The Dylan run-time system provides the following (inefficient) default definition of (setter element) for mutable sequences:<p>
+<PRE><tt>(define-method (setter element) ((c &lt;mutable-sequence&gt;)
+                                 (key &lt;integer&gt;) new-value)
+  (for ((state (initial-state c) (next-state c state))
+        (k     0                 (+ k 1)))
+       ((or (not state) (= k key))
+        (if state
+            (set! (current-element c state) new-value)
+            (error ...)))))
+</tt></PRE>
+<PRE>
+<b><A NAME="mutable-explicit-key-collection-class0">&lt;mutable-explicit-key-collection&gt;</A></b>	[Abstract Class]
+</PRE>
+This class inherits from &lt;explicit-key-collection&gt; and &lt;mutable-collection&gt;.  The Dylan run-time system provides the following (inefficient) default definition of <A NAME="(setter element)4">(setter element)</A><A HREF="ch12.html#(setter element)5">[next citation]</A> for mutable-explicit-key-collections:<p>
+<PRE><tt>(define-method (setter element) ((c &lt;mutable-explicit-key-collection&gt;)
+                                 key new-value)
+  (for ((state (initial-state c) (next-state c state)))
+       ((or (not state) (= (current-key c state) key))
+        (if state
+            (set! (current-element c state) new-value)
+            (error ...)))))
+</tt></PRE>
+<b><A NAME="collalign">Collection Alignment</b></A><p>
+Some operations on collections, such as mapping, are defined to allow the use of more than a single collection.  The presence of potentially unstable collections, i.e., collections for which two iterations may produce values in different orders even though the collection remains unchanged, can create problems for multi-collection operations unless special care is taken.  That is, if iteration is effectively performed in random order in the general case, then naively performing parallel iterations over two different collections would randomly pair values from the two collections, which would presumably have no meaning.<p>
+To prevent such random pairing, when operating on more than one collection, map, do, etc. must, in general, align the collections, by first computing the intersection of the collections key sequences and then using the random-access operations (element and <A NAME="(setter element)5">(setter element)</A><A HREF="ch12.html#(setter element)6">[next citation]</A>) to operate on the collections themselves.  As a concrete example, here is the two-collection case for do:<p>
+<PRE><tt>(define-method do2 (f (c1 &lt;collection&gt;) (c2 &lt;collection&gt;))
+  (bind ((keys (intersection (key-sequence c1)
+                             (key-sequence c2))))
+    (for ((ks (initial-state keys) (next-state keys ks)))
+         ((not ks) #f)
+      (bind ((key (current-element keys ks)))
+        (f (element c1 key) (element c2 key))))))
+</tt></PRE>
+Note that this definition has the potential for extreme inefficiency, because of its dependence on <A NAME="element4">element</A><A HREF="ch12.html#element5">[next citation]</A> and the potential loops implied by the calls to key-sequence.<p>
+An important special case of this problem is that of iterating over multiple sequences.  In this case, the intersection of key sequences is clearly the non-negative integers up to the length of the shortest sequence.  Further, unlike collections in general, sequences are required to exhibit stability, so no explicit computation of key sequences need be made.  Instead, it is correct (and much more efficient) simply to iterate until one or more of the sequences is exhausted.  Here is a concrete example for do2:<p>
+<PRE><tt>(define-method do2 (f (c1 &lt;sequence&gt;) (c2 &lt;sequence&gt;))
+  (for ((s1 (initial-state c1) (next-state c1 s1))
+        (s2 (initial-state c2) (next-state c2 s2)))
+       ((or (not s1) (not s2)) #f)
+    (f (current-element c1 s1) (current-element c2 s2))))
+</tt></PRE>
+Most cases of iteration over more than a single collection will be iterations over sequences, rather than over arbitrary collections.  Since this case <i>is</i> efficient, the requirement for alignment is probably not burdensome in practice.<p>
+Any iteration operations that modify a collection must also include the key sequence of the target collection during alignment of the collection arguments.  For example, consider these definitions for a simplified map-into function:<p>
+<PRE><tt>(define-method map-into1 ((target &lt;mutable-collection&gt;) f
+                          (source &lt;collection&gt;))
+  (bind ((keys (intersection (key-sequence target)
+                             (key-sequence source))))
+    (for ((ks (initial-state keys) (next-state keys ks)))
+         ((not ks) target)
+      (bind ((key (current-element keys ks)))
+        (set! (element target key) (f (element source key)))))))
+(define-method map-into1 ((target &lt;mutable-sequence&gt;) f
+                          (source &lt;sequence&gt;))
+  (for ((ss (initial-state source) (next-state source ss))
+        (ts (initial-state target) (next-state target ts)))
+       ((or (not ss) (not ts)) target)
+    (set! (current-element target ts)
+          (f (current-element source ss)))))</A>
+</tt>
+</PRE>
+<PRE>
+<b><A NAME="newcoll">Defining a New Collection Class: A Summary
+</b></PRE>
+Every collection class must provide an implementation of the iteration protocol (<A NAME="initial-state1">initial-state</A><A HREF="ch12.html#initial-state0">[return to first citation]</A>, <A NAME="next-state1">next-state</A><A HREF="ch12.html#next-state0">[return to first citation]</A>, <A NAME="current-element1">current-element</A><A HREF="ch12.html#current-element0">[return to first citation]</A>, and <A NAME="copy-state1">copy-state</A><A HREF="ch12.html#copy-state0">[return to first citation]</A>).<p>
+Every explicit-key-collection must provide an implementation for <A NAME="current-key1">current-key</A><A HREF="ch12.html#current-key0">[return to first citation]</A>.  The Dylan run-time system defines a default method of <A NAME="key-sequence1">key-sequence</A><A HREF="ch12.html#key-sequence0">[return to first citation]</A> for &lt;explicit-key-collection&gt; if appropriate, a more specific method should be defined.<p>
+Every mutable-collection must implement <A NAME="(setter current-element)1">(setter current-element)</A><A HREF="ch12.html#(setter current-element)0">[return to first citation]</A>.<p>
+No other methods are required of a collection class for correctness.  However, for efficiency, it may be highly desirable to provide specialized implementations for certain generic functions.<p>
+If a collection supports random-access behavior, it should implement <A NAME="element5">element</A><A HREF="ch12.html#element0">[return to first citation]</A> directly.  If the collection is also a mutable-collection, it should also implement <A NAME="(setter element)6">(setter element)</A><A HREF="ch12.html#(setter element)0">[return to first citation]</A> directly.<p>
+A collection that is not a mutable-collection must provide an implementation of <A NAME="class-for-copy3">class-for-copy</A><A HREF="ch11.html#class-for-copy0">[return to first citation]</A>.<p>
+Collections that can implement <A NAME="size3">size</A><A HREF="ch12.html#size0">[return to first citation]</A> or <A NAME="member?3">member</A><A HREF="ch12.html#member?0">[return to first citation]</A> more efficiently should do so.<p>
+Sequences that can reuse storage to implement <A NAME="reverse!2">reverse!</A><A HREF="ch12.html#reverse!0">[return to first citation]</A> and <A NAME="sort!1">sort!</A><A HREF="ch12.html#sort!0">[return to first citation]</A> should do so.<p>
+</A><P><A NAME="NEXT" HREF="ch13.html">Next chapter:  Conditions</A>

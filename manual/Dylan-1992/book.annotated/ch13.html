@@ -1,0 +1,282 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch12.html">Previous chapter:  Collections</A><P>
+<title>Dylan manual: Conditions</title>
+<H2>13. Conditions<p></H2>
+<b><A NAME="backgrd">Background<p>
+</b>A long-standing problem of software engineering is the need to develop an organized way to deal with exceptions, situations that must be handled gracefully but that are not conceptually part of the normal operation of the program.  A number of programming languages contain linguistic features for exceptions, among them Common Lisp, C++, PL/I, and Ada.<p>
+Of course it is possible to program exception handling without using special linguistic features.  For example, all functions could return an extra result that indicates whether they succeeded or failed, functions could take an extra argument that they consult if an exception occurs, or a designated exception-handling function could be called whenever a problem arises.  All of these approaches have been used in one real-life system or another, but they are deficient in two ways.  First, they are too informal and dont provide enough structure to allow an organized, systematic approach to exception handling.  Second, and more importantly, the first two approaches do not provide textual separation between normal code and code for dealing with exceptions; exception-related code is sprinkled throughout the program.  This leads to two problems: one is the well-known mistake of forgetting to test error codes and thus failing to detect an exception, perhaps one that could never happen; the other is that program clarity is lost because it isnt easy to think about the main flow of the program while temporarily ignoring exceptions.<p>
+Thus, the most important requirements of a linguistic exception-handling facility are to provide overall structure, to eliminate the possibility of failing to notice an exception, and to provide a clean separation between normal code and code for dealing with exceptions.<p>
+All exception systems involve the concept of signal (sometimes with a different name, such as raise or throw) and the concept of handle (sometimes with a different name such as on-unit or catch).  All exception systems considered here dynamically match signalers with handlers, first invoking the most recently established matching handler still active, and then, if that matching handler declines to handle the exception, invoking the next most recent matching handler, and so on.  Thus, exception systems really are a way of establishing a run-time connection between a signaler and a handler, as distinct from the usual fixed connection between a caller and a callee through function-name matching.<p>
+The major design choices in exception systemsname-based versus object-based, calling versus terminating, and formal versus ad-hoc recoveryare discussed in the following paragraphs.<p>
+PL/I and Ada have name-based exception systems.  A program signals a name, and a handler matches if it handles the same name or any.  The name is a constant in the source text of the program, not the result of an expression.<p>
+C++ and Common Lisp have object-based exception systems.  A program signals an object, and a handler matches if it handles a type that object belongs to.  Object-based exceptions are more powerful, because the object can communicate additional information from the signaler to the handler, because the object to be signaled can be chosen at run-time rather than signaling a fixed name, and because type inheritance in the handler matching adds abstraction and provides an organizing framework.<p>
+The C++ object-based exception system has complicated inheritance rules and allows any object whatsoever to be used as an exception.  Common Lisp, in contrast, allows only objects that inherit from a certain built-in class to be used as exceptions, thus limiting the inheritance rules to class inheritance and providing a class on which to hang any protocols specific to exceptions.<p>
+Ada and C++ have terminating exception systems: before a handler receives control, all dynamic state between the handler and the signaler is unwound, as if signaling were a non-local goto from the signaler to the handler.  PL/I has a calling exception system: when a handler receives control, the signaler is still active and control can be returned to it, as if signaling were a function call from the signaler to the handler.  Common Lisp has both, with the calling semantics regarded as fundamental and the terminating semantics explained in terms of it.  Note that calling semantics need not imply that the signal operation can return the way a function call returns; Common Lisp provides a restart mechanism that signalers use to grant handlers permission to return.  The Common Lisp model shows that terminating versus calling is a property of handlers, not of exception systems as a whole.<p>
+Terminating exception systems are acceptable for errors.  However, they do not work for an exception that is not an error and doesnt require termination, either because there is a default way to handle it and recover or because it can safely be ignored by applications that dont care about it.  Non-error exceptions are quite common in networked environments, in computers with gradually expiring resources (such as batteries), in complex user interfaces, and as one approach for reflecting hardware exceptions such as page protection violations or floating-point overflow to the application.<p>
+Most languages have not formalized how to recover from exceptions, leaving programmers to invent ad hoc mechanisms.  Common Lisp provides restarts, which is an object-based way of establishing a run-time connection from a handler back to the signaler or to any other part of the dynamically active program.  A handler can choose to return control to any available restart, or else can mimic terminating semantics, using the languages normal non-local exit mechanisms.  Restarts can also be a good way for programs to indicate to an interactive debugger what the end users choices are for recovery from an exception that lands in the debugger.  In this sense, the debugger can be understood as just a complicated handler.  Unfortunately some details of restarts are somewhat poorly designed in Common Lisp.<p>
+It is necessary to have a way to clean up when execution of a function is terminated by a non-local exit initiated either by the function itself or by something it explicitly or implicitly called.  In C++ this includes invoking destructors for automatic objects, as well as application-specific cleanup.  Ada, C++, and the Multics dialect of PL/I associate this action with exception handling.  Common Lisp and Dylan realize it is related but different and call it unwind-protect.<p>
+For detailed information on exceptions in Common Lisp, refer to chapter 29 of <i>Common Lisp: the Language</i>, Second Edition, by Guy L.  Steele Jr.  For detailed information on exceptions in C++ (not yet implemented in many C++ implementations but adopted into the draft proposed ANSI C++ standard), refer to chapter 15 of <i>The Annotated C++ Reference Manual</i>, by Margaret A.  Ellis and Bjarne Stroustrup.  Although it is not necessary to read either document to understand the Dylan condition system, they may be helpful as sources of background information.<p></A>
+<A NAME="overview"><b>Overview<p>
+</b>The Dylan exception facility is object-based.  It uses calling semantics but also provides terminating handlers.  It provides formal recovery.<p>
+Conditions are a dynamically bound, type-based mechanism for finding and invoking functions.  When an exceptional situation occurs, it is indicated to the calling code by signaling a condition.  The condition facility locates an applicable handler and calls it.  An applicable handler is one that matches the signaled condition by type and by (an optional) test function associated with the handler.  The condition system is simply a way for a signaler and a handler to be introduced to each other.  Once they have met, they communicate through an ordinary function call.<p>
+Like any function, the called handler either returns some values or takes a non-local exit.  Either way, the handler has handled the condition, and the act of signaling is completed.  A dynamic handler also has the option of declining to handle the condition, passing the buck to the next applicable handler, by calling a next-handler function passed to the dynamic handler as an argument.  A default handler cannot decline because it is always the last applicable handler.  Every signaled condition is handled, because the system ensures that there is always an applicable default handler.<p>
+The following terms describe portions of the dynamic state of execution.  These terms come from the stack model of function calling.<p>
+<DL COMPACT>
+<DT>outside stack<DD>The state existing just before the handler was established
+<DT>signaling unit <DD>The module or other conceptual program component that includes the form that signaled the condition and does not include the form that established the handler.  This informal  concept provides a notion of where the interface boundary between the signaler and the handler lies.
+<DT>middle stack<DD>The state existing just before the signaling unit was called, minus the outside stack
+<DT>inside stack<DD>The state existing just before signaling occurred, minus the middle stack and outside stack
+</DL>
+The simplest way to handle a condition is to terminate the signaling unit by taking a non-local exit established in the outside stack.  The convenient handler-case macro is provided for this purpose.<p>
+A less common handling style is to terminate the signaling unit by taking a non-local exit established in the middle stack, leaving the handler in force.<p>
+Instead of terminating, a handler can recover, returning control to the signaling unit.  This can be done either by returning values that the signaling unit will understand or by taking a non-local exit established in the inside stack.  Returning or exiting can be done directly, or a more formal recovery mechanism called restarting can be used.  The advantage of the formal mechanism is the advantage of any formal interface: it provides more assurance that the handler and the signaling unit agree on the meaning of what they are doing and provides some isolation of the handler from names and data representations internal to the signaling unit.<p>
+Returning values or non-locally exiting directly, rather than restarting, is a less formal mechanism with an increased likelihood of accidentally violating the protocol or contract between a signaler and a handler.  Nonetheless it is allowed, in the spirit of freedom and because it is the primitive upon which restarting is built.  When the direct mechanism is used, it should be used with due care.<p>
+A handler restarts by signaling a restart.  Any values needed for recovery are passed in the restart (that is, in initialization arguments that the restart remembers either in slots or in any other way it chooses).  The restart is handled by a restart handler which either returns or takes a non-local exit.  If the restart handler returns some values, signal returns those values and the handler that called signal also returns them.  The call to signal from the signaling unit that signaled the original condition returns the same values, and the signaling unit recovers as directed by those values.  If the restart handler was established by the signaling unit, then it was established in the inside stack and typically takes a non-local exit in the inside stack.  It is just as valid to invoke a restart handler established in the outside or middle stack by a program component other than the signaling unit.<p>
+For every condition class there should be a recovery protocol that defines the meaning of handling by returning, the meaning of the values returned, and which restart handlers are supposed to be established by the signaling unit.  The recovery protocol tells the handler what to expect from the signaler.  For many condition classes, this is the empty protocol: handling by returning isnt allowed, and no particular restart handlers are provided.  In this case only handling by terminating is possible.  (Terminating might be accomplished by signaling a restart whose handler was established in the outside or middle stack, or by an ordinary non-local exit.)  The recovery protocol for a subclass should be compatible with the recovery protocol of a superclass.  That is, a handler that applies the superclasss recovery protocol, when the condition actually signaled was a direct instance of the subclass, should operate correctly.<p>
+An example recovery protocol for a hypothetical &lt;unbound-slot&gt; condition could be: returning a value uses that value as if it had been the contents of the slot; a restart handler for &lt;new-value&gt; is available; &lt;new-value&gt; has initialization arguments value:, the value to use, and permanent:, #t to store the value into the slot or #f (the default) to leave the slot unbound.<p>
+At present, no formal mechanism is provided for describing recovery protocols; they are left to the documentation of a condition class.  Introspective functions are provided for discovering which recovery facilities are actually available, but this is different from (and sometimes is a superset of) the recovery facilities guaranteed by a recovery protocol always to be available.<p>
+The debugger is the condition handler of last resort which receives control if no program-provided handler handles a serious condition.  (This is true even if the debugger provided cannot analyze or intervene in the execution of programs but can only abort or restart them.  The debugger might be merely a core dumper, a bomb box, or something similar.)  An interactive debugger ought to offer the user the ability to signal any restart for which a restart handler is applicable and to return if the conditions recovery protocol allows it.  This could, for example, be done with a menu titled Recovery.<p></A>
+<A NAME="spec"><b>Specification<p>
+</b>The following sections outline the classes and operations on conditions available in Dylan.<p>
+<b>Classes<p>
+</b>The classes described in this section are defined by Dylan.  In addition, numerous condition classes specific to particular Dylan built-in functions or user functions will no doubt exist.  Note that there can be other direct subclasses of &lt;condition&gt; besides the three specified ones.  Also note that the subclass relationships shown below are not necessarily direct subclass relationships (i.e.  implementation-specific classes can be inserted in the class hierarchy).<p>
+Abstract classes are shown in italics.<p>
+<A href="figures/conditions-aa.gif"> <IMG SRC="figures/conditions-aa.gif" ALIGN=BOTTOM ALT="CONDITIONS"> <P> Picture 2</A><p>
+<PRE>
+<b>&lt;condition&gt;</b>	[Abstract Class]
+</PRE>
+A condition is a general instance of the abstract class &lt;condition&gt;.  It is an object that represents the occurrence of an exception.  Conditions have indefinite extent and no special restrictions.  A program that does not encounter any exceptional situations will not implicitly allocate any conditions.<p>
+There is a default handler for &lt;condition&gt; that returns #f.<p>
+<PRE>
+<b><A NAME="serious-condition-class0">&lt;serious-condition&gt;</A></b>	[Abstract Class]
+</PRE>
+&lt;serious-condition&gt; is the abstract class of all conditions that cannot safely be ignored.  There is a default handler for &lt;serious-condition&gt; that calls the debugger, using an unspecified mechanism.<p>
+<PRE>
+<b><A NAME="error-class0">&lt;error&gt;</A></b>	[Abstract Class]
+</PRE>
+&lt;error&gt; is the abstract class of all conditions that represent something invalid about the program (as opposed to environmental conditions such as running out of memory or battery power, or inability to establish a network connection, for example).  &lt;error&gt; is a subclass of &lt;serious-condition&gt;.  &lt;error&gt; is distinct from &lt;serious-condition&gt; so one can establish a handler for errors that does not also trap unpredictable environmental exceptions such as network problems.<p>
+<PRE>
+<b><A NAME="simple-error-class0">&lt;simple-error&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;simple-error&gt; is the concrete class of error conditions that consist of just an error message constructed from a format string and arguments; it is a subclass of &lt;error&gt;.  The recovery protocol is empty.  The initialization arguments format-string: and format-arguments: are accepted.  The accessor functions condition-format-string and condition-format-arguments are applicable.<p>
+<PRE>
+<b><A NAME="type-error-class0">&lt;type-error&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;type-error&gt; is a concrete subclass of &lt;error&gt; used by check-type.  The recovery protocol is empty.  The initialization arguments value: and type: are accepted.  The accessor functions type-error-value and type-error-expected-type are applicable.<p>
+<PRE>
+<b><A NAME="warning-class0">&lt;warning&gt;</A></b>	[Abstract Class]
+</PRE>
+&lt;warning&gt; is an abstract subclass of &lt;condition&gt;.  There is a default handler for &lt;warning&gt; that displays the warning in a user-interface dependent way and then returns #f.  The recovery protocol is that any value can be returned and will be ignored.<p>
+<PRE>
+<b><A NAME="simple-warning-class0">&lt;simple-warning&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;simple-warning&gt; is a concrete subclass of &lt;warning&gt; used by signal.  The recovery protocol is the same as for &lt;warning&gt;.  The initialization arguments and accessor functions are the same as for &lt;simple-error&gt;.<p>
+<PRE>
+<b><A NAME="restart-class0">&lt;restart&gt;</A></b>	[Abstract Class]
+</PRE>
+A restart is a general instance of the abstract class &lt;restart&gt;.  &lt;restart&gt; is a subclass of &lt;condition&gt;.  There is a default handler for &lt;restart&gt; that signals an error reporting an attempt to use a restart for which no restart handler was established.  The recovery protocol concept is not applicable to restarts.  The initialization argument condition: is accepted and ignored by &lt;restart&gt; some subclasses save the value of this initialization argument and use it to associate a restart with a particular condition from which the restart can recover.  At present, none of these subclasses are defined as part of the language.  Other restarts do not care; they can recover from any condition.<p>
+<PRE>
+<b><A NAME="simple-restart-class0">&lt;simple-restart&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;simple-restart&gt; is a concrete subclass of &lt;restart&gt; that exists just to be distinct from the other subclasses of &lt;restart&gt; it is used by cerror.<p>
+<PRE>
+<b><A NAME="abort-class0">&lt;abort&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;abort&gt; is a concrete subclass of &lt;restart&gt; whose handlers are expected to terminate execution of the current application command, or similar unit of execution, and return control to something like an application command loop.  This is comparable to command-period on the Macintosh.  The exact details of this feature depend on the particular environment, of course, but signaling an instance of &lt;abort&gt; is a uniform way to get out.<p>
+<b>Basic Operator for Signaling<p>
+<PRE>
+<A NAME="signal0">signal</A><A HREF="ch13.html#signal1">[next citation]</A></b>   <i>condition</i>   ==><i>  values</i>	[Sealed Function]
+</PRE>
+Signals the <i>condition</i>, trying each active dynamic handler, the most recent first.  If all dynamic handlers decline, signal calls (default-handler <i>condition</i>).  If a handler returns, all the values that it returned are returned from signal.  If signal returns when <i>condition</i>s recovery protocol does not allow returning, some handler has violated protocol; signal does not check for this error.  If <i>condition</i> is a restart, the caller of signal should always assume that it might return.<p>
+Additional operators for signaling, defined for convenience, are described in a later section.<p>
+<b>Basic Operator for Handling Conditions</b><p>
+<PRE>
+<b><A NAME="handler-bind0">handler-bind</A></b>	(<i>type function</i> #key <i>test description</i>)	[Macro]
+	<i>form1 form2...
+</i>==><i>  values</i>
+</PRE>
+handler-bind establishes a condition handler during the dynamic extent of the evaluation of the <i>forms</i> and returns the values of the last <i>form</i>, or #f if there are no <i>forms</i>.  <i>type</i>, <i>function</i>, <i>test</i>, and <i>description</i> are evaluated before evaluation of the <i>forms</i> begins.<p>
+<DL COMPACT>
+<DT><i>type</i> <DD>The handler applies to conditions that are general instances of <i>type</i>.  <i>type</i> should be a class or a singleton.
+<DT><i>test</i> <DD>A function called with a condition that is a general instance of <i>type</i> or the singleton object of <i>type</i> and that returns true if this handler applies to this condition.  The default is a function that always returns true.  An example usage is a restart handler for restarting only from a particular condition object, for example, restarting from an unbound-slot error by setting the slot and retrying the invocation of the accessor.  The &lt;set-and-continue&gt; restart condition will have the signaled &lt;unbound-slot&gt; condition in a slot, and the handlers test will check for it.  (These class names are invented for this example and are not part of the specification.) 
+<DT><i>function</i><DD>A function called to handle a condition that matches <i>type</i> and passes <i>test</i>.  The function receives two arguments typically named <i>condition</i> and <i>next-handler</i>.  The function handles the condition by taking a non-local exit, returning values according to the conditions recovery protocol, or tail-recursively calling signal of a restart.  The function can decline to handle the condition by tail-recursively calling <i>next-handler</i> with no arguments. <A href="footnotes.html#fn32">FN32</A> 
+<DT><i>description</i><DD>A function called with one argument, a stream, and which outputs a brief description of this handler to the stream.  This can be textual, in which case it should be one line with no newline or delimiters, or it can be graphical (anything that the stream allows).  Descriptions are probably used only in restart handlers.  The description argument can also be a string, which is an abbreviation for a function that writes that string to the stream.  If description is omitted, some sort of default description will be concocted.
+</DL>
+<i>test</i> and <i>function</i> are distinct so that handler applicability can be tested without actually handling (which might take a non-local exit).  One use for this is constructing a list of available restart handlers.<p>
+There is no condition wall, i.e., when executing <i>function</i> the set of available handlers is not reset to the handlers that were in effect when the handler-bind was entered. <A href="footnotes.html#fn33">FN33</A> <p>
+The expansion of a handler-bind form is implementation-dependent.  Implementations are encouraged to use an expansion that optimizes establishing a handler for both speed and space, even if that increases the cost of signaling.  The assumption is that most of the time a handler will never be used, because the exception it is looking for will never occur.<p>
+<b>Miscellaneous Condition Operations<p>
+</b>print of a condition, when not verbose, prints the conditions error message with no additional text, punctuation, or newlines.  Many condition classes define methods for print.  If you define your own condition class, you need to define a method for print unless the inherited method is suitable.  If you have a condition object and wish to print its error message, you can call print with verbose: #f.<p>
+Some condition classes define accessor functions.  The accessor functions for the standardized classes are specified briefly with the class above.  None of these are settable.<p>
+<b>Full set of Operators for Signaling<p>
+</b>The first operator listed here is a repeat of the basic operator.  The others all have straightforward implementations in terms of other primitives but are provided to enable concise code in simple, common cases.<p>
+<PRE>
+<b><A NAME="signal1">signal</A><A HREF="ch13.html#signal0">[return to first citation]</A>   </b><i>condition</i>   ==><i>  values	</i>[Sealed Function]
+<b>signal   </b><i>string argument1 argument2</i> ...   ==>  <i>values</i>
+</PRE>
+Signals the <i>condition</i>, trying each active dynamic handler, the most recent first.  If all dynamic handlers decline, signal calls (default-handler <i>condition</i>).  If a handler returns, all the values that it returned are returned from signal.  If signal returns when the conditions recovery protocol does not allow returning, some handler has violated protocol; signal does not check for this error.  If the condition is a restart, the caller of signal should always assume that it might return.<p>
+The second form signals a condition of type &lt;simple-warning&gt;. <p>
+<PRE>
+<b><A NAME="error0">error</A></b><i>   condition</i>   ==><i>  {will never return}	</i>[Sealed Function]
+<b>error</b>  <i> string argument1 argument2</i> ...   ==>  <i>{will never return}</i>
+</PRE>
+error is similar to signal but never returns; if a handler returns, error bombs directly to the debugger.  error is used to make it clear that a program does not expect to receive control again after signaling a condition and might enable the compiler to generate slightly more compact code.<p>
+The second form signals a condition of type &lt;simple-error&gt;.<p>
+<PRE>
+<b><A NAME="cerror0">cerror</A></b>   <i>restart-description condition</i>   ==><i>  </i>#f<i>	</i>[Sealed Function]
+<b>cerror</b>   <i>restart-description string argument1 argument2</i> ...  ==>  #f
+</PRE>
+cerror is the same as error but first establishes a handler for &lt;simple-restart&gt;, whose description is <i>restart-description</i>, which can be a string or a function of one argument.<p>
+If the restart handler is invoked, cerror returns #f; otherwise, cerror never returns.  If cerror returns, the program should take the corrective actions promised in the restart-description.  cerror is the standard way to signal correctable errors when no special class of restart condition is required.<p>
+<PRE>
+<b><A NAME="break0">break</A></b>   [<i>condition</i>]  ==><i>  </i>#f<i>	</i>[Sealed Function]
+<b>break</b>   [<i>string argument1 argument2</i>...]   ==>  #f
+</PRE>
+break obtains a condition in the same way as signal but then invokes the debugger immediately without signaling first.  break establishes a &lt;simple-restart&gt; so the debugger can continue execution.  This is useful for breakpoints.  break always returns #f.  With no arguments, a default message string is used.<p>
+<PRE>
+<b><A NAME="check-type0">check-type</A></b><i>   value type</i>   ==><i>  value	</i>[Sealed Function]
+</PRE>
+check-type signals a &lt;type-error&gt; if (instance? <i>value type</i>) is false.  If Dylan defines types that are more general than just classes, check-type will work with them. <A NAME="type-checking2">type-checking</A><A HREF="ch4.html#type-checking0">[return to first citation]</A><p>
+<PRE>
+<b><A NAME="abort0">abort</A></b>	[Sealed Function]
+</PRE>
+Performs (error (make &lt;abort&gt;)).  This function is provided as a convenient shortcut.<p>
+The call is to error, rather than to signal, to guarantee that abort will never return.<p>
+<b>Additional Operators for Handling</b><p>
+<PRE>
+<b><A NAME="handler-case0">handler-case</A></b>	<i>protected-form</i> 	[Macro]
+	((<i>typea</i> #key <i>condition test description</i>) <i>form1a form2a</i> ...)  
+	((<i>typeb</i> #key <i>condition test description</i>) <i>form1b form2b</i> ...) ...
+==><i>  values</i>
+</PRE>
+handler-case establishes handlers during the dynamic extent of the evaluation of the <i>protected-form</i>.  If one of these handlers is invoked, it never declines, but immediately takes a non-local exit, executes the body forms in the dynamic environment that was in effect when the handler-case was entered, and returns the values of the last body form, or #f if the clause has no body<i> forms</i>.  If the <i>protected-form</i> completes execution, handler-case returns the values of the <i>protected-form</i>.  Note that when the <i>forms</i> of a clause are executed, the handlers established by the handler-case are no longer active.<p>
+<i>type</i>, <i>test</i>, and <i>description</i> are as for handler-bind.  <i>condition</i>, if present, is not evaluated but is the name of a variable that is bound to the condition around the <i>forms</i>.  handler-case can expand into handler-bind and bind-exit; it exists only for program conciseness.  handler-case will usually be more commonly used than handler-bind.<p>
+The handler clauses are checked in the order in which they appear.  That is, the first handler will take precedence over the second, etc.<p>
+A very trivial use of handler case might look like:<p>
+<PRE><tt>(handler-case (some-function)
+  ((&lt;type-error&gt;) "there was a type-error")
+  ((&lt;error&gt;) "there was an error")
+  ((&lt;warning&gt;) "there was a warning"))
+</tt></PRE>
+<PRE>
+<b><A NAME="default-handler0">default-handler</A></b>   <i>condition</i>   ==><i>  values</i>	[Generic Function]
+</PRE>
+default-handler is called if no dynamic handler handles a condition.  There are predefined methods for &lt;condition&gt;, which returns #f, &lt;serious-condition&gt;, which calls the debugger, &lt;warning&gt;, which prints the message and returns #f, and &lt;restart&gt;, which signals an error.<p>
+<b>Operators for Interactive Handling</b><p>
+<PRE>
+<b><A NAME="restart-query0">restart-query</A></b>   <i>restart</i>	[Generic Function]
+</PRE>
+restart-query engages the interactive user in a dialog and stores the results in slots of restart.  This function is designed to be called from a handler, after making a restart and before signaling it.  The debugger uses restart-query, for example.  There is a default method for &lt;restart&gt; which does nothing.<p>
+<PRE>
+<b><A NAME="return-query0">return-query</A>   </b><i>condition</i>	[Generic Function]
+</PRE>
+If the recovery protocol of <i>condition</i> allows returning values, this engages the interactive user in a dialog and returns the results as any number of values, which the handler should return.  return-query should not be called if (return-allowed?<i> condition</i>) returns #f.  If you define your own condition class whose recovery protocol allows returning values, you need to define a method for return-query, unless the inherited method is suitable.<p>
+<b>Operators for Introspection<p>
+<PRE>
+<A NAME="do-handlers0">do-handlers</A></b>   <i>funarg	</i>[Sealed Function]
+</PRE>
+do-handlers applies<i> funarg</i> to all dynamically active handlers, the most recently established first.  <i>funarg</i> receives four arguments: <i>type</i>, <i>test</i>, <i>function</i>, and <i>description</i>.  The arguments describe a dynamically active handler.  All arguments have dynamic extent and must not be modified.  <i>test</i> is defaulted to a function that always returns #t.  <i>description</i> is #f if unsupplied by the handler, or else will be a function or a string.<p>
+<PRE>
+<b><A NAME="return-allowed?0">return-allowed</A>   </b><i>condition</i>   ==><i>  boolean</i>	[Generic Function]
+</PRE>
+This predicate returns #t if the recovery protocol of <i>condition</i> allows returning values, or #f if it does not.  There is a default method for &lt;condition&gt; that returns #f.  If you define your own condition class, you need to define a method for return-allowed? unless the inherited method is suitable.<p>
+<PRE>
+<b><A NAME="return-description0">return-description</A>   </b><i>condition</i>  ==><i>  description</i>	[Generic Function]
+</PRE>
+If the recovery protocol of this condition allows returning values, return-description returns a description of the meaning of returning values, similar to the description of a restart handler.  This <i>description</i> can be a function, a string, or #f.  return-description should not be called if (return-allowed?<i> condition</i>) returns #f.  If you define your own condition class whose recovery protocol allows returning values, you need to define a method for return-description unless the inherited method is suitable.<p></A>
+<A NAME="ex"><b>Examples</b><p></A>
+<PRE>
+;;; Classes such as &lt;file-not-found&gt; used in these examples are
+;;; invented for the example and are not part of the specification
+;;; This example shows minimal handling of a file-not-found error
+
+(handler-case (open "file-that-doesnt-exist")
+  ((&lt;file-not-found&gt; condition: c
+    (format *error-output* "~&ampThe file ~A was not found."
+            (file-name c))))
+
+
+;;; This example shows how to handle a file-not-found error by
+;;; reading a different file instead.
+(handler-bind (&lt;file-not-found&gt;
+                 (method (condition next-handler)
+                   (signal (make &lt;try-a-different-file&gt;
+                                 file-name: "my-emergency-backup-file"))))
+   (open "file-that-doesnt-exist")
+  ....)
+
+(define-method open (the-file)
+  (handler-case (guts-of-open the-file)
+    ((&lt;try-a-different-file&gt;
+      description: (method (stream)
+                     (format stream "Read a different file instead of ~A"
+                                     the-file))
+      condition: restart
+     (open (file-name restart)))))))
+
+(define-method guts-of-open (the-file)
+  (bind ((result (operating-system-open the-file)))
+    (cond ((instance? result &lt;stream&gt;) result)
+          ((id? result +file-not-found-error-code+)
+           (error (make &lt;file-not-found&gt; file-name: the-file)))
+          ...)))
+
+(define-class &lt;file-not-found&gt; (&lt;error&gt;)
+  ((file-name init-keyword: file-name:)))
+
+(define-method print ((self &lt;file-not-found&gt;) #key stream verbose)
+  (if verbose
+      (next-method)
+      (format stream "The file ~A was not found" (file-name self))))
+
+(define-class &lt;try-a-different-file&gt; (&lt;restart&gt;)
+  ((file-name init-keyword: file-name:)))
+
+
+;;; This is the same example improved so the restart handler that
+;;; reads another file can only be reached by a handler for the
+;;; associated condition, useful if there are nested errors.
+
+(handler-bind (&lt;file-not-found&gt;)
+                 (method (condition next-handler)
+                   (signal (make &lt;try-a-different-file&gt;
+                                 condition: condition
+                                 file-name: "my-emergency-backup-file")))
+  (open "file-that-doesnt-exist")
+  ....)
+
+(define-method open (the-file)
+  ....  (guts-of-open the-file))
+
+(define-method guts-of-open (the-file)
+  (bind ((result (operating-system-open the-file)))
+    (cond ((instance? result &lt;stream&gt;) result)
+          ((id? result +file-not-found-error-code+)
+           (bind ((condition (make &lt;file-not-found&gt; file-name: the-file)))
+             (handler-case (error condition)
+               ((&lt;try-a-different-file&gt;
+                  test: (compose (curry id? condition) restart-condition)
+                 description: (method (stream)
+                                (format stream
+                                  "Read a different file instead of ~A"
+                                  the-file))
+                 condition: restart
+                (open (file-name restart)))))))
+          ...)))
+
+(define-class &lt;file-not-found&gt; (&lt;error&gt;)
+  ((file-name init-keyword: file-name:)))
+
+(define-method print ((self &lt;file-not-found&gt;) #key stream verbose)
+  (if verbose
+     (next-method)
+     (format stream "The file ~A was not found" (file-name self))))
+
+(define-class &lt;try-a-different-file&gt; (&lt;restart&gt;)
+  ((condition init-keyword: condition: reader: restart-condition)
+   (file-name init-keyword: file-name:)))
+
+
+</PRE>
+<P><A NAME="NEXT" HREF="ch14.html">Next chapter:  Numbers</A>
+

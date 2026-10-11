@@ -1,0 +1,369 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="31-method-specificity.html">Previous chapter:  #31: Method Specificity (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #32: Module Defining Forms      (Addition)</TITLE>
+<H1>#32: Module Defining Forms      (Addition)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This Design Note specifies a syntax and semantics for module defining 
+forms, which further documents <a href="../book.annotated/ch5.html">the description of modules</a> found in the 
+Dylan book.  
+<HR>
+<h3>
+Overview
+</h3>
+A module establishes a mapping from variable names to variables (memory 
+locations containing values).  It does this in one of two ways: a 
+variable can be owned by the module, or the module may import variables 
+exported by another module by using the other module.  Modules export 
+variables to make them accessible to other modules.  Only exported 
+variables can be imported by other modules.
+<P>
+Within a given module, a variable name refers to at most one variable.  
+It is an error to create or import two or more different variables with 
+the same name in a single module.  If a name does refer to a variable, 
+the variable is said to be accessible from the module.  Each variable is 
+owned by exactly one module, but it can be accessible from many modules.
+<P>
+Owned variables are created by the create: keyword argument to 
+<tt>define-module</tt> and in some cases by definitions associated with a module.
+<P>
+Dylan includes two kinds of definitions.  <a href="../book.annotated/ch2.html#structure">Explicit definitions</a> are 
+created by <tt>define-constant, define-variable, define-generic-function</tt>, and the class name in <tt>define-class</tt>.  Implicit definitions are created by <tt>define-method</tt> and the slot specifications of <tt>define-class</tt>.
+<P>
+Definitions are used both to create variables and to provide values for 
+variables.  An explicit definition performed on a variable which was not 
+imported creates an owned variable and provides a value for it.  An 
+explicit definition performed on a variable which was imported just 
+provides a value for the variable.  An implicit definition has the same 
+behavior, but only if there is no explicit definition for the variable.  
+(If there is an explicit definition for the variable, then the implicit 
+definition does not create the variable, nor does it provide the value 
+for it.)
+<P>
+There must be exactly one explicit definition for each module variable, 
+with the exception that the explicit definition can be left out if there 
+are one or more implicit definitions.  Any module variable whose value is 
+a generic function can have any number of implicit definitions.
+<h3>
+Programs, module declarations, and expressions
+</h3>
+A Dylan program is composed of expressions.  Each expression is 
+associated with a module.  Within an expression, variables are referenced 
+by variable names.  The module associated with the expression provides 
+the mapping from variable name to variable used within the expression.  
+It is an error to reference a variable name for the purpose of getting or 
+setting its value if the variable name does not designate either a 
+variable locally bound with a scope that includes the reference or a 
+variable accessible in the associated module. 
+<P>
+A technique for associating an expression with a module is described in 
+the <a href="33-source-file-headers.html">Design Note #33: Headers for Dylan Source Files (Addition)</a>.
+<P>
+Module declarations are expressions.  Like other defining forms, module 
+declarations are only allowed at top level or inside of begin.  The 
+variable names in module declarations are relative either to the module 
+being declared or to a module that it uses, and thus are not affected by 
+the module declaration's associated module.  A module declaration can be 
+associated with any module where <tt>define-module</tt> has its normal meaning.
+<P>
+Before an expression can be compiled, the module declaration for the 
+module associated with the expression must be compiled and then made 
+available to the development environment in an implementation-defined 
+way.
+<P>
+Macros can expand into module declarations.  This happens during 
+compilation of the module declaration.
+<h3>
+Module declarations
+</h3>
+Modules are defined by <tt>define-module</tt> forms.
+<PRE>
+define-module module-name { module-clause }*  [Module Declaration]
+</PRE>
+where each <tt>module-clause</tt>  is either a use clause,  a create clause,  or an export clause  (see below).
+<P>
+This form defines the module with the given name.  It describes which 
+modules are used by the module being defined, which variables are 
+imported from the used modules, and which variables are exported by the 
+module being defined.
+<P>
+<tt>module-name</tt>  has the same syntax as identifiers and symbols.  Module 
+names are global in scope.  Under this proposal, entire programs are 
+compiled as a unit and module names are global to that unit.  Though they 
+are not part of this proposal, extensions to allow separate compilation 
+will be considered in the future.  The namespace of module names is 
+distinct from that of variables.  No variable with the name <tt>module-name</tt> is created.
+<h3>
+Use clauses
+</h3>
+There is one or more use-clause  for each module used by the module being 
+defined.  Each use-clause  has the form:
+<PRE>
+(use used-module-name #key import export prefix exclude rename)
+</PRE><P>
+<tt>used-module-name</tt>  is the name of a module to be used.  By default all 
+exported variables from the used module are imported by the module being 
+defined, under the same name they had in the used module.
+<P>
+When there are multiple use clauses using the same module, the set of 
+imported variables is the union of those specified by all the use 
+clauses.  Some variables may be imported under more than one variable 
+name.
+<P>
+The keyword options are used to prevent some variables from being 
+imported, to give some or all variables different names in the new 
+module, and to re-export variables which were imported from a used 
+module.  Each of these keyword options applies within the scope of the 
+particular use clause, and does not affect the behavior of other use 
+clauses (even if the other use clauses indicate the same module).
+<PRE>
+import: ({variable-name  |  (old-name =&gt; new-name) }*) | all
+</PRE><P>
+Indicates which variables are to be imported from the module being used.  
+The default is all, meaning that all the variables exported by the used 
+module should be imported.  When =&gt; appears in an import-option, it 
+specifies both an import and a rename.  In other words, 
+<PRE>
+        import: (foo =&gt; bar)</PRE>
+is simply an abbreviation for 
+<PRE>
+        import: (foo), rename: (foo =&gt; bar)
+</PRE>
+and means exactly the same thing.  
+<PRE>
+exclude: ({variable-name}*)
+</PRE>
+Indicates variables which should not be imported.  This keyword can only 
+be used if import: is all.  The default for the exclude: keyword is ().
+<PRE>
+prefix: string
+</PRE>
+Prepends string  to the names of variables as they are imported from the 
+used module.  This option can be overridden for a particular variable by 
+using the rename: keyword for that variable.  The default value is "".
+<PRE>
+rename: ({(old-name =&gt; new-name)}*)
+</PRE>
+Used to override both the import: keyword and the prefix: keyword.  The 
+variables named are imported, regardless of whether the import: keyword 
+indicates they should be imported.  <tt>old-name</tt> indicates the name of the
+variable in the module being used; <tt>new-name</tt>  indicates the name to be 
+given to the variable in the module being defined.  The prefix: keyword 
+of the use clause is ignored for variables specified by the <tt>rename</tt>: 
+keyword.  The default value for the rename: keyword is ().
+<PRE>
+export: ({variable-name}*) | all
+</PRE>
+Specifies variables which should be exported from the module being 
+defined.  Each of these variables must have been imported by this use 
+clause.  <tt>variable-name</tt>  is the name of the variable in the module being defined.  It is also the name under which the variable will be exported.  
+It is allowed for the same <tt>variable-name</tt>  to appear more than once, as
+this is sometimes useful for documentation purposes.  all indicates that 
+all the variables imported by this use clause should be exported.  The 
+default value for the export: keyword is ().
+<h3>
+Exporting owned variables
+</h3>
+A module export clause  has the following syntax:
+<PRE>
+(export {variable-name }*)
+</PRE>
+This option specifies that the named variables are to be exported from 
+the module being defined.  Each <tt>variable-name</tt>  is the name of a variable to export.  These variables must be defined by a defining form in the module being defined.  It is an error if any of the variables were 
+imported from other modules.   It is allowed for the same name to appear 
+more than once, since this is sometimes useful for documentation 
+purposes.
+<P>
+A module create clause  has the following syntax:
+<PRE>
+(create {variable-name }*)
+</PRE>
+This option specifies that the named variables are to be created in and 
+exported from the module being defined.  A <tt>variable-name</tt>  is the name of a variable to create and export.  These variables must not be defined by 
+a defining form in the module being defined, and they must be defined by 
+a module which uses the module being defined.  It is an error if any of 
+the variables were imported from other modules.   It is allowed for the 
+same name to appear more than once, since this is sometimes useful for 
+documentation purposes.
+<h3>
+Circular uses and imports
+</h3>
+Circular use relationships among modules are not allowed.  The graph of 
+the module-uses-module relation must be a directed acyclic graph.
+<HR>
+<h3>
+Examples</h3>
+<PRE>
+define module graphics
+  use dylan;
+  create draw-line,
+         erase-line,
+         invert-line,
+         skew-line
+         frame-rect,
+         fill-rect,
+         erase-rect,
+         invert-rect;
+end module graphics;
+
+define module lines
+  use dylan;
+  use graphics,
+        import: (draw-line,
+               erase-line,
+               invert-line,
+               skew-line);
+end module lines;
+
+define module rectangles
+  use dylan;
+  use graphics,
+        prefix: "graphics$",
+        exclude: (skew-line);
+end module rectangles;
+
+define module dylan-gx
+  use dylan, export: all;
+  use graphics,
+        rename: (skew-line =&gt; warp-line),
+      export: all;
+end module dylan-gx;
+</PRE>
+The modules created by the above module declarations would have access to 
+variables with the following names:
+<PRE>
+graphics        draw-line
+                erase-line
+                invert-line
+                skew-line
+                frame-rect
+                fill-rect
+                erase-rect
+                invert-rect
+                plus all the variables in the Dylan module
+
+lines           draw-line
+                erase-line
+                invert-line
+                skew-line
+                plus all the variables in the Dylan module
+
+rectangles      graphics$draw-line
+                graphics$erase-line
+                graphics$invert-line
+                graphics$frame-rect
+                graphics$fill-rect
+                graphics$erase-rect
+                graphics$invert-rect
+                plus all the variables in the Dylan module
+
+dylan-gx        draw-line
+                erase-line
+                invert-line
+                warp-line
+                frame-rect
+                fill-rect
+                erase-rect
+                invert-rect
+                plus all the variables in the Dylan module
+</PRE>
+The lines and rectangles modules do not export any variables.  They are 
+presumably used to provide definitions for the variables created and 
+exported by the graphics modules.  The difference between the graphics 
+module and the dylan-gx module is that one variable is renamed, and the 
+dylan-gx module exports the variables which it imports from the dylan 
+module, while the graphics module does not.
+<HR>
+<h3>
+Syntax for Module Declarations</h3>
+<PRE>
+define module module-definition
+
+module-definition ::=
+
+        module-name [ module-clauses ] end [ module ] [ module-name ]
+
+module-clauses ::=
+        module-clause [ ; ]
+        module-clause ; module-clauses
+
+module-clause ::=
+        module-use-clause
+        module-export-clause
+        module-create-clause
+
+module-export-clause ::=
+        export variable-names
+
+module-create-clause ::=
+        create variable-names
+
+module-use-clause ::=
+
+        use module-name [ , module-use-options ]
+
+module-use-options ::=
+        module-use-option
+        module-use-option , module-use-options
+
+module-use-option ::=
+        prefix-option
+        import-option
+        exclude-option
+        rename-option
+        export-option
+
+prefix-option ::=
+        prefix: string
+
+import-option ::=
+        import: all
+        import: import-set
+
+import-set ::=
+        ( [ imports ] )
+
+imports ::=
+        import
+        import , imports
+
+import ::=
+        variable-name
+        variable-name =&gt; variable-name
+
+exclude-option ::=
+        exclude: variable-name-set
+
+export-option ::=
+        export: all
+        export: variable-name-set
+
+rename-option ::=
+        rename: ( [ rename-specs ] )
+
+rename-specs ::=
+        rename-spec
+        rename-spec , rename-specs
+
+rename-spec ::=
+        variable-name =&gt; variable-name
+
+variable-name-set ::=
+        ( [ variable-names ] )
+
+variable-names ::=
+        variable-name
+        variable-name , variable-names
+
+variable-name ::=
+        symbol
+
+module-name ::=
+        symbol
+</PRE>
+<P><A NAME="NEXT" HREF="33-source-file-headers.html">Next chapter:  #33: Headers for Dylan Source Files     (Addition)</A>

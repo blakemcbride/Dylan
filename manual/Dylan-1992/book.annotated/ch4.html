@@ -1,0 +1,120 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch3.html">Previous chapter:  Syntax and Semantics</A><P>
+<title>Dylan manual: Variables</title>
+<H2>4. Variables</H2>
+<p>
+<b>See Also: <a href="../design-notes/19-top-level-defns.html">Dylan Design Notes: Definitions are Declarative (Change)</a></b><p>
+The following functions and syntax forms are used to define and manipulate variables.  Additional information on module variables is given in the following section.<p>
+Throughout the text below, the term <b><A NAME="environment0">environment</A></b> is used to refer to the set of variables that are available to a given part of a program.  It includes both module variables and <A NAME="lexical variables0">lexical variables</A>.<p>
+Variables can be set to new values with the set! special form, which is described in a later section.<p>
+<A NAME="modvar"><b>Module Variables<p>
+</b>Module variables are created with the define syntax form and the related forms define-class, define-generic-function, define-method, and define-slot.  Module variables can be referenced from anywhere inside the module.  Source code is associated with a specific module through the programming environment.  This association occurs at development time and cannot be changed at run-time.<p>
+<b>See Also: <a href="../design-notes/17-define-like-bind.html">Dylan Design Notes: Define Like Bind (Addition)</a></b><p>
+<b>See Also:<a href="../design-notes/23-defines-make-constants.html">Dylan Design Notes: Defining Forms Make Constants (Change)</a></b><p> 
+<PRE>
+<b><A NAME="define1">define</A><A HREF="ch5.html#define2">[next citation]</A></b>   <i>variable-name initial-value</i>   ==>  <i>variable-name</i>	[Macro]
+</PRE>
+define creates a variable accessible through <i>variable-name</i> in the current module <A href="footnotes.html#fn9">FN9</A> .  The <i>initial-value</i> argument provides the initial value of the variable.<p>
+The <i>variable-name</i> argument is not evaluated.  It must be a symbol, or a list of the form (setter <i>symbol</i>).<p>
+The <i>initial-value</i> argument is evaluated, and the value is stored into the new variable.<p>
+See also the related forms define-class, define-generic-function, define-method, and define-slot.<p>
+<PRE>
+ <i>? </i><tt>foo</tt>
+ <i>error: unbound variable foo
+   ?</i> <tt>(define foo 10)</tt>
+   <i>foo
+   ?</i> <tt>foo</tt>
+   <i>10
+   ?</i> <tt>(+ foo 100)</tt>
+   <i>110
+   ?</i> <tt>bar</tt>
+   <i>error: unbound variable bar
+   ?</i> <tt>(define bar foo)</tt>
+   <i>bar
+   ?</i> <tt>bar</tt>
+   <i>10
+   ?</i> <tt>(define foo 20)</tt>
+   <i>warning: redefining variable foo
+   ?</i> <tt>foo</tt>
+   <i>20
+   ?</i> <tt>bar</tt>
+   <i>10
+   ?</i> <tt>(+ foo bar)</tt>
+   <i>30</i></A>
+</PRE>
+
+<A NAME="lexvar"><b>Lexical Variables<p>
+</b>Lexical variables are visible within a limited piece of program text.  Parameters of methods are lexical variables.  Other lexical variables can be created with the syntax form bind.  Several other syntax forms also create lexical variables as part of their operation.<p>
+<PRE>
+<b><A NAME="bind1">bind</A><A HREF="ch2.html#bind0">[return to first citation]</A></b>	((<i>binding1 init1</i>)	[Special Form]
+	  (<i>binding2 init2</i>)...)
+	<i>form1 form2 ...</i>
+==>  <i>values</i>
+</PRE>
+<i>binding</i> may be one or more instances of either <i>variable-name</i> or <p>
+(<i>variable-name type</i>)<i>,</i> optionally followed by #rest <i>rest-variable-name</i>.<p>
+bind creates a new lexical variable for each <i>variable-name</i> and <i>rest-variable-name</i> and executes the <i>form</i>s in an environment containing the new variables.  Each <i>init</i> is evaluated in an environment containing the previously bound <i>variable-names</i>.  The values of the last <i>form</i>  are returned.  If there are no <i>forms</i>, #f is returned.<p>
+The variables are initialized to values from the <i>init</i>s.  In the simplest case, where there is only one <i>variable-name</i> for each <i>init</i>, the variable is bound to the value of the <i>init</i>.  If there is more than one <i>variable-name</i> for a given <i>init</i>, the variables are bound to the multiple values returned by the <i>init</i>.  The complete multiple-value semantics is described below.<p>
+<PRE>
+<i>? </i><tt>(bind ((number1 20))
+   </tt>       <tt>(number2 30))
+    (+ number1 number2))
+</b><i>50</i>
+</PRE>
+The <i>init</i>s are evaluated in order.  Each <i>init </i>can refer to the variables that were bound to values from the previous <i>init</i>s.<p>
+?<i> </i><b>(bind ((x 20)
+</b>  <b>       (y (+ x x)))
+    (+ y y))
+</b><i>80</i>
+A variable shadows any module variable with the same name and any surrounding lexical variable with the same name.  This rule means that the innermost version of a variable is the one referenced.<p>
+<PRE>
+<i>? </i><tt>(define foo 10)</tt>
+<i>foo
+?</i> <tt>(+ foo foo)</tt>
+<i>20
+?</i> <tt>(bind ((foo 35))
+    (+ foo foo))
+</tt><i>70
+?</i> <tt>(bind ((foo 20))</tt>
+  <tt>  (bind ((foo 50))
+      (+ foo foo)))
+</tt><i>100
+</i></PRE>
+<b>Checking Init Types<p>
+</b>Each variable bound by bind can be a variable name or a list of the form (<i>variable-name type</i>).  If the latter syntax is used, then the <i>init </i>must evaluate to a value of the given type, or an error is signaled.<A NAME="type-checking0">type-checking</A><A HREF="ch6.html#type-checking1">[next citation]</A><p>
+The <i>type</i> can be any form.  It is evaluated before the corresponding <i>init </i>is evaluated.  The <i>type</i> must evaluate to a class or a singleton. <A href="footnotes.html#fn10">FN10</A> <p>
+<PRE>
+<i>? </i><tt>(bind (((x &lt;integer&gt;) (sqrt 2)))
+        x)
+</tt><i>error: 1.4142135623730951 is not an instance of &lt;integer&gt;
+</i></PRE>
+<b>Binding Multiple Values<p>
+</b>bind can be used to receive multiple values.  If there is more than one <i>variable-name</i> for a given <i>init</i>, the variables are bound to the multiple values returned by the <i>init</i>.  If the <i>init</i> produces more values than there are <i>variable-names</i>, the extra values are ignored.  If the <i>init</i> produces fewer values than there are <i>variable-names</i>, then the extra variables are bound to #f.<p>
+<PRE>
+<i>? </i><tt>(bind ((foo bar baz (values 1 2 3)))
+</tt>  <tt>  (list foo bar baz))</tt>
+<i>(1 2 3)
+?</i> <tt>(define-method opposite-edges ((center &lt;number&gt;)
+                                 (radius &lt;number&gt;))
+</tt>  <tt>  (bind ((min max (edges center radius)))
+</tt>  <tt>    (values max min)))</tt>
+<i>opposite-edges
+?</i> <tt>(opposite-edges 100 2)</tt>
+<i>102
+98</i>
+</PRE>
+Multiple values can be used to perform parallel binding, as performed by let in Lisp.<p>
+<PRE>
+<i>? </i><tt>(bind ((x 10)
+</tt>         <tt>(y 20))</tt>
+  <tt>  (bind ((x y (values y x)))
+</tt>  <tt>    (list x y)))
+</tt><i>(20 10)
+</i></PRE>
+The token #rest can be used in the variable lists.  This use of #rest is roughly equivalent to its use in parameter lists.  #rest is followed by a single variable name; all remaining multiple values are stored in a sequence, which becomes the value of the variable.<p>
+<PRE>
+<i>? </i><tt>(bind ((#rest nums (edges 100 2)))
+</tt>  <tt>  nums)
+</tt><i>(98 102)
+<P><p><A NAME="NEXT" HREF="ch5.html">Next chapter:  Modules</A>
+

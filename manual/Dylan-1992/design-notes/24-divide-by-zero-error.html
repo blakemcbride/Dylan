@@ -1,0 +1,26 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="23-defines-make-constants.html">Previous chapter:  #23: Defining Forms Make Constants      (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+</PRE>
+<TITLE>Dylan Design Notes: #24: Divide by Zero Signals Error       (Clarification)</TITLE>
+<H1>#24: Divide by Zero Signals Error       (Clarification)</H1>
+<PRE>
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note specifies that division by zero signals an error.  This 
+makes Dylan programs safer and more robust, possibly at the cost of speed 
+in some cases.
+<HR>
+Specify that division by zero signals an error. The special case 0/0 is 
+also specifically an error. This affects the following functions <a href="../book.annotated/ch14.html#+0"> (p.
+149-150)</a>:
+<PRE>
+/ unary/ binary/ 
+floor/ ceiling/ round/ truncate/
+modulo remainder
+</PRE>
+<HR>
+
+<P><A NAME="NEXT" HREF="25-exit-extent.html">Next chapter:  #25: Exit Extent        (Change)</A>

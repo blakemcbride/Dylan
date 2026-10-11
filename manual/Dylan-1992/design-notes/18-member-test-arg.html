@@ -1,0 +1,55 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="17-define-like-bind.html">Previous chapter:  #17: Define Like Bind        (Addition)</A><P>
+<TITLE>Dylan Design Notes: #18: Member? Intersection Test Arg        (Clarification)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#18: Member? Intersection Test Arg        (Clarification)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note clarifies that the &lt;range&gt; methods for member? and 
+intersection support a test: keyword argument, which defaults to id?.  
+This makes the &lt;range&gt; methods consistent with the definitions for 
+these generic functions.
+<P>
+<HR>
+<P>
+Replace the definition of member? <a href="../book.annotated/ch12.html#member?2">on page 118</a> with the following:
+<PRE>
+member? val range #key test =&gt; boolean        [G. F. Method]
+</PRE>
+member? generally terminates when given a range value, even if range 
+is unbounded.  However, if range is unbounded, this method is 
+guaranteed to terminate only if test is <a href="../book.annotated/ch9.html#id?0">id?</a> (the default).
+<P>
+Replace the definition of intersection <a href="../book.annotated/ch12.html#intersection2">on page 119</a> with the 
+following:
+<PRE>
+intersection range1 range2 #key test =&gt; range        [G. F. Method]
+</PRE>
+intersection applied to two ranges and a test of id? (the default) 
+will produce a range as the result, even though the <a href="../book.annotated/ch11.html#class-for-copy0">class-for-copy</a> of 
+a range is not &lt;range&gt;.  If either range1 or range2 is unbounded, 
+this method is guaranteed to terminate only if the test is id?.
+<P>
+<HR>
+<P>
+Examples:
+<PRe>
+? (member? 1 (range from: 0.0 up-to: 10.0 by: .5) test: =)
+#t
+? (intersection (range from: -5 up-to 10)
+                (range from: 1.0 up-to 15.0)
+                test: =)
+{range 1 2 3 4 5 6 7 8 9}
+</PRe>
+The return value contains integers in the second example because the 
+elements are taken from the first argument to intersection.  This is 
+consistent with the definition of intersection<a href="../book.annotated/ch12.html#intersection1"> on page 107 of the 
+Dylan manual</a>.
+<P><A NAME="NEXT" HREF="19-top-level-defns.html">Next chapter:  #19: Definitions are Declarative        (Change)</A>
+
+
+
+

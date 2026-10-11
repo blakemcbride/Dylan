@@ -1,0 +1,35 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="03-make-class.html">Previous chapter:  #3: Make Class Specification         (Addition)</A><P>
+<TITLE>Dylan Design Notes: #4: No Incremental Class Modifications        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#4: No Incremental Class Modifications        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note deletes the functions add-slot and remove-slot, 
+the setter for direct-superclasses, and the macro define-slot from 
+the Dylan language specification.  
+<P>
+<HR>
+<P>
+Remove the functions  <a href="../book.annotated/ch11.html#add-slot0">add-slot</a>, <a href="../book.annotated/ch11.html#remove-slot0"> remove-slot</a>, and the <a href="../book.annotated/ch11.html#(setter direct-superclasses)0"> setter for direct-superclasses</a> from the language.  Remove the macro <a href="../book.annotated/ch5.html#define-slot0">defineslot</a> from the language.
+<P>
+<HR>
+<P>
+Notes:
+<P>
+These operations are costly to implement, degrade efficiency, are 
+subject to misuse, and complicate the language model.  By removing 
+runtime modification of classes, it is easier for the compiler to 
+optimize code and class representations.  This change simplifies 
+the language model and removes confusing and inefficient 
+alternative approaches to problems.  Note that being able to make 
+new classes at runtime does not destroy useful static properties in 
+the way that being able to change existing classes at runtime does.
+<P>
+It is expected that many programming environments will allow 
+incremental class modifications during program development.  This 
+proposal is not intended to preclude that useful feature.
+<P><A NAME="NEXT" HREF="05-type-system.html">Next chapter:  #5: Regularization of the Type System        (Change)</A>

@@ -1,0 +1,92 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="26-iteration-protocol.html">Previous chapter:  #26: New Iteration Protocol     (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #27: Pseudo-Generic Mappers     (Change)</TITLE>
+<H1>#27: Pseudo-Generic Mappers     (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note changes the functions that iterate over an arbitrary 
+number of collections to be functions rather than generic functions.  The 
+affected functions are:  <tt>do, map, map-as, map-into, any?, every?, 
+concatenate</tt>, and <tt>concatenate-as</tt>. 
+<HR>
+Change the functions <a href="../book.annotated/ch12.html#do0"><tt>do</a>, <a href="../book.annotated/ch12.html#any?0">any?</a></tt>, and <a href="../book.annotated/ch12.html#every?0"><tt>every?</a></tt>, all currently specified as generic functions, to instead be specified as functions.  Their 
+definitions are unchanged.
+<P>
+Change the functions <a href="../book.annotated/ch12.html#map-as0"><tt>map-as</a></tt> and <a href="../book.annotated/ch12.html#concatenate-as0"><tt>concatenate-as</a></tt>, both currently specified as generic functions, to instead be specified as functions.  Add the requirement on the value class that size: with a non-negative integer 
+value must be an acceptable initarg for make of the class.  Add the 
+following sentence to the description of <tt>map-as</tt>:
+<P>
+The new collection is created by calling make on the indicated class, 
+with a size: initialization argument whose value is the number of 
+corresponding elements in the argument collections.
+<P>
+Add the following sentence to the description of <tt>concatenate-as</tt>:
+<P>
+The new sequence is created by calling make on the indicated class, with 
+a size: initialization argument whose value is the sum of the sizes of 
+the arguments.
+<P>
+Change the description of <a href="../book.annotated/ch12.html#string-class0"><tt> &lt;string&gt;</a></tt> to specify that it supports the init-keywords size: and fill:.  size: (default 0) tells how large a 
+string to create.  Change the description of  <a href="../book.annotated/ch12.html#unicode-string-class0"><tt>&lt;unicode-string</a></tt>&gt; to specify 
+that the default value for size: is 0.
+<P>
+Change the description of <a href="../book.annotated/ch12.html#table-class0"><tt> &lt;table&gt;</a></tt> and <tt)&ltid?-table&gt;</tt> to specify that they support the init-keyword size:.   When specified, it provides a hint to the implementation of the class as to the expected number of elements to be stored in the table, which might be used to control how much space to initially allocate for the table.  The default value is unspecified.
+<P>
+Add a new abstract class<tt> &lt;stretchy-collection&gt;</tt>, which is a subclass of <tt>&lt;collection&gt;</tt> and a superclass of<tt> &lt;table&gt;</tt>,  <a href="../book.annotated/ch12.html#stretchy-vector-class0"><tt>&lt;stretchy-vector&gt;</a></tt>, and <a href="../book.annotated/ch12.html#deque-class0"><tt> &lt;deque&gt;</a></tt>.  
+It is used to indicate that instances have the property that they may 
+grow or shrink to accomodate adding or removing elements.  Remove the 
+corresponding sentence from the description of<tt> &lt;stretchy-vector&gt;</tt> since it is now redundant.  Stretchy collections allow element-setter to be called with a key that is not present in the collection, expanding the 
+collection as necessary to add a new element in that case.  Each concrete 
+subclass of<tt> &lt;stretchy-collection&gt;</tt> must provide or inherit a method for <a href="../book.annotated/ch12.html#(setter element)0"> element-setter</a> that behaves as follows when there is not already an 
+element present for the indicated key:
+<P>
+If the class is a subclass of  <a href="../book.annotated/ch12.html#explicit-key-collection-class0"><tt>&lt;explicit-key-collection&gt;</a></tt>, adds a new element to the collection with the indicated key.
+<P>
+If the class is a subclass of  <a href="../book.annotated/ch12.html#sequence-class0"><tt>&lt;sequence&gt;</a></tt>, first calls size-setter on the collection and the key + 1 to expand the sequence.  The key must be a 
+non-negative integer.
+<P>
+Change  <a href="../book.annotated/ch12.html#map-into0"><tt>map-into</a></tt>, currently described as a generic function, to instead be specified as a function.  Remove the G.F. Method for <tt>map-into</tt> when the destination is a table.  Instead, add to the description of <tt>map-into</tt> the following (based on the removed method description):
+<P>
+When <tt>mutable-collection</tt>  is an instance of <tt>&lt;stretchy-collection&gt;</tt>, the usual alignment requirement (described in the section on collection alignment) is relaxed.  In this case, the key sequence of 
+<tt>mutable-collection</tt>  is not considered during alignment.  Rather, only the key sequences for the source collections are aligned, with procedure  
+called on the corresponding elements.  The result of each call to 
+procedure  is then stored into <tt>mutable-collection</tt>  with the corresponding key (possibly stretching <tt>mutable-collection</tt>  in the process), using element-setter.  Other keys in <tt>mutable-collection</tt>  remain undisturbed.
+<P>
+Change the functions  <a href="../book.annotated/ch12.html#map0"><tt>map</a></tt> and  <a href="../book.annotated/ch12.html#concatenate1"><tt>concatenate</a></tt>, currently specified as generic functions, to instead be specified as functions.  Delete the second paragraph of the description of <tt>map</tt>, which discusses the default 
+implementation and what additional methods might do in order to compute 
+the result value, replacing it with:
+<P>
+<tt>map</tt> returns a collection whose value is an instance of the <a href="../book.annotated/ch11.html#class-for-copy0">class-for-copy</a> value for the first collection.  The new collection is created by calling 
+make on that class, with a size: initialization argument whose value is 
+the number of corresponding elements in the argument collections.
+<P>
+Add the following to the description of <tt>concatenate</tt>:
+<P>
+<tt>concatenate</tt> returns a sequence whose value is an instance of the 
+class-for-copy value for the first sequence.  The new sequence is created 
+by calling make on the indicated class, with a size: initialization 
+argument whose value is the sum of the sizes of the argument sequences.
+<P>
+Clarify that the class returned by  class-for-copy must be a subclass of 
+<tt>&lt;mutable-collection&gt;</tt>.  Add the requirement that it must support the init-keyword size:. 
+<HR>
+<h3>
+Notes
+</h3>
+We made this change because the set of functions for collections 
+specified in the Dylan book contains a number of generic functions that 
+are difficult or impossible to implement efficiently for user defined 
+collection classes.  Many of them even present difficulties when only the 
+collection classes defined by the language are involved.  The suspect 
+functions are those which accept and iterate over an arbitrary number of 
+collections, and since the relevant argument positions cannot be 
+specialized (they are part of a #rest argument), the effective method 
+cannot directly implement the iteration over those arguments efficiently, 
+but must instead use the generic iteration protocol. 
+
+<P><A NAME="NEXT" HREF="28-first-etc-are-functions.html">Next chapter:  #28: First, Second, Third are Functions (Change)</A>

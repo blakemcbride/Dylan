@@ -1,0 +1,116 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="36-punt-trivial-log-ops.html">Previous chapter:  #36: Remove Trivial Logical Operators   (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #37: Variadic Operators (Change)</TITLE>
+<H1>#37: Variadic Operators (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+The presence of separate binary and variadic versions of some functions 
+complicates the Dylan language.  This design note removes several 
+variadic operators that are no longer needed in infix Dylan, and renames 
+the binary versions of those operators.
+<HR>
+Remove the variadic functions <a href="../book.annotated/ch14.html#+0">*, +, -, and /</a>.
+<P>
+Rename the generic functions  <a href="../book.annotated/ch14.html#binary+0"><tt>binary*, binary+, binary-</tt>, and <tt>binary/</a></tt> to *, +, -, and /.
+<P>
+Rename the generic function  <a href="../book.annotated/ch14.html#unary-0"><tt>unary-</tt></a> to <tt>negative</tt>.
+<P>
+Remove the function  <a href="../book.annotated/ch14.html#unary/0"><tt>unary/</tt></a>.
+<P>
+Remove the variadic functions  <a href="../book.annotated/ch9.html#&lt;0">&lt;</a> and  <a href="../book.annotated/ch9.html#=0">=</a>.
+<P>
+Rename the generic functions  <a href="../book.annotated/ch9.html#binary&lt;0"><tt>binary&lt;</a></tt> and  <a href="../book.annotated/ch9.html#binary=0"><tt>binary=</a></tt> to &lt; and =.
+<P>
+Remove the ability to call <a href="../book.annotated/ch9.html#&lt;0">&lt;=, &gt;, and &gt;=</a> with more or fewer than two 
+arguments.  (/= is already a binary function.)
+<P>
+Remove the variadic functions  <a href="../book.annotated/ch14.html#lcm0"><tt>gcd</tt> and <tt>lcm</tt></a>.
+<P>
+Rename the generic functions  <a href="../book.annotated/ch14.html#binary-lcm0"><tt>binary-gcd</tt> and <tt>binary-lcm</a></tt> to <tt>gcd</tt> and <tt>lcm</tt>.
+<P>
+Rename the variadic function  <a href="../book.annotated/ch9.html#id?0"><tt>id?</a></tt> to == and remove the ability to call it with more than two arguments.
+<HR>
+<h3>
+Notes
+</h3>
+Wporkarounds for removed constructs:
+<PRE>
+`+`(x, y, z)                    =&gt;       x + y + z
+<P>
+apply(`+`, stuff)               =&gt;      reduce(`+`, 0, stuff)
+<P>
+unary/(x)                       =&gt;      1 / x
+<P>
+map(`+`, s1, s2, s3)            =&gt;      map(method (x,y,z) 
+                                               x + y + z 
+                                             end, 
+                                            s1, s2, s3);
+`&lt;`(x, y, z)                    =&gt;      (x &lt; y) &amp; (y &lt; z) 
+</PRE>
+        Note: The workaround is less trivial when y is a more complex 
+        expression.
+<PRE>
+logand(x, y, z)                 =&gt;      logand(logand(x, y), z)
+<P>
+apply(logand, stuff)            =&gt;      reduce(logand, -1, stuff)
+<P>
+gcd(x, y, z)                    =&gt;      gcd(gcd(x, y), z)
+<P>
+apply(gcd, stuff)               =&gt;      reduce(gcd, 0, stuff)
+<P>
+apply(lcm, stuff)               =&gt;      reduce(lcm, 1, stuff)
+<P>
+id?(x, y, z)                    =&gt;      (x == y) &amp; (y == z)
+
+apply(`&lt;`, stuff) =&gt;
+
+        let (init, limit, next, end?, key, elt)
+                = forward-iteration-protocol(stuff);
+        if (end?(stuff, init, limit))
+          error("at least one argument required.");
+        else
+          let value = elt(stuff, init);
+          let state = next(stuff, init);
+          local method loop (value, state)
+            if (end?(stuff, state, limit))
+              #t;
+            else
+              let new-value = elt(stuff, state);
+              if (value &lt; new-value)
+                 loop(new-value, next(stuff, state));
+              end if;
+            end if;
+          end method;
+         # assume l-to-r evaluation, else bind temp to first element
+         # before potentially clobbering initial state.
+         loop(elt(stuff, init), next(stuff, init));
+       end if;
+
+apply(id?, stuff) =&gt;
+
+       let (init, limit, next, end?, key, elt)
+                      = forward-iteration-protocol(stuff);
+       if (end?(stuff, init, limit))
+         error("at least two arguments required");
+       else
+         let value = elt(stuff, init);
+         let state = next(stuff, init);
+         if (end?(stuff, state, limit))
+            error("at least two arguments required");
+         else
+            local method loop (state)
+                     if (value == elt(stuff, state))
+                       let nstate = next(stuff, state);
+                       end?(stuff, nstate, limit) | loop(nstate);
+                     end if;
+                   end method;
+            loop(state);
+         end if;
+       end if;
+</PRE>
+

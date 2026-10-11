@@ -1,0 +1,29 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="13-types-survive.html">Previous chapter:  #13: Type Restrictions Survive Assignment        (Change)</A><P>
+<TITLE>Dylan Design Notes: #14: Union Allows Duplicates        (Clarification)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#14: Union Allows Duplicates        (Clarification)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note clarifies that the result of union is only 
+guaranteed free of duplicates if no element appears more than once 
+in a single argument sequence.  If the same element appears more 
+than once in a single argument sequence, it may appear more than 
+once in the result sequence.  This allows union to be implemented 
+more efficiently.
+<P>
+<HR>
+<P>
+Replace the first sentence of the description of union <a href="../book.annotated/ch12.html#union1"> on page 107 
+of the manual</a> with the following:
+<P>
+union returns a sequence containing every element of sequence1 and 
+sequence2.  If the same element appears in both argument sequences, 
+this will not cause it to appear twice in the result sequence.  
+However, if the same element appears more than once in a single 
+argument sequence, it may appear more than once in the result 
+sequence.
+<P><A NAME="NEXT" HREF="15-replace-subseq.html">Next chapter:  #15: Replace-Subsequence! Different Sizes        (Change)</A>

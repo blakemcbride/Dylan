@@ -1,0 +1,76 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="07-union-types.html">Previous chapter:  #7: Union Types        (Addition)</A><P>
+<TITLE>Dylan Design Notes: #8: Method Dispatch Ambiguity        (Clarification)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#8: Method Dispatch Ambiguity        (Clarification)</H1>
+<P>
+Version 1, March 1993
+<P>
+Sometimes it is not clear which of two methods is the most specific 
+for a particular function call.  This is a particular problem for 
+non-class types because it is possible for an object to be an 
+instance of two disjoint types, such as (limited &lt;integer&gt; min: 0) 
+and (limited &lt;integer&gt; max: 10).  This design note requires Dylan to 
+signal an error in such cases.
+<P>
+See <a href="05-type-system.html">Dylan Design Note #5: Regularization of the Type System</a> for Dylan's general type system, including types that are not classes.
+<P>
+<HR>
+<P>
+Add the following section to the Dylan manual's chapter on <a href="../book.annotated/ch10.html#methdisp">Functions</a>:
+<P>
+Method Dispatch Ambiguity
+<P>
+Sometimes it is not clear which of two methods is the most specific 
+for a particular function call.    This section does not address what 
+happens when t1 and t2 are both classes; it applies when either t1 or 
+t2 or both is not a class.
+<P>
+If f is a generic function having methods m1 and m2, we say that it 
+is ambiguous which of m1 and m2 is the most specific when all of the 
+following are true:
+<UL>
+<LI> f  is called with some object x as the argument in a 
+particular position
+<LI> m1 and m2 have types t1 and t2 as parameter specializers in 
+that position
+<LI> x is an instance of both t1 and t2
+<LI> t1 and t2 are disjoint (neither is a subtype of the other)
+</UL>
+Dylan signals an error when a generic function is called and it is 
+ambiguous which method is the most specific, or when next-method is 
+called and it is ambiguous which method is the next most specific.
+<PRE>
+? (define t1 (limited &lt;integer&gt; min: 1 max: 10))
+? (define t2 (limited &lt;integer&gt; min: 0 max: 7))
+? (define x 3)
+? (define-method f ((a t1)) 1)
+? (define-method f ((a t2)) 2)
+? (define-method f ((a (singleton 5))) 'five)
+? (f 3)
+;error
+? (f 0)
+2
+? (f 8)
+1
+? (f 5)
+five  ;the ambiguous methods are applicable but not called
+</PRE>
+<HR>
+<P>
+Notes:
+<P>
+The Dylan book doesn't say what happens in this case (page 82 only 
+addresses the case where one specializer is a singleton or a subclass 
+of the other).   We needed to define how Dylan should handle these 
+cases, or we couldn't coherently add more non-class types to Dylan.  
+CLOS has a rule defining how to choose one method as more specific, 
+using the class precedence list based on the order in which multiple 
+superclasses are listed in the define-class, but the rule does not 
+extend nicely from classes to parameterized types and has frequently 
+been criticized as obscure and unhelpful.  By requiring Dylan to 
+signal an error, we prevent programmers from depending on what is 
+essentially an arbitrary choice.
+<P><A NAME="NEXT" HREF="09-punt-slot-desc.html">Next chapter:  #9: Punt Slot Descriptors        (Change)</A>

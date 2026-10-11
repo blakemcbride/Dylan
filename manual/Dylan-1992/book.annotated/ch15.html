@@ -1,0 +1,44 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch14.html">Previous chapter:  Numbers</A><P>
+<title>Dylan manual: Keywords and Symbols</title>
+<H2>15. Keywords and Symbols</H2><p>
+Keywords and symbols are two very simple classes of object.  The usefulness of keywords and symbols is that they are uniquely identifiable by name.  Two keywords with the same name are guaranteed to be id?.  Similarly, two symbols with the same name are guaranteed to be id?.<p>
+Keywords and symbols in Dylan are not case sensitive.  That is, Foo and foo and FOO all indicate the same symbol.  However, the case of keywords and symbols is remembered from the first time the keyword or symbol is entered.  This case is used when the keyword or symbol is printed.<p>
+Symbols are used for creating named variables in Dylan.  Keywords are not.  The syntax of keywords includes a trailing colon.  The colon is not part of the name of the keyword.<p>
+<PRE>
+<b><A NAME="symbol-class0">&lt;symbol&gt;</A></b>	[Instantiable Cl<A NAME="as2">as</A><A HREF="ch16.html#as3">[next citation]</A>s]
+</PRE>
+&lt;symbol&gt; is a subclass of &lt;object&gt;.<p>
+<PRE>
+<b><A NAME="keyword-class0">&lt;keyword&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;keyword&gt; is a subclass of &lt;object&gt;.<p>
+<PRE>
+<b><A NAME="as1">as</A><A HREF="ch15.html#as2">[next citation]</A></b>   <i>&lt;symbol&gt; string</i>   ==><i>  symbol</i>	[G.F. Method]
+<b>as</b>   <i>&lt;keyword&gt; string</i>   ==><i>  keyword</i>	[G.F. Method]
+</PRE>
+These methods on as return the keyword or symbol that has the name <i>string</i>.  If the keyword or symbol does not yet exist, it is created.  This method on as will always return the same keyword or symbol for strings of the same characters, without regard to character case.<p>
+<PRE>
+<i>?</i> <tt>(as &lt;symbol&gt; "foo")
+</tt><i>foo
+?</i> <tt>(id? 'FOO (as &lt;symbol&gt; "Foo"))
+</tt><i>#t
+?</i> <tt>'Foo</tt>
+<i>foo
+?</i> <tt>(as &lt;keyword&gt; "foo")</tt>
+<i>foo:</i>
+</PRE>
+<PRE>
+<b>as</b>   <i>&lt;string&gt; symbol</i>   ==><i>  string</i>	[G.F. Method]
+<b>as</b>   <i>&lt;string&gt; keyword</i>   ==><i>  string</i>	[G.F. Method]
+</PRE>
+These methods on as return the name of the symbol or keyword, which will be a string.  This string will contain the default character case of the symbol or keyword.<p>
+<PRE>
+<i>?</i> <tt>(as &lt;string&gt; 'Foo)
+</tt><i>"foo"
+?</i> <tt>(as &lt;string&gt; 'bar:)</tt>
+<i>"bar"</i>
+</PRE>
+<p>
+<p>
+<P><A NAME="NEXT" HREF="ch16.html">Next chapter:  Characters</A>

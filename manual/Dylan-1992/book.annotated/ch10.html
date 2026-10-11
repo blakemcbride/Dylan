@@ -1,0 +1,269 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch9.html">Previous chapter:  Equality and Magnitude </A><P>
+<title>Dylan manual: Functions</title>
+<H2>10. Functions</H2><p>
+<A NAME="meth"><b>Methods</b><p>
+Previous sections discussed methods as components of generic functions.  In Dylan, methods can also be created and used directly.  Direct use of methods is appropriate in several situations:<p>
+<UL>
+<LI>	To perform a local calculation.
+<LI>	For a function that does not require any class dispatch.
+<LI>	To build up generic functions programmatically.
+</UL>
+The basic tool for creating methods is the special form method.  The special form bind-methods can be used for creating self- and mutually-recursive methods.<p>
+<PRE>
+<b><A NAME="method2">method</A><A HREF="ch2.html#method0">[return to first citation]</A></b>   <i>parameter-list form1 form2 </i>...  ==><i>  &lt;method&gt;</i>	[Special Form]
+</PRE>
+method creates and returns a method that accepts the arguments described by <i>parameter-list</i> and then executes the <i>forms</i> in order.  The <i>forms</i> taken together are called the <i>body</i> of the method.  The format of the <i>parameter-list</i> is described in the definition of define-method, given in Chapter 6.<p>
+Methods may be called directly or they may be added to generic functions. <A href="footnotes.html#fn26">FN26</A> <p>
+In general, when you want to add a method to a generic function, you create and add the method in a single step, with define-method.  The method special form is most often used to create local methods that do not need to be added to a generic function.  It can also be used to create a function that cannot be further specialized.<p>
+<PRE>
+<i>?</i> <tt>(method (num1 num2)
+    (+ num1 num2))</tt>
+<i>{an anonymous method}</i>
+
+<i>;the second argument to SORT is the test function
+?</i> <tt>(sort person-list
+</tt>  <tt>      (method (person1 person2)
+</tt>  <tt>        (&lt; (age person1)
+</tt>  <tt>           (age person2))))</tt>
+<i>?</i> <tt>(bind ((double (method (number)
+</tt>  <tt>                 (+ number number))))
+    (double (double 10)))
+</tt><i>40
+</i></PRE>
+In the section on generic functions and methods, we defined the generic function double and gave it methods for numbers and sequences.  The following example defines a method for double that works on functions.  When you double a function, you get back a method that accepts arguments and calls the function twice, passing the arguments both times.<p>
+<PRE>
+<i>?</i> <tt>(define-method double ((my-method &lt;function&gt;))
+</tt>  <tt>  (method (#rest args)
+</tt>  <tt>    (apply my-method args)
+</tt>  <tt>    (apply my-method args)
+</tt>  <tt>    #f))</tt>
+<i>double
+?</i> (<tt>define print-twice (double print))</tt>
+<i>print-twice
+?</i> <tt>print-twice
+</tt><i>{an anonymous method}
+?</i> <tt>(print-twice "The rain in Spain. . .")</tt>
+<i>The rain in Spain. . .The rain in Spain. . .
+#f
+?</i> <tt>(print-twice 55)</tt>
+<i>5555
+#f</i>
+</PRE>
+<PRE>
+<b><A NAME="bind-methods1">bind-methods</A><A HREF="ch2.html#bind-methods0">[return to first citation]</A></b>	(<i>method-spec1 method-spec2</i> ...)	[Special Form]
+	<i>body-form1 body-form2 </i>... 
+==>  <i>values</i>
+</PRE>
+A <i>method-spec</i> has the form (<i>name parameter-list method-form1 method-form2</i> ...)<p>
+The <i>body-forms</i> are evaluated in order, in a scope in which each <i>name</i> is bound to a method specified by the corresponding <i>parameter-list</i> and <i>method</i>-<i>forms</i>.  The values of the last <i>body-form</i> are returned.<p>
+The scope of the <i>names</i> also includes the parameter lists and the bodies of the methods.  This means that the methods can refer to themselves and to the other methods created by the bind-methods form.<p>
+<PRE>
+<i>?</i> <tt>(define-method root-mean-square ((s &lt;sequence&gt;))</tt>
+  <tt>   (bind-methods ((average (numbers)</tt>
+  <tt>                    (/ (reduce1 + numbers)
+                         (length numbers)))
+                    (square (n) (* n n)))</tt>
+       <tt> (sqrt (average (map square s)))))
+</tt><i>root-mean-square
+?</i> <tt>(root-mean-square '(5 6 6 7 4))</tt>
+<i>5.692099788303083
+</i></PRE>
+The next example calculates a square root using <A NAME="Newton0">Newton</A>s method of successive approximations.  The function sqrt1 can refer to itself recursively as well as to the other bound methods, close? and improve.<p>
+<PRE>
+<i>? </i><tt>(define-method newtons-sqrt (x)
+</tt>     <tt>(bind-methods ((sqrt1 (guess)
+                       (if (close? guess) 
+                           guess 
+                           (sqrt1 (improve guess))))
+                    (close? (guess)
+                       (&lt; (abs ( (* guess guess) x)) .0001))
+                    (improve (guess)
+                       (/ (+ guess (/ x guess)) 2)))
+</tt>            <tt>(sqrt1 1)))
+</tt><i>newtons-sqrt
+?</i> <tt>(newtons-sqrt 25)
+</b><i>5.000000000053723</i></A>
+</PRE>
+<b>See Also <a href="../design-notes/31-method-specificity.html">Dylan Design Notes: Method Specificity (Change)</a></b><p>
+<A NAME="methdisp"><b>Method Dispatch<p>
+</b>In Dylan, a generic function contains of a number of methods.  When you call a generic function, the generic function uses the classes and identities of the arguments to determine which methods to call.  This process is called method dispatch.<p>
+When you define a method, you specify the classes or identities of the arguments appropriate for the method.  This is called <b><A NAME="specialize1">specialize</A><A HREF="ch6.html#specialize0">[return to first citation]</A>ing</b> the method.<p>
+<PRE>
+<i>?</i> <tt>(define-method double ((thing &lt;number&gt;))
+</tt>    <tt>(+ thing thing))
+</b><i>double</i>
+</PRE>
+In this example, we are defining a method on double which is applicable when double is called with a general instance of &lt;number&gt;.  Note that the instance can be a direct instance or an indirect instance of the specializer class.  In the example, the argument can be an integer, a floating-point number, or any other kind of number.<p>
+<PRE>
+<i>?</i> <tt>(double 10)</tt>
+<i>20
+?</i> <tt>(double 4.5)</tt>
+<i>9.0</i>
+</PRE>
+<b>Most Specific Method<p>
+</b>When a generic function performs method dispatch, it chooses the most specific method to run.  Imagine three methods defined for double:  one method specializes on &lt;number&gt;, one specializes on &lt;sequence&gt;, and one specializes on &lt;function&gt;.  When we call double with 5 as an argument, the choice of methods is easy.  5 is not a sequence or function, but it is a number.  Therefore the method on number is run.<p>
+But what if we add another method to double, which specializes on &lt;integer&gt;?<p>
+<PRE>
+<i>?</i> <tt>(define-method double ((thing &lt;integer&gt;))
+</tt>  <tt>  (* thing 2))
+</b><i>double</i>
+</PRE>
+If we call (double 5) now, which method is run: the method for &lt;integer&gt; or the method for &lt;number&gt;?  5 is both an integer and a number.  The answer is that the more specific method is run.  Because &lt;integer&gt; is a subclass of &lt;number&gt;, and because 5 is an instance of &lt;integer&gt;, the method for &lt;integer&gt; is run.  This rule allows subclasses to override the methods of their superclasses.<p>
+Singleton specializers are considered more specific than any class.<p>
+<PRE>
+<i>?</i> <tt>(define-method double ((thing (singleton 'cup)))
+</tt>  <tt>  'pint)
+</tt><i>double
+?</i><tt> (double 'cup)
+</tt><i>pint</i>
+</PRE>
+<h3>
+See Also: <a href="../design-notes/08-ambig-methods.html">Dylan Design Notes: Method Dispatch Ambiguity (Clarification)</a>
+</h3>
+<B>Calling More General Methods</B><p>
+In the previous example, the double method for &lt;integer&gt; completely overrode the double method for &lt;number&gt;.  In many situations, however, a subclass wants to modify the behavior of a method, rather than replace it completely; it wants to perform some work but also use the inherited behavior.  This can be accomplished with <tt><A NAME="next-method0">next-method</A></tt>.  next-method is a function that, when called, invokes the next most specific method applicable in the generic function.  The next-method is the value of the #next parameter.  Normally this parameter is named next-method, though it can have other names at the programmers discretion.
+In the following example, the double method for &lt;float&gt; prints out a notice and then calls next-method, which invokes the next most specific method, in this case the method for &lt;number&gt;. <A href="footnotes.html#fn27">FN27</A> 
+<PRE>
+<i>?</i> <tt>(define-method double ((num &lt;float&gt;))
+    (print "doubling a floating-point number")
+    (next-method))</tt>
+<i>double
+?</i> <tt>(double 10.5)</tt>
+<i>doubling a floating-point number
+21.0</i>
+</PRE>
+If there are no more methods available, the next-method parameter will be bound to the value #f instead of to a method.<p>
+<b>Passing Different Arguments to Next-Method<p>
+</b>In the usual case, next-method is called with no arguments.  This indicates that the next-method should be passed the same arguments that were supplied to the current method.<p>
+It is valid to supply arguments, including different arguments, when calling next-method.  However, if you pass different arguments, the new arguments must result in the same ordered sequence of applicable methods, in the same order, as the original arguments.  Otherwise, the behavior of Dylan is undefined.<p>
+In some cases, the methods in a generic function accept different keyword arguments.  In such cases, its convenient for the methods also to accept a rest parameter.  That way, <i>all</i> the non-required arguments to the generic function are captured in the rest parameter.  By using apply, the next-method can be invoked with the complete set of arguments.<p>
+<b>The Next-Method Parameter<p>
+</b>The next-method parameter is passed behind the scenes.  When a method is called by its generic function, the generic function dispatch mechanism automatically passes the appropriate value for next-method.  There is no way for a user program to specify the next-method argument when calling a method.<p>
+If you create a method directly (i.e., with method rather than with define-method) and you want this method to accept a next-method parameter, then you should insert a #next into the parameter list explicitly.  You would do this if you are creating a method that you plan to add to a generic function, and you want this method to be able to call next-method.  You can also supply the next-method parameter when using define-method, in cases where you want to give the parameter a different name.<p>
+<b>Multiple Argument Dispatch<p>
+</b>In the simplest case, only one parameter of a method has a specializer.  In this case, the dispatch happens completely on the one specialized argument.  However, it is possible to specialize on more than one parameter.  When more than one parameter is specialized, all the arguments must match all the specializers for the method to run.  Methods that specialize on more than one parameter are called <b><A NAME="multimethods0">multimethods</A></b>.<p>
+Multimethod dispatch occurs in three phases.  First, all the applicable methods are selected, then these methods are sorted, then the most specific is called.<p>
+A method is considered applicable if all its specializers match the arguments of the call.  If the specializer is a class, a match occurs when the argument is a general instance of the class.  If the specializer is a singleton, a match occurs when the argument is the singletons object.  The comparison of arguments to singleton objects is performed with id?.<p>
+The applicable methods are sorted according to their specializer lists, which are compared lexicographically using a function which considers a singleton less than any class and considers a class less than any of its superclasses.  The result is a lexicographic sort, based on the specializer lists of the methods.<p>
+Multimethods are useful in Dylan to provide multiple levels of discrimination.  For example, imagine the generic function show, which displays an object on an output device.  We could define methods on show that dispatch first on the class of output device and next on the class of object being displayed.<p>
+<PRE><tt>(define-method show ((device &lt;window&gt;) (thing &lt;character&gt;))
+  ...)
+
+(define-method show ((device &lt;window&gt;) (thing &lt;string&gt;))
+  ...)
+
+(define-method show ((device &lt;window&gt;) (thing &lt;rectangle&gt;))
+  . . .)
+
+(define-method show ((device &lt;file&gt;) (thing &lt;character&gt;))
+  . . .)
+
+(define-method show ((device &lt;file&gt;) (thing &lt;string&gt;))
+  . . .)</A>
+</tt></PRE>
+<A NAME="funcdet"><b>Additional Function Details</b>
+<PRE>
+<b><A NAME="function-class0">&lt;function&gt;</A></b>	[Abstract Class]
+</PRE>
+&lt;function&gt; is the class of all objects that can be applied to arguments.  It is the superclass of generic functions and methods.  &lt;function&gt; inherits from &lt;object&gt;.<p>
+<PRE>
+<b><A NAME="generic-function-class0">&lt;generic-function&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;generic-function&gt; is the class of functions which contain methods.  Generic functions inherit from &lt;function&gt;.<p>
+The class &lt;generic-function&gt; supports the following init-keywords:<p>
+<DL COMPACT>
+<DT><b>debug-name:</b><DD>Used to assign a human-readable name to an otherwise anonymous generic function; it is used only for debugging and display purposes.  The default value for this argument is determined on an implementation-dependent basis.
+<DT><b>required:</b><DD>The number of required arguments that the generic function accepts.  This argument should be a positive integer.  It must be supplied, or an error is signaled.
+<DT><b>rest?:</b><DD>A Boolean value that indicates whether the generic function accepts a rest argument.
+<DT><b>key?:</b><DD>A Boolean value that indicates whether the generic function accepts keyword arguments.
+</DL>
+The new generic function initially has no methods. An error will be signaled if the generic function is called before methods are added to it.  Once a generic function is created, you can give it behavior by adding methods to it with add-
+method or define-method.<p>
+Generic functions are not usually created directly.  Most often they are created by define-method.<p>
+<PRE>
+<i>?</i> <tt>(make &lt;generic-function&gt; required: 3)</tt>
+<i>{an anonymous generic function}
+?</i> <tt>(make &lt;generic-function&gt; required: 3
+                           debug-name: 'foo)</tt>
+<i>{the generic function foo}
+?</i> <tt>(define expand
+</tt>  <tt>  (make &lt;generic-function&gt; required: 1 debug-name: 'expand))</tt>
+<i>{the generic function expand}
+?</i> <tt>(expand 55)</tt>
+<i>error: no applicable method for 55 in {the generic function expand}</i>
+</PRE>
+<PRE>
+<b><A NAME="method-class0">&lt;method&gt;</A></b>	[Abstract Class]
+</PRE>
+Methods inherit from &lt;function&gt;.<p>
+<PRE>
+<b><A NAME="add-method0">add-method</A></b>   <i>generic-function method</i>   	[Generic Function]
+==><i>  new-method old-method
+</PRE>
+</i>add-method adds <i>method</i> to <i>generic-function</i>.  This operation modifies the generic function object.<p>
+In general, you do not need to call add-method directly.  It is called by define-method.<p>
+If you add a method to a generic function, and the generic function already has a method with the exact same specializers, then the old method is replaced with the new one.<p>
+A single method may be added to any number of generic functions.<p>
+add-method returns two values.  The first is the new <i>method</i>.  The second will be either the method in <i>generic-function</i> which is being replaced by <i>method</i>, or it will be #f, if no method is being replaced.<p>
+<PRE>
+<b><A NAME="make-read-only0">make-read-only</A><A HREF="ch11.html#make-read-only1">[next citation]</A></b>   <i>generic-function</i>   ==><i>  generic-function</i>	[Generic Function]
+</PRE>
+make-read-only makes <i>generic-function</i> readonly.  This means that methods can no longer be added to or removed from the generic function.  The compiler can perform additional optimizations on read-only generic functions.<p>
+<PRE>
+<b><A NAME="freeze-methods0">freeze-methods</A></b>   <i>generic-function </i>#rest<i> specializers</i>	[Generic Function]<i>	</i>
+==><i>  generic-function</i>	
+</PRE>
+freeze-methods prevents certain methods in <i>generic function</i> from being replaced, shadowed, or removed.  Specifically, no methods with specializers that match or are more specific than <i>specializers</i> can be added to or removed from <i>generic-function</i>.  (Because replacing a method involves removing the old one, no methods with matching or more specific specializers in a generic function can be replaced.)<p>
+The number of <i>specializers</i>  given must match the number of required arguments to <i>generic-function</i>.<p>
+Given a generic function frob with two required arguments, the call (freeze-
+methods frob &lt;object&gt; &lt;object&gt;) prevents the addition of any methods to frob.  The call (freeze-methods frob &lt;sequence&gt; &lt;object&gt;) prevents the addition of any methods whose first specializer is &lt;sequence&gt;, a subclass of &lt;sequence&gt;, or a singleton on a general instance of &lt;sequence&gt;.<p>
+The methods in <i>generic-function</i> that are affected may be combined so that they appear as a single method to introspective functions such as generic-function-methods.<p></A>
+<A NAME="reflex"><b>Reflective Operations on Functions and Methods<p>
+</b>The following functions dont need to be called in routine programming, but are useful for implementation of the language and in the construction of the programming environment.<p>
+<PRE>
+<b><A NAME="generic-function-methods0">generic-function-methods</A></b>   <i>generic-function</i>	[Generic Function]
+==><i>  sequence</i>	
+</PRE>
+generic-function-methods returns a sequence of all of the methods in <i>generic-function</i>.  The order of the methods in the sequence is not significant. <A href="footnotes.html#fn28">FN28</A> <p>
+The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+<PRE>
+<b><A NAME="method-specializers0">method-specializers</A></b>   <i>method</i>   ==><i>  sequence</i>	[Generic Function]
+</PRE>
+method-specializers returns a sequence of the specializers for <i>method</i>.  The length of the sequence will equal the number of required arguments of <i>method</i>.  The first element of the sequence will be the specializer of the first argument of the method, the second will be the specializer of the second argument, etc.<p>
+The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+<PRE>
+<b><A NAME="function-arguments0">function-arguments</A></b>   <i>function</i>	[Generic Function]
+==><i>  required-number rest-boolean kwd-sequence</i>
+</PRE>
+function-arguments returns three values:<p>
+<OL>
+<LI>The number of required arguments accepted by <i>function.</i>
+<LI>A Boolean that indicates whether <i>function</i> accepts a #rest argument.
+<LI>A sequence of the keywords accepted by <i>function</i>, or #f if the functions definition did not specify #key.  The sequence may be empty if the function specified #key but did not name any keywords explicitly.
+</OL>
+The sequence returned as the third value should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+<PRE>
+<b><A NAME="applicable-method?0">applicable-method</A></b>   <i>function </i>#rest <i>sample-arguments</i>   	[Generic Function]
+==><i>  boolean</i>
+</PRE>
+applicable-method? returns true if <i>function</i> is a method or contains a method that would be applicable for <i>sample-arguments</i>.<p>
+<PRE>
+<b><A NAME="sorted-applicable-methods0">sorted-applicable-methods</A></b> <i>	</i>[Generic Function]
+<i>function </i>#rest <i>sample-arguments
+</i>==><i>  sequence</i>
+</PRE>
+sorted-applicable-methods returns a sequence of the methods in <i>function</i> that are applicable for the <i>sample-arguments</i>.  The methods are sorted from most to least specific.<p>
+The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+<PRE>
+<b><A NAME="find-method0">find-method</A></b>   <i>generic-function specializer-list</i>   	[Generic Function]
+==><i>  {method or </i>#f<i>}</i>
+</PRE>
+find-method returns the method in <i>generic-function</i> that has the specializers in <i>specializer-list</i> as its specializers.  The specializers must match exactly for a method to be returned.<p>
+<PRE>
+<b><A NAME="remove-method0">remove-method</A>;</b>   <i>generic-function method</i>   ==><i>  method</i>	[Generic Function]
+</PRE>
+remove-method removes <i>method</i> from <i>generic-function</i> and returns <i>method</i>.  remove-method will signal an error if <i>method</i> is not in <i>generic-function</i>.<p>
+<p>
+<p></A><P><A NAME="NEXT" HREF="ch11.html">Next chapter:  Classes</A>
+

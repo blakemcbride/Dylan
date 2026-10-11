@@ -1,0 +1,46 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="27-mappers.html">Previous chapter:  #27: Pseudo-Generic Mappers     (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #28: First, Second, Third are Functions (Change)</TITLE>
+<H1>#28: First, Second, Third are Functions (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+The functions first, second, third, and their associated setter functions 
+are specified as generic functions on sequences.   This design note 
+changes them to functions.
+<HR>
+Change<a href="../book.annotated/ch12.html#first0"> the following functions</a> currently documented as generic functions 
+to instead be functions with the indicated definitions:
+<PRE>
+first sequence #key default =&gt; value
+second sequence #key default =&gt; value
+third sequence #key default =&gt; value
+</PRE>
+Each of these functions returns the indicated element of the sequence, by 
+calling element with the supplied arguments and the corresponding index.
+<PRE>
+first-setter sequence new-value =&gt; new-value
+second-setter sequence new-value =&gt; new-value
+third-setter sequence new-value =&gt; new-value
+</PRE>
+Each of these functions sets the indicated element of the sequence and 
+returns the new value, by calling element-setter with the supplied 
+arguments and the corresponding index.
+<HR>
+<h3>
+Notes
+</h3>
+The functions first, second, third, and their associated setter functions 
+are specified as generic functions on sequences.  It would be a serious 
+problem if any of them should differ from a call to element or 
+element-setter (as appropriate) with the corresponding integer key.  The 
+existence of these functions without any specified methods makes it 
+difficult for programmers to know whether they need to explicitly define 
+additional methods for these functions that are applicable to new 
+sequence classes.
+
+<P><A NAME="NEXT" HREF="https://web.archive.org/web/20000617132725/http://www.basistech.com/tree/dylan/prefix-dylan/design-notes/29-for-loops.html">Next chapter:  #29: For Loops  (Change)</A>

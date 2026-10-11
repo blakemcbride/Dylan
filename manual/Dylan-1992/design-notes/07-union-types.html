@@ -1,0 +1,82 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="06-limited-types.html">Previous chapter:  #6: Limited Types        (Addition)</A><P>
+<TITLE>Dylan Design Notes: #7: Union Types        (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#7: Union Types        (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note introduces a new facility for creating a union type 
+as a union of two other types.   Union types are useful as slot 
+specializers, and describe the return types of many common functions.  
+For example, (union &lt;integer&gt; (singleton #f)) describes the return 
+type of size.   
+<P>
+Union types are not classes.  See <a href="05-type-system.html">Dylan Design Note #5: 
+Regularization of the Type System</a> for a general description of types 
+that are not classes.
+<P>
+<HR>
+<P>
+Add <a href="../book.annotated/ch6.html#funclass">a new facility</a> for creating a type as a union of two other types.
+<P>
+union type1 type2  #key   =&gt; type        [Method]
+<P>
+Returns a type whose instances are each an instance of type1 or 
+type2.  No keyword arguments are accepted (the union method for 
+sequences has a test: argument, hence the #key in the parameter 
+list).  This type is not instantiable.
+<P>
+For example:
+<PRE>
+The result of size is of type (union &lt;integer&gt; (singleton #f)).
+The result of find-method is of type (union &lt;method&gt; (singleton #f)).
+The first argument to union must be of type (union &lt;sequence&gt; 
+&lt;type&gt;).
+</PRE>
+If x is an object, s1, ..., sm, t1, ..., tn are non-union types, and 
+the notation (union* t1 ... tn) stands for any arrangement of nested 
+calls of union, where none of the arguments is a subtype of any 
+other, and none of the arguments form an exhaustive partition of any 
+other type:
+<PRE>
+(union t1 t1) = t1
+
+(union t1 t2) = (union t2 t1)
+
+(union t1 (union t2 t3)) = (union (union t1 t2) t3)
+
+(union t1 t2) = t2 when (subtype? t1 t2)
+
+(union t1 t2) = t3 when t1 and t2 form an exhaustive partition of t3
+e.g. (union &lt;integer&gt; &lt;ratio&gt;) = &lt;rational&gt;.
+
+(instance? x (union* t1 ... tn)) 
+         iff (or (instance? x t1) ... (instance? x tn))
+
+(subtype? (union* t1 ... tn) s1) 
+         iff (and (subtype? t1 s1) ... (subtype? tn s1))
+
+(subtype? s1 (union* t1 ... tn)) 
+         iff (or (subtype? s1 t1) ... (subtype? s1 tn))
+
+(subtype? (union* s1 ... sm) (union* t1 ... tn))
+  iff (and (or (subtype? s1 t1) ... (subtype? s1 tn))
+             ...
+             (or (subtype? sm t1) ... (subtype? sm tn)))
+</PRE>
+<HR>
+<P>
+Notes:
+<P>
+The union, <a href="../book.annotated/ch11.html#instance?0">instance?</a>, and <a href="05-type-system.html">subtype?</a> methods for unions are 
+straightforward to implement.  Adding unions to the method dispatch 
+mechanism simply makes a union-specialized method applicable to each 
+type in the union.
+<P>
+Dispatching to a union-specialized method should be no slower than 
+dispatching to separate methods applicable to each type in the union, 
+and should take less space.
+<P><A NAME="NEXT" HREF="08-ambig-methods.html">Next chapter:  #8: Method Dispatch Ambiguity        (Clarification)</A>

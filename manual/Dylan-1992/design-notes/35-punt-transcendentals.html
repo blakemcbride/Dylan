@@ -1,0 +1,41 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="34-select-ordering.html">Previous chapter:  #34: Select Ordering    (Clarification)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+</PRE>
+<TITLE>Dylan Design Notes: #35: Remove Transcendental Functions    (Change)</TITLE>
+<H1>#35: Remove Transcendental Functions    (Change)</H1>
+<PRE>
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note removes the functions sin, cos, tan, asin, acos, atan, 
+atan2, sinh, cosh, tanh, asinh, acosh, atanh, exp, log, and sqrt from 
+core Dylan.
+<HR>
+Remove the following functions from the Dylan manual <a href="../book.annotated/ch14.html#abs0">(p. 151)</a>
+<PRE>
+        sin, cos, tan, asin, acos, atan, atan2,
+        sinh, cosh, tanh, asinh, acosh, atanh,
+        exp, log, sqrt
+</PRE>
+Remove the class <tt> &lt;rectangular-complex&gt;</tt>, and the functions <a href="../book.annotated/ch14.html#make-rectangular0"><tt>
+make-rectangular, make-polar,</a> <a href="../book.annotated/ch14.html#real-part0">real-part, imag-part, and angle</a></tt>.
+<P>
+Specify that the class <a href="../book.annotated/ch14.html#complex-class0"><tt>&lt;complex&gt;</a></tt> may be subclassed.
+<P>
+Keep <a href="../book.annotated/ch14.html#expt0">expt</a> with the following definition:
+<PRE>
+expt number1 integer2  [Generic Function]
+        =&gt; number
+</PRE>
+        Returns <tt>number1</tt> raised to the power<tt> integer2</tt>. 
+<HR>
+<h3>
+Notes
+</h3>
+Removing transcendental functions makes core Dylan slimmer and more 
+elegant, without reducing usefulness for many users.  These functions 
+will be made available through a standard library.
+
+<P><A NAME="NEXT" HREF="36-punt-trivial-log-ops.html">Next chapter:  #36: Remove Trivial Logical Operators   (Change)</A>

@@ -1,0 +1,44 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="19-top-level-defns.html">Previous chapter:  #19: Definitions are Declarative        (Change)</A><P>
+<TITLE>Dylan Design Notes: #20: New Syntax for Setter Variables        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#20: New Syntax for Setter Variables        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note changes the syntax for setter variables.  In the 
+revised syntax, the setter corresponding to the getter foo is named 
+foo-setter rather than (setter foo).  This removes the special case 
+syntax for setters so that all variable names are symbols.
+<P>
+<HR>
+<P>
+Specify that setter variable names are symbols, just like getter 
+variable names, and are derived by appending "-setter" to the 
+corresponding getter variable name.  
+<P>
+Update all examples in the Dylan book that involve setter variables.  
+For example, the table of getters and setters <a href="../book.annotated/ch3.html#getter0"> on page 26</a> should be 
+changed to:
+<PRE>
+window-position   window-position-setter
+window-color      window-color-setter
+table-size        table-size-setter
+</PRE>
+Rename all setter variables that are part of the language 
+specification in the Dylan book, as well as any other variables that 
+have been added to the language or that exist in implementations and 
+libraries.
+<PRE>
+(setter aref)             =&gt;       aref-setter
+(setter current-element)  =&gt;       current-element-setter
+(setter element)          =&gt;       element-setter
+(setter first)            =&gt;       first-setter
+(setter second)           =&gt;       second-setter
+(setter third)            =&gt;       third-setter
+</PRe>
+Remove all special case discussions of setter variables and setter 
+from the language specification.
+<P><A NAME="NEXT" HREF="21-result-types.html">Next chapter:  #21: Result Type Declarations        (Addition)</A>

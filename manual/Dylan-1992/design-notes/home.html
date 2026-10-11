@@ -1,0 +1,211 @@
+<meta charset="utf-8">
+<TITLE>Dylan Design Notes: Table of Contents </TITLE>
+<H2>Dylan Design Notes</H2>
+<H1>Introduction</H1>
+<P>
+When we released the first edition of the Dylan manual in April, 1992 we 
+invited feedback.  The Dylan Design Notes, describing changes to the 
+Dylan language design, are a result of that feedback.
+<P>
+The goal of the Dylan language design process has been to clarify 
+ambiguities, remove inconsistencies, and increase the efficiency of the 
+language.  The overall goal of Dylan is to better meet the needs of  
+mainstream application programmers.
+<P>
+The document is divided into a number of Design Notes.  
+Each Note describes a single change or new feature of the language.  The 
+Dylan Manual and the Design Notes, taken together, define the Dylan 
+programming language.
+<P>
+We invite your continued feedback.
+<P>
+<HR>
+<P>
+<H1>Table of Contents</H1>
+<DL>
+<DT><A HREF="00-intro.html">Design Note Format</A>
+<DD>
+<DT><A HREF="01-class-for-copy.html">#1: Collection Class-For-Copy        (Clarification)</A>
+<DD>This design note clarifies that class-for-copy of a collection must 
+return a mutable collection.
+<DT><A HREF="02-default-keyword.html">#2: First, Second, Third, Last Default        (Addition)</A>
+<DD>
+This design note adds a default: keyword argument to the 
+specification of the functions  first, second, third, and last.  This 
+change removes a possible source of confusion by making these 
+functions more consistent with the function element.
+<DT><A HREF="03-make-class.html">#3: Make Class Specification         (Addition)</A>
+<DD>This design note gives an expanded specification for &lt;class&gt; which 
+enables new classes to be created at runtime, with make.
+<DT><A HREF="04-no-class-mods.html">#4: No Incremental Class Modifications        (Change)</A>
+<DD>
+This design note deletes the functions add-slot and remove-slot, the 
+setter for direct-superclasses, and the macro define-slot from the 
+Dylan language specification.
+<DT><A HREF="05-type-system.html">#5: Regularization of the Type System        (Change)</A>
+<DD>
+This design note outlines a more expressive type system for Dylan.  
+Not all types in Dylan are classes.  For example, singleton types are 
+not classes.  The new type system allows for a variety of types, 
+including classes and singleton types, and also provides a framework 
+for introducing additional types that are not classes.
+<DT><A HREF="06-limited-types.html">#6: Limited Types        (Addition)</A>
+<DD>This design note introduces a new generic function, limited, for 
+constructing limited types, and specific methods for creating limited 
+integer types and limited collection types.   For example, (limited 
+&lt;integer&gt; min: 0 max: 255) and (limited &lt;array&gt; of: &lt;single-float&gt;) 
+are useful types.
+<DT><A HREF="07-union-types.html">#7: Union Types        (Addition)</A>
+<DD>This design note introduces a new facility for creating a union type 
+as a union of two other types.   Union types are useful as slot 
+specializers, and describe the return types of many common functions.  
+For example, (union &lt;integer&gt; (singleton #f)) describes the return 
+type of size.
+<DT><A HREF="08-ambig-methods.html">#8: Method Dispatch Ambiguity        (Clarification)</A>
+<DD>Sometimes it is not clear which of two methods is the most specific 
+for a particular function call.  This is a particular problem for 
+non-class types because it is possible for an object to be an 
+instance of two disjoint types, such as (limited &lt;integer&gt; min: 0) 
+and (limited &lt;integer&gt; max: 10).  This design note requires Dylan to 
+signal an error in such cases.
+<DT><A HREF="09-punt-slot-desc.html">#9: Punt Slot Descriptors        (Change)</A>
+<DD>This design note deletes Dylan's specification of slot descriptors.  
+This change removes a feature which is incomplete, which does not 
+match our current goals, and which impedes efficient implementation.
+<DT><A HREF="10-element-setter.html">#10: Element-Setter Signals Error        (Clarification)</A>
+<DD>
+It is an error if element-setter cannot successfully set the element 
+of a sequence.  This design note requires an error to be signaled in 
+that case, preventing programs from silently returning an incorrect 
+result or otherwise failing.
+<DT><A HREF="11-last-setter.html">#11: Last-Setter        (Addition)</A>
+<DD>This design note adds a specification for the generic function lastsetter, consistent with the setters for first, second, third, and 
+element.
+<DT><A HREF="12-size-setter.html">#12: Size-Setter for Stretchy Sequences        (Addition)</A>
+<DD>
+This design note adds the generic function size-setter to the 
+language specification, allowing the size of a stretchy sequence to 
+be changed in a single operation.
+<DT><A HREF="13-types-survive.html">#13: Type Restrictions Survive Assignment        (Change)</A>
+<DD>
+When a parameter or local variable is specialized, its initial value 
+is required to be an instance of a certain type.  This design note 
+extends the type restriction to cover values later stored into the 
+specialized parameter or local variable.
+<DT><A HREF="14-union-duplicates.html">#14: Union Allows Duplicates        (Clarification)</A>
+<DD>This design note clarifies that the result of union is only 
+guaranteed free of duplicates if no element appears more than once in 
+a single argument sequence.  If the same element appears more than 
+once in a single argument sequence, it may appear more than once in 
+the result sequence.  This allows union to be implemented more 
+efficiently.
+<DT><A HREF="15-replace-subseq.html">#15: Replace-Subsequence! Different Sizes        (Change)</A>
+<DD>
+This design note extends the definition of replace-subsequence! to 
+allow the old and new subsequences to have different sizes.  This 
+change greatly increases the utility of replace-subsequence!, 
+enabling it to be used for replace, insert and delete operations over 
+any sequence.
+<DT><A HREF="16-list-issues.html">#16: List Issues        (Change)</A>
+<DD>In this design note, Dylan's specification of the &lt;list&gt; type is made 
+more consistent with the rest of the language, mysterious 
+abbreviations and redundant list-only operations are removed, and 
+handling of improper lists is clarified.  These changes make the 
+language more accessible to our primary audience of programmers who 
+have not used dynamic languages before.
+<DT><A HREF="17-define-like-bind.html">#17: Define Like Bind        (Addition)</A>
+<DD>This design note unifies the behavior of bind and define.  It  
+extends  define to support declaring the types of  module variables 
+and defining multiple module variables from multiple values.
+<DT><A HREF="18-member-test-arg.html">#18: Member? Intersection Test Arg        (Clarification)</A>
+<DD>
+This design note clarifies that the &lt;range&gt; methods for member? and 
+intersection support a test: keyword argument, which defaults to id?.  
+This makes the &lt;range&gt; methods consistent with the definitions for 
+these generic functions.
+<DT><A HREF="19-top-level-defns.html">#19: Definitions are Declarative        (Change)</A>
+<DD>This design note distinguishes definitions from other syntax forms, 
+making module variable definition essentially a declarative 
+operation, not a procedural one.  Definitions are restricted to 
+appear only at the top level.  A given module variable can only be 
+defined once, except for multiple define-method definitions with 
+different specializers.  Definitions do not return values, since they 
+cannot appear as argument expressions.
+<DT><A HREF="20-setter-syntax.html">#20: New Syntax for Setter Variables        (Change)</A>
+<DD>This design note changes the syntax for setter variables.  In the 
+revised syntax, the setter corresponding to the getter foo is named 
+foo-setter rather than (setter foo).  This removes the special case 
+syntax for setters so that all variable names are symbols.
+<DT><A HREF="21-result-types.html">#21: Result Type Declarations        (Addition)</A>
+<DD>This design note introduces a way to declare the result types of 
+methods and generic functions.  This addition is intended to make 
+code more self-documenting and allow for better compiler 
+optimization.  Type declarations will be checked at run time unless 
+they can be proven at compile time to be satisfied always.
+<DT><A HREF="22-bnf-for-infix.html">#22: BNF for Infix Dylan        (Change)</A><DD>
+This document presents a preliminary specification of the lexical and 
+syntactic aspects of  Dylan.
+<DT><A HREF="23-defines-make-constants.html">#23: Defining Forms Make Constants      (Change)</A><DD>
+This design note makes define-method more consistent with 
+define-generic-function.  It also provides general declarative forms for 
+defining constants and variables.
+<DT><A HREF="24-divide-by-zero-error.html">#24: Divide by Zero Signals Error       (Clarification)</A><DD>
+This design note specifies that division by zero signals an error.  This 
+makes Dylan programs safer and more robust, possibly at the cost of speed 
+in some cases.
+<DT><A HREF="25-exit-extent.html">#25: Exit Extent        (Change)</A><DD>
+Interactions between bind-exit and unwind-protect are complicated, 
+especially when a non-local exit is taken during the execution of an 
+unwind-protect cleanup form.  This design note replaces bind-exit and 
+unwind-protect with a new block construct, and clarifies Dylan's 
+behavior.
+<DT><A HREF="26-iteration-protocol.html">#26: New Iteration Protocol     (Change)</A><DD>
+This Design Note specifies a revised iteration protocol for Dylan.  The 
+new iteration protocol is complex, but allows better performance than the 
+original specification.  Note that the iteration protocol is intended to 
+be used primarily by creators of new collection classes, rather than by 
+users of collections.  In practice, most iterations will be hidden inside 
+for and the other standard iteration functions.
+<DT><A HREF="27-mappers.html">#27: Pseudo-Generic Mappers     (Change)</A><DD>
+This design note changes the functions that iterate over an arbitrary 
+number of collections to be functions rather than generic functions.  The 
+affected functions are:  do, map, map-as, map-into, any?, every?, 
+concatenate, and concatenate-as.
+<DT><A HREF="28-first-etc-are-functions.html">#28: First, Second, Third are Functions (Change)</A><DD>
+The functions first, second, third, and their associated setter functions 
+are specified as generic functions on sequences.   This design note 
+changes them to functions.
+<DT><A HREF="https://web.archive.org/web/20000617132725/http://www.basistech.com/tree/dylan/prefix-dylan/design-notes/29-for-loops.html">#29: For Loops  (Change)</A><DD>
+This Design Note unifies Dylan's existing iteration constructs, for, 
+for-each, and dotimes, into one general for statement.  It also changes 
+the keywords in &lt;range&gt; to be compatible with the numeric clauses in the 
+new for statement.
+<DT><A HREF="30-make-range.html">#30: Make Range (Change)</A><DD>
+This design note defines (make &lt;range&gt; ...) to create a range.
+<DT><A HREF="31-method-specificity.html">#31: Method Specificity (Change)</A><DD>
+This Design Note gives a revised specification of Dylan's handling of 
+method specificity.
+<DT><A HREF="32-modules.html">#32: Module Defining Forms      (Addition)</A><DD>
+This Design Note specifies a syntax and semantics for module defining 
+forms, which further documents the description of modules found in the 
+Dylan book.
+<DT><A HREF="33-source-file-headers.html">#33: Headers for Dylan Source Files     (Addition)</A><DD>
+This design note specifies a standard portable format for distributing 
+Dylan source code.
+<DT><A HREF="34-select-ordering.html">#34: Select Ordering    (Clarification)</A><DD>
+This design note specifies the order of evaluation for the select 
+statement.
+<DT><A HREF="35-punt-transcendentals.html">#35: Remove Transcendental Functions    (Change)</A><DD>
+This design note removes the functions sin, cos, tan, asin, acos, atan, 
+atan2, sinh, cosh, tanh, asinh, acosh, atanh, exp, log, and sqrt from 
+core Dylan.
+<DT><A HREF="36-punt-trivial-log-ops.html">#36: Remove Trivial Logical Operators   (Change)</A><DD>
+This design note removes the logical operators logeqv, lognand, lognor, 
+logandc1, logandc2, logorc1, and logorc2 from core Dylan.
+<DT><A HREF="37-variadic-operators.html">#37: Variadic Operators (Change)</A><DD>
+The presence of separate binary and variadic versions of some functions 
+complicates the Dylan language.  This design note removes several 
+variadic operators that are no longer needed in infix Dylan, and renames 
+the binary versions of those operators.
+</DL>
+<P><A NAME="NEXT" HREF="00-intro.html">Next chapter:   Design Note Format</A>

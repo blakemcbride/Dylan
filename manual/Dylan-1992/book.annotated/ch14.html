@@ -1,0 +1,164 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch13.html">Previous chapter:  Conditions</A><P>
+<title>Dylan manual: Numbers</title>
+<H2>14. Numbers</H2><p>
+Dylan supports several kinds of numerical representations. The classes for these representations are placed in a hierarchy of abstract classes corresponding to mathematical number types. The abstract classes have no direct instances but are useful for specialization. The complete class hierarchy is shown below.  Abstract classes are shown in italics.  Sealed classes are shown in bold.<p>
+<p>
+<A href="figures/numbers-aa.gif"> <IMG SRC="figures/numbers-aa.gif" ALIGN=BOTTOM ALT="NUMBERS"> <P> Picture 3</A><p>
+The &lt;single-float&gt;, &lt;double-float&gt;, and &lt;extended-float&gt; classes implement the IEEE standard floating-point formats <A href="footnotes.html#fn34">FN34</A> .<p>
+<A NAME="autotype"><b>Automatic Type Conversion<p>
+</b>The Dylan rules for automatic type conversion are the same as in Common Lisp (X3J13): floating-point contagion (with rational contagion for comparisons), rational canonicalization, and complex canonicalization.  Argument coercions are implemented by the individual methods on the arithmetic functions.  Because of the decomposition of multiargument calls to arithmetic functions into calls to the binary versions of those functions, coercions are performed in left-to-right order.<p></A>
+<A NAME="numericl"><b>Numeric Classes</b><p>
+<PRE>
+<b><A NAME="number-class0">&lt;number&gt;</A></b>		[Abstract Class]
+<b><A NAME="real-class0">&lt;real&gt;</A></b>			[Abstract Class]
+<b><A NAME="float-class0">&lt;float&gt;</A></b>			[Instantiable Class]
+<b><A NAME="single-float-class0">&lt;single-float&gt;</A></b>		[Instantiable Class]
+<b><A NAME="double-float-class0">&lt;double-float&gt;</A></b>		[Instantiable Class]
+<b><A NAME="extended-float-class0">&lt;extended-float&gt;</A></b>	[Instantiable Class]
+<b><A NAME="rational-class0">&lt;rational&gt;</A></b>		[Instantiable Class]
+<b><A NAME="ratio-class0">&lt;ratio&gt;</A></b>			[Instantiable Class]
+<b><A NAME="integer-class0">&lt;integer&gt;</A></b>		[Instantiable Class]
+<b><A NAME="complex-class0">&lt;complex&gt;</A></b>		[Instantiable Class]
+</PRE>
+<b>See Also: <a href="../design-notes/35-punt-transcendentals.html">Dylan Design Notes: Remove Transcendental Functions (Change)</a></b><p>
+<b>Complex Numbers<p>
+</b>The class &lt;complex&gt; accepts the init-keywords real:, imag:, magnitude:, and angle:.  The arguments are interpreted as follows:<p>
+<DL COMPACT>
+<DT><i>none</i><DD>(make-rectangular 0 0)
+<DT>real: <i>r</i><DD>(make-rectangular <i>r</i> 0)
+<DT>imag: <i>i</i><DD>(make-rectangular 0 <i>i</i>)
+<DT>real: <i>r</i> imag: <i>i</i><DD>(make-rectangular <i>r</i> <i>i</i>)
+<DT>magnitude: <i>m</i><DD>(make-polar <i>m</i> 0)
+<DT>angle: <i>a</i><DD>(make-polar 0 <i>a</i>)
+<DT>magnitude: <i>m</i> angle: <i>a</i><DD>(make-polar <i>m</i> <i>a</i>)
+</DL>
+No other init-keyword combination is legal.<p>
+<DL COMPACT>
+<DT><b><A NAME="make-rectangular0">make-rectangular</A>   </b><i>real-part imag-part</i>  =&gt;<i>  complex<DD></i>[Generic Function]
+</DL>
+<b><A NAME="make-polar0">make-polar</A>   </b><i>magnitude angle</i>  =&gt;<i>  complex</i>	[Generic Function]<p>
+These functions are used to create complex numbers.<p></A>
+<A NAME="arithfunc"><b>General Arithmetic Functions <p>
+Properties</b><p>
+<PRE>
+<b><A NAME="odd?0">odd?</A></b><i>   integer</i>  =&gt;<i>  boolean	</i>	[Generic Function]
+<b><A NAME="even?0">even?</A>   </b><i>integer</i> =&gt;<i>  boolean	</i>	[Generic Function]
+<b><A NAME="odd?0">zero?</A></b><i>   number</i> =&gt;<i>  boolean</i>	[Generic Function]
+<b><A NAME="positive?0">positive?</A></b><i>   real</i> =&gt;<i>  boolean</i>	[Generic Function]
+<b><A NAME="negative?0">negative?</A></b><i>   real</i> =&gt;<i>  boolean</i>	[Generic Function]
+<b><A NAME="integral?0">integral?</A></b><i>   number</i> =&gt;<i>  boolean</i>	[Generic Function]
+</PRE>
+These functions test a number for the given property and return a Boolean result.<p>
+<b>Arithmetic Operations</b><p>
+<b>See Also: <a href="../design-notes/37-variadic-operators.html">Dylan Design Notes: Variadic Operators (Change)</a></b><p>
+<b>See Also:<a href="../design-notes/24-divide-by-zero-error.html">Dylan Design Notes: Divide By Zero Signals Error (Clarifiaction)</a></b><p> 
+<PRE>
+<b><A NAME="+0">+</A>   </b>#rest <i>numbers</i> =&gt; <i>  number</i>	[Method]
+<b> <A NAME="*0">*</A>  </b>#rest <i>numbers</i>  =&gt; <i>  number</i>	[Method]
+</PRE>
+These methods return the sum or product of their arguments. With no arguments, + returns the &lt;integer&gt; 0 and * returns the &lt;integer&gt; 1. With one argument, both return the argument.  With two or more arguments, they combine the arguments in pairs by calling binary+ or binary*.<p>
++ and * are methods, so you cannot add other methods to them.  To extend the protocol, define methods on binary+ and binary*.<p>
+<PRE>
+<b><A NAME="-0">-</A>   </b><i>number</i> #rest <i>numbers</i> =&gt;<i>  number</i>	[Method]
+<b><A NAME="/0">/</A>   </b><i>number</i> #rest <i>numbers</i> =&gt;<i>  number</i>	[Method]
+</PRE>
+With one argument,  returns the additive inverse of the argument and / returns the multiplicative inverse of the argument. With two or more arguments, they combine the arguments in pairs by calling binary- or binary/.<p>
+ and / are methods, so you cannot add other methods to them.  To extend the protocol, define methods on binary-, binary/, <A NAME="unary-0">unary-</A>, and unary/.<p>
+<PRE>
+<b><A NAME="binary+0">binary+</A>   </b><i>number1</i> <i>number2</i> =&gt; <i>  number</i>	[Generic Function]
+<b> <A NAME="binary*0">binary*</A>  </b><i>number1</i> <i>number2</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="binary/0">binary/</A>   </b><i>number1</i> <i>number2</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="binary-0">binary-</A>   </b><i>number1</i> <i>number2</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="unary-0">unary-</A>   </b><i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="unary/0">unary/</A>   </b><i>number</i> =&gt;<i>  number</i>	[Generic Function]
+</PRE>
+Called by +, *, , and /.  Programs should not call these functions directly.<p>
+These functions return the sum, product, difference, quotient, additive inverse, and multiplicative inverse of their arguments, respectively.<p>
+<PRE>
+<b><A NAME="floor0">floor</A>   </b><i>real</i> =&gt;<i>  integer real</i>	[Generic Function]
+<b><A NAME="ceiling0">ceiling</A>   </b><i>real</i> =&gt;<i>  integer real</i>	[Generic Function]
+<b><A NAME="round0">round</A></b>;<b>   </b><i>real</i> =&gt;<i>  integer real</i>	[Generic Function]
+<b><A NAME="truncate0">truncate</A></b>;<b>   </b><i>real</i> =&gt;<i>  integer real</i>	[Generic Function]
+</PRE>
+These functions are equivalent to the one-argument forms of the like-named Common Lisp (X3J13) functions.<p>
+<PRE>
+<b><A NAME="floor/0">floor/</A>   </b><i>real1 real2</i> =&gt;<i>  integer real</i>	[Generic Function]
+<b><A NAME="ceiling/0">ceiling/</A>   </b><i>real1 real2 </i> &gt;  <i>integer real</i>	[Generic Function]
+<b><A NAME="round/0">round/</A>   </b><i>real1 real2 </i> &gt;  i<i>nteger real</i>	[Generic Function]
+<b><A NAME="truncate/0">truncate/</A></b>;<b>   </b><i>real1 real2</i> =&gt;  <i>integer real</i>	[Generic Function]
+</PRE>
+These functions are equivalent to the two-argument forms of floor, ceiling, round, and truncate in Common Lisp (X3J13).<p>
+<PRE>
+<b><A NAME="modulo0">modulo</A>   </b><i>real1 real2</i> =&gt;<i>  real</i>	[Generic Function]
+</PRE>
+modulo returns the second value of (floor/ <i>real1</i> <i>real2</i>).<p>
+<PRE>
+<b><A NAME="remainder0">remainder</A></b>   <i>real1 real2</i> =&gt;<i>  real</i>	[Generic Function]
+</PRE>
+remainder returns the second value of (truncate/ <i>real1</i> <i>real2</i>).<p>
+<b>See Also: <a href="../design-notes/35-punt-transcendentals.html">Dylan Design Notes: Remove Transcendental Functions (Change)</a></b><p>
+<b>See Also: <a href="../design-notes/36-punt-trivial-log-ops.html">Dylan Design Notes: Remove Trivial Logical Operators (Change)</a></b><p>
+<PRE>
+<b><A NAME="abs0">abs</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="sin0">sin</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="cos0">cos</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="tan0">tan</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="asin0">asin</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="acos0">acos</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="atan0">atan</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="atan20">atan2</A></b>   <i>number1 number2</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="sinh0">sinh</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="cosh0">cosh</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="tanh0">tanh</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="asinh0">asinh</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="acosh0">acosh</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="atanh0">atanh</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="exp0">exp</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="log0">log</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="expt0">expt</A></b>   <i>number1 number2</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="sqrt0">sqrt</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="logior0">logior</A></b>   #rest <i>integers</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logxor0">logxor</A></b>   #rest <i>integers</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logand0">logand</A></b>   #rest <i>integers</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logeqv0">logeqv</A></b>   #rest <i>integers</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="lognand0">lognand</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="lognor0">lognor</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logandc10">logandc1</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logandc20">logandc2</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logorc10">logorc1</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logorc20">logorc2</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="lognot0">lognot</A></b>   <i>integer</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="logbit?0">logbit</A></b>   <i>index integer</i> =&gt;<i>  boolean</i>	[Generic Function]
+<b><A NAME="ash0">ash</A></b>   <i>integer count</i> =&gt;<i>  integer</i>	[Generic Function]
+</PRE>
+The generic functions abs, sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh, acosh, atanh, exp, log, expt, sqrt, logior, logxor, logand, logeqv, lognand, lognor, logandc1, logandc2, logorc1, logorc2, lognot, ash are as defined in Common Lisp.  atan2 is equivalent to the two-argument version of atan; logbit? is equivalent to Common Lisps logbitp.<p>
+<b>See Also: <a href="../design-notes/35-punt-transcendentals.html">Dylan Design Notes: Remove Transcendental Functions (Change)</a></b><p>
+<PRE>
+<b><A NAME="rationalize0">rationalize</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="numerator0">numerator</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="denominator0">denominator</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="real-part0">real-part</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="imag-part0">imag-part</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+<b><A NAME="angle0">angle</A></b>   <i>number</i> =&gt;<i>  number</i>	[Generic Function]
+</PRE>
+The generic functions rationalize, numerator, denominator, real-part, imag-part, and angle are as defined in <i>Revised4 Report on Scheme</i>.<p>
+<b>See Also:  <a href="../design-notes/37-variadic-operators.html">Dylan Design Notes: Variadic Operators (Change)</a></b><p>
+<PRE>
+<b><A NAME="lcm0">lcm</A></b>   #rest <i>integers</i> =&gt;<i>  integer</i>	[Method]
+<b><A NAME="gcd0">gcd</A></b>   #rest <i>integers</i> =&gt;<i>  integer</i>	[Method]
+</PRE>
+With no arguments, lcm returns the &lt;integer&gt; 1 and gcd returns the &lt;integer&gt; 0. With one argument, both return the argument. With two or more arguments, they combine the arguments left to right, equivalent to calling(reduce binary-lcm 1 <i>integers</i>) or (reduce binary-gcd 0 <i>integers</i>).<p>
+lcm and gcd are methods, so you cannot add other methods to them.  To extend the protocol, define methods on binary-lcm and binary-gcd.<p>
+<PRE>
+<b><A NAME="binary-lcm0">binary-lcm</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+<b><A NAME="binary-gcd0">binary-gcd</A></b>   <i>integer1 integer2</i> =&gt;<i>  integer</i>	[Generic Function]
+</PRE>
+These functions return the least common multiple and greatest common divisor of <i>integer1</i> and <i>integer2</i>, respectively<p>
+<PRE>
+<b><A NAME="min0">min</A></b>   <i>real </i>#rest<i> more-reals</i> =&gt;<i>  real</i>	[Method]
+<b><A NAME="max0">max</A></b>   <i>real</i> #rest <i>more-reals</i> =&gt;  <i>real</i>	[Method]
+</PRE>
+min returns the argument that is least (closest to negative infinity).  max returns the argument that is greatest (closest to positive infinity).  The methods operate by calling binary&lt;.<p>
+</A><P><A NAME="NEXT" HREF="ch15.html">Next chapter:  Keywords and Symbols</A>
+

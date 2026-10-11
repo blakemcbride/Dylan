@@ -1,0 +1,264 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="30-make-range.html">Previous chapter:  #30: Make Range (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #31: Method Specificity (Change)</TITLE>
+<H1>#31: Method Specificity (Change)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This Design Note gives a revised specification of Dylan's handling of 
+<a href="../book.annotated/ch10.html#methdisp">method specificity</a>.
+<HR>
+<h3>
+Class Precedence List
+</h3>
+[This section is intended to present the same class precedence list 
+algorithm as in CLOS.]
+<P>
+The definition of a class specifies a total ordering on that class and 
+its direct superclasses.  This ordering is called the local precedence 
+order.  In the local precedence order, the class precedes its direct 
+superclasses, and each direct superclass precedes all other direct 
+superclasses following it in the sequence of direct superclasses of the 
+class definition.
+<P>
+The class precedence list for a class C is a total ordering on C and its 
+superclasses that is consistent with the local precedence orders for each 
+of C and its superclasses.  
+<P>
+Sometimes there are several possible total orderings on C and its 
+superclasses that are consistent with the local precedence orders for 
+each of C and its superclasses.  Dylan uses a deterministic algorithm to 
+compute the class precedence list, which chooses one of the possible 
+total orderings.  The algorithm has the effect that the classes in a 
+simple superclass chain are adjacent in the class precedence list, and 
+classes in each relatively separated subgraph are adjacent in the class 
+precedence list.  
+<P>
+Sometimes there is no possible total ordering on C and its superclasses 
+that is consistent with the local precedence orders for each of C and its 
+superclasses.  In this case, the class precedence list cannot be 
+computed, and Dylan signals an error.
+<P>
+To compute the class precedence list:
+<P>
+Let S  be the set of C and all of its superclasses.  
+<PRE>
+For each class c in S, let
+        Rc  = {(c, c1), (c1, c2), .... , (cn-1, cn)}
+</PRE>
+where c1 ,..., cn are the direct superclasses of c in the order in which 
+they are mentioned in the class definition for c.
+<P>
+Let R be the union of all Rc for every class c in S.  The set R might
+or might not generate a partial ordering, depending on whether the Rc
+are consistent; it is assumed that they are consistent and that R
+generates a partial ordering.  When the Rc are not consistent, it is
+said that R is inconsistent.
+<P>
+To compute the class precedence list for C, topologically sort C and
+its superclasses with respect to R.  Topological sorting proceeds in
+the following way:
+<OL>
+<LI>    Find a class N in S such that no other class precedes N
+according to the elements in R.
+<P>
+        If there are several classes from S with no predecessors,
+select the one that has a direct subclass rightmost in the partial
+class precedence list computed so far.  In more precise terms, let
+{N1,...Nm}, m&gt;=2, be the classes from S with no predecessors.  Let
+(C1,...,Cn), n&gt;=1, be the partial class precedence list computed so
+far.  C1 is the most specific class, and Cn is the least specific.
+Let 1&lt;=j&lt;=n be the largest number such that there exists an i
+where 1&lt;=i&lt;=m and Ni is a direct superclass of Cj.  Select Ni.
+<P>
+<LI>    Place N first in the result.  Remove N from S, and remove all
+pairs of the form (N, M), such that M is an element of S, from R.
+<P>
+<LI>    Repeat the process, adding classes with no predecessors to the
+end of the result.  Stop when no element can be found that has no
+predecessor.
+</OL>
+If S is not empty and the process has stopped, R is inconsistent because 
+it contains a loop.  That is, there is a chain of classes C1,....,Cn in S 
+such that Ci precedes Ci+1, 1&lt;=i&lt;n, and Cn precedes C1.  When R is 
+inconsistent, there is no possible total ordering on C and its 
+superclasses that is consistent with the local precedence orders for each 
+of C and its superclasses, and an error is signaled.
+<h3>
+Ordering of methods by specificity
+</h3>
+[Our approach is similar to that in the language Cecil  (Craig Chambers, 
+University of Washington).  This approach is different from CLOS in that 
+there is no reference to the lexicographic order of arguments when 
+multimethods are sorted.  See the Examples section for more detail on 
+these differences.]
+<P>
+Method dispatch occurs in three phases.  First, all the applicable 
+methods are selected.  Next, the applicable methods are sorted by 
+specificity.  Then the most specific method is called.  This section 
+covers how methods are sorted by specificity.
+<P>
+For any two methods A and B that are applicable to a given generic 
+function call, one method may be more specific than the other, or the 
+methods may be ambiguous methods.
+<P>
+To order two methods A and B with respect to a particular set of 
+arguments, compare each of A's specializers with B's specializer in the 
+corresponding position using the corresponding argument.  The comparison 
+works in the following way.
+<UL>
+<LI>
+        If the specializers are type equivalent, then A and B are 
+unordered at the current argument position.  That is, this argument 
+position provides no information about the order of the two methods.
+<P>
+<LI>
+        Otherwise, if the specializer of A is a subtype of the 
+specializer of B, then A precedes B at the current argument position.  
+Similarly, B precedes A at this position if B's specializer is a subtype 
+of A's specializer.
+<P>
+<LI>
+        Otherwise, if both specializers are classes, then their order in 
+the class precedence list of the argument's class is used to determine 
+which is more specific.  If A's specializer precedes B's specializer in 
+the class precedence list of the argument's class, then A precedes B at 
+the current argument position.  Similarly, B precedes A at this position 
+if B's specializer precedes A's in the class precedence list of the 
+argument's class.
+<P>
+<LI>
+        Otherwise, the methods are ambiguous methods. (See Design Note 
+<a href="08-ambig-methods.html">Dylan Design Notes: #8: Method Dispatch Ambiguity (Clarification)</a>)
+</UL>
+The method A is more specific than the method B if and only if A precedes 
+B or is unordered with respect to B in all required argument positions, 
+and precedes B in at least one argument position.  Similarly, B is more 
+specific than A if and only if B precedes A or is unordered with respect 
+to A in all required argument positions, and precedes A in at least one 
+argument position.  If neither of these cases apply, i.e. neither method 
+is more specific than the other, then A and B are ambiguous methods.
+<P>
+When the applicable methods are sorted by specificity, the sorted list is 
+divided into two parts, each possibly empty.  The first part contains 
+methods that are more specific than every method that follows them.  The 
+second part (which need not be sorted itself) begins at the first point 
+of ambiguity; there are at least two methods that could equally well go 
+first in the second part.  If the first part is empty, generic function 
+dispatch signals an "ambiguous method" error.  If the last method in the 
+first part calls next-method, the call signals an "ambiguous next method" 
+error.
+<HR><h3>
+Examples:</h3>
+
+Consider the following class definitions
+<PRE>
+define class &lt;sentient&gt; (&lt;life-form&gt;) ... end class;
+define class &lt;bipedal&gt; (&lt;life-form&gt;) ... end class;
+define class &lt;intelligent&gt; (&lt;sentient&gt;) ... end class;
+define class &lt;humanoid&gt; (&lt;bipedal&gt;) ... end class;
+define class &lt;vulcan&gt; (&lt;intelligent&gt;, &lt;humanoid&gt;) ... end class;
+</PRE><P>
+Computing the class precedence list for &lt;vulcan&gt; yields 
+<PRE>
+(&lt;vulcan&gt;,&lt;intelligent&gt;,&lt;sentient&gt;,&lt;humanoid&gt;,&lt;bipedal&gt;,&lt;life-form&gt;)
+</PRE><P>
+In this class precedence list, note that classes in the simple
+superclass chains<tt> (&lt;intelligent&gt;,&lt;sentient&gt;)</tt> and<tt> (&lt;humanoid&gt;,&lt;bipedal&gt;)</tt>
+are kept adjacent.
+<P>
+The class precedence lists computed for two different classes may have 
+different precedence orders for some intermediate superclasses.  This is 
+not a problem as long as there is no class which inherits from both 
+classes.  For example, we could define a class<tt> &lt;human&gt;</tt> as follows:
+<PRE>
+define class &lt;human&gt; (&lt;humanoid&gt;, &lt;intelligent&gt;) ... end class;
+</PRE><P>
+For the class<tt> &lt;human&gt;</tt> defined as above, the class precedence list would 
+be<tt> (&lt;human&gt;,&lt;humanoid&gt;,&lt;bipedal&gt;,&lt;intelligent&gt;,&lt;sentient&gt;,&lt;life-form&gt;)</tt>
+<P>
+It is not a problem that the two class precedence lists give different 
+orders to some of the intermediate superclasses such as<tt> &lt;bipedal&gt;</tt> and<tt>&lt;sentient&gt;</tt>  as long as no class is added which inherits from both<tt>&lt;vulcan&gt;</tt> and<tt> &lt;human&gt;</tt>.
+<P>
+When sorting the applicable methods, each specializer pair needs to be 
+compared with respect to the class precedence list for the class of the 
+argument passed to the generic function in that argument position, 
+because the class precedence list might be different depending on which 
+class it was computed from.  For example, given the following definitions
+<PRE>
+define class &lt;vulcan&gt; (&lt;intelligent&gt;, &lt;humanoid&gt;) end class;
+define class &lt;human&gt; (&lt;humanoid&gt;, &lt;intelligent&gt;) end class;
+define method psychoanalyze (being :: &lt;intelligent&gt;) ... end method;
+define method psychoanalyze (being :: &lt;humanoid&gt;) ... end method;
+</PRE><P>
+calling the generic function psychoanalyze on a being of type<tt> &lt;human&gt;</tt>would cause the method for<tt> &lt;humanoid&gt;</tt> to be called first, while calling the generic function on a being of type<tt> &lt;vulcan&gt;</tt> would cause the method for<tt> &lt;intelligent&gt;</tt> to be called first.
+<P>
+There is no reference to lexicographic order in sorting multimethods.  
+This is different from CLOS.  Given the above class definitions, the 
+following methods are unambiguous when superior-being is called on two 
+beings of type<tt> &lt;vulcan&gt;</tt> or two beings of type<tt> &lt;human&gt;</tt>, but the methods are ambiguous when superior-being is called on a being of type<tt> &lt;vulcan&gt;</tt> and a being of type<tt> &lt;human&gt;</tt> (because it is ambiguous whether to choose the most-intelligent-being, or the best-looking-being):
+<PRE>
+define method superior-being (a :: &lt;intelligent&gt;, b :: &lt;intelligent&gt;) 
+  most-intelligent-being (a, b)
+  end method;
+
+define method superior-being (a :: &lt;humanoid&gt;, b :: &lt;humanoid&gt;)
+  best-looking-being (a, b)
+  end method;
+</PRE>
+On the other hand, under the CLOS system, when superior-being is called 
+on a being of type &lt;vulcan&gt; and a being of type<tt> &lt;human&gt;</tt>,  the best-looking-being is chosen when the<tt> &lt;human&gt;</tt> is the first argument, and the most-intelligent-being is chosen when the<tt> &lt;vulcan&gt;</tt> is the first argument.
+<P>
+Sometimes two methods are ambiguous, and you have to define an extra 
+method to disambiguate between them.  This typically happens when the 
+ambiguity is between two methods that are actually equivalent.  For example,
+<PRE>
+define method intersection (l1 :: &lt;list&gt;, l2 :: &lt;empty-list&gt;) 
+  #() 
+  end method;
+
+define method intersection (l1 :: &lt;empty-list&gt;, l2 ::&lt;list&gt;)
+  #() 
+  end method;
+
+define method intersection (l1 :: &lt;empty-list&gt;, l2 :: &lt;empty-list&gt;)
+  #() 
+  end method;
+</PRE><P>
+The third method is needed because intersection(#(), #()) would otherwise 
+signal an "ambiguous method" error.
+<HR><h3>
+Notes:</h3>
+<P>
+We considered requiring an error to be signaled in cases where the local 
+precedence orders are insufficient, but this is unacceptable because of 
+certain generic functions like initialize.  For example, suppose that 
+every class has an initialize method, every initialize method has to be 
+called, and every initialize method calls next-method.  The class 
+precedence list defines a total ordering for calling all the initialize 
+methods in sequence, consistent with all the local precedence orders.
+<P>
+Although the algorithm which computes the class precedence list may make 
+some arbitrary choices in the precedence ordering of classes, we feel any 
+program which explicitly depends on these choices is bizarre.
+<P>
+There are languages which take a different approach, creating a total 
+ordering of all classes which is used for tie-breaking.  This makes 
+method specificity independent of the particular arguments passed to the 
+generic function, a nice simplification.  The problem with this is that 
+the example classes<tt> &lt;vulcan&gt;</tt> and<tt> &lt;human&gt;</tt> would each be valid by itself, but an attempt to define them both in the same Dylan object space would signal an error because no total ordering of classes exists that is consistent with both of them.  That militates against modular programming.  One answer to this is to make the total ordering independent of existing class definitions, for example to use alphabetical order.  Thus the class precedence lists would be:
+<P><tt>(&lt;vulcan&gt;,&lt;intelligent&gt;,&lt;humanoid&gt;,&lt;bipedal&gt;,&lt;sentient&gt;,&lt;life-form&gt;) 
+(&lt;human&gt;,&lt;humanoid&gt;,&lt;bipedal&gt;,&lt;intelligent&gt;,&lt;sentient&gt;,&lt;life-form&gt;)
+</tt><P>
+Note that this still does not produce total consistency, since the local 
+precedence lists were inconsistent to begin with.  Also, using 
+alphabetical order of class names would be a very bad idea in Dylan, 
+which strives to maintain a clean separation between names and objects.  
+This is why we feel that the rather complicated set of rules being 
+proposed are better than seemingly simpler alternatives.
+
+<P><A NAME="NEXT" HREF="32-modules.html">Next chapter:  #32: Module Defining Forms      (Addition)</A>

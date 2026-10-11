@@ -1,0 +1,39 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="preface.html">Previous chapter:  Preface</A><P>
+<title>Dylan manual: Introduction</title>
+<H2>1. Introduction<p></H2>
+<P>
+<b><A NAME="bgrnd">Background and Goals<p>
+</b>Dylan is a general-purpose high-level programming language, designed for use both in application and systems programming.  Dylan includes garbage collection, run-time type checking, dynamic linking, error recovery, and an efficient module system.  These features simplify programming and support attractive debugging and development tools.<p>
+The motivation for Dylan is that programs and large software systems have become too complex for traditional static programming languages.  To create a new generation of softwareand to ensure that this software is maintainable and extensiblerequires a new, friendlier set of programming tools.  The core of these tools is a simple and expressive language, one that is efficient but which protects the programmer from crashes and machine-level debugging.  All programming should take place at an object-oriented level.  Improved implementation techniques and increasingly powerful computer hardware make it possible to use fully dynamic object-oriented languages for a wide range of programming tasks.<p>
+Dylan is a simple dialect of Lisp with a thoroughly integrated object model.  Like other recent object-oriented extensions to Lisp, Dylan implements polymorphism through generic functions and class dispatch, rather than through a Smalltalk-style message-passing mechanism.<A href="footnotes.html#fn1">FN1</A>  Generic functions have been adopted throughout the Lisp community because they match the functional style that is one of Lisps key strengths.  They provide a very convenient model for a broad range of programming tasks.<p>
+To those familiar with the Lisp family of languages, Dylan looks like Scheme augmented with CLOS.  However, Dylan is not intended primarily for the Lisp community.  The real target audience of Dylan is application developers now using languages such as C, C++, and Pascal who are ready to move up to Object Oriented Dynamic Languages.  Thus compatibility with other Lisp dialects such as Scheme and Common Lisp is not a primary goal.  Dylan has been rethought from the ground up, on a fully object-oriented foundation.  A primary goal was to make the language as simple as possible, but no simpler.  We have tried to avoid multiple ways to do the same thing, to omit features that are difficult for the average application developer to understand and use effectively, to leave out anything that we do not know how to implement efficiently in both space and time, and to provide a clear separation of the language executed at run-time from the development tools.  At the same time weve moved complicated low-level bookkeeping underneath the language and taken it out of the hands of the application programmers, to make them more productive.  The overriding goal of Dylan is rapid development and delivery of applications and application components on very small computers.<p></A>
+<A NAME="about"><b>About this Manual<p>
+</b>This manual is a description of the Dylan programming language.  It is primarily a reference manual.<p>
+The language described in this manual should be taken as an initial specification.  A few language features, notably macros, have not yet been specified.  The specification still needs further editorial work to improve the descriptions and remove ambiguities.  Thus although the current version of Dylan is stable and usable, we plan on continued evolution of the language, primarily driven by feedback from those using it.  In addition to feedback from internal users, we now invite constructive criticism from the wider community.  We realize that this language is likely to be useful to others besides ourselves and would like to make it the best language we can.<p>
+Comments on Dylan can be sent to the internet mail address <p>
+dylan-comments@cambridge.apple.com.<p>
+Programming environment is a very important part of any language implementation.  Dylan provides support for a very high quality programming environment.  Environment issues are not, however, addressed directly by this manual.<p>
+<b><p></A>
+<A NAME="notation">Manual <A NAME="Notation0">Notation</A><A HREF="ch3.html#Notation1">[Next Citation]</A><p>
+</b>This manual uses a small number of typographic conventions:notation<p>
+Body text appears in Roman.<p>
+First uses of terms appear in <b>Bold</b>.<p>
+Text which appears as it would be entered in the computer appears in Letter Gothic.<p>
+Formal parameters (i.e., place holders for the actual text you would enter) appear in <i>Italic</i>.<p>
+The names of parameters are often descriptive of the type of value acceptable as a value of the parameter.  They will often match the names of classes, indicating a general instance of the class.  For example, <i>number</i> indicates a general instance of the class &lt;number&gt;, and <i>string</i> indicates a general instance of the class &lt;string&gt;.<p>
+Interactions between a user and a Dylan interpreter are shown in a mixture of Letter Gothic and <i>Letter Gothic Italic</i>.  Letter Gothic shows the text entered by the user, and <i>Letter Gothic Italic</i> shows the text printed by the interpreter.  The question mark used in these sections is the interpreters prompt.<A href="footnotes.html#fn2">FN2</A> <p>
+The following notation is used to describe syntax forms:<p>
+<DL COMPACT>
+<DT>{...}<DD>Curly braces indicate a group of items.
+<DT>{...}*<DD>Curly braces followed by an asterisk indicate that the contents can appear zero or more times.
+<DT>{...}+<DD>Curly braces followed by a plus sign indicate that the contents can appear one or more times.
+<DT>[...]<DD>Square brackets indicate that the contents are optional.
+<DT>...|...<DD>Items separated by a vertical bar are mutually exclusive.  One or the other may appear.
+</DL>
+Throughout the manual, the term <b><A NAME="parameter0">parameter</A></b> is used to mean formal parameter.  That is, a parameter is a local variable bound upon entry to a function.  The manual uses the term <b><A NAME="argument0">argument</A></b> to describe what is sometimes called an actual parameter.  That is, an argument is an object that is passed as the value of a parameter.<p>
+The error messages in the manual have been edited for brevity.  The details of interactions with Dylan (prompt text, error message texts, etc.) may differ among implementations.<p>
+The functions <A NAME="format0">format</A> and <A NAME="print0">print</A> are used in examples but are not part of Dylan.<p></A>
+<p>
+<P><A NAME="NEXT" HREF="ch2.html">Next chapter:  Language Overview</A>
+

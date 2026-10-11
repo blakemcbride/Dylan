@@ -1,0 +1,203 @@
+<meta charset="utf-8">
+
+<A NAME="PREV" HREF="ch10.html">Previous chapter:  Functions</A><P>
+<title>Dylan manual: Classes</title>
+<H2>11. Classes</H2><p>
+<b>See Also: <a href="../design-notes/05-type-system.html">Dylan Design Notes: Regularization of the Type System (Change)</a></b><p>
+<b>See Also <a href="../design-notes/03-make-class.html">Dylan Design Notes: Make Class Specification (Addition)</a></b><p>
+This section lists additional tools for working with classes and instances.  The user should also refer to the introductory section above, where define-class, make, and initialize are described.<p>
+<PRE>
+<b><A NAME="class-class0">&lt;class&gt;</A></b>	[Abstract Class]
+</PRE>
+All classes (including &lt;class&gt;) are general instances of &lt;class&gt;.  &lt;class&gt; is a subclass of &lt;object&gt;.<p>
+The class &lt;class&gt; supports the following init-keywords:<p>
+<DL COMPACT>
+<DT><b>superclasses:</b><DD>Specifies the superclasses of the <i>class</i>.  superclasses: should be a single class or list of classes.  The default value is &lt;object&gt;.
+<DT><b>debug-name:</b><DD>Used only for debugging and display purposes.  The default is implementation-dependent.
+</DL>
+Classes are not normally created by calling to make, but rather through define-class.  However, there is nothing to prevent programmers from creating classes by calling make, for example, if they want to create a class without storing it in a module variable.<p>
+
+<PRE>
+<b><A NAME="instance?0">instance?</A></b>   <i>object class</i>   ==><i>  boolean</i>	[Generic Function]
+</PRE>
+instance? returns true if <i>object</i> is a general instance of <i>class</i>.<p>
+<A NAME="coerceobj"><b>Coercing and Copying Objects<p>
+</b>These functions are used to perform shallow copies on objects, and to coerce objects to other classes.<p>
+<PRE>
+<b><A NAME="as0">as</A><A HREF="ch15.html#as1">[next citation]</A></b>   <i>class object</i>   ==><i>  instance</i>	[Generic Function]
+</PRE>
+as coerces <i>object</i> to <i>class</i>.  That is, it returns a new instance of <i>class</i> that has the same contents as <i>object</i>.<p>
+If <i>object</i> is already an instance of <i>class</i>, it is returned unchanged.<p>
+Predefined methods allow coercion between numeric types, between integers and characters, and between collection types.  No methods are defined for other classes.<p>
+When converting between collection types, the new collection (the returned object) will have the same number of elements as the source collection (the <i>object</i>).  If the source and target class are both subclasses of &lt;sequence&gt;, the elements will be in the same order.  The individual elements may also undergo some conversion.<p>
+<PRE>
+<b><A NAME="shallow-copy0">shallow-copy</A></b>   <i>object</i>   ==><i>  new-object</i>	[Generic Function]
+</PRE>
+shallow-copy returns a new object that has the same contents as <i>object</i>.  The contents are not copied but are the same objects contained in <i>object</i>.<p>
+The new object is created by calling make on the class-for-copy of <i>object</i>.<p>
+Dylan includes methods for copying collections.  For other classes, the programmer must provide a method.<p>
+<PRE>
+<b><A NAME="class-for-copy0">class-for-copy</A><A HREF="ch12.html#class-for-copy1">[next citation]</A></b>   <i>object</i>   ==><i>  class</i>	[Generic Function]
+</PRE>
+class-for-copy returns the class that should be passed to make in order to duplicate <i>object</i>.  The default version calls object-class.<p></A>
+<A NAME="reflexclass"><b>Reflective Operations on Classes<p>
+</b>The following operations return information about classes and objects.  These functions may be disabled for sealed classes.  (Sealing of classes is described in a following section.)<p>
+<b>See Also:<a href="../design-notes/05-type-system.html"> Dylan Design Notes: Regularization of the Type System (Change)</a></b><p> 
+<PRE>
+<b><A NAME="subclass?0">subclass?</A></b>   <i>class1 class2</i>   ==><i>  boolean</i>	[Generic Function]
+</PRE>
+subclass? returns true if <i>class1</i> is a subclasseither direct or indirectof <i>class2</i>, or if <i>class1</i> and <i>class2</i> are the same class.<p>
+<PRE>
+<b><A NAME="object-class0">object-class</A></b>   <i>object</i>   ==><i>  class</i>	[Generic Function]
+</PRE>
+object-class returns the class of which <i>object</i> is a direct instance.<p>
+<b>See Also: <a href="../design-notes/09-punt-slot-desc.html">Dylan Design Notes: Punt Slot Descriptors (Change)</a></b>
+<PRE>
+<b><A NAME="slot-descriptors0">slot-descriptors</A></b>   <i>class</i>   ==><i>  sequence</i>	[Generic Function]
+</PRE>
+slot-descriptors returns a sequence of the slot descriptors for all the slots in the class.  Slot descriptors are described in the following section.<p>
+The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+
+<PRE>
+<b><A NAME="all-superclasses0">all-superclasses</A></b>   <i>class</i>   ==><i>  sequence</i>	[Generic Function]
+</PRE>
+all-superclasses returns all the superclasses of <i>class</i> in a sequence.  The order of the classes in the sequence is significant.  The first element in the sequence will always be <i>class</i>, and &lt;object&gt; will always be the last.<p>
+The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+<PRE>
+<b><A NAME="direct-superclasses0">direct-superclasses</A></b>   <i>class</i>   ==><i>  sequence</i>	[Generic Function]
+</PRE>
+direct-superclasses returns the direct superclasses of <i>class</i> in a sequence.  These are the classes that were passed as arguments to make or define-class when the <i>class</i> was created.  The order of the classes in the sequence is the same as the order in which they were passed to define-class, or make when <i>class</i> was created.<p>
+The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior.<p>
+<b>See Also <a href="../design-notes/04-no-class-mods.html">Dylan Design Notes: No Incremental Class Modifications (Change)</a></b><p>
+<PRE>
+<b><A NAME="(setter direct-superclasses)0">(setter direct-superclasses)</A></b   	[Generic Function]
+<i>class new-superclass-list</i>  ==><i>  new-superclass-list</i>
+</PRE>
+(setter direct-superclasses) remakes <i>class</i> so that it inherits from the classes in <i>new-superclass-list</i>.  (You may think youre just setting the value of a slot when you call this generic function.  Its actually somewhat more involved than that.)<p>
+<i>new-superclass-list</i> is returned.  The restrictions on the <i>new-superclass-list</i> are the same as those on the <i>superclasses</i> argument to define-class.<p>
+
+<PRE>
+<b><A NAME="direct-subclasses0">direct-subclasses</A></b>   <i>class</i>   ==><i>  sequence</i>	[Generic Function]
+</PRE>
+direct-subclasses returns the direct subclasses of <i>class</i> in a sequence.  These are the classes that have <i>class</i> as a direct superclass.  The sequence returned should never be destructively modified.  Doing so may cause unpredictable behavior. <A href="footnotes.html#fn29">FN29</A> <p></A>
+<A NAME="seal"><b>Sealing Classes</b><p>
+<PRE>
+<b><A NAME="make-read-only1">make-read-only</A><A HREF="ch10.html#make-read-only0">[return to first citation]</A></b>   <i>class</i>   ==><i>  class</i>	[Generic Function]
+</PRE>
+This function makes <i>class</i> read-only, so slots can no longer be added or removed, and the superclasses cannot be changed.  This does not affect the instances of the class (i.e., the slots of instances can still be written).<p>
+The values of slots in <i>class</i> with class and each-subclass allocation can still be changed.<p>
+<PRE>
+<b><A NAME="seal0">seal</A></b>   <i>class</i>   ==><i>  class</i>	[Generic Function]
+</PRE>
+seal makes the <i>class</i> read-only and, in addition, new subclasses cannot be created from <i>class</i>.  The functions all-superclasses, direct-superclasses, and slot-descriptors will return an empty sequence when called on a sealed class.<p></A>
+<A NAME="slotdesc"><b>Slots and Slot Descriptors<p>
+</b>This section gives a low-level description of slots and slot descriptors.  Most programs do not need to work with slot descriptors directly.  Slot descriptors are created automatically by define-class and define-slot.<p>
+The language facilities described in this section can be used in the implementation of the object system.  They are useful for inspectors, debuggers, and other system tools,  as well as for programs which extend the object system.<p>
+<PRE>
+<b><A NAME="<slot-descriptor>0">&lt;slot-descriptor&gt;</A></b>	[Abstract Class]
+</PRE>
+Slot descriptors identify slots and may contain certain information about them (such as default values, specializers, etc.).<p>
+&lt;slot-descriptor&gt; is a subclass of &lt;object&gt;.<p>
+Slot descriptors are not created directly (with make), but are created and returned by add-slot.<p>
+<PRE>
+<b><A NAME="add-slot0">add-slot</A></b><i>	slot-owner </i>#key<i> type allocation setter getter 	</i>[Generic Function]<i>
+	debug-name init-value init-function init-keyword</i>   
+==><i>  slot-descriptor</i><p>
+</PRE>
+add-slot adds a slot to <i>slot-owner</i> (which should be a class or singleton) and returns a slot descriptor for it.  The instances of <i>slot-owner</i> are updated to contain the new slot.  This function is called by define-
+class and define-slot.<p>
+If the getter and setter are supplied, they should be generic functions.  Besides this, all the keyword arguments have the same meanings as in slot-specs of define-class forms.<p>
+The <i>debug-name</i>  can be retrieved from the slot-descriptor.<p>
+If <i>slot-owner</i> is a singleton, then <i>allocation </i>must be instance, constant, or virtual, and <i>init-keyword</i> cannot be specified.<p>
+<b>See Also <a href="../design-notes/04-no-class-mods.html">Dylan Design Notes: No Incremental Class Modifications (Change)</a></b><p>
+<PRE>
+<b><A NAME="remove-slot0">remove-slot</A></b>   <i>slot-owner slot-descriptor</i>   	[Generic Function]
+==><i>  slot-descriptor</i>
+</PRE>
+remove-slot removes the slot for <i>slot-descriptor</i> from <i>slot-owner</i>.  If <i>slot-owner</i> is a class, then existing instances of the <i>class</i> are updated to no longer contain the slot.  (The updates do not occur all at once but rather as the objects are accessed.)<p>
+<PRE>
+<b><A NAME="slot-descriptor0">slot-descriptor</A></b>   <i>instance getter</i>   	[Generic Function]
+==><i>  {slot-descriptor or </i>#f<i>}</i>
+</PRE>
+slot-descriptor returns the slot descriptor for the slot that is accessed in <i>instance</i> by <i>getter</i>.  This function works for virtual as well as nonvirtual slots.<p>
+slot-descriptor returns #f if  <i>getter</i> does not access a slot in <i>instance</i>.  It may also return #f if the class of the <i>instance</i> has been sealed.<p>
+<PRE>
+<b><A NAME="slot-getter0">slot-getter</A></b>   <i>slot-descriptor</i>   ==><i>  {generic-function or </i>#f<i>}</i>	[Generic Function]
+</PRE>
+slot-getter returns the getter generic-function for the slot, or #f if the <i>slot-descriptor</i> indicates a slot in a sealed class.  The return value is an actual generic function object, not a variable name.<p>
+<PRE>
+<b><A NAME="slot-setter0">slot-setter</A></b>   <i>slot-descriptor</i>   ==><i>  {generic-function or </i>#f<i>}</i>	[Generic Function]
+</PRE>
+slot-setter returns the setter generic-function for the slot, or #f if the information is not available.  The information will not be available if the <i>slot-descriptor</i> indicates a slot in a sealed class or if no setter was specified or defaulted when the slot was created. The return value is an actual generic function object, not a variable name.<p>
+<PRE>
+<b><A NAME="slot-type0">slot-type</A></b>   <i>slot-descriptor</i>   ==><i>  {class or singleton}</i>	[Generic Function]
+</PRE>
+slot-type returns the type restriction of the slot.  If no slot type was specified, then the default, &lt;object&gt;, is returned.<p>
+<PRE>
+<b><A NAME="slot-allocation0">slot-allocation</A></b>   <i>slot-descriptor</i>   ==><i>  symbol</i>	[Generic Function]
+</PRE>
+slot-allocation returns a symbol that describes the allocation of the slot.<p>
+<PRE>
+<b><A NAME="init-value0">init-value</A></b>   <i>slot-descriptor</i>   ==><i>  object  boolean</i>	[Generic Function]
+</PRE>
+init-value returns two values: the init-value of the slot and #t if an init-value was specified, or #f and #f if no init-value was specified when the slot was created.<p>
+<PRE>
+<b><A NAME="init-function0">init-function</A></b>   <i>slot-descriptor</i>   ==><i>  {function or </i>#f<i>}</i>	[Generic Function]
+</PRE>
+init-function returns the init-function of the slot, or #f if no init-function was specified when the slot was created.<p>
+<PRE>
+<b><A NAME="init-keyword0">init-keyword</A></b>   <i>slot-descriptor</i>   ==><i>  {keyword or </i>#f<i>}</i>	[Generic Function]
+</PRE>
+init-keyword returns the init-keyword of the slot, or #f if no init-keyword was specified when the slot was created.<p>
+By using a slot-descriptor and an instance, programs can access the storage for slots.  The predefined methods on these functions signal an error when passed a slot-descriptor for a slot with virtual allocation, because virtual slots are not backed by any storage.<p>
+<PRE>
+<b><A NAME="slot-value0">slot-value</A></b>   <i>instance slot-descriptor</i>   ==><i>  object</i>	[Generic Function]
+</PRE>
+slot-value returns the value of the slot associated with <i>slot-descriptor</i> in <i>instance</i>.<p>
+<b>See Also: <a href="../design-notes/09-punt-slot-desc.html">Dylan Design Notes: Punt Slot Descriptors (Change)</a></b><p>
+<PRE>
+<b><A NAME="(setter slot-value)0">(setter slot-value)</A></b>   <i>instance slot-descriptor new-value</i>	[Generic Function]
+==><i>  new-value</i>
+</PRE>
+(setter slot-value) sets the value of the slot associated with <i>slot-descriptor</i> in <i>instance</i> to <i>new-value</i> and returns <i>new-value</i>.<p>
+This function enforces the type restrictions specified when the slot was created.<p></A>
+<A NAME="single"><b>Singletons<p>
+</b>Singletons provide a way to add slots and methods to single instances.  This let programs specialize a single object, without changing other objects of the same class, and without defining a whole new class just for the object.<p>
+Singletons and classes are currently the only types of specializers available in Dylan.<p>
+A singleton is little more than a pointer to a single object.  The singletons sole purpose is to indicate that object, so that a method can be created that specializes on the object.  By defining a method that specializes on a singleton (rather than on a class), you have defined a method that discriminates on the singletons object.<p>
+Singleton methods are considered more specific than methods defined on an objects original class.  Singletons are the most specific specializer.<p>
+Singletons are normally created and used immediately (i.e., passed directly to method, define-method, define-slot, etc.).  They are not normally stored for later use.<p>
+<PRE>
+<b><A NAME="<singleton>0">&lt;singleton&gt;</A></b>	[Instantiable Class]
+</PRE>
+The class &lt;singleton&gt; supports the following init-keywords:<p>
+<DL COMPACT>
+<DT><b>object:</b><DD>The object that the singleton indicates.  There is no default for this argument.  If it is not supplied, an error will be signaled.
+</DL>
+If a singleton for the specified object already exists, implementations are free to fold the two instances into one.<p>
+<PRE>
+<b><A NAME="singleton2">singleton</A><A HREF="ch6.html#singleton0">[return to first citation]</A></b>   <i>object</i>   ==><i>  singleton</i>	[Function]
+</PRE>
+singleton returns a singleton for <i>object</i>.<p>
+(singleton <i>object</i>) is equivalent to (make &lt;singleton&gt; object: <i>object</i>).<p>
+<PRE>
+<i>?</i> <tt>(define-method double ((thing (singleton 'cup)))
+    'pint)</tt>
+<i>{a method on double}
+?</i> <tt>(double 'cup)</tt>
+<i>pint
+?</i> <tt>(double 10)
+</b><i>20</i>
+</PRE>
+<PRE>
+<i>?</i> <tt>(define-method factorial ((num &lt;integer&gt;))
+</tt>  <tt>  (* num (factorial (- num 1))))
+</tt><i>factorial
+?</i> <tt>(define-method factorial ((num (singleton 0)))
+     1)
+</tt><i>factorial
+?</i> <tt>(factorial 5)
+</b><i>120</i>
+</PRE>
+<p></A><P><A NAME="NEXT" HREF="ch12.html">Next chapter:  Collections</A>
+

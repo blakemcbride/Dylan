@@ -1,0 +1,37 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="08-ambig-methods.html">Previous chapter:  #8: Method Dispatch Ambiguity        (Clarification)</A><P>
+<TITLE>Dylan Design Notes: #9: Punt Slot Descriptors        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#9: Punt Slot Descriptors        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note deletes Dylan's specification of slot descriptors.  
+This change removes a feature which is incomplete, which does not 
+match our current goals, and which impedes efficient implementation.
+<P>
+<HR>
+<P>
+Remove all specification of <a href="../book.annotated/ch11.html#slot-descriptors0">slot descriptors</a> from the Dylan language 
+specification.  This includes removing the class &lt;slot-descriptor&gt;, 
+the functions slot-descriptors, add-slot, remove-slot, slot-descriptor, slot-getter, slot-setter, slot-type, slot-allocation, 
+init-value, init-function, init-keyword, and slot-value and its 
+setter.  The <a href="../book.annotated/ch11.html#slotdesc">description of seal on page 94</a> should be changed to 
+remove the reference to slot descriptors.
+<P>
+<HR>
+<P>
+Notes:
+<P>
+The Dylan manual includes a partial specification for slot 
+descriptors.  The manual says that these operations are "useful for 
+inspectors, debuggers, and other system tools, as well as for 
+programs which extend the object system."  We feel that these uses 
+are not aligned with our current goals for Dylan.  Slot descriptors 
+provide a back door to information that programs might intend to 
+hide, and they complicate the description of sealing.  In addition, 
+having a definition of slot descriptors in the language specification 
+unnecessarily restricts implementations.
+<P><A NAME="NEXT" HREF="10-element-setter.html">Next chapter:  #10: Element-Setter Signals Error        (Clarification)</A>

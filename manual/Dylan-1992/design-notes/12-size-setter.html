@@ -1,0 +1,53 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="11-last-setter.html">Previous chapter:  #11: Last-Setter        (Addition)</A><P>
+<TITLE>Dylan Design Notes: #12: Size-Setter for Stretchy Sequences        (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#12: Size-Setter for Stretchy Sequences        (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note adds the generic function size-setter to the 
+language specification, allowing the size of a stretchy sequence to 
+be changed in a single operation.
+<P>
+<HR>
+<P>
+Add a new generic function, with predefined methods for <a href="../book.annotated/ch12.html#stretchvecops">&lt;stretchyvector&gt;</a> and <a href="../book.annotated/ch12.html#dequeops">&lt;deque&gt;</a>, as follows:
+<PRE>
+size-setter sequence n   =&gt; n                [Generic Function]
+</PRE>
+Sets the size of sequence to be n.  sequence is destructively 
+modified.
+<P>
+If n is less than or equal to the original size of sequence, then the 
+first n elements of sequence are retained at the same positions.  If 
+n is greater than the original size of sequence, then the previous 
+elements of sequence are retained at the same positions, and enough 
+new elements are added to reach the new size.  The value of each new 
+element is the same as would have been used if sequence had been 
+created with make, specifying size: n  but not fill:.
+<P>
+It is not specified how size-setter adds new elements to a sequence.  
+In particular, size-setter is not required to call add! or any other 
+predefined Dylan function.
+<PRE>
+? (define my-deque (make &lt;deque&gt; size: 5 fill: 10))
+;unspecified
+? my-deque
+{deque 10 10 10 10 10}
+? (set! (size my-deque) 10)
+10
+? my-deque
+{deque 10 10 10 10 10 #f #f #f #f #f}
+? (set! (size my-deque) 3)
+3
+? my-deque
+{deque 10 10 10}
+? (set! (size my-deque) 5)
+5
+? my-deque
+{deque 10 10 10 #f #f}
+</PRE>
+<P><A NAME="NEXT" HREF="13-types-survive.html">Next chapter:  #13: Type Restrictions Survive Assignment        (Change)</A>

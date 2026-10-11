@@ -1,0 +1,128 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="15-replace-subseq.html">Previous chapter:  #15: Replace-Subsequence! Different Sizes        (Change)</A><P>
+<TITLE>Dylan Design Notes: #16: List Issues        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#16: List Issues        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+In this design note, Dylan's specification of the &lt;list&gt; type is 
+made more consistent with the rest of the language, mysterious 
+abbreviations and redundant list-only operations are removed, and 
+handling of improper lists is clarified.  These changes make the 
+language more accessible to our primary audience of programmers who 
+have not used dynamic languages before.
+<P>
+<HR>
+<P>
+Make the following changes to the Dylan manual, <a href="../book.annotated/ch12.html#listops">pages 115-117</a>:  
+<P>
+Rename cons to pair.  Rename car and cdr to head and tail 
+respectively, and rename the corresponding setters to head-setter 
+and tail-setter.  Remove the compound functions caar through cdddr 
+and the corresponding setter operations.
+<P>
+Remove list*.  Use (pair a (pair b c)) instead of (list* a b c).  
+<P>
+Remove find-pair.
+<P>
+Remove append.  Use concatenate instead.  Replace the definition of 
+concatenate <a href="../book.annotated/ch12.html#concatenate1">on page 108</a> with the following:
+<PRE>
+concatenate sequence1 #rest sequences=&gt; new-sequence        [Generic Function]
+</PRE>
+concatenate returns a new sequence containing all the elements of 
+all the sequences, in order.  new-sequence may non-destructively 
+share structure with any of the input sequences, but it is not 
+guaranteed to do so.
+<P>
+Specify that member? on lists always returns a boolean.  Remove the 
+definition of member? on page 117, and replace the definition of 
+member? <a href="../book.annotated/ch12.html#member?0">on page 103</a> with the following:
+<P>
+member? value collection #key test =&gt; boolean        [Generic Function]
+member? returns #t if and only if collection contains value (as 
+determined by test, which defaults to id?).  The test function may 
+be non-commutative: it is always called with value as its first 
+argument and an element from collection as its second argument.
+<PRE>
+? (define flavors '(pistachio chocolate pumpkin))
+flavors
+? (member? 'chocolate flavors)
+#t
+? (member? 'banana flavors)
+#f
+</PRE>
+Add the following description of the class &lt;empty-list&gt;:
+<PRE>
+&lt;empty-list&gt;        [Sealed Instantiable Class]
+</PRE>
+The class &lt;empty-list&gt; has only one instance, the empty list.  The 
+empty list is a direct instance of &lt;empty-list&gt; and an indirect 
+instance of &lt;list&gt;.  Note that &lt;empty-list&gt; is not id? to 
+(singleton '()).
+<PRE>
+? (object-class '())
+&lt;empty-list&gt;
+? (define-method f (x &lt;empty-list&gt;) 1)
+? (define-method f (x (singleton '())) 2)
+? (define-method f (x &lt;list&gt;) 3)
+? (f '())
+2
+? (f '(chocolate vanilla))
+3
+</PRE>
+An improper list is a list that is not terminated by the empty 
+list, either because it is terminated by something that is not a 
+list, or because it is circular and thus non-terminating.  Except 
+when their behavior on improper lists is documented explicitly, 
+collection or sequence functions are not guaranteed to return an 
+answer when an improper list is used as a collection or a sequence.  
+At the implementation's option, these functions may return the 
+correct result, signal a &lt;type-error&gt;, or  (in the case of a 
+circular list) fail to return.
+<PRe>
+? (size '(1  2 . 3)) 
+   ; signals a &lt;type-error&gt; (there is no correct result)
+? (size (bind ((x (pair 1 1))) (set! (tail x) x)))
+#f
+? (member? 1 (bind ((x (pair 1 1))) (set! (tail x) x)))
+#t ; may also signal a &lt;type-error&gt; or never return
+? (member? 0 (bind ((x (pair 1 1))) (set! (tail x) x)))
+#f ; may also signal a &lt;type-error&gt; or never return
+? (element '(1 2 . 3) 1)
+2  ; may also signal a &lt;type-error&gt; 
+? (element '(1 2 . 3) 2)
+   ; signals a key out of range error or a &lt;type-error&gt;
+? (element '(1 2 . 3) 2 default: 0)
+0  ; may also signal a &lt;type-error&gt;
+</PRE>
+<HR>
+<P>
+Notes
+<P>
+The mysterious abbreviations car and cdr have no meaning to most 
+people.  The name cons does not have an apparent meaning either, 
+and it is not obviously related to the class, &lt;pair&gt;, that it 
+instantiates.
+<P>
+The compound functions caar through cdddr seem like holdovers from 
+the days before object-oriented programming, when data structures 
+were built up from pairs, using these functions as accessors, and 
+not encapsulated in abstractions.
+<P>
+list* is an obscure function.  It does the same thing as cons when 
+called with two arguments, so one of them is redundant.
+<P>
+append does almost the same thing as concatenate, making it seem 
+redundant.  The result of append is specified to share structure 
+with the last argument; the book does not specify whether the 
+result of concatenate must, might, or must not share structure with 
+an argument.  We feel that the decision whether to share structure 
+in concatenate is regarded as an implementation optimization 
+decision, rather than language semantics.  This assumes that users 
+want structure-sharing only to optimize space, not because they 
+rely on modifying the shared structure.
+<P><A NAME="NEXT" HREF="17-define-like-bind.html">Next chapter:  #17: Define Like Bind        (Addition)</A>

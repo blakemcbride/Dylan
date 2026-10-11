@@ -1,0 +1,29 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch15.html">Previous chapter:  Keywords and Symbols</A><P>
+<title>Dylan manual: Characters</title>
+<H2>16. Characters</H2><p>
+See also the description of comparison operations, which discuss the comparison of characters.<p>
+<PRE>
+<b><A NAME="character-class0">&lt;character&gt;</A></b>	[Instantiable Class]
+</PRE>
+&lt;character&gt; is a subclass of &lt;object&gt;.<p>
+<PRE>
+<b><A NAME="as-uppercase1">as-uppercase</A><A HREF="ch12.html#as-uppercase0">[return to first citation]</A></b>   <i>character</i>   ==><i>  uppercase-character</i>	[G.F. Method]
+</PRE>
+The &lt;character&gt; on as-uppercase returns the upper-case equivalent for <i>character</i>.  If <i>character</i> already is uppercase or does not exist in two cases, it is returned unchanged.<p>
+<PRE>
+<b><A NAME="as-lowercase1">as-lowercase</A><A HREF="ch12.html#as-lowercase0">[return to first citation]</A></b>   <i>character</i>   ==><i>  lowercase-character</i>	[G.F. Method]
+</PRE>
+The &lt;character&gt; on as-lowercase returns the lower-case equivalent for <i>character</i>.  If <i>character</i> already is lowercase or does not exist in two cases, it is returned unchanged.<p>
+<PRE>
+<b><A NAME="as3">as</A><A HREF="ch11.html#as0">[return to first citation]</A></b>   <i>&lt;integer&gt; character</i>   ==><i>  integer</i>	[G.F. Method]
+</PRE>
+This method on as returns a numeric equivalent for <i>character</i>.  The integer returned may be implementation dependent.  (It may often be ASCII but could be something else where ASCII is not appropriate.)<p>
+<PRE>
+<b>as</b>   <i>&lt;character&gt; integer</i>   ==><i>  character</i>	[G.F. Method]
+</PRE>
+This method on as returns the character equivalent to <i>integer</i>.  The meaning of <i>integer</i> may be implementation dependent.  (It may often be ASCII but could be something else where ASCII is not appropriate.)<p>
+<p>
+<p>
+
+<P><A NAME="NEXT" HREF="ch17.html">Next chapter:  Functional Operations</A>

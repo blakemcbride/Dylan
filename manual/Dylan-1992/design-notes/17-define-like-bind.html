@@ -1,0 +1,50 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="16-list-issues.html">Previous chapter:  #16: List Issues        (Change)</A><P>
+<TITLE>Dylan Design Notes: #17: Define Like Bind        (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#17: Define Like Bind        (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note unifies the behavior of bind and define.  It  
+extends  define to support declaring the types of  module variables 
+and defining multiple module variables from multiple values.
+<P>
+<HR>
+<P>
+Replace the definition of define <a href="../book.annotated/ch4.html#define1"> on page 31 of the Dylan manual</a> with 
+the following:
+<PRE>
+define {variable  | (variable type)}+ [#rest rest-variable ] init        [Macro]
+</PRe>
+define creates module variables in the current module for each 
+variable  and for rest-variable.  The values returned by init provide 
+the initial values for these variables.
+<P>
+If there are more variables than there are values returned by init , 
+the remaining variables are initialized to #f.  If there are more 
+values returned than there are variables, the excess  values are 
+placed in a sequence which is used as the initial value for restvariable; if there is no rest-variable, these excess values are 
+discarded.  If there is a rest-variable but there is are no excess 
+values, rest-variable is initialized to an empty sequence.
+<P>
+Each type is any expression that evaluates to a valid Dylan type.  
+The types  are evaluated before the init, in the same environment as 
+init. The order of evaluation of the types is not specified.  Each 
+type specifies the type of the corresponding variable.  A variable 
+can only contain instances of the type.  Attempts to initialize or 
+assign the variable to a value which is not an instance of the 
+corresponding type will result in a type-error being signaled.
+<P>
+The variable and rest-variable arguments must be symbols, and are not 
+evaluated.
+<P>
+See also  <a href="../book.annotated/ch6.html#define-class2">define-class</a>, <a href="../book.annotated/ch6.html#define-generic-function2">define-generic-function</a>, and <a href="../book.annotated/ch6.html#define-method2">define-method</a>.
+<P>
+[The examples <a href="../book.annotated/ch4.html#define1">on page 32</a> of the Dylan Manual will also need to be 
+replaced.]
+<P><A NAME="NEXT" HREF="18-member-test-arg.html">Next chapter:  #18: Member? Intersection Test Arg        (Clarification)</A>
+
+

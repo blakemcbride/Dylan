@@ -1,0 +1,25 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="35-punt-transcendentals.html">Previous chapter:  #35: Remove Transcendental Functions    (Change)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+</PRE>
+<TITLE>Dylan Design Notes: #36: Remove Trivial Logical Operators   (Change)</TITLE>
+<H1>#36: Remove Trivial Logical Operators   (Change)</H1>
+<PRE>
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note removes the logical operators logeqv, lognand, lognor, 
+logandc1, logandc2, logorc1, and logorc2 from core Dylan.
+<HR>
+Remove the logical operators <a href="../book.annotated/ch14.html#logeqv0"><tt>logeqv, lognand, lognor, logandc1, logandc2, 
+logorc1</tt>, and <tt>logorc2</a></tt>.
+<HR>
+<h3>
+Notes
+</h3>
+These seven logical operators are unnecessary and may confuse users.  
+They can be replaced with simple combinations of <tt>logand, logior, logxor</tt>, and <tt>lognot.  logand, logior, logxor</tt>, and <tt>lognot </tt> are common in the languages and educational experience of Dylan's target audience, while
+the extra seven are not.
+
+<P><A NAME="NEXT" HREF="37-variadic-operators.html">Next chapter:  #37: Variadic Operators (Change)</A>

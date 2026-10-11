@@ -1,0 +1,124 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="home.html">Previous chapter:  Table of Contents </A><P>
+<TITLE>Dylan Design Notes:  Design Note Format</TITLE>
+<H2>Dylan Design Notes</H2>
+<H1>Design Note Format</H1>
+<P>
+Each Design Note fits into one of the following categories:
+<UL>
+<LI> clarification:                This Design Note resolves an ambiguity or 
+underspecification in the Dylan manual.
+<LI> change:        This Design Note specifies an incompatible change.
+<LI> addition:        This Design Note specifies a compatible extension.
+</UL>
+<P>
+The first section of each Design Note contains the following parts: 
+<OL>
+<LI> the title of this Note
+<LI> the category that this Note fits into
+<LI> the version and date of this Design Note
+<LI> a one-paragraph summary of the clarification, change, or addition 
+specified by this Note.
+</OL>
+The second section of each Design Note contains the language 
+specification itself.  This may be expressed as a change to the text 
+of the manual, or as an independent section.  It often includes 
+examples.
+<P>
+Some Design Notes have an additional section which may include 
+implementation notes, further examples, or some of our reasons for 
+making the change.
+<P>
+Throughout the Design Notes, the term parameter is used to mean 
+formal parameter.  That is, a parameter is a local variable bound 
+upon entry to a function.  The Design Notes use the term argument to 
+describe what is sometimes called an actual parameter.  That is, an 
+argument is an object that is passed as the value of a parameter.
+<P>
+The names of parameters are often descriptive of the type of value 
+acceptable as a value of the parameter.  They will often match the 
+names of classes, indicating a general instance of the class.  For 
+example, number indicates a general instance of the class &lt;number&gt;, 
+and string indicates a general instance of the class &lt;string&gt;.
+<P>
+The following notation is used to describe syntax forms:
+<PRE>
+        {...}      Curly braces indicate a group of items.
+
+        {...}*     Curly braces followed by an asterisk indicate that the 
+                   contents can appear zero or more times.
+
+        {...}+     Curly braces followed by a plus sign indicate that the 
+                   contents can appear one or more times.
+
+        [...]      Square brackets indicate that the contents are optional.
+
+        ... | ...  Items separated by a vertical bar are mutually exclusive.  
+                   One or the other may appear.
+</PRE>
+We issue the Design Notes in plain text format as well as in 
+PostScript.  In the PostScript format, we use a small number of 
+typographic conventions to enhance readability:
+<UL>
+<LI>        Body text appears in Roman.
+<LI>        First uses of terms appear in Bold.
+<LI>        Text which appears as it would be entered in the computer 
+appears in Courier.
+<LI>        Formal parameters appear in Italic.
+<LI>        Interactions between a user and a Dylan listener are shown in 
+a mixture of Courier and Courier Oblique.  Courier shows the text 
+entered by the user, and Courier Oblique shows the text printed by 
+the listener.  The question mark used in these sections is the 
+listener's prompt.
+</UL>
+The error messages in the Design Notes have been edited for brevity.  
+The details of interactions with Dylan (prompt text, error message 
+texts, etc.) may differ among implementations.
+<P>
+<HR>
+<H3>Dylan Correspondence</H3>
+Questions and comments about Dylan may be sent to:
+<PRE>
+        info-dylan@cambridge.apple.com 
+</PRE>
+and will appear on the info-dylan mailing list.
+Private correspondence may be sent to:
+<PRE>
+        dylan-comments@cambridge.apple.com.
+</PRE>
+To subscribe to the info-dylan mailing list, send a message to:
+<PRE>
+        info-dylan-request@cambridge.apple.com
+</PRE>
+The body of the message should read:
+<PRE>
+        subscribe info-dylan
+</PRE>
+The info-dylan mailing list is also available in a digest format. The 
+digest is put together and mailed out every morning at 4AM and covers all 
+the mail received by the list in the last 24 hours.  To subscribe to the 
+digest, send a message to:
+<PRE>
+        info-dylan-digest-request@cambridge.apple.com
+</PRE>
+The body of the message should read:
+<PRE>
+        subscribe info-dylan-digest
+</PRE>
+If you prefer to read info-dylan as a Usenet newsgroup, it is available 
+under the name comp.lang.dylan.
+<P>
+To access the current Dylan FAQ, archived Dylan Design Notes, and other 
+archived Dylan information, connect by anonymous ftp to 
+cambridge.apple.com.  Dylan information is located in the /pub/dylan 
+directory.
+<UL>
+<LI>    A text-only version of the Dylan FAQ is in dylan-faq.txt.  A 
+        binhex MS Word version of the Dylan FAQ is in dylan-faq.msword.hqx.
+
+<LI>     The Dylan Design Notes are archived in the design-notes 
+        directory.  Within the design-notes directory, text-only files
+        are in the text subdirectory, and postscript files are in the
+        postscript subdirectory.
+</UL>
+<P><A NAME="NEXT" HREF="01-class-for-copy.html">Next chapter:  #1: Collection Class-For-Copy        (Clarification)</A>

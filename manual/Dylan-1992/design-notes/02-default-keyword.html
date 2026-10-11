@@ -1,0 +1,46 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="01-class-for-copy.html">Previous chapter:  #1: Collection Class-For-Copy        (Clarification)</A><P>
+<TITLE>Dylan Design Notes: #2: First, Second, Third, Last Default                (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#2: First, Second, Third, Last Default                (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note adds a default: keyword argument to the 
+specification of the functions  first, second, third, and last.  
+This change removes a possible source of confusion by making these 
+functions more consistent with the function element.
+<P>
+<HR>
+<P>
+Add a default: keyword argument to the functions first, second, 
+third, and last.  Change the description of first, second, and third 
+<a href="../book.annotated/ch12.html#first0">on page 110 of the Dylan manual</a> to read as follows:
+<P>
+Each of these functions returns the indicated element of the 
+sequence.  If the sequence is too short to contain such an element, 
+then the behavior depends on whether the default argument was 
+supplied.  If the default argument was supplied, its value is 
+returned; otherwise, an error is signaled.
+<P>
+Replace the second sentence of the description of last on page 110 of the manual</a> with the following:  
+<P>
+If the sequence is empty, then the behavior of last depends on 
+whether it was called with a default  argument.  If the default  
+argument was supplied, its value is returned; otherwise, an error is 
+signaled.
+<P>
+<HR>
+<P>
+Notes:
+<P>
+Many implementations will want to compile away the keyword argument.  
+However, they should already have technology to do this for the 
+implementation of element, so there isn't much added cost here.
+<P>
+This design note does not address the behavior of last on unbounded 
+sequences, including the effect of the default: keyword when last is 
+called on unbounded sequences.
+<P><A NAME="NEXT" HREF="03-make-class.html">Next chapter:  #3: Make Class Specification         (Addition)</A>

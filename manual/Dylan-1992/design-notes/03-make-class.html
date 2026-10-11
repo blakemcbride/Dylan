@@ -1,0 +1,115 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="02-default-keyword.html">Previous chapter:  #2: First, Second, Third, Last Default                (Addition)</A><P>
+<TITLE>Dylan Design Notes: #3: Make Class Specification         (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#3: Make Class Specification         (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note gives an expanded specification for &lt;class&gt; which 
+enables new classes to be created at runtime, with make.
+<P>
+<HR>
+<P>
+Replace the specification of &lt;class&gt; <a href="../book.annotated/ch11.html#class-class0"> on page 91 of the Dylan manual</a> 
+with the following:
+<PRE>
+&lt;class&gt;        [Abstract Class]
+</PRE>
+All classes (including &lt;class&gt;) are general instances of &lt;class&gt;.  
+&lt;class&gt; is a subclass of &lt;type&gt;.
+<P>
+In most programs the majority of classes are created with defineclass.  However, there is nothing to prevent programmers from 
+creating classes by calling make, for example, if they want to 
+create a class without storing it in a module variable, or if they 
+want to create new classes at runtime.
+<P>
+The class &lt;class&gt; supports the following init-keywords:
+<DL>
+<DT>superclasses:        <DD>Specifies the direct superclasses of the class.  
+superclasses: should be a class or a sequence of classes.  The 
+default value is &lt;object&gt;.  The meaning of the order of the 
+superclasses is the same as in define-class.
+<DT>debug-name:        <DD>Used only for debugging and display purposes.  The 
+default is implementation-dependent.
+<DT>slots:        <DD>A sequence of slot specs, where each slot-spec is a 
+sequence of keyword/value pairs.
+</DL>
+The following keywords and corresponding values  are accepted by 
+all implementations.  Implementations may also define additional 
+keywords and values for use within slot specs.
+<DL>
+<DT>getter:        <DD>A generic function of one argument.  Unless the 
+allocation of the slot is virtual, the getter method for the slot 
+will be added to this generic function.  This option is required.
+<DT>setter:        <DD>A generic function of two arguments.  Unless the 
+allocation of the slot is virtual, the setter method for the slot 
+will be added to this generic function.  There is no default.
+<DT>type:        <DD>A type.  Values stored in the slot are restricted to be of 
+this type.  The default value for this option is &lt;object&gt;.
+<DT>init-value:        <DD>Supplies a default initial value for the slot.  This 
+option cannot be specified along with init-function.  There is no 
+default.
+<DT>init-function:        <DD>A function of no arguments.  This function will 
+be called to generate an initial value for the slot when new 
+instances are created.  This option cannot be specified along with 
+init-value.  There is no default
+<DT>init-keyword:        <DD>A keyword.  This option permits an initial value 
+for the slot to be passed to make, as a keyword argument using this 
+keyword.  There is no default.  This option cannot be specified 
+along with required-init-keyword:.
+<DT>required-init-keyword:        <DD>A keyword.  This option is like initkeyword:, except it indicates an init-keyword that must be provided 
+when the class is instantiated.  If make is called on the class and 
+a required init-keyword is not provided, an error is signaled.  
+There is no default.  This option cannot be specified if initkeyword:, init-value:, or init-function: is specified.
+<DT>allocation:        <DD>One of the symbols instance, class, each-subclass, 
+constant, or virtual, or an implementation defined symbol.  The 
+meaning of this option is the same as for define-class.
+</DL>
+<HR>
+<P>
+Examples:
+<PRE>
+(make &lt;class&gt;
+      superclasses: &lt;object&gt;
+      slots: `((getter: ,point-x
+                setter: ,point-x-setter
+                init-keyword: ,x:
+                init-value: ,0
+                type: ,&lt;integer&gt;)
+               (getter: ,point-y
+                setter: ,point-y-setter
+                init-keyword: ,y:
+                init-value: ,0
+                type: ,&lt;integer&gt;)))
+
+(make &lt;class&gt;
+      superclasses: `(,&lt;input-stream&gt; ,&lt;output-stream&gt;)
+      slots: `((getter: ,stream-cache
+                setter: ,stream-cache-setter
+                init-keyword: ,cache:)))
+</PRE>
+Or, in a different style:
+<PRE>
+(make &lt;class&gt;
+      superclasses: &lt;object&gt;
+      slots: (vector (vector getter: point-x
+                             setter: point-x-setter
+                             init-keyword: x:
+                             init-value: 0
+                             type: &lt;integer&gt;)
+                     (vector getter: point-y
+                             setter: point-y-setter
+                             init-keyword: y:
+                             init-value: 0
+                             type: &lt;integer&gt;)))
+
+(make &lt;class&gt;
+      superclasses: (vector &lt;input-stream&gt; &lt;output-stream&gt;)
+      slots: (vector (vector getter: stream-cache
+                             setter: stream-cache-setter
+                             init-keyword: cache:)))
+</PRE>
+<P><A NAME="NEXT" HREF="04-no-class-mods.html">Next chapter:  #4: No Incremental Class Modifications        (Change)</A>

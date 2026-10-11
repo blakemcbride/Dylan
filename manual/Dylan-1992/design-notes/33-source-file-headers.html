@@ -1,0 +1,104 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="32-modules.html">Previous chapter:  #32: Module Defining Forms      (Addition)</A><P>
+<PRE>
+<H2>Dylan Design Notes</H2>
+
+<TITLE>Dylan Design Notes: #33: Headers for Dylan Source Files     (Addition)</TITLE>
+<H1>#33: Headers for Dylan Source Files     (Addition)</H1>
+
+Version 1, January 1994
+Copyright (c) 1993-1994, Apple Computer
+</PRE>
+This design note specifies a standard portable format for distributing 
+Dylan source code.
+<HR>
+We introduce the notion of a Dylan source code file. A file has two 
+parts, the header and the body.  The header comes before the body.
+<P>
+The body consists of zero or more outer expressions and comments, all of 
+which must be in the same syntax.
+<P>
+The  header consists of zero or more keyword-value pairs, as follows:
+<OL>
+<LI>The syntax of a keyword is as follows: a keyword is a letter, followed 
+by zero or more letters, digits, and hyphens, followed by a colon, 
+contains only characters from the ISO 646 7-bit character set, and is 
+case-independent.
+<P>
+<LI>A keyword begins on a new line, and cannot be preceded by whitespace.
+<P>
+<LI>All text (excluding padding whitespace) between the keyword and the 
+newline is considered to be the value.  Additional lines can be added by 
+having the additional lines start with whitespace.  Leading whitespace is 
+not part of the value.
+<P>
+<LI>Interpretation of the value is determined by the keyword.
+<P>
+<LI>Implementations must recognize and handle standardized keywords 
+properly, unless the specification for a keyword explicitly states that 
+it can be ignored.
+<P>
+<LI>When importing a file, implementations are free to ignore any 
+non-standard keyword/value pair that they do not recognize.
+<P>
+<LI>When exporting a file, implementations must use standard keywords 
+properly. Implementations are free to use non-standard keywords. 
+<P>
+<LI>The definition of a keyword may allow multiple occurrences of that 
+keyword in a single file header.  If it does, it must specify the meaning 
+of multiple occurrences.  If it does not, it is an error for the keyword 
+to appear more than once.
+</OL>
+The header cannot contain comments.
+<P>
+Blank lines may not appear in the header.  A blank line defines the end 
+of the header and the beginning of the code body.  It is not part of the 
+code body.
+<P>
+The following standard keywords are defined:
+<PRE>
+module:  module-name  [Header keyword]</PRE>        
+Expressions in the file are associated with the named module.  This 
+keyword is required.
+<PRE>
+author: arbitrary text  [Header keyword]
+copyright:arbitrary text  [Header keyword]
+version: arbitrary text  [Header keyword]</PRE>
+<P>
+These are provided for standardization.  These are optional, and can be 
+ignored by the implementation.
+<P>
+For example, a typical Dylan source file might look like this:
+<PRE>
+module: quickdraw
+author:         J. Random Rect
+                Linear Wheels, Inc., "Where quality is a slogan!"
+                rect@linear.com
+copyright: (c) 1993 Linear Wheels, Inc., All rights reserved
+version:        1.3 alpha (not fully tested)
+
+define-constant $black-color ...
+...
+</PRE>
+<HR>
+<h3>
+Notes
+</h3>
+Some sort of standard portable file format is needed to publish Dylan 
+source code. Code will be shared among very different development 
+environments, and although some will store code in a database, sharing 
+will only be possible through some kind of files.  
+<P>
+This change will enhance ability to share code between development 
+environments.   It will facilitate code-management tasks in file-based 
+environments by formalizing code attributes like syntax, authorship, 
+copyright, version control, etc.  It will facilitate management of code 
+repositories (e.g. file servers, cd-roms, particularly in multi-platform 
+environments) by providing readily browsable information to tools with 
+minimal awareness of Dylan.
+<P>
+Keyword-value pairs are relatively easy for machines to parse and 
+generate,and are relatively legible to humans.  Also, this allows for 
+future extensions by adding keywords.
+
+<P><A NAME="NEXT" HREF="34-select-ordering.html">Next chapter:  #34: Select Ordering    (Clarification)</A>

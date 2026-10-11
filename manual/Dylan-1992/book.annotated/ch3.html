@@ -1,0 +1,206 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch2.html">Previous chapter:  Language Overview</A><P>
+<title>Dylan manual: Syntax and Semantics</title>
+<H2>3. Syntax and Semantics<p></H2>
+<b><A NAME="lex">Lexical <A NAME="notation1">Notation</A><A HREF="ch3.html#notation2">[next citation]</A></b>
+<p>
+Dylan programs are written using a parenthesized Lisp notation <A NAME="syntax0">FN</A><A href="footnotes.html#fn4">4</A>.<p>
+
+<DL COMPACT>
+<DT><DD><A NAME="White Space0">White Space</A> (including spaces, tabs, newlines, and newpage characters) serves as a delimiter.  The amount of contiguous white space is not significant.  Thus, any number of contiguous white space characters can be used for formatting.
+<DT>
+<b>(</b>...<b>)</b><DD>
+<A NAME="lists0">Lists</A> are delimited by open and close parentheses.  The items between the parentheses are the elements of the list.<p>
+<DT>'<b>#(</b>...<b>)</b>'<DD><A NAME="Vectors0">Vectors</A> (one-dimensional arrays) are represented using list notation, preceded by a hash-sign.
+<DT><b>foo</b><DD><A NAME="Symbols0">Symbols</A> are a series of alphanumeric and symbolic characters that do not indicate a number.  Symbols are not case-sensitive, though they do retain case information. <A href="footnotes.html#fn5">FN5</A> 
+<DT><b>foo:</b><DD><A NAME="Keywords0">Keywords</A> are used as symbolic constants.  They look like symbols ending in colons.  However, they are not symbols.  They are a distinct class of objects.
+<DT><b>123</b><DD>
+<DT><b>1.5</b><DD>
+<DT><b>-4.0</b><DD>
+<DT><b>+57</b><DD>
+<DT><b>#x1f4e</b><DD>The syntax of numbers is described in the numerics section of this manual.
+<DT><b>"abc"</b><DD><A NAME="Strings0">Strings</A> are delimited by double-quote marks.  The characters between the quotes are the elements of the string.  Within the string, white space is significant (it contributes to the string).  Double quotes can be included in strings by preceding them with a backslash character.  Within a string, backslash (\) has the general effect of quoting the following character.  To include a backslash in a string, the backslash must be preceded by another backslash.
+<DT>'<b><A NAME="0">#</A></b>'<b>a</b><DD>
+<DT><b>#\space</b><DD><A NAME="characters0">Characters</A> are represented by a hash-sign, followed by a backslash, followed by the character or the name of the character.  Character names include newline, space, rubout, page, tab, backspace, return, and linefeed.
+<A NAME= "comment0"> <DT><b>;</b><DD>A semicolon indicates the start of a comment.  The comment continues until the end of the line.  At the start of a new line, regular parsing begins again.
+<DT>'<b>#|</b>...<b>|#</b>'<DD>Hash-sign/vertical-bar pairs delimit extended comments.  These comments can run over multiple lines.  Extended comments can be nested.</A>
+<DT>{...}<DD>Curly braces are used to delimit unreadable objects.  These are objects (for example, generic functions) that do not print out in a format that can be reliably read back into Dylan.
+<DT><b>'</b><DD>A single quote mark is used to introduce literal constants.  It is an abbreviation for the quote special form.
+<DT><b>`</b><DD>A backquote is used to introduce a section of partial quotation.  Backquote is described in a separate section of this manual.
+<DT>'<b><A NAME="t0">#t</A><A HREF="ch8.html#t1">[next citation]</A></b>'<DD>The hash-sign t syntax is used to indicate the canonical true value.
+<DT>'<b><A NAME="f0">#f</A><A HREF="ch8.html#f1">[next citation]</A></b>'<DD>The hash-sign f syntax is used to indicate the canonical false value.
+<DT>'<b><A NAME="key0">#key</A><A HREF="ch6.html#key1">[next citation]</A></b>'<DD>
+<DT>'<b><A NAME="rest0">#rest</A><A HREF="ch6.html#rest1">[next citation]</A></b>'<DD>
+<dt>'<b><A NAME="next0">#next</A><A HREF="ch6.html#next1">[next citation]</A></b>'<dd>#key, #rest, and #next are used to indicate special tokens in parameter lists.
+</DL>
+<p>
+<b><A NAME="notation2"><A HREF="ch3.html#notation0">Conventions[return to first citation]</a> </b> <p>
+Programs written in Dylan, and Dylan itself, use the following conventions.<p>
+<b>Variable Names<p>
+</b>Several conventions for naming <A NAME="variables0">variables</a> help programmers identify the purposes of variables.  With the exception of setter variables (described below), the names of variables do not affect the semantics of a program, but are simply used to improve readability.<p>
+Variables used to hold classes begin and end with <A NAME="angle brackets0">angle brackets</A>.<p>
+<DL COMPACT>
+<DT><b>&lt;window&gt;<DD>
+<DT>&lt;object&gt;<DD>
+<DT>&lt;character&gt;<DD>
+<DT>&lt;number&gt;<DD>
+<DT>&lt;stream&gt;<DD>
+<DT>&lt;list&gt;
+</DL>
+</b>Module variables that are designed to have their values change in the course of a program (i.e., variables that are not read-only) begin and end with asterisks.<p>
+<DL COMPACT>
+<DT><b>*parse-level*<DD>
+<DT>*incremental-search-string*<DD>
+<DT>*machine-state*<DD>
+<DT>*window-count*
+</DL>
+</b>
+<p>
+Program <A NAME="constants0">constants</A><A HREF="ch3.html#constants1">[next citation]</A> (read-only module variables) begin with a dollar sign.<p>
+<dl compact>
+<dt><b>$pi<dd>
+<dt>$end-of-file
+</dl>
+</b>The names of <A NAME="predicate functions0">predicate functions</A> end with a question mark.  Predicates are functions which return a true or false value. <A href="footnotes.html#fn6">FN6</a><p>
+<DL COMPACT>
+<DT><b>subclass?<DD>
+<dt>even?<dd>
+<DT>instance?<DD>
+<dt>id?
+</DL>
+</b>The names of operations that destructively modify data structures end with an exclamation point.  These names sometimes contrast with versions that allocate new memory for the result.<p>
+<DL COMPACT>
+<dt>set!<dd>
+<DT>reverse!<DD><i>(non-destructive version is </i>reverse<i>)</i>
+<DT>sort!<DD><i>(non-destructive version is </i>sort<i>)</i>
+</DL>
+<b>See Also <a href="../design-notes/20-setter-syntax.html">Dylan Design Notes: New Syntax for Setter Variables (Change)</a></b><p> 
+Operations that retrieve a value from a location are called <b><A NAME="getter0">getter</A>s</b>.  Operations that store into a location are called <b><A NAME="setter1">setter</A><A HREF="ch2.html#setter0">[return to first citation]</A>s</b>.  In general, getters and setters come in pairs.  The getter will be stored in a symbol variable, and the setter will be stored in the corresponding setter variable.  This is actually not simply a convention.  The rule is exploited to generate setter names from getter names automatically, and it is used to expand calls to set!.<p>
+<pre>
+<i>Getter</i>             <i>Setter </i>
+window-position   (setter window-position)
+table-size        (setter table-size)
+window-color      (setter window-color)
+</pre>
+These two expressions are roughly equivalent; they both set the color of
+my-window to green:<p>
+<PRE><tt>((setter window-color) my-window green)
+(set! (window-color my-window) green)
+</tt></PRE>
+<b>See Also: <a href="../design-notes/19-top-level-defns.html">Dylan Design Notes: Definitions are Declarative (Change)</a></b><p>
+<A NAME="exp"><b>Expressions and Programs</b></A><p>
+Dylan programs are composed of <b><A NAME="expression0">expression</A>s</b>.  When an expression is <b><A NAME="evaluate0">evaluate</A>d</b>, it returns zero or more values.  Evaluating an expression may have side effects and may involve evaluating sub-expressions. <p>
+There are four kinds of expressions: literal <A NAME="constants1">constants</A><A HREF="ch3.html#constants0">[return to first citation]</A>, variable references, function calls, and syntax forms. <A href="footnotes.html#fn7">FN7</A> <p>
+<b>Literal Constants<p>
+</b>Literal constantssuch as numbers, strings, and keywordsmay be directly embedded in programs.  Literal constants evaluate to themselves.  In addition to numbers and strings, some system constants are provided, for example, #t and #f (Boolean true and false).<p>
+Symbols and lists (which have special evaluation rules) must be quoted to be used as literal constants.  Quoting is performed with the syntax form quote, which is usually abbreviated to a single quote mark ( ' ).<p>
+<PRE>
+  <i>? </i><tt>"abc"</tt>
+   <i>"abc"
+   ?</i> <tt>123</tt>
+   <i>123
+   ?</i> <tt>foo:</tt>
+   <i>foo:
+   ?</i> <tt>#\a</tt>
+   <i>#\a
+   ?</i> <tt>#t</tt>
+   <i>#t
+   ?</i> <tt>#f
+   </tt><i>#f
+   ?</i> <tt>(quote foo)</tt>
+   <i>foo
+   ?</i> <tt>'foo</tt>
+   <i>foo
+   ?</i> <tt>'(1 2 3)</tt>
+   <i>(1 2 3)</i>
+</PRE>
+<b>Variable References<p>
+</b>When an expression is a variable name, the expression indicates a variable reference.  The variable name evaluates to the value of the variable.<p>
+There are two syntaxes for variable names in Dylan.  A variable name can be a symbol, or it can be a two-element list whose first element is the symbol setter and whose second element is another symbol.  The latter syntax is used to create <b><A NAME="setter variables0">setter variables</A></b>.  Setter variables can be used in all the same situations as symbol variables.<p>
+The symbol setter cannot be used as a variable name.  This restriction is
+necessary to prevent ambiguities in the syntax.  The following are examples of legal variable names:
+<dl compact>
+<dt>position<dd>
+<dt>my-variable<dd>
+<dt>(setter position)<dd>
+<dt>(setter another-variable)
+</dl>
+Dylan supports two kinds of variables:  lexical variables and module variables.  Lexical variables are created locally and can be referenced only in a limited range of program text.  Method parameters are an example of lexical variables; they can be referenced from the body of the method but not from anywhere else.<p>
+Module variables are created by using a define form.  Module variables can be referenced by any expressions defined in the same module.  Module variables play the role assumed by global variables, unit variables, and pool variables in other languages.<p>
+<PRE>
+  <i>? </i><tt>&lt;window&gt;</tt>
+   <i>{the class &lt;window&gt;}
+   ?</i> <tt>concatenate</tt>
+   <i>{the generic function concatenate}
+   ?</i> <tt>(define my-variable 25)
+   </tt><i>my-variable
+   ?</i> <tt>my-variable</tt>
+   <i>25
+   ?</i> <tt>(bind ((x 50))
+     (+ x x))</tt>
+   <i>100
+   ?</i> <tt>(setter element)
+   </tt><i>{the generic function (setter element)}
+   ?</i> <tt>(define (setter my-variable) 20) <A href="footnotes.html#fn8">FN8</A> 
+   </tt><i>(setter my-variable)
+   ?</i> <tt>(setter my-variable)</tt>
+   <i>20</i>
+</PRE>
+<b>Function Calls<p>
+</b>A list whose first element is not a syntax operator or setter is a function call.  The function to be called is the value of the first element in the list.  The arguments to the function are the values of the remaining elements in the list.<p>
+The arguments to a function are evaluated in left-to-right order.  The function may be evaluated at any time before, during, or after the arguments are evaluated.  Once the function and all the arguments are evaluated, the function is called with the arguments.<p>
+Note that the same rules are used to evaluate the function and argument parts of an expression.  The expression in the function position does not have to be a variable reference; it can be any expression that evaluates to a function.  In this way, Dylan is like Scheme and unlike Common Lisp.<p>
+A function call evaluates to the values returned by the function.<p>
+<PRE>
+  <i>? </i><tt>(+ 3 4)</tt>
+   <i>7
+   ?</i> <tt>(* my-variable 3)</tt>
+   <i>75
+   ?</i> <tt>(* (+ 3 4) 5)</tt>
+   <i>35
+   ?</i> <tt>((if #t + *) 4 5)</tt>
+   <i>9</i>
+</PRE>
+<b>See Also: <a href="../design-notes/19-top-level-defns.html">Dylan Design Notes: Definitions are Declarative (Change)</a></b><p> 
+<b><A NAME="Syntax Form0">Syntax Form</A>s<p>
+</b>A list whose first element is a <b><A NAME="special form operator0">special form operator</A></b> or <b><A NAME="macro operator0">macro operator</A></b> is a <b>syntax form</b>.  Every syntax form has its own rule for evaluation.<p>
+Special form operators and macro operators are together called <b><A NAME="syntax operators0">syntax operators</A></b>.<p>
+Syntax forms look like function calls (that is, they are represented as lists).  However, syntax forms are not function calls.  In a function call, all the subexpressions are evaluated and passed to the function as arguments.  In contrast, a syntax form can examine its subexpressions literally and can choose to evaluate some and give special meaning to others.  For example, the special form bind parses its first subexpression into a variable binding list.<p>
+Some examples of syntax operators are define, set!, bind, and method.<p>
+<PRE><tt>
+   ; Creates and initializes a module variable
+   (define my-variable 25)
+   ; Sets the value to 12
+   (set! my-variable 12)
+   ; Returns 30. Uses lexical variables x and y.
+   (bind ((x 10) (y 20))
+      (+ x y))
+   ; Creates an anonymous method, which expects 2 
+   ; numeric arguments.
+   (method ((a &lt;number&gt;) (b &lt;number&gt;))
+      (list (- a b) (+ a b)))</A>
+</tt></PRE>
+<p>
+<A NAME="mv"><b><A NAME="Multiple Values0">Multiple Values</A></b></a>
+
+Evaluating a Dylan expression can yield one value, more than one value, or no values at all.  This capability is called <b>multiple values</b>.<p>
+Multiple values are supported through two capabilities:  the function values is used to return multiple values; and bind (described in the section on Lexical Variables, below) is used to receive multiple values.<p>
+<PRE>
+<b><A NAME="values1">values</A><A HREF="ch2.html#values0">[return to first citation]</A></b>   #rest <i>the-values</i>   X<i>  the-values</i>	[Function]
+</PRE>
+Returns <i>the-values</i> as multiple values.<p>
+<PRE>
+ <i>? </i><tt>(values 1 2 3)
+ </tt><i>1
+   2
+   3
+   ?</i> <tt>(define-method edges ((center &lt;number&gt;)(radius &lt;number&gt;))
+   </tt>  <tt>  (values (- center radius) (+ center radius)))
+   </tt><i>edges
+   ?</i> <tt>(edges 100 2)
+   </tt><i>98
+   102
+</pre)
+<P><p>
+<A NAME="NEXT" HREF="ch4.html">Next chapter:  Variables</A>
+

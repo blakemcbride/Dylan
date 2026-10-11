@@ -1,0 +1,26 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="09-punt-slot-desc.html">Previous chapter:  #9: Punt Slot Descriptors        (Change)</A><P>
+<TITLE>Dylan Design Notes: #10: Element-Setter Signals Error        (Clarification)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#10: Element-Setter Signals Error        (Clarification)</H1>
+<P>
+Version 1, March 1993
+<P>
+It is an error if element-setter cannot successfully set the element 
+of a sequence.  This design note requires an error to be signaled in 
+that case, preventing programs from silently returning an incorrect 
+result or otherwise failing.
+<P>
+<HR>
+<P>
+Specify that if element-setter cannot successfully set the element of 
+a sequence, it should signal an error.  The second paragraph of the 
+description of element-setter on <a href="../book.annotated/ch12.html#(setter element)4">page 127 of the Dylan manual</a> should 
+be changed to read, "An error is signaled if a program calls elementsetter with a key that is not already a key to collection, unless the 
+collection supports the dynamic addition of keys and adds the key and 
+new-value."
+<P><A NAME="NEXT" HREF="11-last-setter.html">Next chapter:  #11: Last-Setter        (Addition)</A>
+
+

@@ -1,0 +1,163 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="05-type-system.html">Previous chapter:  #5: Regularization of the Type System        (Change)</A><P>
+<TITLE>Dylan Design Notes: #6: Limited Types        (Addition)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#6: Limited Types        (Addition)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note introduces a new generic function, limited, for 
+constructing limited types, and specific methods for creating limited 
+integer types and limited collection types.   For example, (limited 
+&lt;integer&gt; min: 0 max: 255) and (limited &lt;array&gt; of: &lt;single-float&gt;) 
+are useful types.
+<P>
+Limited types are not classes.  See <a href="05-type-system.html">Dylan Design Note #5: 
+Regularization of the Type System</a> for the general framework allowing 
+types that are not classes.
+<P>
+<HR>
+<OL>
+<H2><LI>Limited Type Constructor</H2>
+<P>
+Add a new function, <a href="../book.annotated/ch6.html#funclass">limited</a>, with the following definition:
+<P>
+limited class   #key  =&gt; type        [Generic Function]
+The function limited returns a limited subtype of class.   The 
+available keyword arguments depend on the class.  Not all classes 
+support limited; the methods for limited are documented individually.
+<P>
+<H2><LI>Limited Integer Types</H2>
+<P>
+Specify a method for creating limited subtypes of <a href="../book.annotated/ch14.html#integer-class0">&lt;integer&gt;:</a>
+<P>
+limited (singleton &lt;integer&gt;) #key  min max =&gt; type        [G. F. Method]
+Returns a limited integer type, which is a subtype of &lt;integer&gt; whose 
+instances are integers greater than or equal to <a href="../book.annotated/ch14.html#min0">min</a> (if min: is 
+specified) and less than or equal to <a href="../book.annotated/ch14.html#max0">max</a> (if max: is specified).  If 
+no keyword arguments are specified, the result type is equivalent to 
+&lt;integer&gt;.  Limited integer types are not instantiable.
+<PRE>
+;accepts integers between -1000 and 1000 inclusive.
+
+(define-method f ((x (limited &lt;integer&gt; min: -1000 max: 1000)) ...) 
+...)
+
+;accepts all strictly positive integers.
+
+(define-method f ((x (limited &lt;integer&gt; min: 1) ...) ...)
+
+If w, x, y, and z are integers, the following equivalences hold:
+
+(instance? x (limited &lt;integer&gt; min: y max: z))
+   iff (and (instance? x &lt;integer&gt;) (&lt;= y x z))
+
+(instance? x (limited &lt;integer&gt; min: y))
+   iff (and (instance? x &lt;integer&gt;) (&lt;= y x))
+
+(instance? x (limited &lt;integer&gt; max: z))
+   iff (and (instance? x &lt;integer&gt;) (&lt;= x z))
+
+(subtype? (limited &lt;integer&gt; min: w max: x) 
+          (limited &lt;integer&gt; min: y max: z))
+   iff (and (&gt;= w y) (&lt;= x z))
+
+(subtype? (limited &lt;integer&gt; min: w ...) (limited &lt;integer&gt; min: y))
+   iff (&gt;= w y)
+
+(subtype? (limited &lt;integer&gt; ... max: x) (limited &lt;integer&gt; max: z))
+   iff (&lt;= x z)
+</PRE>
+
+<H2><LI>Limited Collection Types</H2>
+<P>
+Specify a method for creating a limited subtype of a collection 
+class:
+<P>
+limited collection-class  #key  of  size  =&gt; type        [G. F. Method]
+Returns a limited collection type: a subtype of collection-class  
+whose instances are limited to have elements of a particular type 
+and/or limited to a particular number of elements.  A limited 
+collection type is instantiable and accepts the same keyword 
+arguments to make as the collection-class from which it is derived.
+<P>
+collection-class  must be instantiable and not sealed, thus among the 
+predefined collection classes, <a href="../book.annotated/ch12.html#instcoll">the following</a> are acceptable: &lt;table&gt;, 
+&lt;array&gt;, &lt;vector&gt;, &lt;stretchy-vector&gt;, &lt;string&gt;, &lt;deque&gt;, and &lt;range&gt;</a>.
+<P>
+If  of: type  is specified, each element must be an instance of type.  
+Fetching an element of the collection is guaranteed to return an 
+instance of type.    Setting or initializing an element will check 
+that the new element is an instance of type  and signal an error of 
+type &lt;type-error&gt; if it is not.
+<P>
+If  <a href="../book.annotated/ch12.html#size0">size</a>: integer  is specified, there must be exactly integer  
+elements.  This keyword argument is not accepted if collection-class  
+is stretchy (e.g. &lt;table&gt;, &lt;stretchy-vector&gt;, or &lt;deque&gt;).  For 
+&lt;array&gt;, the argument can be a sequence of integers.
+<P>
+Here are some example expressions that return useful types:
+<PRE>
+(limited &lt;array&gt; of: &lt;single-float&gt;)
+(limited &lt;vector&gt; of: (limited &lt;integer&gt; min: 0 max: 255))
+(limited &lt;stretchy-vector&gt; of: &lt;window&gt;)
+(limited &lt;vector&gt; of: &lt;single-float&gt; size: 100)
+(limited &lt;table&gt; of: &lt;symbol&gt;)
+</PRE>
+Two limited collection types are disjoint unless they match exactly, 
+because any operation that works on an instance of a supertype must 
+work on an instance of a subtype.
+<P>
+ If c1 and c2 are instantiable, unsealed subclasses of &lt;collection&gt;, 
+t1 and t2 are types, t3 is a type other than a limited collection 
+type, and n1 and n2 are integers, the following equivalences hold:
+<PRE>
+(subtype? (limited c1 of: t1 size: n1) (limited c2 of: t2 size: n2))
+   iff (and (id? c1 c2) (subtype? t1 t2) (subtype? t2 t1) (id? n1 n2))
+
+(subtype? (limited c1 of: t1) (limited c2 of: t2))
+   iff (and (id? c1 c2) (subtype? t1 t2) (subtype? t2 t1))
+
+(subtype? (limited c1 size: n1) (limited c2 size: n2))
+   iff (and (id? c1 c2) (id? n1 n2))
+
+(subtype? (limited c1 ...) t3) iff (subtype? c1 t3)
+</PRE>
+</OL>
+<HR>
+<P>
+Notes:
+<P>
+We needed to specify that two limited collection types are disjoint 
+unless they match exactly, because any operation that works on an 
+instance of a supertype must work on an instance of a subtype.  Only 
+if the element types are identical can the element and element-setter 
+operations on the supertype also work on the subtype.  Otherwise 
+either element on the subtype could return values that a caller of 
+element on the supertype would not expect, or else element-setter on 
+the subtype could fail to accept values that element-setter on the 
+supertype accepts.
+<P>
+Implementation Notes:
+<P>
+Like any type, limited subtypes must be supported by the generic 
+function dispatch mechanism.  If the usual approach is used, where 
+the generic function effectively calls object-class and uses that 
+class as a key for a table lookup that finds the applicable methods, 
+then when the class has limited subtypes used as method specializers, 
+an additional dispatch is required.  This is similar to the way 
+singletons are usually handled, so the implementation should be 
+straightforward.  Perhaps the real cost is implementing the compiler 
+optimizations that are made possible by this, which are not required 
+by the language but which nearly everyone will want to do.
+<P>
+Type-limited collections can be used to hoist type checking from the 
+time when an element is extracted from a collection, back to the time 
+when the element is put into the collection, which could be useful 
+with any user-defined element type.  Often the compiler can prove the 
+type check in (setter element) is unnecessary and optimize it out.  
+Limiting the size of a collection allows the compiler to optimize out 
+array bounds checking.
+<P><A NAME="NEXT" HREF="07-union-types.html">Next chapter:  #7: Union Types        (Addition)</A>

@@ -1,0 +1,478 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="ch5.html">Previous chapter:  Modules</A><P>
+<title>Dylan manual: Introduction to Functions and Classes</title>
+<H2>6. Introduction to Functions and Classes</H2><p>
+This section describes the use of functions and classes, the basic tools used in creating Dylan programs.<p>
+<A NAME="funcmeth">
+<b>Generic Functions and Methods<p>
+</b>The basic tools for defining generic functions and methods are the macros define-generic-function and define-method.  Additional tools for working with generic functions and methods are described in a later section.<p>
+define-generic-function is used to declare information about the generic function as a whole.  Currently, it is used to describe the arguments accepted by the generic function.  It also provides a home base, for documentation purposes.  If Dylan is extended to support a more formal notion of protocols, some of this information would be described in define-generic-function forms.  It is not strictly necessary to use define-generic-function; generic functions can be created with define-method alone.<p>
+define-method is used to add methods to a generic function.  It can also be used to create a new generic function that does not already exist.<p>
+<b>See Also:<a href="../design-notes/23-defines-make-constants.html">Dylan Design Notes: Defining Forms Make Constants (Change)</a></b><p>
+<b>See Also: <a href="../design-notes/19-top-level-defns.html">Dylan Design Notes: Definitions are Declarative (Change)</a></b><p> 
+<PRE>
+<b><A NAME="define-generic-function2">define-generic-function</A><A HREF="ch2.html#define-generic-function0">[return to first citation]</A> 	</b><i>name parameter-list </i> 	[Macro]
+<i>	keyword1 option1 keyword2 option2 </i>... 
+==>  <i>name</i>
+</PRE>
+<i>name</i> should be a variable name.  If the variable is bound in the current module, then it must contain a generic-function, or an error is signaled.  If it contains a generic function, the definition of the generic function must be consistent with the call to define-generic-function, or an error is signaled.  If there is no variable with the given name bound in the current module, then a read-only variable with the name is created in the current module, containing a new generic function object, as specified by the <i>parameter-list</i> and options.<p>
+define-generic-function returns <i>name</i>.<p>
+<i>parameter-list</i>  has the syntax<p>
+({<i>required</i>}* [#rest <i>rest</i>] [#key {<i>key</i>}*])<p>
+The <i>requireds</i> and <i>rest </i>must be variable names.  The <i>keys </i>must be symbols or keywords.  #key can be specified without specifying any <i>keys</i>.<p>
+Specifying #key means that the generic function takes a variable number of arguments.  Methods added to the generic function must specify #rest, #key, or both.  When the generic function is called, the arguments following the required arguments must be keyword/value pairs, whether or not any of the applicable methods contain #key.<p>
+If any <i>keys</i> are specified, then all methods added to the generic function must accept the specified keys (either by specifying them explicitly after #key or by specifying a #rest argument).<p>
+Specifying #rest means that the generic function takes a variable number of arguments; it does not however, require that the extra arguments be keyword/value pairs.  (They would only have to be keyword/value pairs if any of the applicable methods specify #key).  Methods added to the generic function must specify #rest, #key, or both.<p>
+The meaning of specifying both #rest and #key in define-generic-function is unspecified.<p>
+Currently no <i>option</i>s for define-generic-function are supported.  The syntax is specified for future expansion.  For example, options could be used to specify method-combination, the generic-functions class, return-values, additional argument checking rules, etc.<p>
+<PRE>
+<b>See Also:<a href="../design-notes/23-defines-make-constants.html">Dylan Design Notes: Defining Forms Make Constants (Change)</a></b><p> 
+<b><A NAME="define-method2">define-method</A><A HREF="ch2.html#define-method0">[return to first citation]</A></b>	<i>variable-name parameter-list</i>	[Macro]
+	<i>form1 form2 ...
+</i>==>  <i>variable-name</i>	
+</PRE>
+define-method creates a method, and adds it to the generic function in <i>variable-name</i>.  If the generic function already contains a method with the exact same <A NAME="specialize0">specialize</A><A HREF="ch10.html#specialize1">[next citation]</A>rs as the new method, then the old method is replaced by the new one.<p>
+<i>variable-name</i> is returned.<p>
+If the module variable <i>variable-name</i> is not already defined, it is first defined (as with define) and a generic function is created and stored in it.  Thus, define-method will create a new generic function or extend an old one, as needed.<p>
+If the variable <i>variable-name</i> is already defined but contains something besides a generic function, an error is signaled.  If <i>variable-name</i> contains an incompatible generic function (e.g., a generic function with an incompatible parameter list), an error is signaled.<p>
+<b>See Also:<a href="../design-notes/21-result-types.html"> Dylan Design Notes: Result Type Declarations (Addition)</a></b><p>
+The parameters of the methodand the specializers of the parametersare described in the <i>parameter-list</i>.  The specializers declare what kinds of arguments are acceptable to the method.  The method can be called only with arguments that match the specializers of the parameters.  A complete description of parameter lists is given below.<p>
+When the method is run, it executes the <i>forms</i> in order.  The <i>forms</i>, taken together, constitute the <b><A NAME="body0">body</A></b> of the method.<p>
+Within the body of the method, the parameters can be accessed as lexical variables.<p>
+The following example shows how a generic function double could be defined to work with some built-in classes.<p>
+If you try to call double before it is defined, you get an error.<p>
+<PRE>
+<i>? </i><tt>(double 10)</tt>
+<i>error: unbound variable double.</i>
+</PRE>
+You can define a method for double that is applicable when double is called on a number.<p>
+<PRE>
+<i>? </i><tt>(define-method double ((thing &lt;number&gt;))</tt>
+  <tt>  (+ thing thing))</tt>
+<i>double</i>
+</PRE>
+<PRE>
+<i>?</i> <tt>double</tt>
+<i>{the generic function double}</i>
+</PRE>
+<PRE>
+<i>?</i> <tt>(double 10)</tt>
+<i>20</i>
+</PRE>
+The generic function double is now defined, but because it has a method only for the class &lt;number&gt;, it can be called only on instances of &lt;number&gt;.  If you try to call double with another class of argument, you will get an error.<p>
+<PRE>
+<i>? </i><tt>(double "the rain in Spain.")
+</tt><i>error: no method for {the generic function double} was found
+       for the arguments ("the rain in Spain.")
+</i></PRE>
+To operate on a second class of arguments, you have to add another method to double.<p>
+<PRE>
+<i>? </i><tt>(define-method double ((thing &lt;sequence&gt;))</tt>
+  <tt>  (concatenate thing thing))</tt>
+<i>double
+?</i> <tt>(double "the rain in Spain.")</tt>
+<i>"the rain in Spain.the rain in Spain."
+?</i> <tt>(double '(a b c))
+</b><i>(a b c a b c)</i>
+</PRE>
+<b>Parameter List Syntax<p>
+</b>Dylan supports <b><A NAME="required parameters0">required parameters</A></b>, <b><A NAME="rest parameters0">rest parameters</A><A HREF="ch6.html#rest parameters1">[next citation]</A></b>, <b><A NAME="keyword parameters0">keyword parameters</A><A HREF="ch6.html#keyword parameters1">[next citation]</A></b>, and sometimes a special <b><A NAME="next-method parameter0">next-method parameter</A></b>.<p>
+Required parameters correspond to arguments supplied when a function is called.  The arguments are supplied in a fixed order and must appear before any other arguments.<p>
+A rest parameter allows a function to accept an unlimited number of arguments. <A href="footnotes.html#fn12">FN12</A>   After the required arguments of a function have been supplied, any additional arguments are stored in a sequence, which is passed as the value of the rest parameter.<p>
+Keyword parameters correspond to arguments that are optional and may be given in any order.  The arguments and parameters are matched up by keyword name.  Keyword arguments can only be supplied after all required arguments are supplied.<p>
+Required parameters come first in the parameter list, followed by the rest parameter, if any, and then the keyword parameters, if any.  A rest parameter is indicated by the token '<A NAME="rest1">#rest</A><A HREF="ch6.html#rest2">[next citation]</A>', followed by the name of the parameter.  Keyword parameters are indicated by the token '<A NAME="key1">#key</A><A HREF="ch6.html#key2">[next citation]</A>', followed by the keyword parameter specifiers.  A next-method parameter is indicated by the token '<A NAME="next1">#next</A><A HREF="ch3.html#next0">[return to first citation]</A>', followed by the name of the parameter.<p>
+The complete syntax of parameter lists is:
+<pre>
+( {<i>required</i> | (<i>required specializer</i>)}*
+  [#next <i>next</i>]
+  [#rest <i>rest</i>]
+  [#key {<i>keyparam</i> | ([<i>keyword</i>]<i> keyparam </i>[<i>default</i>])}*]
+  )
+</pre>
+<i>required</i>, <i>rest</i>, and <i>next</i>, have the syntax of variable names.  The syntax of keyword parameters is described below.  Specializers are described below.<p>
+It is not normally necessary to specify a next-method parameter explicitly.  If a next-method parameter is not specified by the programmer, define-method inserts one with the name next-method.  If an explicit next-method parameter is given, it should come after the required parameters and before the rest and keyword parameters.  Details of using next-method are given in the section on method combination.<p>
+The following are sample parameter lists as they would appear in a method definition.<p>
+<DL COMPACT>
+<DT><b>(a b c)</b><DD>	three required parameters
+<DT><b>((a &lt;list&gt;) b #rest c)</b><DD>two required parameters and a rest parameter
+<DT><b>(#rest a)</b><DD>	a rest parameter, no required parameters
+<DT><b>(a b #key foo bar)</b><DD>	two required and two keyword parameters
+<DT><b>(#key bar baz bim)</b><DD>	three keyword and no required parameters
+<DT><b>(#rest all #key fee fi)</b><DD>a rest parameter and two keyword parameters
+</DL>
+<b><A NAME="Rest Parameters1">Rest Parameters</A><A HREF="ch6.html#Rest Parameters0">[Return To First Citation]</A><p>
+</b>The following is a sample use of a rest parameters. <p>
+<PRE>
+<i>? </i><tt>(define-method show-rest (a #rest b)
+</tt>  <tt>  (print a)
+</tt>  <tt>  (print b)
+</tt>  <tt>  #t)</tt>
+<i>show-rest
+?</i> <tt>(show-rest 10 20 30 40)</tt>
+<i>10
+(20 30 40)
+#t
+?</i> <tt>(show-rest 10)</tt>
+<i>10
+()
+#t
+</i></PRE>
+<b><A NAME="keyword parameters1">Keyword Parameters</A><A HREF="ch6.html#keyword parameters0">[return to first citation]</A><p>
+</b>When defining a method that includes keyword parameters, each keyword specifier must have one of the following forms:<p>
+<DL COMPACT>
+<dt><dd>symbol
+<dt>or<dd>(symbol default)
+<DT>or<DD>(keyword parameter)
+<DT>or<DD>(keyword parameter default)
+</DL>
+In the first two forms, the <i>symbol</i> is used to indicate both the keyword and the parameter.  Because of this, it cannot use complete variable syntax but allows only symbol variables (i.e., it does not allow setter variables).  In the last two forms, the keyword and parameter are given independently.  The keyword is used when calling the method, and the parameter is used to refer to the value inside the body of the method.  The parameter can use full variable syntax (i.e., it can be a setter variable as well as a symbol variable). <p>
+The <i>default</i> supplies a default value for the argument.  It is used when the method is called and the keyword is not supplied.  The <i>default</i> should be an expression.  It is evaluated each time the method is called and the corresponding keyword argument is not supplied.  If no <i>default</i> is specified, the parameter corresponding to an unsupplied keyword argument is initialized to #f.  The <i>default</i> is evaluated in a scope that includes all the preceding parameters, including required parameters, the rest parameter (if any), the preceding keyword parameters, and the next-method parameter (if any).<p>
+For example:<p>
+<PRE><tt>(define-method percolate (#key (brand 'maxwell-house)
+                               (cups 4)
+                               (strength 'strong))
+  (make-coffee brand cups strength))
+
+(define-method layout (widget #key (position: the-pos)
+                                   (size: the-size))
+  (bind ((the-sibling (sibling widget)))
+   (unless (</tt>= <tt>the-pos (position the-sibling))
+     (align-objects widget the-sibling the-pos the-size))
+</tt></PRE>
+These methods could be called as follows:<p>
+<PRE><tt>(percolate brand: 'folgers cups: 10)
+(percolate strength: 'weak
+           brand: 'tasters-choice
+           cups: 1)
+(layout my-widget position: (point 10 10)
+                  size: (point 30 50))
+(layout my-widget size: (query-user-for-size))
+</tt></PRE>
+The extended syntax for declaring keyword arguments (in which the keyword name and parameter name are given separately) is needed to allow keyword names like position: without forcing the method to use position as a parameter name.  If a method uses position as a parameter name, it cannot access the function stored in the module variable position.  The lexical variable will shadow the module variable.<p>
+All required arguments must be supplied before any keyword arguments can be supplied.  In the second call to show-keys, below, the arguments foo: and three are taken as the two required arguments, rather than as a keyword argument because all the required parameters must be filled before any arguments will be used towards keyword parameters.<p>
+<PRE>
+<i>? </i><tt>(define-method show-keys (req1 req2 #key foo)</tt>
+  <tt>  (format #t "requireds: ~a ~a~%" req1 req2)</tt>
+  <tt>  (format #t "key: ~a" foo)</tt>
+  <tt>  #t)</tt>
+<i>show-keys
+?</i> <tt>(show-keys 'one 'two foo: 'three)</tt>
+<i>requireds: one two
+key: three
+#t
+?</i> <tt>(show-keys foo: 'three)</tt>
+<i>requireds: foo: three
+key: #f
+#t</i>
+</PRE>
+<b>Keyword Argument Checking<p>
+</b>A method accepts only those keywords it specifically mentions in its parameter list, unless it specifies <A NAME="rest2">#rest</A><A HREF="ch3.html#rest0">[return to first citation]</A>, in which case it accepts any keyword.  (If it specifies #rest and not <A NAME="key2">#key</A><A HREF="ch3.html#key0">[return to first citation]</A>, this still counts as accepting any keyword.)  A generic function accepts all the keywords accepted by any of the applicable methods for a given call.  This means that if any applicable method specifies #rest, then the generic function will accept all keywords.<p>
+All the applicable methods wont necessarily be called (i.e., in cases where next-method is not called).  Dylan does not check for that situation.<p>
+It is an error to call a method or generic function with a keyword argument that it does not accept (either through #key or #rest).  If a method or generic function specifies #key, it signals an error if the arguments following the required arguments are not keyword/value pairs.<p>
+If a method is called via a generic function or via next-method (rather than directly), the method itself does not complain about keyword arguments not accepted by its parameter list.  In these cases, the generic function does all the checking before dispatching to any method.  In addition, Dylan is not required to check whether correct keywords are supplied if next-method is called with changed arguments.<p>
+<PRE>
+<i>?</i><tt> (define-method label ((x &lt;object&gt;) #key price)
+   (list price x))
+</tt><i>label
+?</i><tt> (define-method label ((x &lt;sequence&gt;) #key unit-price)
+   (add x (* unit-price (length x))))
+</tt><i>label
+?</i><tt> (define-method label ((x &lt;list&gt;) #rest info #key calories)
+   (add x calories))
+</tt><i>label
+?</i><tt> (label 'grape price: 189 unit-price: 2)
+</tt><i>error:  illegal keyword argument unit-price:.  Accepted keyword arguments are (price:).
+?</i><tt> (label 'grape price: 189)
+</tt><i>(189 grape)
+?</i><tt> (label (vector 3 4 5) price: 189 unit-price: 2)
+</tt><i>#(6 3 4 5)
+?</i><tt> (label (vector 3 4 5) protein: 7 fat: 8 calories: 9)
+</tt><i>error:  illegal keyword argument protein:.  Accepted keyword arguments are (price: unit-price:).
+?</i> <tt>(label (list 3 4 5) protein: 7 fat: 8 calories: 9)</tt>
+<i>(9 3 4 5)</i>
+</PRE>
+A call to a function may supply the same keyword argument more than once.  When this is done, the leftmost occurrence is used.<p>
+<b>Combining #rest and #key<p>
+</b>If #rest and #key are used in the same parameter list, #rest must come first.  The rest parameter will be bound to a sequence containing all the keywords and their corresponding values.  The method can be called with any keyword arguments, but it cannot be given rest arguments that are not in keyword format (i.e., are not keyword/value pairs).<p>
+<PRE>
+<i>? </i><tt>(define-method test (the-req #rest the-rest</tt>
+  <tt>                             #key a b)</tt>
+  <tt>  (print the-req)</tt>
+  <tt>  (print the-rest)</tt>
+  <tt>  (print a)</tt>
+  <tt>  (print b))</tt>
+<tt><i>test</tt>
+?</i> <tt>(test 1 a: 2 b: 3 c: 4)</tt>
+<i>1
+(a: 2 b: 3 c: 4)
+2
+3</i>
+</PRE>
+<b>Parameter List Congruency<p>
+</b>All the methods in and the define-generic-function of a given generic function must have <b><A NAME="congruent parameter lists0">congruent parameter lists</A></b>.  Two parameter lists are congruent if they have the same number of required arguments, and either both specify #rest and/or #key, or neither specifies #rest and/or #key.<p>
+The following are examples of groups of congruent parameter lists.  None of the parameter lists is congruent with one from any other group.<A NAME="type-checking1">type-checking</A><A HREF="ch13.html#type-checking2">[next citation]</A><p>
+<PRE><tt>(a b #key)
+(x y #key foo)
+(a b #key bar)
+(a b #rest l)
+(a b #rest l #key quux)
+
+(a b)
+(x y)
+
+(a b c)
+(d e f)
+
+(a b c #key)
+(x y c #key foo)
+(a b c #key bar)
+(a b c #rest l)
+(a b c #rest l #key quux)
+</tt></PRE><a NAME = "special">
+<b>See Also: <a href="../design-notes/13-types-survive.html">Dylan Design Notes: Type Restrictions Survive Assignment (Change)</a></b><p>
+<B>Specializing Required Parameters</B>
+<P>
+Required parameters can be <b>specialized</b> for a class or individual object.  Specialization restricts the arguments that may be passed as the value of the parameter.  The method can be called only with arguments that match the specializers of the corresponding parameters.  If a specializer is a class, the corresponding argument must be a general instance of the class.  If the specializer is a <b><A NAME="singleton0">singleton</A><A HREF="ch6.html#singleton1">[next citation]</A></b> (used to indicate an individual object), the corresponding argument must be the singletons object.<p>
+Specialized parameters are used in method dispatch.  A generic function chooses among its methods on the basis of the methods specializers.  The generic function chooses the method whose specializers most closely match the classes and identities of the actual parameters.  reference p. 53<p>
+In addition, specializers can make code easier to understand and they provide type information to the compiler.<p>
+The following are examples of parameter lists that include specializers:<p>
+<DL>
+<DT><b>((a &lt;window&gt;) b c)</b><DD>Three required arguments.  The first must be a window.
+<DT><b>((a &lt;window&gt;)</b>
+<DT><b> (b &lt;character&gt;)</b>
+<DT><b> c)</b><DD>Three required arguments.  The first must be a window and the second a character.  The third can be of any class.
+<DT><b>((a &lt;window&gt;)</b>
+<DT><b> (b &lt;character&gt;)</b>
+<DT><b> (c (singleton 0)))</b><DD>Three required arguments.  The first must be a window, the second a character, and the third the integer 0.
+<DT><b>(a (b &lt;string&gt;)<DD></b>
+<DT><b> #rest c)</b><DD>Two required arguments and a rest argument.  The second argument must be a string.
+<DT><b>((a &lt;vector&gt;) b<DD></b>
+<DT><b> #key foo bar)</b><DD>Two required and two keyword arguments.  The first required argument must be a vector.
+</DL>
+Specializers are evaluated once, when a method is created.  They are not reevaluated each time the method or containing generic function is called.<p>
+Specializers will usually be module-variables or calls to singleton.  However, they are not restricted to these forms.  A specializer can be any expression that evaluates to a class or a singleton.<p>
+
+<b>Generic Functions with No Required Parameters<p>
+</b>A generic function with no required parameters can contain a single method.  Adding a method has the effect of replacing the old method.<p></A>
+<A NAME="funclass"><b>Classes, Instances, and <A NAME="Singleton1">Singleton</A><A HREF="ch11.html#Singleton2">[Next Citation]</A>s<p>
+<b>See Also: <a href="../design-notes/05-type-system.html">Dylan Design Notes: Regularization of the Type System (Change)</a></b><p>
+<b>See Also: <a href="../design-notes/06-limited-types.html">Dylan Design Notes: Limited Types (Addition)</a></b><p>
+<b>See Also: <a href="../design-notes/07-union-types.html">Dylan Design Notes: Union Types (Addition)</a></b><p>
+</b><A NAME="Classes0">Classes</A> are used to categorize Dylan objects.  Classes specify the structure of their instances.  In concert with methods, classes help determine the behavior of their instances.  Every object is a direct instance of exactly one class.<p>
+A class determines which slots its instances have.  Slots are the local storage available within instances.  They are used to store the state of objects.  Slots correspond to the <i><A NAME="fields0">fields</A></i> or <i><A NAME="instance variables0">instance variables</A></i> of other object-oriented programming languages.<p>
+A class also helps determine the behavior of its instances.  When an object is passed as an argument to a generic function, the generic function looks at the class (and perhaps identity) of the object to determine which method should be run.<p>
+Singletons are specializers used to indicate an individual object.  A singleton for an object is created by passing the object to the function singleton.  Singletons are used to customize the behavior of individual objects.  Singletons can be used for specialization, like classes, but the specialization will only apply to the singleton object.  When determining whether a method is applicable for a set of arguments, an argument with a singleton specializer must be id? to the object used to create the singleton.<p>
+Basic information on classes is given in this section.  Additional information is given in Chapter 11.<p>
+<b><A NAME="slots0">Slots</A><p>
+</b>Slots are used to store the state of instances.  Usually, all the slots in an instance are specified in the definition of the instances class, though it is also possible to add slots to a class or an individual instance.  For most slots, each instance of the class has private storage for the slot, so one instance can have one value in the slot and another instance can have another value.<p>
+Slots are accessed through methods.  The method that returns the value of a slot is called the <b><A NAME="getter method0">getter method</A></b>, and the method that sets the value of a slot is called the <b><A NAME="setter method0">setter method</A></b>.  Normally the getter and setter methods are added to generic functions.  When defining a class, you specify slots by specifying to which generic functions the getter and setter methods should be added.<p>
+For example, the class definition for &lt;point&gt; might be<p>
+<PRE><tt>(define-class &lt;point&gt; (&lt;object&gt;)
+  horizontal
+  vertical)
+</tt></PRE>
+This definition indicates that instances of &lt;point&gt; should have two slots.  The getter method for the first slot is added to the generic function horizontal, and the getter method for the second slot is added to the generic function vertical.  The setter method for the first slot is added to the generic function (setter horizontal), while the setter method for the second slot is added to the generic function (setter vertical).<p>
+To get the horizontal coordinate of a point, make the call<p>
+<PRE><tt>(horizontal my-point)
+</tt></PRE>
+To set the horizontal coordinate to 10, use the corresponding setter function:<p>
+<PRE><tt>((setter horizontal) my-point 10)
+</tt></PRE>
+or<p>
+<PRE><tt>(set! (horizontal my-point) 10)
+</tt></PRE>
+(The full syntax for setter functions is described below, in the section on set!.)<p>
+<b>Rationale<p>
+</b>Many object-oriented languages treat slots as variables and use the syntax of variable reference to access slots.  Dylan follows the lead of some newer object-oriented languages by always accessing slots through function call (or message send) syntax. <A href="footnotes.html#fn13">FN13</A> <p>
+Consistent function call syntax helps hides implementation details.  For example, the end-point value may be stored in a slot in one class and computed from location and size in another.  Both classes provide the same interface to end-point (the end-point generic function).  The first class has added a slot getter method to end-point, and the second class has added a method that computes the value.  If the implementor of either class decides to change the implementation, users of the classes will not need to change or recompile code, because there is no change in the interface.<p>
+Further discussion of slots is given in the following sections.<p>
+<b>Defining New Classes<p>
+</b>The double example given in the section Generic Functions and Methods showed how to define methods for classes that already exist.  A large portion of Dylan programming consists of defining new classes.  New classes are created with the macro define-class.<p>
+The creation and initialization of instances is controlled by the generic functions initialize and  make.<p>
+<b>See Also: <a href="../design-notes/19-top-level-defns.html">Dylan Design Notes: Definitions are Declarative (Change)</a></b><p>
+<PRE>
+<b><A NAME="define-class2">define-class</A><A HREF="ch2.html#define-class0">[return to first citation]</A>	</b><i>class-name</i> (<i>superclass1 superclass2</i>...)	[Macro]
+	<i>slot-spec1 slot-spec2...</i>
+==>  <i>class-name</i>
+</PRE>
+define-class is used to create classes.  define-class defines the module variable <i>class-name</i> and creates a class to store in the variable.  The variable is made readonly.<p>
+The new class inherits from the list of <A NAME="superclass1"><A HREF="ch2.html#superclass0"><i>superclass</i>es[return to first citation]</A></A>.  The elements of the list are evaluated. <A href="footnotes.html#fn14">FN14</A>   The list cannot contain duplicates, and the class heterarchy cannot be circularthat is, a class cannot be its own direct or indirect superclass.  At least one superclass must be specified.<p>
+If the <i>class-name</i> argument to define-class already names a variable in the current module, and if the variable contains a class, define-class modifies the class in place.  (That is, it does not create a new class, but modifies the class which already exists.)  In this way, anything that references the class will reference the modified version.  Existing instances of the class are updated to the new class definition at some point before they are next accessed.<p>
+If the variable <i>class-name</i> exists but contains something besides a class, an error is signaled.<p>
+In addition to inheriting slots from its superclasses, the new class is given a slot for each of the <i>slot-spec</i> arguments.  In the simplest format, a slot-spec is just a symbol.  A getter method is defined on the generic function <i>symbol</i>, and a setter function is defined on the generic function (setter <i>symbol</i>).  The full syntax for slot-specs is given in a separate section below.  The full syntax allows many more options when defining slots.<p>
+The following definition creates a new class and stores it in the module variable &lt;menu&gt;.  Instances of the class will have two slots.  The first slot is read with the generic function title and set with the generic function (setter title).  The second slot is read with the generic function action and set with the generic function (setter action).<p>
+<PRE>
+<i>? </i><tt>(define-class &lt;menu&gt; (&lt;object&gt;)
+</tt>  <tt>  title
+</tt>   <tt> action)</tt>
+</PRE>
+<PRE>
+<b><A NAME="make1">make</A><A HREF="ch2.html#make0">[return to first citation]</A></b>   <i>class</i> #rest <i>key-value-pairs</i>   ==>  <i>instance</i>	[Generic Function]
+</PRE>
+Make returns an instance of <i>class</i>, with characteristics specified by <i>key-value-pairs</i>.<p>
+Dylan does not specify whether the value returned must be a newly allocated instance, or whether make is permitted to return a previously created instance.  If a new instance is allocated, make will call initialize on the instance before returning it.  The new instance and the <i>key-value-pairs</i> are passed to initialize.<p>
+The keywords arguments that can be specified in <i>key-value-pairs</i> include the keyword arguments accepted by initialize methods of the class and its superclasses, as well as the init-keywords specified for slots in the class and its superclasses.  Init-keywords are described below.<p>
+The object returned is guaranteed to be a general instance of <i>class</i> but not necessarily a direct instance of <i>class</i>.  This liberality allows make to be called on an abstract class; it can instantiate and return a direct instance of one of the concrete subclasses of the abstract class. <A href="footnotes.html#fn15">FN15</A> <p>
+Programmers do not normally add methods to make.  Instead, they add methods to initialize.<p>
+<PRE>
+<b><A NAME="initialize1">initialize</A><A HREF="ch2.html#initialize0">[return to first citation]</A></b>   <i>instance </i>#key...   ==>  <i>{unspecified}</i>	[Generic Function]
+</PRE>
+initialize is used to perform class-specific initialization of new instances.  Programmers should add methods to this generic function, to perform any initializations specific to classes they define.<p>
+<b><A NAME="Slot Options0">Slot Options</A> </b><p>
+Each <i>slot-spec</i> in a define-class form can have one of the following forms:<p>
+<DL COMPACT>
+<DT>  <DD>slot-name
+<DT>or<DD>(slot-name {keyword value}*)
+<DT>or<DD> ({keyword value}+)
+</DL>
+The <i>slot-name</i> argument is not evaluated.  It must be a symbol.  It provides default values for two of the keyword arguments.  The <i>slot-name</i> is not otherwise used, except perhaps for debugging purposes.<p>
+Either <i>slot-name</i> or the getter: keyword must be specified.<p>
+The possible <i>keywords</i> are:<p>
+<ul>
+<li><b>getter:
+<li>setter:
+<li>type:
+<li>init-value:
+<li>init-function:
+<li>init-keyword:
+<li>required-init-keyword:
+<li>allocation:
+</ul>
+</b>Each keyword can be specified no more than once and must be followed by a value.  Implementations may add additional keyword arguments.<p>
+<DL COMPACT>
+<DT><b>getter:</b><DD>The name of a module variable to which the getter method should be added.  If the <i>slot-name</i> argument is given, it is used as the default value for the getter: argument; otherwise there is no default.  This argument is not evaluated.
+<DT><b>setter:</b><DD>The name of a module variable to which the setter method should be added.  If the <i>slot-name</i> argument is given, then (setter <i>slot-name</i>) is used as the default value for the setter: argument; otherwise there is no default.  This argument is not evaluated.
+<DT><b>type:</b><DD>Should be a type-specifier that limits the types of values that can be stored in the slot.  This type specification is enforced by the low-level slot storage mechanisms.  It is not enforced for virtual slots, which do not use the low-level slot storage mechanisms.
+<DT><DD>This argument defaults to &lt;object&gt;, which allows any object to be stored in the slot.  The argument is evaluated once, after the variable containing the class is defined and before the slot is first added to an instance.
+<DT><DD>Currently, the only type specifiers supported are specializers (classes and singletons).
+<DT><b>init-value:</b><DD>Supplies a default initial value for the slot.  The argument is evaluated once, after the variable containing the class is defined and before the slot is first added to an instance.  The resultant value is used as the initial value when an instance is created.  If you want to create a new value for every instance, you should supply an init-function rather than an init-value.  There is no default value for this argument. 
+<DT><DD>init-value: may not be specified with init-function:.
+<DT><b>init-function:</b><DD>Should be a function of no arguments.  It will be called to generate an initial value for the slot when a new instance is created.  There is no default value for this argument.   The argument is evaluated once, after the variable containing the class is defined and before the slot is first added to an instance.
+<DT><DD>init-function: may not be specified with init-value:.
+<DT><b>init-keyword:</b><DD>Should be a keyword.  It permits an initial value for the slot to be passed to make, as a keyword argument using this keyword.  For use, see Slot Initialization, below. This argument is not evaluated.
+<DT><DD>There is no default for the init-keyword: argument.  If none is specified, there will be no init-keyword for the slot.
+<DT><DD>init-keyword: and required-init-keyword: cannot both be specified for a single slot.
+<dt>
+<b>required-init-keyword:</b><dd>
+Like init-keyword:, except it indicates an init-keyword that must be
+provided when the class is instantiated.  If make is called on the class and a required init-keyword is not provided, an error is signaled. <A href="footnotes.html#fn16">FN16</a> 	If required-init-keyword: is specified for a slot, then init-keyword:, init-value:, and init-function: cannot be specified.
+<dt><b>allocation:</b><dd>	Specifies how storage for the slot is allocated. This argument should be one of the symbols instance, class, each-subclass, virtual, or  constant, or it may be an implementation-dependent value.  This argument is not evaluated.<p>
+<DL COMPACT>
+<DT><b>instance</b><DD>Indicates that each instance gets its own storage for the slot.  This is the default.
+<DT><b>class</b><DD>Indicates there is only one storage location used by all the direct and indirect instances of the class.  All the instances share a single value for the slot.  If the value is changed in one instance, all the instances see the new value.
+<DT><b>each-subclass</b><DD>Indicates that the class gets one storage location for the slot, to be used by all the direct instances of the class.  In addition, every subclass of the class gets a storage location for the slot, for use by its direct instances.
+<DT><b>constant</b><DD>Indicates a constant value for the slot.  There will be no setter method.  The value of the slot must be specified as an init-value.
+<DT><b>virtual</b><DD>Indicates that no storage will be automatically allocated for the slot.  If allocation is virtual, then it is up to the programmer to define methods on the getter and setter generic functions to retrieve and store the value of the slot.  Dylan will ensure the existence of generic functions for any specified getter and setter but will not add any methods to them. 
+</DL>
+</DL>
+<pre>
+<i>? </i><b>(define-class &lt;rectangle&gt; (&lt;object&gt;)
+     (top type: &lt;integer&gt;
+          init-value: 0
+          init-keyword: top:)
+     (left type: &lt;integer&gt;
+           init-value: 0
+           init-keyword: left:)
+     (bottom type: &lt;integer&gt;
+             init-value: 100
+             init-keyword: bottom:)
+     (right type: &lt;integer&gt;
+            init-value: 100
+            init-keyword: right:))
+</b><i>&lt;rectangle&gt;
+?</i> <b>&lt;rectangle&gt;</b>
+<i>{the class &lt;rectangle&gt;}
+?</i> <b>(define my-rectangle (make &lt;rectangle&gt; top: 50 left: 50))
+</b><i>my-rectangle
+?</i> <b>(top my-rectangle)
+</b><i>50
+?</i> <b>(bottom my-rectangle)
+</b><i>100
+?</i> <b>(set! (bottom my-rectangle) 55)</b>
+</tt><i>55
+?</i> <b>(bottom my-rectangle)</b>
+<i>55
+?</i> <b>(set! (bottom my-rectangle) 'foo)
+</b><i>error: foo is not an instance of &lt;integer&gt; while executing (setter bottom).</i>
+</PRE>
+<b>Slot Initialization<p>
+</b>The initialization protocol varies slightly with the allocation type of the slot.  Initialization for instance allocation is described first, followed by the differences for other allocation types.<p>
+When a slot is defined, the init-value:, init-function:, init-
+keyword:, and required-init-keyword: arguments provide four different ways to initialize the value of the slot in new instances.<p>
+An init-value or init-function is used to provide a default value for a slot.  An init-keyword lets the caller of make supply an initial slot value when a new instance is created.  Because both init-value and init-function serve the same role, they cannot both be specified in a slot definition.  However, either is compatible with specifying an init-keyword.<p>
+When make is called to create a new instance, the values of some of the slots can be specified as keyword arguments to make.  For example, if the class &lt;auto&gt; has a slot with the init-keyword color:, a red &lt;auto&gt; could be created with the call<p>
+<PRE><tt>(make &lt;auto&gt; color: 'red)
+</tt></PRE>
+If the call to make does not include an init-keyword for a given slot, then the slot is initialized from the init-value or the init-function.  (Dylan guarantees that the init-function will not be called if the init-keyword is supplied.)  If there is no init-value or init-function, the slot remains uninitialized.  An error is signaled if a program tries to get the value of an uninitialized slot.  The slot must be set before it can be gotten.<p>
+An init-value is a single value that is used over and over again to initialize instances.  In contrast, an init-function is a function that is called whenever a default value is needed.  The init-function can compute or allocate a new value for each instance.  For example, an init-function is appropriate if you want the slot to contain an empty data structure, such as an empty array, that will later be used as storage by the object.  An init-value is appropriate for initializing the slot to a simple value, such as #f or the integer 0, or to initialize the slot to a particular known object.<p>
+Regardless of the source, the initial value is stored directly into the slot using an unspecified built-in mechanism.  In particular, the setter generic function is not called to store the value into the slot.<p>
+For slots that are shared among instancesthat is, for slots with allocation of class or each-subclassthe initial value can be specified only as an init-value.<p>
+For slots with allocation constant, the value must be supplied as an init-value when the slot is defined.<p>
+For slots with allocation virtual, the responsibility for any needed initialization lies with the programmer.  For example, the slot may be initialized in a method for initialize.  Because there is no automatic initialization, the slot-options init-value:, init-function:, init-keyword:, and required-init-keyword: cannot be supplied when defining virtual slots.<p>
+<b>Testing the Initialization of a Slot<p>
+</b>A program can test to see whether a slot has been initialized.<p>
+<PRE>
+<b><A NAME="slot-initialized?1">slot-initialized?</A><A HREF="ch2.html#slot-initialized?0">[return to first citation]?</a></b>   <i>instance getter</i>   X  <i>boolean</i>	[Generic Function]
+</PRE>
+slot-initialized? returns true if the slot in <i>instance</i> that would be accessed by the <i>getter</i> generic function is initialized.  If the slot is not initialized, then false is returned.<p>
+The default version of the function will always return true for virtual slots.  If you create a virtual slot and want to define an uninitialized state for it, you should add a method to slot-initialized? which specializes on your class and on a singleton of the generic function for the slot.<p>
+slot-initialized? will signal an error if the <i>getter</i> does not access a slot in the <i>instance</i>.<p>
+In many implementations, slot-initialized? will be a relatively expensive operation.<p>
+There is no portable method for resetting a slot to the uninitialized state.<p>
+<b>Adding Slots After Instance Creation<p>
+</b>Slots can be added to classes and individual instances even after instance creation.  If a slot is added to a class, then all the instances of the class are updated to contain the new slot.  The exact time at which the instances are updated is not defined.  However, they are guaranteed to be updated by the time they are next accessed, so no program will ever see an instance which does not contain the slot.<p>
+When new slots are added in this way, the initial value of the slot will be taken from the init-value or init-function.  The init-keyword cannot be used, because there is no way for a program to supply the corresponding value.  If there is no init-value or init-function, the slot remains uninitialized.<p>
+<b>Supporting Virtual Slots<p>
+</b>When you define a slot, Dylan ensures that there are generic functions defined in the module variables named by the setter and getter.  If the allocation is not virtual, Dylan adds methods for accessing the slot to the getter and setter generic functions.  For virtual slots, the programmer should explicitly define methods for the setter and getter generic functions.<p>
+The values of virtual slots are not automatically initialized when a new instance is created.  The programmer must perform any necessary initialization.  This would usually be done inside a method on initialize.  Because the values of virtual slots are often computed from other values at run-time, many virtual slots will not require any explicit initialization.<p>
+The default version of slot-initialized? always returns true for virtual slots.  To support the slot-initialized? protocol in a virtual slot, programmers must define a method for slot-initialized? that shares a protocol with the getter method for the slot.<p>
+<b>Filtered Slots<p>
+</b>In some situations, the value of a slot will be stored directly in instances of one class but will require some computation in a subclass.  For example, the position slot could be stored as a value in direct instances of &lt;view&gt; while requiring some computation in direct instances of the &lt;view&gt; subclass &lt;displaced-view&gt;.<p>
+In this case, the &lt;view&gt; class supports position as an instance slot, and the &lt;displaced-view&gt; class supports position as a filtered slot.  Methods for position and (setter position) are added automatically by the slot definition in &lt;view&gt; these methods access the raw value of the slot in the instance.  In contrast, the implementor of &lt;displaced-view&gt; must explicitly add methods to the two generic functions.  The &lt;displaced-view&gt; methods can call next-method to access (get or set) the stored value of the slot.<p>
+For the purposes of documentation, the implementor could declare position to be a virtual slot in &lt;displaced-view&gt;.<p>
+<PRE><tt>(define-class &lt;view&gt; (&lt;object&gt;)
+  (position allocation: instance)
+  ...)
+
+(define-class &lt;displaced-view&gt; (&lt;view&gt;)
+  (position allocation: virtual)
+  ...)
+
+(define-method position ((v &lt;displaced-view&gt;))
+  (displace-transform (next-method v)))
+
+(define-method (setter position) ((v &lt;displaced-view&gt;)
+                                  new-position)
+  (next-method v (undisplace-transform new-position)))
+</tt></PRE>
+In other situations, a programmer will want storage in an instance for a slot value, but will want to perform some auxiliary action whenever the slot is accessed.  In this case, the programmer should define two slots:  an instance slot to provide the storage and a virtual slot to provide the interface.  In general, only the virtual slot will be documented.  The instance slot will be an internal implementation used by the virtual slot for storage.  An example of such use would be a slot that caches a value.<p>
+<PRE><tt>(define-class &lt;shape&gt; (&lt;view&gt;)
+  (image allocation: virtual)
+  (cached-image allocation: instance init-value: #f)
+  ...)
+
+(define-method image ((shape &lt;shape&gt;))
+  (or (cached-image shape)
+      (set! (cached-image shape) (compute-image shape))))
+
+(define-method (setter image) ((shape &lt;shape&gt;) new-image)
+  (set! (cached-image shape) new-image))
+</tt></PRE>
+<b>Redefining Slots</b>
+<p>
+A subclass can redefine a slot inherited from a superclass.  Similarly, if a class inherits the same slot from two or more superclasses, the inherited definitions must be resolved in some way.<p>
+Dylan considers two slots to be the same slot if they are read with the same getter generic function.  The two slots are considered to fulfill the same protocol and hence are the same slot.<p>
+If you redefine any inherited slots when you create a new class, you must respecify all the slot features that were specified in the superior slot definition.  If the superior version of the slot specifies a type, then the new definition of the slot must specify a type.  If it specifies an init-value or init-function, then the new definition must specify an init-value or init-function.  The init-keyword must also be specified if it was specified in the old definition.  The allocation must be specified if it was anything besides instance in the old definition.  If the old definition specified a setter (either directly, or as a default derived from the slot-name), then the new definition must specify a setter (directly, or through a slot-name).<p>
+The type specified for the new slot must be within the intersection of the types of all the slots being overridden (there may be more than one, if multiple inheritance is used).<p>
+If you inherit from multiple superclasses that specify the same slot, then there are two possibilities.  If the superclasses have exactly the same definition for the slot, then you can simply inherit that definition.  If the definitions differ, then you have to specify the slot in your class.<p>
+<b>Defining individual slots<p>
+<PRE>
+<A NAME="define-slot1">define-slot</A><A HREF="ch5.html#define-slot0">[return to first citation]</A></b>   <i>slot-owner</i> [<i>slot-name</i>]<i> keyword1 value1</i> <i>keyword2 value2</i> ... 	[Macro]
+==>  <i>slot-name</i>
+</PRE>
+define-slot defines a slot and adds it to <i>slot-owner</i>, which must be a class or a singleton.  If <i>slot-owner</i> is a class, all instances of the class will be given a new slot.  If it is a singleton, only the one object will be given a new slot.<p>
+The <i>slot-name</i> and <i>keyword</i>/<i>value</i> pairs are the same as for slot-specs given in define-
+class forms.  Either the <i>slot-name</i> or the <i>getter</i> keyword must be specified; <i>slot-name</i> may be omitted if a <i>getter</i> is provided.<p>
+define-slot is normally called only to add slots to individual objects (i.e., <i>slot-owner</i> will be a singleton).  Slots defined for classes are usually defined as part of the define-class form.  If <i>slot-owner</i> is a singleton, then allocation: must be instance, constant, or virtual. Furthermore, neither init-keyword: nor required-init-keyword: may be specified.<p>
+<p></A><P><A NAME="NEXT" HREF="ch7.html">Next chapter:  Assignment</A>
+

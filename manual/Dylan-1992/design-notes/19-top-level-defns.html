@@ -1,0 +1,112 @@
+<meta charset="utf-8">
+<A NAME="PREV" HREF="18-member-test-arg.html">Previous chapter:  #18: Member? Intersection Test Arg        (Clarification)</A><P>
+<TITLE>Dylan Design Notes: #19: Definitions are Declarative        (Change)</TITLE>
+<P>
+<H2>Dylan Design Notes</H2>
+<P>
+<H1>#19: Definitions are Declarative        (Change)</H1>
+<P>
+Version 1, March 1993
+<P>
+This design note distinguishes definitions from other syntax forms, 
+making module variable definition essentially a declarative 
+operation, not a procedural one.  Definitions are restricted to 
+appear only at the top level.  A given module variable can only be 
+defined once, except for multiple define-method definitions with 
+different specializers.  Definitions do not return values, since they 
+cannot appear as argument expressions.
+<P>
+<HR>
+<P>
+<a href="../book.annotated/ch3.html#exp">On page 27</a> of the Dylan manual, define an outer expression to be an 
+expression that is not a sub-expression of any expression.  Then 
+define a top-level expression to be either an outer expression or a 
+direct sub-expression of a begin syntax form that itself is a toplevel expression.  Note that a macro expands into a top-level 
+expression if the macro invocation is itself a top-level expression.
+<P>
+<a href="../book.annotated/ch3.html#Syntax Form0">On page 29</a>, introduce a third kind of syntax form called a 
+definition, introduced by a definition operator.  The definition 
+operators in the book are  define, define-class, define-genericfunction, and define-method.  Change their documentation to say 
+"[Definition]" instead of "[Macro]."
+<P>
+<a href="../book.annotated/ch4.html">On page 30</a>, restrict definitions to be top-level expressions.
+<P>
+On page 31, specify that a given module variable can only be defined 
+once, except that multiple define-method definitions with different 
+specializers are allowed, together with at most one define-genericfunction definition.
+<P>
+On page 31, remove indications of a value returned by define.  
+Definitions do not have values since they cannot appear as argument 
+expressions.
+<P>
+Modify footnote 9 on page 31, since define is no longer allowed 
+inside a definition.
+<P>
+<a href="../book.annotated/ch6.html">On page 39</a>, change the first paragraph of the description of definegeneric-function to:
+<P>
+name should be a variable name.  It is defined as a read-only 
+variable in the current module, containing a new generic function 
+object, as specified by the parameter-list and options.
+<P>
+This eliminates all discussion of side effects in define-genericfunction.  Delete the second paragraph and any other indications of a 
+value returned by define-generic-function.  Definitions do not have 
+values since they cannot appear as argument expressions.
+<P>
+On page 40, replace the first four paragraphs of the description of 
+define-method with the following, and eliminate any indication of a 
+value returned by define-method.
+<P>
+define-method creates a method and adds it to the generic function in 
+variable-name.  If the module variable variable-name  is not already 
+defined, it is defined as with define-generic-function, with a 
+parameter-list that has the same number of required parameters as 
+parameter-list, contains #rest if and only if parameter-list  does, 
+and contains #key (with no keys following it) if and only if 
+parameter-list  contains #key.  Thus, define-method will create a new 
+generic function or extend an old one, as needed.
+<P>
+This eliminates all discussion of side effects in define-method.
+<P>
+<a href="../book.annotated/ch6.html#define-class2">On page 51</a>, remove the third and fourth paragraphs of the description 
+of define-class.  This eliminates all discussion of side effects in 
+define-class.  Also eliminate any  indications of a value returned by 
+define-class.  Definitions do not have values since they cannot 
+appear as argument expressions.
+<P>
+<HR>
+<P>
+Notes
+<P>
+The Dylan book describes definitions as if they were macros that 
+expand into calls to operators available at run time such as set!, 
+add-method, ensure-generic-function, etc.   This precludes the 
+possibility of keeping the runtime free of overhead to support 
+development operations such as adding new definitions or redefining 
+existing definitions.  We prefer that definitions be static 
+properties of a program, rather than side-effects that occur in some 
+particular order.  This should allow the runtime to be smaller, and 
+also allow for better compiler optimization because the structure of 
+the program is more static.
+<P>
+We restrict definitions to be top-level expressions, because toplevel expressions are executed unconditionally, not inside of loops, 
+and in a lexical environment containing only module variables, which 
+makes them sufficiently static for our purposes.
+<P>
+The revised language specification does not allow redefinition and 
+thus does not have to define the semantics of redefinition.  
+Presumably most development environments that feature incremental 
+compilation will support redefinition as a programmer operation, not 
+as part of the program.
+<P>
+Allowing definitions to be top-level expressions, rather than just 
+outer expressions, makes it possible for a macro to expand into 
+several definitions and other expressions by enclosing them in a 
+begin syntax form.
+<P>
+Additional definition operators might be added in the future, for 
+example for macros, modules, constants, or things associated with 
+sealing.  Defining a macro would be a definition because the name it 
+introduces is scoped like a module variable even if it is not a 
+"true" module variable.  This language change is intended to include 
+all future definition operators. 
+<P><A NAME="NEXT" HREF="20-setter-syntax.html">Next chapter:  #20: New Syntax for Setter Variables        (Change)</A>

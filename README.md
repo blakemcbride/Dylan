@@ -125,8 +125,6 @@ tables, the full set of character names — are no longer differences.
 
 - **Modules.** There is one module. The manual leaves module operations to
   the programming environment, and none are provided.
-- **Ranges with `by: 0`**, such as `(range from: 1 by: 0 size: 3)`, are an
-  error.
 
 **Different behavior**
 

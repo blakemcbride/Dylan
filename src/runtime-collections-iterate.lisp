@@ -101,11 +101,18 @@
                        (let ((start (dylan-call dylan/get-range-start range))
                              (end (dylan-call dylan/get-range-end range))
                              (step (dylan-call dylan/get-range-step range)))
-                         (if end
+                         ;; A by: 0 range's state is an index: the elements
+                         ;; are all the same.
+                         (cond
+                           ((zerop step)
+                            (if (eql 0 (dylan-call dylan/get-range-count range))
+                                nil
+                                0))
+                           (end
                              (if (funcall (if (minusp step) #'>= #'<=) start end)
                                  start
-                                 nil)
-                             start)))))
+                                 nil))
+                           (t start))))))
 (add-method dylan/initial-state
             (one-arg 'table <table>
                      (lambda (table)
@@ -214,12 +221,16 @@
   (lambda (range state)
     (let* ((end (dylan-call dylan/get-range-end range))
            (step (dylan-call dylan/get-range-step range))
-           (next (+ state step)))
-      (if end
+           (next (+ state step))
+           (count (dylan-call dylan/get-range-count range)))
+      (cond
+        ((zerop step)
+         (if (or (null count) (< (+ state 1) count)) (+ state 1) nil))
+        (end
           (if (funcall (if (minusp step) #'< #'>) next end)
               nil
-              next)
-          next)))))                     ; Unbounded range
+              next))
+        (t next))))))                   ; Unbounded range
 
 (add-method
  dylan/next-state
@@ -288,9 +299,11 @@
     (let* ((start (dylan-call dylan/get-range-start range))
            (step (dylan-call dylan/get-range-step range))
            (prev (- state step)))
+      (if (zerop step)
+          (if (plusp state) (- state 1) nil)
       (if (funcall (if (minusp step) #'> #'<) prev start)
           nil
-          prev)))))
+          prev))))))
 
 ;;
 ;; CURRENT-ELEMENT
@@ -345,7 +358,10 @@
  dylan/current-element
  (dylan%function->method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
-  (lambda (range state) (declare (ignore range)) state)))
+  (lambda (range state)
+    (if (zerop (dylan-call dylan/get-range-step range))
+        (dylan-call dylan/get-range-start range)
+        state))))
 (add-method
  dylan/current-element
  (dylan%function->method

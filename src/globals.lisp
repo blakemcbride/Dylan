@@ -239,6 +239,7 @@
           dylan/get-deque-front
           dylan/get-deque-last
           dylan/get-hash-table
+          dylan/get-range-count
           dylan/get-range-end
           dylan/get-range-start
           dylan/get-range-step
@@ -333,6 +334,7 @@
           dylan/set-deque-front!
           dylan/set-deque-last!
           dylan/set-hash-table!
+          dylan/set-range-count!
           dylan/set-range-end!
           dylan/set-range-start!
           dylan/set-range-step!

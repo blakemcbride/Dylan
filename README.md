@@ -148,8 +148,10 @@ tables, the full set of character names — are no longer differences.
 - **Backquote.** Chapter 3 defers it to "a separate section of this
   manual" that the manual does not contain, so `` ` ``, `,` and `,@` follow
   the usual Lisp rules, nesting included.
-- **`map-into`** passes the target's elements to the function, as the
-  manual's example does, though its prose names only the sources.
+- **`map-into`** passes the function only the source collections'
+  elements, as chapter 12's prose and design note 27 say. The chapter's
+  one example, `(map-into x + '(1 2 3 4))` answering `(101 102 203 204)`,
+  also passes the target's; here it answers `(1 2 3 4)`.
 - **Irrational functions** (`sqrt`, `exp`, the trigonometric functions)
   answer floats for exact arguments, as in Common Lisp and the manual's
   examples.

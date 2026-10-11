@@ -262,30 +262,39 @@ new instance of FIRST's class-for-copy."
                       (procedure ,<function>)
                       (collection ,<collection>))
                     nil t nil)
-   ;; The procedure is applied to the target's elements as well as the
-   ;; sources': chapter 12's prose names only the sources, but its example,
-   ;; (map-into x + '(1 2 3 4)) with x = (100 100 200 200) giving
-   ;; (101 102 203 204), passes the target's too, and that is followed.
-   ;; Sequences are processed in step, stopping at the shortest (the
-   ;; target included); otherwise all are aligned by key (chapter 12,
-   ;; "Collection Alignment").
+   ;; Chapter 12: the procedure is applied to corresponding elements of
+   ;; the source collections (the collection and more-collections), and
+   ;; the results replace the elements of the target.  (The manual's one
+   ;; example, (map-into x + '(1 2 3 4)), shows the target's elements
+   ;; passed as well; its prose, its signature and design note 27 do not.)
+   ;; Sequences are processed in step, stopping when the target or any
+   ;; source runs out; otherwise the target and the sources are aligned by
+   ;; key (chapter 12, "Collection Alignment").  Tables have a method of
+   ;; their own, in which the target takes no part in the alignment.
    (lambda (mut-coll proc coll-1 &rest rest)
-     (let ((sources (list* mut-coll coll-1 rest)))
+     (let ((sources (list* coll-1 rest)))
        (if (and (sequence? mut-coll) (every #'sequence? sources))
-           (let ((current-state (dylan-call dylan/initial-state mut-coll)))
-             (if (not current-state)
-                 mut-coll
-                 (collections-iterate
-                  proc
-                  (lambda (new-value)
-                    (dylan-call dylan/setter/current-element/ mut-coll
-                                current-state new-value)
-                    (setf current-state
-                          (dylan-call dylan/next-state mut-coll current-state))
-                    (if current-state nil (lambda () mut-coll)))
-                  mut-coll
-                  sources)))
-           (let ((keys (aligned-keys sources)))
+           (loop with target-state = (dylan-call dylan/initial-state mut-coll)
+                 with states = (mapcar (lambda (c)
+                                         (dylan-call dylan/initial-state c))
+                                       sources)
+                 until (or (not target-state) (some #'not states))
+                 do (dylan-call dylan/setter/current-element/ mut-coll
+                                target-state
+                                (dylan-call dylan/apply proc
+                                            (mapcar (lambda (c st)
+                                                      (dylan-call
+                                                       dylan/current-element
+                                                       c st))
+                                                    sources states)))
+                    (setf target-state
+                          (dylan-call dylan/next-state mut-coll target-state)
+                          states
+                          (mapcar (lambda (c st)
+                                    (dylan-call dylan/next-state c st))
+                                  sources states))
+                 finally (return mut-coll))
+           (let ((keys (aligned-keys (cons mut-coll sources))))
              (iterate-until
               (lambda (key)
                 (dylan-call dylan/setter/element/ mut-coll key

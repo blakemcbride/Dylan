@@ -62,12 +62,15 @@
           (let ((name (variable->name place)))
             (funcall
              continue
-             `(let ((!saved-value ,value-code))
-                (setq ,(if (member (name->lexical name) bound-vars)
-                           (name->lexical name)
-                           (name->module-variable name))
-                      !saved-value)
-                !saved-value)
+             (if (member (name->lexical name) bound-vars)
+                 `(let ((!saved-value ,value-code))
+                    (setq ,(name->lexical name) !saved-value)
+                    !saved-value)
+                 `(let ((!saved-value ,value-code))
+                    (dylan%check-assignable ',(name->module-variable name)
+                                            ',place)
+                    (setq ,(name->module-variable name) !saved-value)
+                    !saved-value))
              (add-variable name bound-vars module-vars))))
          ((and (listp place) (null (cdr (cl:last place))))
           (compile-forms

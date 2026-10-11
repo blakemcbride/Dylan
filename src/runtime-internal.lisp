@@ -57,6 +57,21 @@
       (dylan-call dylan/error "unbound variable" name)
       value))
 
+;;; Read-only module variables (chapter 5): DEFINE-CLASS and
+;;; DEFINE-GENERIC-FUNCTION make them, and SET! and DEFINE may not assign
+;;; them.  The defining forms themselves assign without the check, so a
+;;; class or generic function can still be redefined.  Predefined variables
+;;; are not read-only: chapter 7's own example assigns (SETTER ELEMENT).
+
+(defvar *read-only-variables* (make-hash-table :test #'eq))
+
+(defun dylan%make-variable-read-only (variable)
+  (setf (gethash variable *read-only-variables*) t))
+
+(defun dylan%check-assignable (variable name)
+  (when (gethash variable *read-only-variables*)
+    (dylan-call dylan/error "variable is read-only" name)))
+
 (defun dylan%call/cc (receiver)
   "Used for BIND-EXIT and HANDLER-CASE.  Dylan only ever escapes with its
 continuations, so a CATCH/THROW pair suffices."

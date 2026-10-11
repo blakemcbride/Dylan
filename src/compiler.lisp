@@ -611,6 +611,9 @@ FILE-NAME."
              (lambda (compiled-value new-module-vars)
                (funcall continue
                         `(progn
+                           (dylan%check-assignable
+                            ',(name->module-variable (variable->name name))
+                            ',name)
                            (,(name->module-setter name) ,compiled-value)
                            ',name)
                         new-module-vars)))))

@@ -317,6 +317,8 @@
              (progn
                ,(funcall set `(dylan%create-generic-function
                                ',name ,(length reqs) ',keys ,(if rest t nil)))
+               (dylan%make-variable-read-only
+                ',(name->module-variable (variable->name name)))
                ',name)))))))
 
 ;;; Parsing and compiling the DEFINE-CLASS form
@@ -455,6 +457,8 @@
                                     (dylan%list ,@getter-code))))
                              ,@(reverse add-slot-calls)
                              ,(funcall set '!class)
+                             (dylan%make-variable-read-only
+                              ',(name->module-variable (variable->name name)))
                              ',name)))))
                  (make-add-slot-call
                   (car slots-left) '!class bound-vars mod-vars compiler

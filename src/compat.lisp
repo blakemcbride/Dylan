@@ -171,14 +171,31 @@ can vanish while a caller walks it."
 ;;;
 ;;; MIT Scheme folded symbols to lower case; Common Lisp folds them to
 ;;; upper case.  All that matters is that the folding be consistent, so
-;;; "canonicalize" means "upcase" here.  DYLAN-SYMBOL->STRING undoes it
-;;; again, so that Dylan programs see the lower-case names they wrote.
+;;; "canonicalize" means "upcase" here.
+;;;
+;;; Chapter 15: symbols and keywords are not case sensitive, but each
+;;; remembers the case it was first entered in, and prints in it.  The
+;;; reader and AS record that spelling; DYLAN-SYMBOL->STRING answers it,
+;;; or the name in lower case for a symbol Dylan has not seen.
 
 (defun canonicalize-string-for-symbol (string)
   (string-upcase string))
 
+(defvar *symbol-spellings* (make-hash-table :test #'eq))
+
+(defun remember-spelling (symbol spelling)
+  (unless (gethash symbol *symbol-spellings*)
+    (setf (gethash symbol *symbol-spellings*) spelling))
+  symbol)
+
+(defun dylan%remember-spellings (pairs)
+  "Record the spellings a compiled file's symbols were first entered in."
+  (loop for (symbol . spelling) in pairs
+        do (remember-spelling symbol spelling)))
+
 (defun dylan-symbol->string (symbol)
-  (string-downcase (symbol-name symbol)))
+  (or (gethash symbol *symbol-spellings*)
+      (string-downcase (symbol-name symbol))))
 
 ;;;; Sorting
 ;;;
@@ -215,7 +232,7 @@ can vanish while a caller walks it."
     (cond
       ((null object) (out "()"))
       ((eq object t) (out "#t"))
-      ((keywordp object) (format stream "~(~a~):" (symbol-name object)))
+      ((keywordp object) (format stream "~a:" (dylan-symbol->string object)))
       ((symbolp object) (out (dylan-symbol->string object)))
       ((stringp object)
        (if *dylan-print-escape*
@@ -365,7 +382,7 @@ their exponent marker (1.5f0), so that they read back as themselves."
                          2 table)
     (set-pprint-dispatch 'keyword
                          (lambda (s x)
-                           (format s "~(~a~):" (symbol-name x)))
+                           (format s "~a:" (dylan-symbol->string x)))
                          2 table)
     (set-pprint-dispatch 'symbol
                          (lambda (s x)
@@ -487,9 +504,13 @@ consuming it, or NIL at end of file."
   (or (dylan-token-number token)
       (let ((n (length token)))
         (if (and (> n 1) (char= #\: (char token (1- n))))
-            (intern (canonicalize-string-for-symbol (subseq token 0 (1- n)))
-                    :keyword)
-            (dylan-symbol (canonicalize-string-for-symbol token))))))
+            (let ((name (subseq token 0 (1- n))))
+              (remember-spelling
+               (intern (canonicalize-string-for-symbol name) :keyword)
+               name))
+            (remember-spelling
+             (dylan-symbol (canonicalize-string-for-symbol token))
+             token)))))
 
 (defun dylan-symbol (name)
   "The Dylan symbol named NAME (already canonicalized).  T and NIL are

@@ -159,7 +159,9 @@ therefore contains a small reader for Dylan's surface syntax.  A Dylan
 keyword foo: is read as the Common Lisp keyword :FOO, and KEYWORD? is
 KEYWORDP; every other identifier is interned in the DYLAN package with its
 case folded up, except that the symbols t and nil get lower-case names, so
-as not to be Common Lisp's T and NIL.  #key, #rest and #next are read as
+as not to be Common Lisp's T and NIL.  The spelling a symbol or keyword was
+first entered in is remembered and used to print it (chapter 15); a
+compiled file records the spellings of its symbols.  #key, #rest and #next are read as
 the !key, !rest and !next the compiler uses; #x, #o, #b, #c(...), nested
 #| ... |# comments and backquote (`, ",", ",@") are read as in Common
 Lisp.  The manual's section on backquote did not survive, so backquote

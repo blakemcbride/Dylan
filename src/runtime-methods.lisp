@@ -873,14 +873,18 @@
                                   (string ,<string>)) nil nil nil)
                (lambda (class string)
                  (declare (ignore class))
-                 (new-name "" string ""))))
+                 (remember-spelling
+                  (dylan-symbol (canonicalize-string-for-symbol string))
+                  (copy-seq string)))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <keyword>))
                                   (string ,<string>)) nil nil nil)
                (lambda (class string)
                  (declare (ignore class))
-                 (intern (canonicalize-string-for-symbol string) :keyword)))))
+                 (remember-spelling
+                  (intern (canonicalize-string-for-symbol string) :keyword)
+                  (copy-seq string))))))
 
 (defparameter dylan/complement
   (dylan%function->method

@@ -134,14 +134,12 @@ decides; the few remaining differences are listed in
 The standard is the manual itself (an annotated copy is in
 `manual/Dylan-1992/`). Thomas's own 1992 list is in
 [`DIFFERENCES`](DIFFERENCES); several of its items — `#key` and `#rest`,
-sealed and abstract classes, read-only module variables, `remove-slot`,
+the case of symbols, sealed and abstract classes, read-only module variables, `remove-slot`,
 `(setter direct-superclasses)`, filtered slots, collection alignment for
 tables, the full set of character names — are no longer differences.
 
 **Different behavior**
 
-- **Symbol case** is not remembered: `'FooBar` prints as `foobar`. Symbols,
-  keywords and variable names are case-insensitive, as in the manual.
 - **Reserved names.** Variables may not begin with `!` or `dylan/`; the
   compiler uses those names.
 - **Modules** are declared as design note 32 describes; the 1992 manual

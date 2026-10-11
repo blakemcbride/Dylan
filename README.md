@@ -118,15 +118,13 @@ The standard is the manual itself (an annotated copy is in
 `manual/Dylan-1992/`). Thomas's own 1992 list is in
 [`DIFFERENCES`](DIFFERENCES); several of its items — `#key` and `#rest`,
 sealed and abstract classes, read-only module variables, `remove-slot`,
-`(setter direct-superclasses)`, collection alignment for tables, the full
-set of character names — are no longer differences.
+`(setter direct-superclasses)`, filtered slots, collection alignment for
+tables, the full set of character names — are no longer differences.
 
 **Not implemented**
 
 - **Modules.** There is one module. The manual leaves module operations to
   the programming environment, and none are provided.
-- **Virtual slots as "filtered slots"** (pp. 58–59). A virtual slot cannot
-  use `next-method` to reach a hidden slot in the same object.
 - **Ranges with `by: 0`**, such as `(range from: 1 by: 0 size: 3)`, are an
   error.
 

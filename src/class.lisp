@@ -172,11 +172,31 @@
           (set-next-vector-entry! new-vec value update-vec!)))))
 
 (defun copy-slot (slot inherited? data-location)
-  (make-slot (slot.debug-name slot) (slot.getter slot) (slot.setter slot)
-             (slot.type slot) (slot.init-value slot)
-             (slot.has-initial-value? slot) (slot.init-function slot)
-             (slot.init-keyword slot) (slot.required-init-keyword slot)
-             (slot.allocation slot) inherited? data-location))
+  (let ((copy (make-slot (slot.debug-name slot) (slot.getter slot)
+                         (slot.setter slot) (slot.type slot)
+                         (slot.init-value slot) (slot.has-initial-value? slot)
+                         (slot.init-function slot) (slot.init-keyword slot)
+                         (slot.required-init-keyword slot)
+                         (slot.allocation slot) inherited? data-location)))
+    (setf (slot.filtered copy) (slot.filtered slot))
+    copy))
+
+;;; Filtered slots (chapter 6): a virtual slot that overrides an inherited
+;;; slot keeps that slot's storage, which the inherited accessor methods
+;;; reach by NEXT-METHOD.  SLOT-STORAGE is the slot that holds a slot's
+;;; value, if any.
+
+(defun slot-storage (slot)
+  (if (eq (slot.allocation slot) 'virtual)
+      (slot.filtered slot)
+      slot))
+
+(defun storage-location (class getter)
+  "Where CLASS keeps the value read by GETTER."
+  (let ((slot (same-slot-getter-in-slot-vector->slot getter (class.slots class))))
+    (slot.data-location (or (and slot (slot-storage slot))
+                            (dylan-call dylan/error
+                                        "slot has no storage" class getter)))))
 
 ;;; The class whose own slot is the one CLASS has for GETTER: CLASS itself
 ;;; if the slot is not inherited, otherwise the most specific of the
@@ -230,34 +250,51 @@ slot vector, the class-data size and the instance-data size."
     ;; specific one that applies.  (The Scheme added them only when the
     ;; offset differed from the first superclass's, so a getter from
     ;; another inheritance path could win and read the wrong offset.)
-    (flet ((figure-slot-data-location (slot)
-             (case (slot.allocation slot)
-               ((class constant) (slot.data-location slot))
-               ((instance)
-                (incf instance-data-index)
-                (add-method (slot.getter slot)
-                            (make-instance-getter class instance-data-index
-                                                  (slot.debug-name slot)))
-                (when (slot.setter slot)
-                  (add-method (slot.setter slot)
-                              (make-instance-setter class instance-data-index
-                                                    (slot.type slot))))
-                instance-data-index)
-               ((each-subclass)
-                (incf class-data-index)
-                (add-method (slot.getter slot)
-                            (make-each-subclass-getter class class-data-index
-                                                       (slot.debug-name slot)))
-                (when (slot.setter slot)
-                  (add-method (slot.setter slot)
-                              (make-each-subclass-setter class class-data-index
-                                                         (slot.type slot))))
-                class-data-index)
-               ((virtual) nil))))
+    ;; A getter CLASS redefines gets no inherited methods here: the slot
+    ;; CLASS defines supplies its own, and a virtual one's are the user's.
+    (labels ((figure-slot-data-location (slot methods?)
+               (case (slot.allocation slot)
+                 ((class constant) (slot.data-location slot))
+                 ((instance)
+                  (incf instance-data-index)
+                  (when methods?
+                    (add-method (slot.getter slot)
+                                (make-instance-getter class instance-data-index
+                                                      (slot.debug-name slot)
+                                                      (slot.getter slot)))
+                    (when (slot.setter slot)
+                      (add-method (slot.setter slot)
+                                  (make-instance-setter class instance-data-index
+                                                        (slot.type slot)
+                                                        (slot.getter slot)))))
+                  instance-data-index)
+                 ((each-subclass)
+                  (incf class-data-index)
+                  (when methods?
+                    (add-method (slot.getter slot)
+                                (make-each-subclass-getter class class-data-index
+                                                           (slot.debug-name slot)
+                                                           (slot.getter slot)))
+                    (when (slot.setter slot)
+                      (add-method (slot.setter slot)
+                                  (make-each-subclass-setter class class-data-index
+                                                             (slot.type slot)
+                                                             (slot.getter slot)))))
+                  class-data-index)
+                 ((virtual) nil)))
+             (inherit (slot)
+               (let ((copy (copy-slot slot t
+                                      (figure-slot-data-location
+                                       slot (not (member (slot.getter slot)
+                                                         new-getter-fns))))))
+                 (when (slot.filtered slot)
+                   (setf (slot.filtered copy)
+                         (copy-slot (slot.filtered slot) t
+                                    (figure-slot-data-location
+                                     (slot.filtered slot) nil))))
+                 copy)))
       (let ((final-slot-list
-              (mapcar (lambda (entry)
-                        (let ((slot (car entry)))
-                          (copy-slot slot t (figure-slot-data-location slot))))
+              (mapcar (lambda (entry) (inherit (car entry)))
                       (reverse entries))))
         (vector (coerce final-slot-list 'simple-vector)
                 (+ 1 class-data-index)
@@ -337,6 +374,10 @@ slot vector, the class-data size and the instance-data size."
           (t (slot.init-value slot)))))
 
 (defun initialize-slot! (slot keywords vector which-allocation-types)
+  (when (slot.filtered slot)
+    (return-from initialize-slot!
+      (initialize-slot! (slot.filtered slot) keywords vector
+                        which-allocation-types)))
   (let ((allocation (slot.allocation slot)))
     (when (member allocation which-allocation-types)
       (case allocation
@@ -522,7 +563,16 @@ descriptor to update the instances as needed."
     (when old-slot                      ; Redefining existing slot
       (when (slot.inherited? old-slot)
         (conflict-test owner new-slot))
-      (remove-this-slot-only! owner current-descriptors old-slot)
+      (if (and (eq (slot.allocation new-slot) 'virtual)
+               (slot.inherited? old-slot)
+               (slot-storage old-slot))
+          ;; A filtered slot: keep the inherited slot's storage.
+          (progn
+            (setf (slot.filtered new-slot) (slot-storage old-slot))
+            (setf (aref current-descriptors
+                        (position old-slot current-descriptors))
+                  nil))
+          (remove-this-slot-only! owner current-descriptors old-slot))
       (setf current-descriptors (funcall accessor owner)))
     (let ((offset (find-empty-slot current-descriptors)))
       (if offset
@@ -569,23 +619,27 @@ answer the class precedence list."
      (add-method (slot.getter new-slot)
                  (make-instance-getter class
                                        (class.instance-data-size class)
-                                       (slot.debug-name new-slot)))
+                                       (slot.debug-name new-slot)
+                                       (slot.getter new-slot)))
      (when (slot.setter new-slot)
        (add-method (slot.setter new-slot)
                    (make-instance-setter class
                                          (class.instance-data-size class)
-                                         (slot.type new-slot))))
+                                         (slot.type new-slot)
+                                         (slot.getter new-slot))))
      (incf (class.instance-data-size class)))
     ((each-subclass)
      (add-method (slot.getter new-slot)
                  (make-each-subclass-getter class
                                             (length (class.class-data class))
-                                            (slot.debug-name new-slot)))
+                                            (slot.debug-name new-slot)
+                                            (slot.getter new-slot)))
      (when (slot.setter new-slot)
        (add-method (slot.setter new-slot)
                    (make-each-subclass-setter class
                                               (length (class.class-data class))
-                                              (slot.type new-slot))))
+                                              (slot.type new-slot)
+                                              (slot.getter new-slot))))
      (setf (class.class-data class)
            (grow-vector (class.class-data class)
                         (get-initial-slot-value new-slot))))
@@ -764,8 +818,17 @@ answer the class precedence list."
                                 "remove-slot -- slot is inherited, not the class's own"
                                 owner slot-descriptor)))
              (flet ((remove-from-class (class slot)
-                      (remove-this-slot-only! class (class.slots class) slot)
-                      (remove-slot-accessors! class slot)))
+                      (if (slot.filtered slot)
+                          ;; The slot it filtered, and its storage, return.
+                          (setf (aref (class.slots class)
+                                      (position slot (class.slots class)))
+                                (copy-slot (slot.filtered slot) t
+                                           (slot.data-location
+                                            (slot.filtered slot))))
+                          (progn
+                            (remove-this-slot-only! class (class.slots class)
+                                                    slot)
+                            (remove-slot-accessors! class slot)))))
                (remove-from-class owner slot)
                (map-over-all-subclasses!
                 (lambda (class)
@@ -773,12 +836,14 @@ answer the class precedence list."
                                     getter (class.slots class))))
                     (and inherited (slot.inherited? inherited))))
                 (lambda (class test)
-                  ;; Keep the slot where another superclass still supplies it.
+                  ;; Keep the slot where another superclass still supplies
+                  ;; it; a filtered slot's copies always go back.
                   (when (and test
-                             (notany (lambda (super)
-                                       (same-slot-getter-in-slot-vector->slot
-                                        getter (class.slots super)))
-                                     (class.superclasses class)))
+                             (or (slot.filtered slot)
+                                 (notany (lambda (super)
+                                           (same-slot-getter-in-slot-vector->slot
+                                            getter (class.slots super)))
+                                         (class.superclasses class))))
                     (remove-from-class
                      class
                      (same-slot-getter-in-slot-vector->slot
@@ -859,16 +924,20 @@ answer the class precedence list."
                     #'class.slots #'set-class-slots! #'add-slot-to-class!)))
     (setf (class.instances class) instances)
     (flet ((old-slot (new-slot)
+             ;; The old storage for NEW-SLOT's storage, if it is alike.
              (let ((slot (same-slot-getter-in-slot-vector->slot
                           (slot.getter new-slot) old-slots)))
                (and slot
-                    (eq (slot.allocation slot) (slot.allocation new-slot))
-                    slot))))
+                    (slot-storage slot)
+                    (eq (slot.allocation (slot-storage slot))
+                        (slot.allocation new-slot))
+                    (slot-storage slot)))))
       ;; Class data this class owns keeps its value.
       (vector-iterate
        (class.slots class)
        (lambda (index slot)
          (declare (ignore index))
+         (setf slot (and slot (slot-storage slot)))
          (let ((old (and slot (old-slot slot))))
            (when old
              (case (slot.allocation slot)
@@ -894,6 +963,7 @@ answer the class precedence list."
             (class.slots class)
             (lambda (index slot)
               (declare (ignore index))
+              (setf slot (and slot (slot-storage slot)))
               (when (and slot (eq (slot.allocation slot) 'instance))
                 (let ((old (old-slot slot)))
                   (setf (aref data (slot.data-location slot))
@@ -972,17 +1042,31 @@ answer the class precedence list."
      (declare (ignore obj))
      (object-ref (class.class-data class) offset class name))))
 
-(defun make-each-subclass-getter (class offset name)
+;;; An instance or each-subclass accessor method made for CLASS may be
+;;; reached, by NEXT-METHOD from a filtered slot's methods, with an instance
+;;; of a subclass whose layout differs; it then finds the slot's location in
+;;; that subclass.
+
+(defmacro with-slot-offset ((var obj class offset getter) &body body)
+  `(let ((,var (if (eq (instance.class ,obj) ,class)
+                   ,offset
+                   (storage-location (instance.class ,obj) ,getter))))
+     ,@body))
+
+(defun make-each-subclass-getter (class offset name getter)
   (dylan%function->method
    (make-getter-param-list class)
    (lambda (obj)
-     (let ((class (instance.class obj)))
-       (object-ref (class.class-data class) offset class name)))))
+     (with-slot-offset (offset obj class offset getter)
+       (let ((class (instance.class obj)))
+         (object-ref (class.class-data class) offset class name))))))
 
-(defun make-instance-getter (class offset name)
+(defun make-instance-getter (class offset name getter)
   (dylan%function->method
    (make-getter-param-list class)
-   (lambda (obj) (object-ref (instance.data obj) offset obj name))))
+   (lambda (obj)
+     (with-slot-offset (offset obj class offset getter)
+       (object-ref (instance.data obj) offset obj name)))))
 
 (defun make-singleton-getter (class singleton offset name)
   (dylan%function->method
@@ -1004,25 +1088,23 @@ answer the class precedence list."
          (dylan-call dylan/check-type value type)
          (setf (aref (class.class-data class) offset) value)))))
 
-(defun make-each-subclass-setter (class offset type)
+(defun make-each-subclass-setter (class offset type getter)
   (dylan%function->method
    (make-setter-param-list class)
-   (if (eq type <object>)
-       (lambda (obj value)
-         (setf (aref (class.class-data (instance.class obj)) offset) value))
-       (lambda (obj value)
-         (dylan-call dylan/check-type value type)
-         (setf (aref (class.class-data (instance.class obj)) offset) value)))))
+   (lambda (obj value)
+     (unless (eq type <object>)
+       (dylan-call dylan/check-type value type))
+     (with-slot-offset (offset obj class offset getter)
+       (setf (aref (class.class-data (instance.class obj)) offset) value)))))
 
-(defun make-instance-setter (class offset type)
+(defun make-instance-setter (class offset type getter)
   (dylan%function->method
    (make-setter-param-list class)
-   (if (eq type <object>)
-       (lambda (obj value)
-         (setf (aref (instance.data obj) offset) value))
-       (lambda (obj value)
-         (dylan-call dylan/check-type value type)
-         (setf (aref (instance.data obj) offset) value)))))
+   (lambda (obj value)
+     (unless (eq type <object>)
+       (dylan-call dylan/check-type value type))
+     (with-slot-offset (offset obj class offset getter)
+       (setf (aref (instance.data obj) offset) value)))))
 
 (defun make-singleton-setter (class singleton offset type)
   (dylan%function->method

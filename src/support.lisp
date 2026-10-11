@@ -98,12 +98,15 @@ consumes it.")
   required-init-keyword
   allocation
   inherited?
-  data-location)                        ; Depends on allocation type:
+  data-location                         ; Depends on allocation type:
                                         ;  Instance = offset in instance data
                                         ;  Class = (class-ptr . offset)
                                         ;  Each-Subclass = offset in class-data
                                         ;  Virtual = NIL
                                         ;  Constant = the value of the slot
+  (filtered nil))                       ; Virtual only: the inherited slot
+                                        ; it overrides, whose storage it
+                                        ; keeps (a "filtered slot")
 
 ;;; The Scheme spelled this accessor SLOT.HAS-INITIAL-VALUE? but the record
 ;;; field HAS-INIT-VALUE?; keep the accessor name the rest of the system

@@ -187,7 +187,7 @@ IMPLEMENTATION-SPECIFIC/EVAL muffles the host compiler's style warnings.
                     DIFFERENCES FROM THE SCHEME VERSION
 
 The regression suite (../dylan-examples.dyl) produces the same values as
-reference/MIT.output except for these.  The first two are where the manual
+reference/MIT.output except for these.  The first three are where the manual
 and Scheme disagree, and the manual is followed:
 
   * Floats print as the manual's examples print them: 9.0 and 0.5 where MIT
@@ -196,6 +196,12 @@ and Scheme disagree, and the manual is followed:
 
   * SQRT is as defined in Common Lisp (chapter 14), so (sqrt 25) is 5.0,
     not Scheme's exact 5.
+
+  * The book's <displaced-view> example (page 58) reads a slot that
+    nothing initialized: the example's <view> slot has no init-keyword, so
+    position: initializes nothing.  The manual makes that an error, and
+    "uninitialized slot accessed" is signalled; Thomas, which did not keep
+    a filtered slot's storage, answered (displace-transform ()).
 
 The rest ../README.thomas already describes as implementation-dependent:
 

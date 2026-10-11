@@ -57,6 +57,12 @@
   "Passed as the default next-method parameter when not going through the
 generic dispatch mechanism.")
 
+(defvar *prevalidated-keywords* nil
+  "Bound by generic dispatch around the call of the last applicable method,
+when that method takes keywords, to the keyword arguments it has already
+validated against all the applicable methods.  DYLAN%KEYWORD-VALIDATE
+consumes it.")
+
 ;;; Create a new symbol from two strings (prefix and postfix) and an
 ;;; existing symbol or string.
 

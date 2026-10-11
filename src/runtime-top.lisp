@@ -92,11 +92,24 @@
     (phase-1 l l 0)))
 
 (defun dylan%keyword-validate (next-method arglist allowed)
-  (if (functionp next-method)
-      ;; Assume that the generic function has checked the content of ARGS.
-      t
-      (validate-keywords arglist allowed
-                         (lambda (&rest args) (dylan-apply dylan/error args)))))
+  (cond ((functionp next-method)
+         ;; Assume that the generic function has checked the content of ARGS.
+         t)
+        ;; The last method of a generic dispatch: the generic function has
+        ;; checked ARGS against every applicable method's keywords, which
+        ;; may include keywords this method does not take.  (The Scheme
+        ;; checked again here against this method's alone, so a keyword
+        ;; meant for a more specific method was rejected once that method
+        ;; reached this one through NEXT-METHOD.)
+        ((and (null next-method)
+              *prevalidated-keywords*
+              (equal arglist (cdr *prevalidated-keywords*)))
+         (setf *prevalidated-keywords* nil)
+         t)
+        (t
+         (validate-keywords arglist allowed
+                            (lambda (&rest args)
+                              (dylan-apply dylan/error args))))))
 
 ;;;
 ;;; Common parameter lists for MAKE-PARAM-LIST

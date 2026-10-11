@@ -274,18 +274,24 @@
                         "generic-dispatch -- too many arguments supplied"
                         generic-function nreq original-args)))
       (labels ((next-method-loop (remaining-methods multiple-values current-args)
-                 (apply (car remaining-methods)
-                        multiple-values
-                        (if (null (cdr remaining-methods))
-                            nil
+                 (if (null (cdr remaining-methods))
+                     (let ((*prevalidated-keywords*
+                             (and (eq current-args original-args)
+                                  (param-list.keys
+                                   (method.param-list (car remaining-methods)))
+                                  (cons t non-req-args))))
+                       (apply (car remaining-methods)
+                              multiple-values nil current-args))
+                     (apply (car remaining-methods)
+                            multiple-values
                             (lambda (multiple-values next-method &rest these-args)
                               (declare (ignore next-method))
                               (next-method-loop (cdr remaining-methods)
                                                 multiple-values
                                                 (if (null these-args)
                                                     current-args
-                                                    these-args))))
-                        current-args)))
+                                                    these-args)))
+                            current-args))))
         (next-method-loop applicable-methods multiple-values original-args)))))
 
 (defun check-handled-keywords (non-req-args methods)

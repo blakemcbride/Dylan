@@ -244,7 +244,11 @@ argument rather than the running extremum; ELEMENT looked for the symbol
 `default' or the list (default:) rather than the keyword default:, so its
 default: argument was never found; FIND-PAIR tested the head of the original
 list rather than of the tail it was walking; and CHECK-HANDLED-KEYWORDS
-stopped without validating when it met a method taking !rest.
+stopped without validating when it met a method taking !rest.  And the
+last method of a generic dispatch checked the keywords again against its
+own alone, so a keyword meant for a more specific method was rejected once
+that method passed control on with NEXT-METHOD; it now trusts the generic
+function's check against all the applicable methods.
 
                               COPYRIGHT
 

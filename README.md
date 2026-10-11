@@ -191,7 +191,9 @@ Several other Scheme bugs have since been fixed as well, each marked with
 an `N.B.` comment — `min` and `max` comparing against their first argument
 rather than the running extremum, `element` looking for the wrong keyword so
 its `default:` was never found, `find-pair` checking the wrong list element,
-and keyword checking in generic dispatch stopping early at a `!rest` method.
+keyword checking in generic dispatch stopping early at a `!rest` method, and
+the last method reached through `next-method` rejecting keywords meant for
+a more specific method.
 They are listed in [`src/README`](src/README).
 
 ## License

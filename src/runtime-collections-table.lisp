@@ -121,19 +121,24 @@
                  (return (car rest-alist)))
                (return nil))))
 
+(defun table-bucket (hash-table key)
+  "The index in HASH-TABLE of KEY's bucket.  MOD, unlike the Scheme's
+REMAINDER, never answers a negative index."
+  (mod (dylan-call dylan/=hash key) (length hash-table)))
+
 (defparameter dylan/remove-key!
   (dylan%generic-fn
    'remove-key!
    (make-param-list `((table ,<table>) (key ,<object>)) nil nil nil)
    (lambda (table key)
      (let* ((hash-table (dylan-call dylan/get-hash-table table))
-            (hash-index (dylan-call dylan/=hash key))
+            (hash-index (table-bucket hash-table key))
             (hash-entry (aref hash-table hash-index))
             (match (dylan-assoc key hash-entry)))
-       (if match
-           (setf (aref hash-table hash-index)
-                 (dylan-call dylan/remove hash-entry match))
-           'no-match)))))
+       (when match
+         (setf (aref hash-table hash-index)
+               (dylan-call dylan/remove hash-entry match)))
+       table))))                        ; Chapter 12: answers the table
 
 (add-method
  dylan/setter/element/
@@ -141,7 +146,7 @@
   (make-param-list `((table ,<table>) (key ,<object>) (new-value ,<object>))
                    nil nil nil)
   (lambda (table key new-value)
-    (let ((hash-index (rem (dylan-call dylan/=hash key) *hash-table-size*))
+    (let ((hash-index (table-bucket (dylan-call dylan/get-hash-table table) key))
           (hash-table (dylan-call dylan/get-hash-table table)))
       (if (>= hash-index (length hash-table))
           (dylan-call

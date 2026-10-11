@@ -232,9 +232,13 @@ can vanish while a caller walks it."
            (write-char object stream)))
       ;; WRITE abbreviates (quote x) as 'x, and Thomas's output was
       ;; produced by Scheme's WRITE.
-      ((and (consp object) (eq (car object) 'quote)
+      ((and (consp object)
+            (member (car object)
+                    '(quote quasiquote unquote unquote-splicing))
             (consp (cdr object)) (null (cddr object)))
-       (write-char #\' stream)
+       (out (ecase (car object)
+              (quote "'") (quasiquote "`") (unquote ",")
+              (unquote-splicing ",@")))
        (rec (cadr object)))
       ((consp object)
        (write-char #\( stream)
@@ -256,6 +260,9 @@ can vanish while a caller walks it."
       ((class? object)
        (format stream "#[dylan-class ~a]"
                (dylan-symbol->string (class.debug-name object))))
+      ((and (instance? object) (condition-message object))
+       ;; Chapter 13: a condition prints as its message.
+       (out (condition-message object)))
       ((instance? object)
        (format stream "#[instance-of ~a]"
                (dylan-symbol->string
@@ -284,6 +291,27 @@ can vanish while a caller walks it."
        (write-char #\) stream))
       (t (princ object stream)))
     object))
+
+(declaim (special <simple-error> <simple-warning> <type-error>))
+
+(defun condition-message (object)
+  "The message of a simple condition or type error, or NIL."
+  (let ((class (instance.class object)))
+    (cond ((or (subclass? class <simple-error>)
+               (subclass? class <simple-warning>))
+           (dylan-format-message
+            (dylan-call dylan/condition-format-string object)
+            (dylan-call dylan/condition-format-arguments object)))
+          ((subclass? class <type-error>)
+           (dylan-format-message
+            "~s is not an instance of ~a"
+            (list (dylan-call dylan/type-error-value object)
+                  (let ((type (dylan-call dylan/type-error-expected-type
+                                          object)))
+                    (if (class? type)
+                        (class.debug-name type)
+                        type)))))
+          (t nil))))
 
 (defun dylan-float-string (x)
   "A float as Common Lisp writes one with double-float the default format:
@@ -378,7 +406,7 @@ file output, and for echoing input in the test harness."
 (defun dylan-delimiter-char-p (ch)
   (or (null ch)
       (whitespace-char-p ch)
-      (member ch '(#\( #\) #\" #\; #\'))))
+      (member ch '(#\( #\) #\" #\; #\' #\` #\,))))
 
 (defun skip-dylan-whitespace (stream)
   "Skip whitespace and comments; return the next character without
@@ -583,6 +611,16 @@ introduces the tail of a dotted list."
           ((char= ch #\") (read-dylan-string stream))
           ((char= ch #\') (read-char stream)
                           (list 'quote (read-dylan-object stream)))
+          ;; Backquote (chapter 3): `x, ,x and ,@x read as (quasiquote x),
+          ;; (unquote x) and (unquote-splicing x).
+          ((char= ch #\`) (read-char stream)
+                          (list 'quasiquote (read-dylan-object stream)))
+          ((char= ch #\,) (read-char stream)
+                          (if (eql (peek-char nil stream nil nil) #\@)
+                              (progn (read-char stream)
+                                     (list 'unquote-splicing
+                                           (read-dylan-object stream)))
+                              (list 'unquote (read-dylan-object stream))))
           ((char= ch #\#) (read-dylan-sharp stream))
           (t (read-dylan-token stream)))))
 

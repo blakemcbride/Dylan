@@ -159,12 +159,14 @@ keyword foo: is read as the Common Lisp keyword :FOO, and KEYWORD? is
 KEYWORDP; every other identifier is interned in the DYLAN package with its
 case folded up, except that the symbols t and nil get lower-case names, so
 as not to be Common Lisp's T and NIL.  #key, #rest and #next are read as
-the !key, !rest and !next the compiler uses; #x, #o, #b, #c(...) and nested
-#| ... |# comments are read as in Common Lisp.
+the !key, !rest and !next the compiler uses; #x, #o, #b, #c(...), nested
+#| ... |# comments and backquote (`, ",", ",@") are read as in Common
+Lisp.  The manual's section on backquote did not survive, so backquote
+follows the usual Lisp semantics, nesting included.
 
 Printing.  For the same reasons there is a printer of its own: NIL prints
-as (), T as #t, :FOO as foo:, and floats as the manual shows them (9.0,
-0.5).  PP pretty-prints Dylan; LISP-PP pretty-prints the compiler's
+as (), T as #t, :FOO as foo:, floats as the manual shows them (9.0,
+0.5), and a simple condition or type error as its message (chapter 13).  PP pretty-prints Dylan; LISP-PP pretty-prints the compiler's
 Lisp output.
 
 Module variables.  In the Scheme a Dylan module variable and a Dylan

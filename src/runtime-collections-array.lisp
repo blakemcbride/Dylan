@@ -204,27 +204,41 @@
 ;;;; Operations on Arrays (page 113)
 ;;;;
 
+;;; An array is stored as nested simple vectors, one level per dimension.
+;;; Element locations are found from the array's dimensions, which say how
+;;; deep to go -- not from whether what is found is a vector, since an
+;;; element may itself be a vector.  (The Scheme went by the latter, so it
+;;; answered an internal row for too few subscripts and would not
+;;; overwrite an element that was a vector.)
+
+(defun locate-array-element (array-instance indices fail)
+  "Answer the row vector holding element INDICES of ARRAY-INSTANCE and the
+index within it, or call FAIL with an error message if INDICES are the
+wrong number or out of bounds (chapter 12)."
+  (let ((dimensions (dylan-call dylan/get-array-dimensions array-instance)))
+    (cond ((/= (length indices) (length dimensions))
+           (funcall fail "wrong number of subscripts"))
+          ((notevery (lambda (index dimension)
+                       (and (integerp index) (< -1 index dimension)))
+                     indices dimensions)
+           (funcall fail "subscript out of range"))
+          (t (let ((row (dylan-call dylan/get-array-value array-instance)))
+               (dolist (index (butlast indices))
+                 (setf row (aref row index)))
+               (values row (car (cl:last indices))))))))
+
 (defparameter dylan/aref
   (dylan%generic-fn
    'aref
    (make-param-list `((array ,<array>)) nil t nil)
-   (lambda (array-instance &rest init-indices)
-     (when (null init-indices)
-       (dylan-call dylan/error "aref -- no indices given" array-instance))
-     (loop with array = (dylan-call dylan/get-array-value array-instance)
-           with indices = init-indices
-           do (if (and (vectorp array) (not (stringp array)))
-                  (let ((size (length array))
-                        (index (car indices)))
-                    (when (>= index size)
-                      (dylan-call dylan/error "aref -- subscript out of range"
-                                  array-instance init-indices array index))
-                    (if (null (cdr indices))
-                        (return (aref array index))
-                        (progn (setf array (aref array index))
-                               (pop indices))))
-                  (dylan-call dylan/error "aref -- too many subscripts"
-                              array-instance init-indices indices))))))
+   (lambda (array-instance &rest indices)
+     (multiple-value-bind (row index)
+         (locate-array-element
+          array-instance indices
+          (lambda (message)
+            (dylan-call dylan/error (concatenate 'string "aref -- " message)
+                        array-instance indices)))
+       (aref row index)))))
 
 (defparameter dylan/setter/aref/
   (dylan%generic-fn
@@ -235,36 +249,16 @@
        (dylan-call dylan/error
                    "(setter aref) -- no indices and new-value given"
                    array-instance))
-     (let ((new-value (nth (- (length indices-and-new-value) 1)
-                           indices-and-new-value))
-           (indices (but-last indices-and-new-value)))
-       (unless (consp indices)
-         (dylan-call dylan/error "(setter aref) -- no indices given"
-                     array-instance indices-and-new-value))
-       (loop with array = (dylan-call dylan/get-array-value array-instance)
-             do (if (and (vectorp array) (not (stringp array)))
-                    (let ((size (length array))
-                          (index (car indices)))
-                      (when (>= index size)
-                        (dylan-call dylan/error
-                                    "(setter aref) -- subscript out of range"
-                                    array-instance indices-and-new-value
-                                    array index))
-                      (if (null (cdr indices))
-                          (if (and (vectorp (aref array index))
-                                   (not (stringp (aref array index))))
-                              (dylan-call
-                               dylan/error
-                               "(setter aref) -- indices need to point to an element"
-                               array-instance indices-and-new-value array index)
-                              (progn (setf (aref array index) new-value)
-                                     (return new-value)))
-                          (progn (setf array (aref array index))
-                                 (pop indices))))
-                    (dylan-call dylan/error
-                                "(setter aref) -- too many subscripts"
-                                array-instance indices-and-new-value
-                                indices)))))))
+     (let ((new-value (car (cl:last indices-and-new-value)))
+           (indices (butlast indices-and-new-value)))
+       (multiple-value-bind (row index)
+           (locate-array-element
+            array-instance indices
+            (lambda (message)
+              (dylan-call dylan/error
+                          (concatenate 'string "(setter aref) -- " message)
+                          array-instance indices)))
+         (setf (aref row index) new-value))))))
 
 (defparameter dylan/dimensions
   (dylan%generic-fn
@@ -277,40 +271,25 @@
  (dylan%dylan-callable->method
   (make-param-list `((array ,<array>) (index ,<sequence>))
                    nil nil '(:default))
-  (lambda (multiple-values next-method array-instance init-indices &rest rest)
+  (lambda (multiple-values next-method array-instance index-sequence &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (let* ((default (dylan%find-keyword rest :default (lambda () nil)))
-           ;; The Scheme applied DYLAN:ERROR directly here, which would have
-           ;; passed the message as the multiple-values argument.
-           (error-report (lambda (&rest args)
-                           (if default
-                               default
-                               (apply #'dylan-call dylan/error args)))))
-      (if (dylan-call dylan/empty? init-indices)
-          (funcall error-report "element -- no indices given" array-instance)
-          (loop with array = (dylan-call dylan/get-array-value array-instance)
-                with index-state = (dylan-call dylan/initial-state init-indices)
-                do (let ((index (dylan-call dylan/current-element
-                                            init-indices index-state)))
-                     (if (and (vectorp array) (not (stringp array)))
-                         (cond ((>= index (length array))
-                                (return
-                                  (funcall error-report
-                                           "element -- subscript out of range"
-                                           array-instance init-indices
-                                           array index)))
-                               ((not (dylan-call dylan/next-state
-                                                 init-indices index-state))
-                                (return (aref array index)))
-                               (t (setf index-state
-                                        (dylan-call dylan/next-state
-                                                    init-indices index-state))
-                                  (setf array (aref array index))))
-                         (return (funcall error-report
-                                          "element -- too many subscripts"
-                                          array-instance init-indices
-                                          index))))))))))
+    ;; Chapter 12: the default is answered for an invalid index sequence if
+    ;; one was given at all -- #f included.
+    (let* ((no-default (list 'no-default))
+           (default (dylan%find-keyword rest :default (lambda () no-default))))
+      (block element
+        (multiple-value-bind (row index)
+            (locate-array-element
+             array-instance (iterate->list #'identity index-sequence)
+             (lambda (message)
+               (return-from element
+                 (if (eq default no-default)
+                     (dylan-call dylan/error
+                                 (concatenate 'string "element -- " message)
+                                 array-instance index-sequence)
+                     default))))
+          (aref row index)))))))
 
 (add-method
  dylan/current-key

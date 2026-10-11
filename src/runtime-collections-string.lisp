@@ -327,13 +327,9 @@
         ((>= index (length string)) string)
       (setf (char string index) (char-upcase (char string index)))))))
 
-(add-method                             ; Not specified in the manual
- dylan/previous-state
- (dylan%function->method
-  (make-param-list `((string ,<string>) (state ,<number>)) nil nil nil)
-  (lambda (string offset)
-    (declare (ignore string))
-    (if (= offset 0) nil (- offset 1)))))
+;;; PREVIOUS-STATE for strings is the array method: string states are
+;;; index vectors.  (The Scheme had a method here specialized on integer
+;;; states, which no string state ever is.)
 
 ;;;
 ;;; Collection Keys
@@ -380,5 +376,13 @@
                      (new-value ,<object>))
                    nil nil nil)
   (lambda (string index new-value)
+    (unless (and (integerp index) (< -1 index (length string)))
+      (dylan-call dylan/error
+                  "((setter element) <byte-string>) -- invalid index"
+                  string index))
+    (unless (characterp new-value)
+      (dylan-call dylan/error
+                  "((setter element) <byte-string>) -- not a character"
+                  string new-value))
     (setf (char string index) new-value)
     new-value)))

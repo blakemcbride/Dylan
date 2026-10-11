@@ -115,3 +115,41 @@ initial NIL next-method argument."
                        (lambda (result) (and result (car result)))
                        nil
                        collections))
+
+(defun dylan%quasi (skeleton values)
+  "Build the value of a backquote from its SKELETON (see QUASI-SKELETON in
+compiler.lisp) and the VALUES of its unquoted expressions."
+  (labels ((marker? (x name)
+             (and (consp x) (eq (car x) name)
+                  (consp (cdr x)) (integerp (cadr x)) (null (cddr x))))
+           (value (x) (aref values (cadr x)))
+           (contains-marker? (x)
+             (cond ((or (marker? x 'dylan%qq-value) (marker? x 'dylan%qq-splice)
+                        (marker? x 'dylan%qq-tail))
+                    t)
+                   ((consp x) (or (contains-marker? (car x))
+                                  (contains-marker? (cdr x))))
+                   ((and (vectorp x) (not (stringp x)))
+                    (some #'contains-marker? x))
+                   (t nil)))
+           (fill-in (x)
+             (cond ((not (contains-marker? x)) x)
+                   ((marker? x 'dylan%qq-value) (value x))
+                   ((consp x)
+                    (let ((result '()) (tail nil))
+                      (loop for rest = x then (cdr rest)
+                            while (consp rest)
+                            do (let ((e (car rest)))
+                                 (cond ((marker? e 'dylan%qq-splice)
+                                        (setf result
+                                              (revappend
+                                               (iterate->list #'identity
+                                                              (value e))
+                                               result)))
+                                       ((marker? e 'dylan%qq-tail)
+                                        (setf tail (value e)))
+                                       (t (push (fill-in e) result))))
+                            finally (unless (null rest) (setf tail rest)))
+                      (nreconc result tail)))
+                   (t (coerce (fill-in (coerce x 'list)) 'simple-vector)))))
+    (fill-in skeleton)))

@@ -130,16 +130,19 @@
 ;;;                      (lambda (string)
 ;;;                        (let ((length (length string)))
 ;;;                          (if (zerop length) nil (- length 1))))))
+;;; Array states are vectors of indices, as INITIAL-STATE and NEXT-STATE
+;;; make them; the Scheme's final states were a list for arrays and an
+;;; integer for simple vectors, which the other state functions could not
+;;; take back.
 (add-method dylan/final-state           ; Not specified in the manual
             (one-arg 'array <array>
                      (lambda (array)
                        (if (dylan-call dylan/empty? array)
                            nil
-                           (mapcar (lambda (index) (- index 1))
-                                   (dylan-call dylan/dimensions array))))))
-(add-method dylan/final-state
-            (one-arg 'sov <simple-object-vector>
-                     (lambda (vec) (- (length vec) 1))))
+                           (map 'simple-vector (lambda (index) (- index 1))
+                                (iterate->list
+                                 #'identity
+                                 (dylan-call dylan/dimensions array)))))))
 (add-method dylan/final-state
             (one-arg 'deque <deque>
                      (lambda (deque)
@@ -248,15 +251,20 @@
  dylan/previous-state
  (dylan%function->method
   (make-param-list `((array ,<array>) (state ,<sequence>)) nil nil nil)
+  ;; The odometer run backwards: decrement the last index that can be, and
+  ;; set every index after it to its maximum.  The state passed in is not
+  ;; modified.
   (lambda (array state)
-    (let ((dimensions (dylan-call dylan/dimensions array)))
-      (loop with dim-index = (- (length dimensions) 1)
-            do (if (minusp dim-index)
-                   (return nil)
-                   (if (< (aref state dim-index) 1)
-                       (decf dim-index)
-                       (progn (decf (aref state dim-index))
-                              (return state)))))))))
+    (let ((dimensions (iterate->list #'identity
+                                     (dylan-call dylan/dimensions array)))
+          (previous (copy-seq state)))
+      (loop for dim-index from (- (length dimensions) 1) downto 0
+            when (plusp (aref previous dim-index))
+              do (decf (aref previous dim-index))
+                 (loop for i from (+ dim-index 1) below (length previous)
+                       do (setf (aref previous i) (- (nth i dimensions) 1)))
+                 (return previous)
+            finally (return nil))))))
 
 (add-method
  dylan/previous-state
@@ -495,7 +503,7 @@ runs out before the DONE? test causes an exit."
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
     (let* ((default-marker (cons 1 2))
-           (default (dylan%find-keyword rest 'default
+           (default (dylan%find-keyword rest :default
                                         (lambda () default-marker))))
       (do ((state (dylan-call dylan/initial-state seq)
                   (dylan-call dylan/next-state seq state))

@@ -198,7 +198,10 @@
     (let ((new-vector (dylan-call dylan/make <stretchy-vector>))
           (size (car (dylan-call dylan/get-array-dimensions s-vector))))
       (dylan-call dylan/set-array-value! new-vector
-                  (coerce (cons new-element (coerce s-vector 'list))
+                  (coerce (cons new-element
+                                (coerce (dylan-call dylan/get-array-value
+                                                    s-vector)
+                                        'list))
                           'simple-vector))
       (dylan-call dylan/set-array-dimensions! new-vector (list (+ size 1)))
       new-vector))))
@@ -235,8 +238,15 @@
  dylan/concatenate
  (dylan%function->method
   (make-param-list `((vector ,<vector>)) nil 'rest nil)
+  ;; Concatenate as simple vectors, then convert to the first argument's
+  ;; class-for-copy.  (The Scheme re-applied CONCATENATE to the same
+  ;; arguments, which dispatched straight back here.)
   (lambda (vector-1 &rest rest)
-    (dylan-call dylan/apply dylan/concatenate vector-1 rest))))
+    (dylan-call dylan/as (dylan-call dylan/class-for-copy vector-1)
+                (dylan-call dylan/apply dylan/concatenate
+                            (dylan-call dylan/as <simple-object-vector>
+                                        vector-1)
+                            rest)))))
 
 (add-method
  dylan/remove!
@@ -339,38 +349,42 @@
                   (dylan-call dylan/as <simple-object-vector>
                               (scheme-sort (dylan-call dylan/as <pair> s-vector)
                                            (lambda (x y)
-                                             (dylan-call test? x y)))))))))
+                                             (dylan-call test? x y)))))
+      s-vector))))                      ; Not the internal simple vector
 
 (add-method
  dylan/first
  (dylan%function->method
   one-vector
   (lambda (vector)
-    (if (= (length vector) 0)
-        (dylan-call dylan/error "(first <vector>) -- vector is empty" vector)
-        (aref vector 0)))))
+    (let ((value (dylan-call dylan/get-array-value vector)))
+      (if (= (length value) 0)
+          (dylan-call dylan/error "(first <vector>) -- vector is empty" vector)
+          (aref value 0))))))
 
 (add-method
  dylan/second
  (dylan%function->method
   one-vector
   (lambda (vector)
-    (if (< (length vector) 2)
-        (dylan-call dylan/error
-                    "(second <vector>) -- vector doesn't have 2 elements"
-                    vector)
-        (aref vector 1)))))
+    (let ((value (dylan-call dylan/get-array-value vector)))
+      (if (< (length value) 2)
+          (dylan-call dylan/error
+                      "(second <vector>) -- vector doesn't have 2 elements"
+                      vector)
+          (aref value 1))))))
 
 (add-method
  dylan/third
  (dylan%function->method
   one-vector
   (lambda (vector)
-    (if (< (length vector) 3)
-        (dylan-call dylan/error
-                    "(third <vector>) -- vector doesn't have 3 elements"
-                    vector)
-        (aref vector 2)))))
+    (let ((value (dylan-call dylan/get-array-value vector)))
+      (if (< (length value) 3)
+          (dylan-call dylan/error
+                      "(third <vector>) -- vector doesn't have 3 elements"
+                      vector)
+          (aref value 2))))))
 
 (add-method
  dylan/last
@@ -451,7 +465,13 @@
   (make-param-list `((vector ,<vector>) (index ,<object>)
                      (new-value ,<object>))
                    nil nil nil)
+  ;; Chapter 12: it is an error to set an element whose key is not
+  ;; already in the vector.
   (lambda (vector-instance index new-value)
     (let ((vector (dylan-call dylan/get-array-value vector-instance)))
+      (unless (and (integerp index) (< -1 index (length vector)))
+        (dylan-call dylan/error
+                    "((setter element) <vector>) -- invalid index"
+                    vector-instance index))
       (setf (aref vector index) new-value)
       new-value))))

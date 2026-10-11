@@ -165,15 +165,20 @@
                         (dylan-call test? (deque-entry.value front-entry) value))
                    (let ((next-entry (deque-entry.next front-entry)))
                      (incf num-changed)
-                     (setf (deque-entry.previous next-entry) nil)
                      (dylan-call dylan/set-deque-front! deque next-entry)
                      (if next-entry
-                         (setf front-entry next-entry)
-                         (return deque)))
+                         (progn
+                           (setf (deque-entry.previous next-entry) nil)
+                           (setf front-entry next-entry))
+                         ;; Every element removed: the deque is empty.
+                         (progn
+                           (dylan-call dylan/set-deque-last! deque nil)
+                           (return deque))))
                    (return nil)))
-             (loop with current-entry = (deque-entry.next
-                                         (dylan-call dylan/get-deque-front
-                                                     deque))
+             (loop with current-entry = (let ((front (dylan-call
+                                                     dylan/get-deque-front
+                                                     deque)))
+                                          (and front (deque-entry.next front)))
                    do (if (or (null current-entry) (>= num-changed count))
                           (return deque)
                           (if (dylan-call test?

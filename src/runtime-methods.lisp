@@ -473,14 +473,79 @@
 (add-method dylan/as-uppercase
             (dylan%function->method one-char #'char-upcase))
 
-(defparameter dylan/=hash
-  (dylan%generic-fn '=hash one-integer #'identity))
+;;; =HASH (chapter 9): objects that are = must hash alike.  Objects that
+;;; binary= compares with id? hash by identity; numbers by value (so that 1
+;;; and 1.0 agree); collections by their elements, since collections are =
+;;; when their keys and elements are (so a string and a list of the same
+;;; characters hash alike).  The Scheme had methods for reals only, so
+;;; tables could not hold symbol or string keys.
 
-(add-method dylan/=hash            ; ***** TEMP: for debugging tables
+(defvar *object-ids*
+  #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized nil)
+  #-sbcl (make-hash-table :test 'eq))
+(defvar *next-object-id* 0)
+
+(defun object-id (object)
+  (or (gethash object *object-ids*)
+      (setf (gethash object *object-ids*) (incf *next-object-id*))))
+
+(defun combine-hash (hash1 hash2)
+  (logand (+ (* 31 hash1) hash2) most-positive-fixnum))
+
+(defparameter dylan/=hash
+  (dylan%generic-fn '=hash one-object
+                    (lambda (object)
+                      (if (or (symbolp object) (characterp object))
+                          (sxhash object)
+                          (object-id object)))))
+
+(add-method dylan/=hash
             (dylan%function->method
-             one-real
-             (lambda (real)
-               (dylan-call dylan/as <integer> (dylan-call dylan/floor real)))))
+             one-number
+             (lambda (number)
+               (flet ((real-hash (real)
+                        (if (and (floatp real)
+                                 (not (ignore-errors (rational real))))
+                            0           ; Infinities and NaNs
+                            (sxhash (rational real)))))
+                 (if (complexp number)
+                     (combine-hash (real-hash (realpart number))
+                                   (real-hash (imagpart number)))
+                     (real-hash number))))))
+
+(add-method dylan/=hash
+            (dylan%function->method
+             one-sequence
+             (lambda (sequence)
+               (let ((hash 17))
+                 (iterate-until (lambda (element)
+                                  (setf hash (combine-hash
+                                              hash
+                                              (dylan-call dylan/=hash element)))
+                                  nil)
+                                sequence)
+                 hash))))
+
+(add-method dylan/=hash
+            (dylan%function->method
+             (make-param-list
+              `((collection ,<explicit-key-collection>)) nil nil nil)
+             (lambda (collection)
+               ;; Independent of iteration order, which need not be stable.
+               (let ((hash 0)
+                     (keys (dylan-call dylan/key-sequence collection)))
+                 (iterate-until
+                  (lambda (key)
+                    (setf hash
+                          (logxor hash
+                                  (combine-hash
+                                   (dylan-call dylan/=hash key)
+                                   (dylan-call dylan/=hash
+                                               (dylan-call dylan/element
+                                                           collection key)))))
+                    nil)
+                  keys)
+                 hash))))
 
 (defparameter dylan/floor (dylan%generic-fn 'floor one-real nil))
 

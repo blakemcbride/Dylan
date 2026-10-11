@@ -102,8 +102,9 @@
                            (dylan-call dylan/next-state seq-1 state-1))
                   (state-2 (dylan-call dylan/initial-state seq-2)
                            (dylan-call dylan/next-state seq-2 state-2)))
+                 ;; Elements are compared with = (chapter 9), not id?.
                  ((or (or (not state-1) (not state-2))
-                      (not (dylan-call dylan/id?
+                      (not (dylan-call dylan/=
                                        (dylan-call dylan/current-element
                                                    seq-1 state-1)
                                        (dylan-call dylan/current-element
@@ -183,31 +184,65 @@
                           nil
                           collections))))
 
+(defun sequence? (collection)
+  (subclass? (get-type collection) <sequence>))
+
+(defun aligned-keys (collections)
+  "Chapter 12's collection alignment: the keys common to COLLECTIONS."
+  (let ((test (make-dylan-callable (lambda (a b) (dylan-call dylan/= a b)))))
+    (cl:reduce (lambda (keys collection)
+                 (dylan-call dylan/intersection keys
+                             (dylan-call dylan/key-sequence collection)
+                             :test test))
+               (cdr collections)
+               :initial-value (dylan-call dylan/key-sequence (car collections)))))
+
+(defun map-aligned-by-keys (proc first collections)
+  "MAP over collections that are not all sequences: apply PROC to the
+elements at each common key, and store the results under those keys in a
+new instance of FIRST's class-for-copy."
+  (let ((keys (iterate->list #'identity (aligned-keys collections)))
+        (class (dylan-call dylan/class-for-copy first)))
+    (when (sequence? first)
+      (setf keys (sort keys #'<)))
+    (flet ((value-at (key)
+             (dylan-call dylan/apply proc
+                         (mapcar (lambda (c) (dylan-call dylan/element c key))
+                                 collections))))
+      (if (subclass? class <sequence>)
+          (dylan-call dylan/as class (mapcar #'value-at keys))
+          (let ((result (dylan-call dylan/make class)))
+            (dolist (key keys result)
+              (dylan-call dylan/setter/element/ result key (value-at key))))))))
+
 (defparameter dylan/map
   (dylan%generic-fn
    'map procedure-and-at-least-one-collection
    (lambda (proc li &rest rest)
      (let ((all-lists (cons li rest)))
-       (loop with result = '()
-             with next-states = (mapcar (lambda (li)
-                                          (dylan-call dylan/initial-state li))
-                                        all-lists)
-             do (if (any? #'not next-states)
-                    (return (dylan-call dylan/as
-                                        (dylan-call dylan/class-for-copy li)
-                                        (reverse result)))
-                    (let ((next-value
-                            (dylan-call dylan/apply
-                                        proc
-                                        (mapcar (lambda (li st)
-                                                  (dylan-call
-                                                   dylan/current-element li st))
-                                                all-lists next-states))))
-                      (push next-value result)
-                      (setf next-states
-                            (mapcar (lambda (li st)
-                                      (dylan-call dylan/next-state li st))
-                                    all-lists next-states)))))))))
+       (if (not (every #'sequence? all-lists))
+           (map-aligned-by-keys proc li all-lists)
+           (loop with result = '()
+                 with next-states = (mapcar (lambda (li)
+                                              (dylan-call dylan/initial-state li))
+                                            all-lists)
+                 do (if (any? #'not next-states)
+                        (return (dylan-call dylan/as
+                                            (dylan-call dylan/class-for-copy li)
+                                            (reverse result)))
+                        (let ((next-value
+                                (dylan-call dylan/apply
+                                            proc
+                                            (mapcar (lambda (li st)
+                                                      (dylan-call
+                                                       dylan/current-element
+                                                       li st))
+                                                    all-lists next-states))))
+                          (push next-value result)
+                          (setf next-states
+                                (mapcar (lambda (li st)
+                                          (dylan-call dylan/next-state li st))
+                                        all-lists next-states))))))))))
 
 (defparameter dylan/map-as
   (dylan%generic-fn
@@ -227,18 +262,41 @@
                       (procedure ,<function>)
                       (collection ,<collection>))
                     nil t nil)
+   ;; The procedure is applied to the target's elements as well as the
+   ;; sources': chapter 12's prose names only the sources, but its example,
+   ;; (map-into x + '(1 2 3 4)) with x = (100 100 200 200) giving
+   ;; (101 102 203 204), passes the target's too, and that is followed.
+   ;; Sequences are processed in step, stopping at the shortest (the
+   ;; target included); otherwise all are aligned by key (chapter 12,
+   ;; "Collection Alignment").
    (lambda (mut-coll proc coll-1 &rest rest)
-     (let ((current-state (dylan-call dylan/initial-state mut-coll)))
-       (collections-iterate
-        proc
-        (lambda (new-value)
-          (dylan-call dylan/setter/current-element/ mut-coll
-                      current-state new-value)
-          (setf current-state
-                (dylan-call dylan/next-state mut-coll current-state))
-          nil)
-        mut-coll
-        (list* mut-coll coll-1 rest))))))
+     (let ((sources (list* mut-coll coll-1 rest)))
+       (if (and (sequence? mut-coll) (every #'sequence? sources))
+           (let ((current-state (dylan-call dylan/initial-state mut-coll)))
+             (if (not current-state)
+                 mut-coll
+                 (collections-iterate
+                  proc
+                  (lambda (new-value)
+                    (dylan-call dylan/setter/current-element/ mut-coll
+                                current-state new-value)
+                    (setf current-state
+                          (dylan-call dylan/next-state mut-coll current-state))
+                    (if current-state nil (lambda () mut-coll)))
+                  mut-coll
+                  sources)))
+           (let ((keys (aligned-keys sources)))
+             (iterate-until
+              (lambda (key)
+                (dylan-call dylan/setter/element/ mut-coll key
+                            (dylan-call dylan/apply proc
+                                        (mapcar (lambda (c)
+                                                  (dylan-call dylan/element
+                                                              c key))
+                                                sources)))
+                nil)
+              keys)
+             mut-coll))))))
 
 (defparameter dylan/any?
   (dylan%generic-fn

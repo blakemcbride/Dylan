@@ -59,8 +59,9 @@
                         (dylan-call dylan/next-state list-1 state-1))
                (state-2 (dylan-call dylan/initial-state list-2)
                         (dylan-call dylan/next-state list-2 state-2)))
+              ;; Elements are compared with = (chapter 9), not id?.
               ((or (or (not state-1) (not state-2))
-                   (not (dylan-call dylan/id?
+                   (not (dylan-call dylan/=
                                     (dylan-call dylan/current-element
                                                 list-1 state-1)
                                     (dylan-call dylan/current-element

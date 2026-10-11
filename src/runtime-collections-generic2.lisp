@@ -272,26 +272,19 @@
   (lambda (multiple-values next-method seq &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
-    (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?))))
-      (loop with state = (dylan-call dylan/initial-state seq)
-            with result = (dylan-call dylan/make
-                                      (dylan-call dylan/class-for-copy seq))
-            do (if state
-                   (let ((cur-element (dylan-call dylan/current-element
-                                                  seq state))
-                         (result-size (dylan-call dylan/size result)))
-                     (do ((state-2 (dylan-call dylan/initial-state seq)
-                                   (dylan-call dylan/next-state seq state-2))
-                          (count 0 (+ count 1)))
-                         ((or (>= count result-size)
-                              (dylan-call test? cur-element
-                                          (dylan-call dylan/current-element
-                                                      seq state-2)))
-                          (when (>= count result-size)
-                            (setf result (dylan-call dylan/add result
-                                                     cur-element)))
-                          (setf state (dylan-call dylan/next-state seq state)))))
-                   (return (dylan-call dylan/reverse result))))))))
+    ;; Each element is compared with those already kept (the Scheme
+    ;; compared it with the first elements of the input instead), the
+    ;; earlier element first, as chapter 12 requires.
+    (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
+          (kept '()))
+      (iterate-until
+       (lambda (element)
+         (unless (some (lambda (k) (dylan-call test? k element)) kept)
+           (push element kept))
+         nil)
+       seq)
+      (dylan-call dylan/as (dylan-call dylan/class-for-copy seq)
+                  (reverse kept))))))
 
 (defparameter dylan/remove-duplicates!
   (dylan%generic-fn
@@ -565,31 +558,36 @@
                    nil nil '(:test :count))
   (lambda (multiple-values next-method big pattern &rest rest)
     (declare (ignore multiple-values))
-    (dylan%keyword-validate next-method rest '(:test :count))
-    (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-          (count (dylan%find-keyword rest :count (lambda () 1)))
-          (first-of-pattern (dylan-call dylan/first pattern))
-          (init-state-pattern (dylan-call dylan/initial-state pattern)))
-      (loop with state = (dylan-call dylan/initial-state big)
-            with num-found = 0
-            with index = 0
-            do (if state
-                   (if (and (dylan-call test?
-                                        (dylan-call dylan/current-element
-                                                    big state)
-                                        first-of-pattern)
-                            (check-subsequence test? big state
-                                               pattern init-state-pattern))
-                       (if (>= num-found (- count 1))
-                           (return index)
-                           (progn
-                             (setf state (dylan-call dylan/next-state big state))
-                             (incf num-found)
-                             (incf index)))
-                       (progn
-                         (setf state (dylan-call dylan/next-state big state))
-                         (incf index)))
-                   (return nil)))))))   ; not found
+    (block subsequence-position
+      (dylan%keyword-validate next-method rest '(:test :count))
+      (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
+            (count (dylan%find-keyword rest :count (lambda () 1)))
+            (init-state-pattern (dylan-call dylan/initial-state pattern)))
+        (when (null init-state-pattern)
+          ;; An empty pattern occurs at every index, up to the size of BIG.
+          (return-from subsequence-position
+            (and (<= count (+ 1 (dylan-call dylan/size big))) (- count 1))))
+        (loop with first-of-pattern = (dylan-call dylan/first pattern)
+              with state = (dylan-call dylan/initial-state big)
+              with num-found = 0
+              with index = 0
+              do (if state
+                     (if (and (dylan-call test?
+                                          (dylan-call dylan/current-element
+                                                      big state)
+                                          first-of-pattern)
+                              (check-subsequence test? big state
+                                                 pattern init-state-pattern))
+                         (if (>= num-found (- count 1))
+                             (return index)
+                             (progn
+                               (setf state (dylan-call dylan/next-state big state))
+                               (incf num-found)
+                               (incf index)))
+                         (progn
+                           (setf state (dylan-call dylan/next-state big state))
+                           (incf index)))
+                     (return nil))))))))   ; not found
 
 ;;;;
 ;;;; MUTABLE COLLECTIONS (p. 127)

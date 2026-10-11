@@ -526,6 +526,9 @@ FILE-NAME."
     (if             . compile-if-form)
     (method         . compile-method-form)
     (or             . compile-or-form)
+    (quasiquote     . compile-quasiquote-form)
+    (unquote        . compile-unquote-form)
+    (unquote-splicing . compile-unquote-form)
     (quote          . compile-quote-form)
     (select         . compile-select-form)
     (set!           . compile-set!-form)
@@ -724,6 +727,84 @@ FILE-NAME."
   (compile-forms forms module-vars bound-vars really-compile multiple-values?
                  (lambda (code mod-vars)
                    (funcall continue `(or ,@code) mod-vars))))
+
+;;; Backquote.  The template is turned into a skeleton in which each
+;;; expression to be evaluated is replaced by a marker holding its index:
+;;; (dylan%qq-value i) for ,x, (dylan%qq-splice i) for ,@x as a list
+;;; element, and (dylan%qq-tail i) as the last element where ,x is the tail
+;;; of a dotted list.  The expressions are compiled in order, and at run
+;;; time DYLAN%QUASI fills the markers in, copying only the structure that
+;;; contains them.  Nested backquotes are kept as written, their unquotes
+;;; evaluated only at the matching depth.
+
+(defun quasi-skeleton (template)
+  "Answer the skeleton of TEMPLATE and the list of expressions to evaluate."
+  (let ((expressions '())
+        (count 0))
+    (labels ((note (expression)
+               (push expression expressions)
+               (prog1 count (incf count)))
+             (unquote-form? (x name)
+               (and (consp x) (eq (car x) name)
+                    (consp (cdr x)) (null (cddr x))))
+             (walk (x depth)
+               (cond ((unquote-form? x 'unquote)
+                      (if (= depth 1)
+                          (list 'dylan%qq-value (note (cadr x)))
+                          (list 'unquote (walk (cadr x) (- depth 1)))))
+                     ((unquote-form? x 'unquote-splicing)
+                      (if (= depth 1)
+                          (dylan%error "QUASIQUOTE: ,@ not in a list" x)
+                          (list 'unquote-splicing
+                                (walk (cadr x) (- depth 1)))))
+                     ((unquote-form? x 'quasiquote)
+                      (list 'quasiquote (walk (cadr x) (+ depth 1))))
+                     ((consp x)
+                      (loop with result = '()
+                            for tail = x then (cdr tail)
+                            do (cond ((null tail) (return (nreverse result)))
+                                     ((and (= depth 1)
+                                           (unquote-form? tail 'unquote))
+                                      ;; `(a . ,b)
+                                      (push (list 'dylan%qq-tail
+                                                  (note (cadr tail)))
+                                            result)
+                                      (return (nreverse result)))
+                                     ((not (consp tail))
+                                      (return (nreconc result tail)))
+                                     ((and (= depth 1)
+                                           (unquote-form? (car tail)
+                                                          'unquote-splicing))
+                                      (push (list 'dylan%qq-splice
+                                                  (note (cadr (car tail))))
+                                            result))
+                                     (t (push (walk (car tail) depth)
+                                              result)))))
+                     ((and (vectorp x) (not (stringp x)))
+                      (coerce (walk (coerce x 'list) depth) 'simple-vector))
+                     (t x))))
+      (let ((skeleton (walk template 1)))
+        (values skeleton (nreverse expressions))))))
+
+(defun compile-quasiquote-form (forms module-vars bound-vars really-compile
+                                multiple-values? continue)
+  (declare (ignore multiple-values?))
+  (must-be-list-of-length forms 1 "QUASIQUOTE: invalid syntax")
+  (multiple-value-bind (skeleton expressions) (quasi-skeleton (car forms))
+    (if (null expressions)
+        (funcall continue `(quote ,skeleton) module-vars)
+        (compile-forms expressions module-vars bound-vars really-compile nil
+                       (lambda (compiled module-vars)
+                         (funcall continue
+                                  `(dylan%quasi ',skeleton
+                                                (vector ,@compiled))
+                                  module-vars))))))
+
+(defun compile-unquote-form (forms module-vars bound-vars really-compile
+                             multiple-values? continue)
+  (declare (ignore module-vars bound-vars really-compile multiple-values?
+                   continue))
+  (dylan%error "unquote (, or ,@) outside a backquote" forms))
 
 (defun compile-quote-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)

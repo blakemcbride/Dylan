@@ -218,6 +218,10 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     (compose dylan/compose)                         ; Method
     (concatenate dylan/concatenate)                 ; Generic-Function
     (concatenate-as dylan/concatenate-as)           ; Generic-Function
+    (condition-format-arguments                     ; Generic-Function
+     dylan/condition-format-arguments)
+    (condition-format-string                        ; Generic-Function
+     dylan/condition-format-string)
     (conjoin dylan/conjoin)                         ; Method
     (cons dylan/cons)                               ; Method
     (copy-sequence dylan/copy-sequence)             ; Generic-Function
@@ -283,6 +287,7 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     (logorc1 dylan/logorc1)                         ; Generic-Method
     (logorc2 dylan/logorc2)                         ; Generic-Method
     (logxor dylan/logxor)                           ; Generic-Method
+    (magnitude dylan/magnitude)                     ; Generic-Function
     (make dylan/make)                               ; Generic-Function
     (make-polar dylan/make-polar)                   ; Generic-Function
     (make-read-only dylan/make-read-only)           ; Generic-Function
@@ -359,6 +364,9 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     (third dylan/third)                             ; Generic-Function
     (truncate dylan/truncate)                       ; Generic-Function
     (truncate/ dylan/truncate/)                     ; Generic-Function
+    (type-error-expected-type                       ; Generic-Function
+     dylan/type-error-expected-type)
+    (type-error-value dylan/type-error-value)       ; Generic-Function
     (unary- dylan/unary-)                           ; Generic-Function
     (unary/ dylan/unary/)                           ; Generic-Function
     (union dylan/union)                             ; Generic-Function

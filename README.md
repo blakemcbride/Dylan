@@ -40,7 +40,7 @@ Exit by typing "dylan:done"
 
 ? (norm (make <point> x: 3 y: 4))
 
-;Value: 5
+;Value: 5.
 
 ? (map (curry + 1) '(3 4 5))
 
@@ -49,9 +49,10 @@ Exit by typing "dylan:done"
 ? dylan:done
 ```
 
-Note that `(sqrt 25)` answers the exact `5`, not `5.0`: the arithmetic keeps
-Scheme's exact/inexact distinction, which Common Lisp's rationals model
-directly.
+Note that `(sqrt 25)` answers the float `5.`, not an exact `5`: the manual
+defines `sqrt`, `exp`, the trigonometric functions and their kin "as in
+Common Lisp", so an irrational function of a rational answers a
+single-float. Rationals are otherwise exact, as in Common Lisp.
 
 ## Using it
 
@@ -109,11 +110,11 @@ $ sbcl --eval '(load "load-dylan.lisp")' \
 ```
 
 It reproduces `src/reference/MIT.output` value for value, apart from a
-handful of differences the original distribution already calls
-implementation-dependent — chiefly the return value of `print`, on which
-the three reference transcripts disagree with each other. The full list is
-under "Differences from the Scheme version" in
-[`src/README`](src/README).
+handful of differences — chiefly the return value of `print`, on which the
+three reference transcripts disagree with each other, and the precision of
+irrational functions of exact arguments, where the manual follows Common
+Lisp rather than Scheme. The full list is under "Differences from the
+Scheme version" in [`src/README`](src/README).
 
 ## How the translation works
 

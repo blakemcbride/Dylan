@@ -159,30 +159,13 @@ can vanish while a caller walks it."
 ;;;; Numbers
 ;;;
 ;;; The arithmetic inherited from Thomas assumes Scheme's exact/inexact
-;;; distinction.  Common Lisp's
-;;; rationals are the exact numbers and its floats the inexact ones, so the
-;;; mapping is direct; only SQRT needs help, because Common Lisp always
-;;; returns a float where Scheme returns an exact root when it can.
+;;; distinction.  Common Lisp's rationals are the exact numbers and its
+;;; floats the inexact ones, so the mapping is direct.
 
 (declaim (inline exact? inexact->exact exact->inexact))
 (defun exact? (n) (rationalp n))
 (defun inexact->exact (n) (if (floatp n) (rational n) n))
 (defun exact->inexact (n) (if (rationalp n) (float n 1d0) n))
-
-(defun exact-integer-sqrt (n)
-  "The exact square root of the non-negative integer N, or NIL."
-  (let ((r (isqrt n)))
-    (and (= (* r r) n) r)))
-
-(defun scheme-sqrt (z)
-  "SQRT, preserving exactness the way Scheme does."
-  (if (and (rationalp z) (>= z 0))
-      (let ((n (exact-integer-sqrt (numerator z)))
-            (d (exact-integer-sqrt (denominator z))))
-        (if (and n d) (/ n d) (sqrt (exact->inexact z))))
-      (sqrt z)))
-
-(defun get-+i () #C(0 1))
 
 ;;;; Symbols and strings
 ;;;

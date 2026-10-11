@@ -46,142 +46,70 @@
 
 (in-package #:dylan)
 
-;;;
-;;; UTILITY FUNCTIONS
-;;;
+;;; Chapter 14 of the manual defines these "as in Common Lisp", so they are
+;;; Common Lisp's own operations on two's-complement integers.  (The Scheme
+;;; simulated them on lists of bits, and answered 0 for any result of the
+;;; form -2^k; it also accepted only two arguments to logxor and logeqv,
+;;; which take any number.)
 
-(defun flip-bit (bit) (if (= 0 bit) 1 0))
+(defun integers-only (name integers)
+  (dolist (n integers integers)
+    (unless (integerp n)
+      (dylan-call dylan/error
+                  (concatenate 'string name " -- not an integer") n))))
 
-(defun negate-bits (l)
-  (loop with answer = '()
-        with remainder = (reverse (mapcar #'flip-bit l))
-        do (cond ((null remainder) (return l)) ; (0 0 0 0 ...) was input
-                 ((= (car remainder) 0)
-                  (return (append (reverse (cdr remainder)) '(1) answer)))
-                 (t (push (flip-bit (car remainder)) answer)
-                    (pop remainder)))))
-
-(defun integer->bits (integer)
-  (if (minusp integer)
-      (let ((nbits (negate-bits (cdr (integer->bits (- integer))))))
-        (if (zerop (car nbits))
-            (cons 1 nbits)
-            nbits))
-      (loop with bits = '()
-            with value = integer
-            do (cond ((zerop value) (return (cons 0 bits)))
-                     ((evenp value) (push 0 bits)
-                                    (setf value (truncate value 2)))
-                     (t (push 1 bits)
-                        (setf value (truncate (- value 1) 2)))))))
-
-(defun pad-bitstring-to (n bits)
-  (let ((basic-bits (length bits)))
-    (when (< n basic-bits)
-      (dylan-call dylan/error "bitstring internal length error"))
-    (append (make-list (- n basic-bits)
-                       :initial-element (if (null bits) 0 (car bits)))
-            bits)))
-
-(defun integers->same-length (integer1 integer2 continue)
-  (let* ((bits1 (integer->bits integer1))
-         (bits2 (integer->bits integer2))
-         (length1 (length bits1))
-         (length2 (length bits2)))
-    (cond ((= length1 length2) (funcall continue bits1 bits2))
-          ((< length1 length2)
-           (funcall continue (pad-bitstring-to length2 bits1) bits2))
-          (t (funcall continue bits1 (pad-bitstring-to length1 bits2))))))
-
-(defun bits->integer (bits)
-  (flet ((unsigned->integer (bits)
-           (let ((result 0))
-             (dolist (bit bits result)
-               (setf result (+ bit (* 2 result)))))))
-    (cond ((zerop (car bits)) (unsigned->integer (cdr bits)))
-          ((null (cdr bits)) -1)
-          (t (- (unsigned->integer (negate-bits (cdr bits))))))))
-
-(defun logical-bitstr (vals)
-  "VALS is a vector #(0/0 0/1 1/0 1/1)."
-  (lambda (int1 int2)
-    (bits->integer
-     (integers->same-length int1 int2
-                            (lambda (bits1 bits2)
-                              (mapcar (lambda (a b)
-                                        (aref vals (+ (* 2 a) b)))
-                                      bits1 bits2))))))
-
-(defun logical-op-only-rest-args (no-arg-value vals)
-  (lambda (&rest all-integers)
-    (if (not all-integers)
-        no-arg-value
-        (let ((op-result (car all-integers)))
-          (dolist (n (cdr all-integers) op-result)
-            (setf op-result (funcall (logical-bitstr vals) op-result n)))))))
+(defun logical-op-only-rest-args (name fn)
+  (lambda (&rest integers)
+    (apply fn (integers-only name integers))))
 
 ;;;
 ;;; DYLAN FUNCTIONS
 ;;;
 
-(defparameter dylan/ash
-  ;; Assume (ash int count) shifts int left by count bits if count>0, right
-  ;; if count<0
-  (dylan%generic-fn 'ash two-integers
-                    (lambda (integer shift)
-                      (dylan-call dylan/floor (* (expt 2 shift) integer)))))
+(defparameter dylan/ash (dylan%generic-fn 'ash two-integers #'ash))
 
 (defparameter dylan/logand
   (dylan%generic-fn 'logand only-rest-args
-                    (logical-op-only-rest-args -1 #(0 0 0 1))))
+                    (logical-op-only-rest-args "logand" #'logand)))
 
 (defparameter dylan/logandc1
-  (dylan%generic-fn 'logandc1 two-integers (logical-bitstr #(0 1 0 0))))
+  (dylan%generic-fn 'logandc1 two-integers #'logandc1))
 
 (defparameter dylan/logandc2
-  (dylan%generic-fn 'logandc2 two-integers (logical-bitstr #(0 0 1 0))))
+  (dylan%generic-fn 'logandc2 two-integers #'logandc2))
 
 (defparameter dylan/logbit?
-  ;; Assuming this is a bit index primitive with 0 being the low bit and
-  ;; assuming it should treat the integer as sign extended.  Number
-  ;; representation is 2's complement (sign extended).
+  ;; Bit INDEX of INTEGER, 0 being the low bit, in two's complement.
   (dylan%generic-fn
-   'logbit two-integers
+   'logbit? two-integers
    (lambda (index integer)
      (when (minusp index)
        (dylan-call dylan/error "logbit? -- negative index" index integer))
-     (let* ((integer-bits (integer->bits integer))
-            (bit-index (- (length integer-bits) index 1)))
-       (if (minusp bit-index)
-           (minusp integer)
-           (= (nth bit-index integer-bits) 1))))))
+     (logbitp index integer))))
 
 (defparameter dylan/logeqv
-  (dylan%generic-fn 'logeqv two-integers
-                    (logical-op-only-rest-args -1 #(1 0 0 1))))
+  (dylan%generic-fn 'logeqv only-rest-args
+                    (logical-op-only-rest-args "logeqv" #'logeqv)))
 
 (defparameter dylan/logior
   (dylan%generic-fn 'logior only-rest-args
-                    (logical-op-only-rest-args 0 #(0 1 1 1))))
+                    (logical-op-only-rest-args "logior" #'logior)))
 
 (defparameter dylan/lognand
-  (dylan%generic-fn 'lognand two-integers (logical-bitstr #(1 1 1 0))))
+  (dylan%generic-fn 'lognand two-integers #'lognand))
 
 (defparameter dylan/lognor
-  (dylan%generic-fn 'lognor two-integers (logical-bitstr #(1 0 0 0))))
+  (dylan%generic-fn 'lognor two-integers #'lognor))
 
 (defparameter dylan/lognot
-  (dylan%generic-fn
-   'lognot one-integer
-   (lambda (integer)
-     (bits->integer (mapcar #'flip-bit (integer->bits integer))))))
+  (dylan%generic-fn 'lognot one-integer #'lognot))
 
 (defparameter dylan/logorc1
-  (dylan%generic-fn 'logorc1 two-integers (logical-bitstr #(1 1 0 1))))
+  (dylan%generic-fn 'logorc1 two-integers #'logorc1))
 
 (defparameter dylan/logorc2
-  (dylan%generic-fn 'logorc2 two-integers (logical-bitstr #(1 0 1 1))))
+  (dylan%generic-fn 'logorc2 two-integers #'logorc2))
 
 (defparameter dylan/logxor
-  (dylan%generic-fn 'logxor two-integers
-                    (logical-op-only-rest-args 0 #(0 1 1 0))))
+  (dylan%generic-fn 'logxor only-rest-args
+                    (logical-op-only-rest-args "logxor" #'logxor)))

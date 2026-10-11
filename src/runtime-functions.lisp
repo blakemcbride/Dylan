@@ -128,32 +128,20 @@
                                      nil nil nil)
                     #'generic-function.methods))
 
+;;; The hyperbolic functions are Common Lisp's (chapter 14).
+
 (defparameter dylan/acosh
-  (dylan%generic-fn 'acosh one-number
-                    (lambda (z)
-                      (log (+ z (* (+ z 1) (sqrt (/ (- z 1) (+ z 1)))))))))
-
+  (dylan%generic-fn 'acosh one-number #'acosh))
 (defparameter dylan/asinh
-  (dylan%generic-fn 'asinh one-number
-                    (lambda (z) (log (+ z (sqrt (+ 1 (* z z))))))))
-
+  (dylan%generic-fn 'asinh one-number #'asinh))
 (defparameter dylan/atanh
-  (dylan%generic-fn 'atanh one-number
-                    (lambda (z) (log (* (+ 1 z) (sqrt (/ 1 (- 1 (* z z)))))))))
-
+  (dylan%generic-fn 'atanh one-number #'atanh))
 (defparameter dylan/cosh
-  (dylan%generic-fn 'cosh one-number
-                    (lambda (z) (/ (+ (exp z) (exp (- z))) 2))))
-
+  (dylan%generic-fn 'cosh one-number #'cosh))
 (defparameter dylan/sinh
-  (dylan%generic-fn 'sinh one-number
-                    (lambda (z) (/ (- (exp z) (exp (- z))) 2))))
-
+  (dylan%generic-fn 'sinh one-number #'sinh))
 (defparameter dylan/tanh
-  (dylan%generic-fn 'tanh one-number
-                    (lambda (z)
-                      (/ (- (exp z) (exp (- z)))
-                         (+ (exp z) (exp (- z)))))))
+  (dylan%generic-fn 'tanh one-number #'tanh))
 
 (defparameter dylan/add-slot
   (dylan%generic-fn 'add-slot
@@ -201,17 +189,19 @@
 (defparameter dylan/make-polar
   (dylan%generic-fn 'make-polar two-reals
                     (lambda (magnitude angle)
-                      (if (zerop angle)
+                      (if (eql angle 0)
                           magnitude
-                          (+ (* magnitude (cos angle))
-                             (* magnitude (sin angle) (get-+i)))))))
+                          (complex (* magnitude (cos angle))
+                                   (* magnitude (sin angle)))))))
 
 (defparameter dylan/make-rectangular
   (dylan%generic-fn 'make-rectangular two-reals
+                    ;; An exact zero imaginary part gives a real; an
+                    ;; inexact one is kept, and makes the result inexact.
                     (lambda (real imaginary)
-                      (if (zerop imaginary)
+                      (if (eql imaginary 0)
                           real
-                          (+ real (* (get-+i) imaginary))))))
+                          (complex real imaginary)))))
 
 (defparameter dylan/method-specializers
   (dylan%generic-fn 'method-specializers

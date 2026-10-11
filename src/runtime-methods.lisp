@@ -192,17 +192,26 @@
     (dolist (x l value)
       (setf value (funcall fn x value)))))
 
+;;; Chapter 14: with no arguments lcm is 1 and gcd 0, with one each answers
+;;; it, and otherwise the arguments are combined left to right.
+
 (defparameter dylan/lcm
   (dylan%function->method
    only-rest-args
    (lambda (&rest args)
-     (reduce args (lambda (x) (dylan-call dylan/binary-lcm x)) 1))))
+     (if (and args (null (cdr args)))
+         (car args)
+         (reduce args (lambda (x value) (dylan-call dylan/binary-lcm value x))
+                 1)))))
 
 (defparameter dylan/gcd
   (dylan%function->method
    only-rest-args
    (lambda (&rest args)
-     (reduce args (lambda (x) (dylan-call dylan/binary-gcd x)) 0))))
+     (if (and args (null (cdr args)))
+         (car args)
+         (reduce args (lambda (x value) (dylan-call dylan/binary-gcd value x))
+                 0)))))
 
 ;;; Special functions
 
@@ -314,7 +323,20 @@
 (defparameter dylan/zero? (dylan%generic-fn 'zero? one-number #'zerop))
 (defparameter dylan/positive? (dylan%generic-fn 'positive? one-number #'plusp))
 (defparameter dylan/negative? (dylan%generic-fn 'negative? one-real #'minusp))
-(defparameter dylan/integral? (dylan%generic-fn 'integral? one-number #'integerp))
+(defparameter dylan/integral?
+  ;; True of any number with an integer value, as Scheme's INTEGER?
+  ;; (2.0 included).
+  (dylan%generic-fn 'integral? one-number
+                    (lambda (number)
+                      (or (integerp number)
+                          (and (floatp number)
+                               (ignore-errors (= number (ffloor number))))))))
+
+;;; Chapter 14: abs, the trigonometric and hyperbolic functions, exp, log,
+;;; expt and sqrt are as defined in Common Lisp -- so, for instance, the
+;;; square root of an exact non-negative number is a float, and an
+;;; irrational function of a rational answers a single-float.  (The Scheme
+;;; followed Scheme, where (sqrt 25) is an exact 5.)
 
 (defparameter dylan/abs (dylan%generic-fn 'abs one-number #'abs))
 (defparameter dylan/sin (dylan%generic-fn 'sin one-number #'sin))
@@ -326,8 +348,8 @@
 (defparameter dylan/atan2 (dylan%generic-fn 'atan2 two-numbers #'atan))
 (defparameter dylan/exp (dylan%generic-fn 'exp one-number #'exp))
 (defparameter dylan/log (dylan%generic-fn 'log one-number #'log))
-(defparameter dylan/expt (dylan%generic-fn 'expt one-number #'expt))
-(defparameter dylan/sqrt (dylan%generic-fn 'sqrt one-number #'scheme-sqrt))
+(defparameter dylan/expt (dylan%generic-fn 'expt two-numbers #'expt))
+(defparameter dylan/sqrt (dylan%generic-fn 'sqrt one-number #'sqrt))
 
 (defparameter dylan/modulo
   (dylan%generic-fn
@@ -335,7 +357,7 @@
    (lambda (r1 r2)
      (let ((multiple-values (vector nil nil '())))
        (dylan-mv-call dylan/floor/ multiple-values r1 r2)
-       (aref multiple-values 0)))))
+       (aref multiple-values 1)))))     ; The remainder, not the quotient
 
 (defparameter dylan/remainder
   (dylan%generic-fn 'remainder two-reals
@@ -558,10 +580,20 @@
 (defparameter dylan/binary-gcd (dylan%generic-fn 'binary-gcd two-integers #'gcd))
 (defparameter dylan/binary-lcm (dylan%generic-fn 'binary-lcm two-integers #'lcm))
 
+;;; As in R4RS: an inexact argument's numerator and denominator are those
+;;; of its exact value, made inexact.
 (defparameter dylan/denominator
-  (dylan%generic-fn 'denominator one-real #'denominator))
+  (dylan%generic-fn 'denominator one-real
+                    (lambda (real)
+                      (if (floatp real)
+                          (float (denominator (rational real)) real)
+                          (denominator real)))))
 (defparameter dylan/numerator
-  (dylan%generic-fn 'numerator one-real #'numerator))
+  (dylan%generic-fn 'numerator one-real
+                    (lambda (real)
+                      (if (floatp real)
+                          (float (numerator (rational real)) real)
+                          (numerator real)))))
 
 (defparameter dylan/angle (dylan%generic-fn 'angle one-number #'phase))
 (defparameter dylan/magnitude (dylan%generic-fn 'magnitude one-number #'abs))
@@ -629,7 +661,28 @@
                      class obj)))))
 
 (labels ((no-change (class object) (declare (ignore class)) object)
-         (->exact (class object) (declare (ignore class)) (inexact->exact object))
+         (->exact (class object) (declare (ignore class))
+           (if (realp object)
+               (inexact->exact object)
+               (dylan-call dylan/error "as -- not a real number" class object)))
+         (->integer (class object)
+           (let ((exact (->exact class object)))
+             (if (integerp exact)
+                 exact
+                 (dylan-call dylan/error "as -- not an integral value"
+                             class object))))
+         (->ratio (class object)
+           (let ((exact (->exact class object)))
+             (if (integerp exact)
+                 (dylan-call dylan/error "as -- not representable as a ratio"
+                             class object)
+                 exact)))
+         (->float-of (format)
+           (lambda (class object)
+             (if (realp object)
+                 (coerce object format)
+                 (dylan-call dylan/error "as -- not a real number"
+                             class object))))
          (->inexact (class object) (declare (ignore class))
            (exact->inexact object)))
   ;; integer <-> character
@@ -679,27 +732,27 @@
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <integer>))
                                   (object ,<number>)) nil nil nil)
-               #'->exact))
+               #'->integer))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <ratio>))
                                   (object ,<number>)) nil nil nil)
-               #'->exact))
+               #'->ratio))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <single-float>))
                                   (object ,<number>)) nil nil nil)
-               #'->inexact))
+               (->float-of 'single-float)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <double-float>))
                                   (object ,<number>)) nil nil nil)
-               #'->inexact))
+               (->float-of 'double-float)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <extended-float>))
                                   (object ,<number>)) nil nil nil)
-               #'->inexact))
+               (->float-of 'long-float)))
   ;; symbols, strings, and keywords
   (add-method dylan/as
               (dylan%function->method

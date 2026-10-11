@@ -182,8 +182,15 @@ IMPLEMENTATION-SPECIFIC/EVAL muffles the host compiler's style warnings.
                     DIFFERENCES FROM THE SCHEME VERSION
 
 The regression suite (../dylan-examples.dyl) produces the same values as
-reference/MIT.output except for these, all of which ../README.thomas already
-describes as implementation-dependent:
+reference/MIT.output except for these.  The first is where the manual and
+Scheme disagree, and the manual is followed:
+
+  * SQRT, EXP, the trigonometric functions and their kin are as defined in
+    Common Lisp (chapter 14 of the manual), so of a rational argument they
+    answer a single-float: (sqrt 2) is 1.4142135, not 1.4142135623730951,
+    and (sqrt 25) is 5., not 5.
+
+The rest ../README.thomas already describes as implementation-dependent:
 
   * PRINT and WRITE-LINE return their argument.  MIT CScheme returned an
     unspecified object and printed it as #[...]; Gambit and Scheme->C
@@ -204,9 +211,10 @@ describes as implementation-dependent:
 
 Two limitations are new:
 
-  * A Dylan variable may not be named T, NIL or PI (nor anything else
-    CONSTANTP answers true for).  T and NIL are read as #t and #f, and
-    constants cannot be bound; VARIABLE->NAME renames the rest.
+  * A Dylan variable may not be named T or NIL, which are read as #t and
+    #f.  Other names Common Lisp could not bind -- PI and the other
+    constants, and the runtime's own special variables -- are renamed by
+    the compiler (VARIABLE->LEXICAL, VARIABLE->NAME).
 
   * kits/MIT/restart-example.dyl did not run, and was removed with the rest
     of the kit: it is written against MIT Scheme's condition system by way

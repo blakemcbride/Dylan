@@ -65,8 +65,10 @@ of pre-existing module variables.  CONTINUE is a function that receives:
   a: the list of newly created module variables,
   b: the preamble (definitions of free variables, refs, sets),
   c: the output code."
+  ;; DEFVAR, not DEFPARAMETER: a variable some file already loaded has
+  ;; defined keeps its value.
   (flet ((define-module-variable (name)
-           `(defparameter ,(name->module-variable name) ',the-unassigned-value))
+           `(defvar ,(name->module-variable name) ',the-unassigned-value))
          (define-module-getter (name)
            `(defun ,(name->module-getter name) ()
               ,(name->module-variable name)))
@@ -428,10 +430,14 @@ FILE-NAME."
      file-name)))
 
 (defun compile-file (input output)
-  "Compile the INPUT file of Dylan expressions into the OUTPUT file."
+  "Compile the INPUT file of Dylan expressions into the OUTPUT file, in the
+module its header names (design note 33), or DYLAN-USER."
   (with-open-file (in input)
     (let ((eof (list 'eof))
-          (exprs '()))
+          (exprs '())
+          (*current-module* *current-module*))
+      (let ((module (read-source-header in)))
+        (in-module (or module 'dylan-user)))
       (loop for next = (dylan-read in nil eof)
             until (eq next eof)
             do (push next exprs))
@@ -518,6 +524,7 @@ FILE-NAME."
     (define-class   . compile-define-class-form)
     (define-generic-function . compile-define-generic-function-form)
     (define-method  . compile-define-method-form)
+    (define-module  . compile-define-module-form)
     (define-slot    . compile-define-slot-form)
     (dotimes        . compile-dotimes-form)
     (for            . compile-for-form)
@@ -895,3 +902,5 @@ FILE-NAME."
                                                   (list nil)
                                                   (cdr forms))))
                             module-vars))))
+
+(initialize-modules)

@@ -93,6 +93,7 @@ not within this one, and they no longer exist here.
                              and the condition-system interface
   support.lisp             src/support.scm
   comp-util.lisp           src/comp-util.scm
+  comp-module.lisp         new -- modules (design notes 32 and 33)
   compiler.lisp            src/compiler.scm
   comp-method.lisp         src/comp-method.scm
   comp-class.lisp          src/comp-class.scm
@@ -176,6 +177,15 @@ proclaimed special, which would have turned every like-named lexical
 binding into a dynamic one, so module variable X is emitted as !MODULE/X/
 and the compiler makes the shadowing explicit (see REALLY-COMPILE in
 compiler.lisp and NAME->MODULE-VARIABLE in comp-util.lisp).
+
+Modules.  Thomas had a single namespace.  comp-module.lisp adds the
+modules of chapter 5 with the DEFINE-MODULE form of design note 32 (in
+prefix form) and the module: file header of design note 33.  A name is
+resolved at compile time: VARIABLE->NAME answers the Lisp name of the
+variable the name refers to in the current module, and the compiler works
+with Lisp names as before.  DYLAN owns the predefined variables; DYLAN-USER
+uses DYLAN, and its own variables keep their earlier names (!MODULE/X/);
+a variable X owned by module M is !MODULE/X@M/.
 
 Generated code.  BEGIN became PROGN, SET! became SETQ, dotted lambda lists
 became &REST, and LETREC became LET plus SETQ.  Scheme's CASE became a COND

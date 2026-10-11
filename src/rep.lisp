@@ -80,6 +80,13 @@
        (not (null input))
        (string-equal (symbol-name input) "DYLAN:DONE")))
 
+;;; (dylan:in-module name) switches the module later input is compiled in.
+(defun rep-in-module-p (input)
+  (and (consp input)
+       (symbolp (car input))
+       (car input)
+       (string-equal (symbol-name (car input)) "DYLAN:IN-MODULE")))
+
 (defun rep ()
   "Start a Dylan read-eval-print loop."
   (terpri)
@@ -93,14 +100,20 @@
        (finish-output)
        (let ((input (dylan-read)))
          (terpri)
-         (if (rep-done-p input)
-             (return '|DYLAN:DONE|)
+         (cond
+           ((rep-done-p input) (return '|DYLAN:DONE|))
+           ((rep-in-module-p input)
+            (unless (list-of-length? input 2)
+              (dylan%error "dylan:in-module -- one module name expected" input))
+            (in-module (cadr input))
+            (format t ";Module: ~(~a~)~%" *current-module*))
+           (t
              (compile-expression
               input '!multiple-values rep-module-variables
               (lambda (new-vars preamble compiled-output)
                 (implementation-specific/eval
                  (append preamble (list (make-result-form compiled-output))))
                 (setf rep-module-variables
-                      (append new-vars rep-module-variables))))))))))
+                      (append new-vars rep-module-variables)))))))))))
 
 (format t "~&~%Call DYLAN:REP to start a Dylan read-eval-print loop.~%")

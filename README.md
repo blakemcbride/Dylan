@@ -64,6 +64,7 @@ There are three ways in, as in the original.
 |---|---|
 | `(dylan:rep)` | start a read-eval-print loop that evaluates Dylan. Errors your Dylan code does not trap reach the Lisp debugger. |
 | `(dylan:empty-environment!)` | forget the module variables earlier interactions created |
+| `(dylan:in-module name)` | compile later input in module `name` (also typed at the `?` prompt) |
 
 **Compiler.** Load `src/load-compiler.lisp`.
 
@@ -76,7 +77,23 @@ There are three ways in, as in the original.
 the `DYLAN` package it compiles Dylan. The forms handed to
 `dylan:compile-to-file` must be Dylan forms, with their symbols interned in
 the `DYLAN` package; that is what `dylan::dylan-read` produces, and
-`dylan:compile-file` reads its input that way for you.
+`dylan:compile-file` reads its input that way for you. A file is compiled
+in the module its `module:` header names (design note 33), or in
+`dylan-user`.
+
+**Modules** follow design note 32, written in prefix form:
+
+```lisp
+(define-module graphics (use dylan) (create draw-line erase-line))
+(define-module lines
+  (use dylan)
+  (use graphics import: (draw-line (erase-line => erase))))
+```
+
+A `use` clause takes `import:`, `exclude:`, `prefix:`, `rename:` and
+`export:`; `export` and `create` clauses name the variables a module
+offers. `dylan` holds the predefined variables, and `dylan-user`, which
+uses it, is where code goes by default.
 
 **Runtime only.** Load `src/load-runtime.lisp`, then `load` the Lisp files
 the compiler produced. They are ordinary Common Lisp and need no compiler
@@ -121,17 +138,14 @@ sealed and abstract classes, read-only module variables, `remove-slot`,
 `(setter direct-superclasses)`, filtered slots, collection alignment for
 tables, the full set of character names — are no longer differences.
 
-**Not implemented**
-
-- **Modules.** There is one module. The manual leaves module operations to
-  the programming environment, and none are provided.
-
 **Different behavior**
 
 - **Symbol case** is not remembered: `'FooBar` prints as `foobar`. Symbols,
   keywords and variable names are case-insensitive, as in the manual.
 - **Reserved names.** Variables may not begin with `!` or `dylan/`; the
   compiler uses those names.
+- **Modules** are declared as design note 32 describes; the 1992 manual
+  left that to the programming environment.
 - **`define-generic-function` options** are checked for keyword/value form
   and otherwise ignored.
 - **Backquote.** The manual's section on it did not survive, so `` ` ``,
@@ -157,7 +171,7 @@ false and the empty list, the reader and printer — is described in
 
 | | |
 |---|---|
-| `src/` | the implementation — 36 files, ~12,000 lines |
+| `src/` | the implementation — 37 Lisp files, ~13,000 lines |
 | `src/README` | the translation notes, and which file came from which Thomas file |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the regression baseline |
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |

@@ -82,6 +82,7 @@
            #:union)
   (:export #:rep                        ; the interactive loop
            #:empty-environment!
+           #:in-module                  ; the module input is compiled in
            #:compile-file               ; a file of Dylan -> a file of Lisp
            #:compile-to-file            ; Dylan forms -> a file of Lisp
            #:compile-expression         ; one form -> Lisp, in memory

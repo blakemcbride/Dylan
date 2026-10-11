@@ -77,13 +77,9 @@
 keywords.  Compiled Dylan variables never appear in operator position here
 -- every Dylan call goes through DYLAN%APPLY -- so the only names that need
 renaming are the ones Common Lisp will not let us bind at all: T, PI and
-any other constant."
-  (if (symbolp dylan-variable)
-      (let ((entry (assoc dylan-variable dylan%lisp-names-of-predefined-names)))
-        (cond (entry (cadr entry))
-              ((constantp dylan-variable) (name->lisp-safe-name dylan-variable))
-              (t dylan-variable)))
-      (name->setter (cadr dylan-variable))))
+any other constant.  Which variable a name refers to depends on the
+current module: see comp-module.lisp."
+  (resolve-variable-name dylan-variable))
 
 ;;; Dylan lexical variables are bound under the Lisp name VARIABLE->NAME
 ;;; gives them, unless that name is a constant or a special variable --

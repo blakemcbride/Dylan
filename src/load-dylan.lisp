@@ -65,7 +65,7 @@
   '("package" "globals" "compat" "support"))
 
 (defparameter *dylan-compiler-files*
-  '("comp-util" "compiler" "comp-method" "comp-class" "comp-sf" "comp-exc"))
+  '("comp-util" "comp-module" "compiler" "comp-method" "comp-class" "comp-sf" "comp-exc"))
 
 (defparameter *dylan-runtime-files*
   '("class"                             ; Dylan Class data type.

@@ -603,7 +603,10 @@ answer the class precedence list."
              (add-method (slot.setter new-slot)
                          (make-class-setter class offset
                                             (slot.type new-slot))))))))
-    ((virtual constant) t)))
+    ((constant)
+     (add-method (slot.getter new-slot)
+                 (make-constant-getter class (slot.data-location new-slot))))
+    ((virtual) t)))
 
 (defun add-slot-to-singleton! (singleton new-slot)
   (when (eq (slot.allocation new-slot) 'instance)
@@ -621,7 +624,10 @@ answer the class precedence list."
       (add-method (slot.setter new-slot)
                   (make-singleton-setter singleton singleton
                                          (slot.data-location new-slot)
-                                         (slot.type new-slot))))))
+                                         (slot.type new-slot)))))
+  (when (eq (slot.allocation new-slot) 'constant)
+    (add-method (slot.getter new-slot)
+                (make-constant-getter singleton (slot.data-location new-slot)))))
 
 (defun dylan%add-slot (owner type allocation setter getter debug-name
                         init-value has-init-value? init-function init-keyword
@@ -779,6 +785,173 @@ answer the class precedence list."
                       getter (class.slots class)))))
                 (class.subclasses owner))))))
     slot-descriptor))
+
+;;; (SETTER DIRECT-SUPERCLASSES) (chapter 11) remakes CLASS so that it
+;;; inherits from NEW-SUPERCLASSES.  The Scheme never implemented it.  CLASS
+;;; and every class below it are rebuilt as MAKE-DYLAN-CLASS and
+;;; DYLAN%ADD-SLOT would have built them, parents before children: the
+;;; inherited slots come from the new superclasses, the class's own slots
+;;; are added back after them, and the accessor methods follow.  Existing
+;;; instances keep the value of every slot that survives (matched by getter)
+;;; and take initial values for the slots that are new to them.
+
+(defun class-descendants (class)
+  (let ((result '()))
+    (labels ((walk (c)
+               (map-over-population!
+                (class.subclasses c)
+                (lambda (sub)
+                  (unless (member sub result)
+                    (push sub result)
+                    (walk sub))))))
+      (walk class))
+    result))
+
+(defun remove-class-accessors! (class)
+  "Remove the accessor methods CLASS's slots put on CLASS itself."
+  (vector-iterate
+   (class.slots class)
+   (lambda (index slot)
+     (declare (ignore index))
+     (when (and slot
+                (or (member (slot.allocation slot)
+                            '(instance each-subclass))
+                    (and (member (slot.allocation slot) '(class constant))
+                         (not (slot.inherited? slot)))))
+       (remove-slot-accessors! class slot)))))
+
+(defun rebuild-class! (class)
+  (let* ((old-slots (class.slots class))
+         (old-class-data (class.class-data class))
+         (own-slots (loop for slot across old-slots
+                          when (and slot (not (slot.inherited? slot)))
+                            collect slot))
+         (instances (class.instances class)))
+    (remove-class-accessors! class)
+    ;; Build the new layout with no instances attached, so that adding the
+    ;; own slots does not touch them; they are converted below.
+    (setf (class.instances class) (make-population*))
+    (let* ((combined (combine-slots class (class.superclasses class)
+                                    (mapcar #'slot.getter own-slots)))
+           (slots (aref combined 0)))
+      (setf (class.slots class) slots
+            (class.instance-data-size class) (aref combined 2)
+            (class.class-data class)
+            (let ((data (make-array (aref combined 1)
+                                    :initial-element
+                                    *the-uninitialized-slot-value*)))
+              (vector-iterate slots
+                              (lambda (i slot)
+                                (declare (ignore i))
+                                (initialize-slot! slot '() data
+                                                  '(each-subclass))))
+              data))
+      (dolist (slot own-slots)
+        (add-a-slot class
+                    (copy-slot slot nil
+                               (case (slot.allocation slot)
+                                 ((instance) (class.instance-data-size class))
+                                 ((each-subclass)
+                                  (length (class.class-data class)))
+                                 ((class)
+                                  (cons class (length (class.class-data class))))
+                                 (t (slot.data-location slot))))
+                    #'class.slots #'set-class-slots! #'add-slot-to-class!)))
+    (setf (class.instances class) instances)
+    (flet ((old-slot (new-slot)
+             (let ((slot (same-slot-getter-in-slot-vector->slot
+                          (slot.getter new-slot) old-slots)))
+               (and slot
+                    (eq (slot.allocation slot) (slot.allocation new-slot))
+                    slot))))
+      ;; Class data this class owns keeps its value.
+      (vector-iterate
+       (class.slots class)
+       (lambda (index slot)
+         (declare (ignore index))
+         (let ((old (and slot (old-slot slot))))
+           (when old
+             (case (slot.allocation slot)
+               ((each-subclass)
+                (setf (aref (class.class-data class) (slot.data-location slot))
+                      (aref old-class-data (slot.data-location old))))
+               ((class)
+                (when (and (eq (car (slot.data-location slot)) class)
+                           (eq (car (slot.data-location old)) class))
+                  (setf (aref (class.class-data class)
+                              (cdr (slot.data-location slot)))
+                        (aref old-class-data
+                              (cdr (slot.data-location old)))))))))))
+      ;; Instance data is laid out afresh.
+      (map-over-population!
+       instances
+       (lambda (instance)
+         (let ((old-data (instance.data instance))
+               (data (make-array (class.instance-data-size class)
+                                 :initial-element
+                                 *the-uninitialized-slot-value*)))
+           (vector-iterate
+            (class.slots class)
+            (lambda (index slot)
+              (declare (ignore index))
+              (when (and slot (eq (slot.allocation slot) 'instance))
+                (let ((old (old-slot slot)))
+                  (setf (aref data (slot.data-location slot))
+                        (if old
+                            (aref old-data (slot.data-location old))
+                            (get-initial-slot-value slot)))))))
+           (setf (instance.data instance) data)))))))
+
+(defun dylan%set-direct-superclasses (class new-superclasses)
+  (let ((supers (dylan-call dylan/as <list> new-superclasses)))
+    (cond ((class.read-only? class)
+           (dylan-call dylan/error
+                       "(setter direct-superclasses) -- class is read-only"
+                       class))
+          ((eq class <object>)
+           (dylan-call dylan/error
+                       "(setter direct-superclasses) -- cannot remake <object>"))
+          ((null supers)
+           (dylan-call dylan/error "must specify at least one superclass"))
+          ((notevery #'class? supers)
+           (dylan-call dylan/error
+                       "(setter direct-superclasses) -- not a class"
+                       new-superclasses))
+          ((not (unique? supers #'member))
+           (dylan-call dylan/error
+                       "multiple inheritance from identical superclasses")))
+    (dolist (super supers)
+      (when (class.sealed? super)
+        (dylan-call dylan/error "cannot subclass a sealed class" super))
+      (when (subclass? super class)
+        (dylan-call dylan/error
+                    "(setter direct-superclasses) -- circular inheritance"
+                    class super)))
+    (let* ((old-supers (class.superclasses class))
+           (affected (cons class (class-descendants class)))
+           (done nil))
+      ;; Install the new superclasses and check every precedence list that
+      ;; changes; on any error, put the old ones back.
+      (unwind-protect
+           (progn
+             (setf (class.superclasses class) supers)
+             (dolist (c affected) (setf (class.precedence-list c) nil))
+             (mapc #'class-precedence-list affected)
+             (setf done t))
+        (unless done
+          (setf (class.superclasses class) old-supers)
+          (dolist (c affected) (setf (class.precedence-list c) nil))))
+      (dolist (super old-supers)
+        (remove-from-population! (class.subclasses super) class))
+      (dolist (super supers)
+        (add-to-population! (class.subclasses super) class))
+      ;; A class's precedence list is longer than any of its superclasses',
+      ;; so this order rebuilds parents before children.
+      (dolist (c (sort (copy-list affected) #'<
+                       :key (lambda (c) (length (class-precedence-list c)))))
+        (rebuild-class! c))
+      (recompute-class-specificities!)
+      new-superclasses)))
 
 (defun make-getter-param-list (class)
   (make-param-list `((obj ,class)) nil nil nil))

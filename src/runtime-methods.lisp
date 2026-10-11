@@ -415,6 +415,13 @@
                           '()
                           (class.superclasses class)))))
 
+(defparameter dylan/setter/direct-superclasses/
+  (dylan%generic-fn 'direct-superclasses
+                    (make-param-list `((class ,<class>)
+                                       (new-superclass-list ,<sequence>))
+                                     nil nil nil)
+                    #'dylan%set-direct-superclasses))
+
 (defparameter dylan/direct-subclasses
   (dylan%generic-fn 'direct-subclasses one-class
                     (lambda (class)

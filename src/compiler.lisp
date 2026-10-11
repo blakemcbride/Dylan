@@ -376,6 +376,7 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     ;;;;;;;;;;;;;;; SETTER VARIABLES
     (,(name->setter 'slot-value) dylan/setter/slot-value/)
     (,(name->setter 'element) dylan/setter/element/)
+    (,(name->setter 'direct-superclasses) dylan/setter/direct-superclasses/)
     (,(name->setter 'current-element) dylan/setter/current-element/)
     (,(name->setter 'first) dylan/setter/first/)
     (,(name->setter 'second) dylan/setter/second/)

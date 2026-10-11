@@ -353,6 +353,7 @@
           dylan/setter/cddr/
           dylan/setter/cdr/
           dylan/setter/current-element/
+          dylan/setter/direct-superclasses/
           dylan/setter/element/
           dylan/setter/first/
           dylan/setter/second/

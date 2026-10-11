@@ -325,7 +325,12 @@
                       (setf (class.read-only? class) t)
                       class)))
 
-(defparameter dylan/remove-slot nil)
+(defparameter dylan/remove-slot
+  (dylan%generic-fn 'remove-slot
+                    (make-param-list `((slot-owner ,<object>)
+                                       (slot-descriptor ,<slot-descriptor>))
+                                     nil nil nil)
+                    #'dylan%remove-slot))
 
 ;;;;;;;;;;;; CRL additions
 

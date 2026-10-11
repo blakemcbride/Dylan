@@ -716,6 +716,70 @@ answer the class precedence list."
                       #'add-slot-to-singleton!))
       new-slot)))
 
+;;; REMOVE-SLOT (chapter 11).  The Scheme never implemented it.  The slot
+;;; goes from OWNER and from every subclass that inherits it only through
+;;; OWNER, together with the accessor methods made for it; a virtual slot's
+;;; methods are the user's and stay.  Instances are updated at once rather
+;;; than as they are accessed: the slot's storage is emptied and left in
+;;; place.
+
+(defun remove-slot-accessors! (specializer slot)
+  (unless (eq (slot.allocation slot) 'virtual)
+    (flet ((remove-from (generic-function specializers)
+             (let ((method (and generic-function
+                                (find-method generic-function specializers))))
+               (when method (delete-method! generic-function method)))))
+      (remove-from (slot.getter slot) (list specializer))
+      (remove-from (slot.setter slot) (list specializer <object>)))))
+
+(defun dylan%remove-slot (owner slot-descriptor)
+  (let ((getter (slot.getter slot-descriptor)))
+    (cond ((singleton? owner)
+           (let* ((slots (singleton.extra-slot-descriptors owner))
+                  (slot (same-slot-getter-in-slot-vector->slot getter slots)))
+             (unless slot
+               (dylan-call dylan/error "remove-slot -- no such slot"
+                           owner slot-descriptor))
+             (remove-this-slot-only! owner slots slot)
+             (remove-slot-accessors! owner slot)))
+          ((not (class? owner))
+           (dylan-call dylan/error
+                       "remove-slot -- owner not a singleton or class" owner))
+          ((class.read-only? owner)
+           (dylan-call dylan/error "remove-slot -- class is read-only" owner))
+          (t
+           (let ((slot (same-slot-getter-in-slot-vector->slot
+                        getter (class.slots owner))))
+             (cond ((null slot)
+                    (dylan-call dylan/error "remove-slot -- no such slot"
+                                owner slot-descriptor))
+                   ((slot.inherited? slot)
+                    (dylan-call dylan/error
+                                "remove-slot -- slot is inherited, not the class's own"
+                                owner slot-descriptor)))
+             (flet ((remove-from-class (class slot)
+                      (remove-this-slot-only! class (class.slots class) slot)
+                      (remove-slot-accessors! class slot)))
+               (remove-from-class owner slot)
+               (map-over-all-subclasses!
+                (lambda (class)
+                  (let ((inherited (same-slot-getter-in-slot-vector->slot
+                                    getter (class.slots class))))
+                    (and inherited (slot.inherited? inherited))))
+                (lambda (class test)
+                  ;; Keep the slot where another superclass still supplies it.
+                  (when (and test
+                             (notany (lambda (super)
+                                       (same-slot-getter-in-slot-vector->slot
+                                        getter (class.slots super)))
+                                     (class.superclasses class)))
+                    (remove-from-class
+                     class
+                     (same-slot-getter-in-slot-vector->slot
+                      getter (class.slots class)))))
+                (class.subclasses owner))))))
+    slot-descriptor))
+
 (defun make-getter-param-list (class)
   (make-param-list `((obj ,class)) nil nil nil))
 

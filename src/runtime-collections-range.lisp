@@ -662,13 +662,16 @@
                         (true? (dylan-call dylan/member? value range-1)))
                    (dylan-call dylan/range :from value :size 1)
                    (empty-range))))
+            ;; Exact ranges intersect as grids; any float among the starts
+            ;; or steps means intersecting the elements (design note 18).
             ((every (lambda (r)
-                      (rationalp (dylan-call dylan/get-range-step r)))
+                      (and (rationalp (dylan-call dylan/get-range-step r))
+                           (rationalp (dylan-call dylan/get-range-start r))))
                     (list range-1 range-2))
              (ranges-intersection range-1 range-2))
             ((and (collection-size range-1)
                   (collection-size range-2))
-             ;; Float steps: intersect the elements.
+             ;; Floats: intersect the elements.
              (dylan-call dylan/as <range>
                          (general-intersection next-method range-1 range-2
                                                rest)))

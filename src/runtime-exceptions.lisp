@@ -339,6 +339,20 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
                  "(return-description <condition>) -- not specialized"
                  condition))))
 
+;;; Chapter 13: a warning's recovery protocol is that any value can be
+;;; returned and will be ignored.
+(add-method dylan/return-allowed?
+            (dylan%function->method
+             (make-param-list `((condition ,<warning>)) nil nil nil)
+             (lambda (condition) (declare (ignore condition)) t)))
+
+(add-method dylan/return-description
+            (dylan%function->method
+             (make-param-list `((condition ,<warning>)) nil nil nil)
+             (lambda (condition)
+               (declare (ignore condition))
+               "Return; the value is ignored.")))
+
 ;;; Top-level wrapper for DYLAN code
 
 (defvar catch-errors? t)

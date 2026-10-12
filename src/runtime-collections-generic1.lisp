@@ -221,7 +221,13 @@ new instance of FIRST's class-for-copy."
                                  collections))))
       (if (subclass? class <sequence>)
           (dylan-call dylan/as class (mapcar #'value-at keys))
-          (let ((result (dylan-call dylan/make class)))
+          (let ((result
+                  ;; An array is made with the first array's dimensions.
+                  (if (subclass? class <array>)
+                      (dylan-call dylan/make class
+                                  :dimensions (dylan-call dylan/dimensions
+                                                          first))
+                      (dylan-call dylan/make class))))
             (dolist (key keys result)
               (dylan-call dylan/setter/element/ result key (value-at key))))))))
 

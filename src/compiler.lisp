@@ -612,9 +612,13 @@ module its header names (design note 33), or DYLAN-USER."
           continue
           `(dylan%call/cc
             (lambda (!bind-exit)
+              ;; The exit's own parameters are named so as not to shadow
+              ;; the multiple-values variable its values go to.
               (let ((,name
-                      (lambda (!multiple-values !next-method &rest values)
-                        (declare (ignore !multiple-values !next-method))
+                      (lambda (!exit/multiple-values !exit/next-method
+                               &rest values)
+                        (declare (ignore !exit/multiple-values
+                                         !exit/next-method))
                         (funcall !bind-exit
                                  (dylan%lisp-apply
                                   dylan/values ,multiple-values?

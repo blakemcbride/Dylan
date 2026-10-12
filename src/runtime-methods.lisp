@@ -299,9 +299,16 @@
    (make-param-list `((instance ,<object>) (getter ,<generic-function>))
                     nil nil nil)
    (lambda (instance getter)
-     (let* ((class (instance.class instance))
-            (slots (class.slots class))
-            (the-slot (same-slot-getter-in-slot-vector->slot getter slots)))
+     (let* ((class (get-type instance))
+            (singleton (and (instance? instance) (instance.singleton instance)))
+            (singleton-slot
+              (and singleton
+                   (same-slot-getter-in-slot-vector->slot
+                    getter (singleton.extra-slot-descriptors singleton))))
+            (the-slot (or singleton-slot
+                          (same-slot-getter-in-slot-vector->slot
+                           getter (class.slots class)))))
+       ;; Chapter 6: an error if the getter does not access a slot.
        (unless the-slot
          (dylan-call dylan/error "slot-initialized? -- no such slot"
                      instance getter class))
@@ -313,7 +320,9 @@
                                    (cdr data-loc))))
                   ((each-subclass) (aref (class.class-data class)
                                          (slot.data-location the-slot)))
-                  ((instance) (aref (instance.data instance)
+                  ((instance) (aref (if singleton-slot
+                                        (singleton.extra-slot-values singleton)
+                                        (instance.data instance))
                                     (slot.data-location the-slot)))
                   (t (dylan-call dylan/error
                                  "slot-initialized? -- bad allocation"
@@ -464,7 +473,8 @@
                     (lambda (class)
                       (if (class.sealed? class)
                           (vector)
-                          (class.slots class)))))
+                          ;; REMOVE-SLOT leaves empty entries behind.
+                          (remove nil (class.slots class))))))
 
 (defparameter dylan/slot-getter
   (dylan%generic-fn 'slot-getter one-slot

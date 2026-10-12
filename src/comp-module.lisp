@@ -63,7 +63,8 @@
 (defstruct (dylan-module (:conc-name module.))
   name
   (imports (make-hash-table :test #'eq)) ; name here -> (module . name there)
-  (exports '()))                         ; names exported
+  (exports '())                          ; names exported
+  (clauses '()))                         ; as DEFINE-MODULE gave them
 
 (defvar *dylan-modules* (make-hash-table :test #'eq))
 
@@ -244,7 +245,7 @@ symbol) -- refers to in the current module."
     (dylan%error "define-module -- the dylan module cannot be redefined"))
   (unless (and (symbolp name) name (not (keyword? name)))
     (dylan%error "define-module -- bad module name" name))
-  (let ((module (make-dylan-module :name name))
+  (let ((module (make-dylan-module :name name :clauses clauses))
         (exports '()))
     (dolist (clause clauses)
       (unless (and (consp clause) (null (cdr (cl:last clause))))
@@ -270,7 +271,26 @@ symbol) -- refers to in the current module."
                          variable name)))))
     (setf (module.exports module) (remove-duplicates exports))
     (setf (gethash name *dylan-modules*) module)
+    (update-using-modules name)
     name))
+
+(defvar *modules-being-updated* '())
+
+(defun update-using-modules (name)
+  "Chapter 5: as variables are exported from a module, they are available
+at once in the modules that use it.  Those modules (and theirs) are defined
+again from their own clauses, so that their imports are recomputed."
+  (let ((*modules-being-updated* (cons name *modules-being-updated*)))
+    (loop for module being the hash-values of *dylan-modules*
+          when (and (not (member (module.name module) *modules-being-updated*))
+                    (some (lambda (clause)
+                            (and (consp clause) (eq (car clause) 'use)
+                                 (eq (cadr clause) name)))
+                          (module.clauses module)))
+            collect module into users
+          finally (dolist (user users)
+                    (dylan%define-module (module.name user)
+                                         (module.clauses user))))))
 
 (defun compile-define-module-form (forms module-vars bound-vars really-compile
                                    multiple-values? continue)

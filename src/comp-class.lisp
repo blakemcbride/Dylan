@@ -338,6 +338,12 @@
           '(:getter :setter :type :init-value :init-function :init-keyword
             :required-init-keyword :allocation)
           #'dylan%error)
+         ;; Chapter 6: each keyword at most once.
+         (let ((keys (loop for key in pairs by #'cddr collect key)))
+           (loop for tail on keys
+                 when (member (car tail) (cdr tail))
+                   do (dylan%error "slot -- slot option given twice"
+                                   (car tail) pairs)))
          (let* ((getter
                  (dylan%find-keyword
                   pairs :getter

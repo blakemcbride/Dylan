@@ -188,10 +188,11 @@
               (dim-list
                 (iterate->list
                  (lambda (elem)
-                   (if (not (and (integerp elem) (plusp elem)))
+                   ;; Chapter 12: non-negative integers.
+                   (if (not (and (integerp elem) (not (minusp elem))))
                        (dylan-call
                         dylan/error
-                        "make -- dimension elements not all positive integers"
+                        "make -- dimension elements not all non-negative integers"
                         class dimensions elem)
                        elem))
                  dimensions)))

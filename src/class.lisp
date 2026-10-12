@@ -752,10 +752,10 @@ answer the class precedence list."
              (dylan-call dylan/error
                          "dylan%add-slot -- bad singleton allocation"
                          allocation))
-           (when init-keyword
+           (when (or init-keyword required-init-keyword)
              (dylan-call dylan/error
                          "dylan%add-slot -- singleton with init-keyword"
-                         init-keyword)))
+                         (or init-keyword required-init-keyword))))
           ((and (class? owner) (class.read-only? owner))
            (dylan-call dylan/error "add-slot -- class is read-only" owner))
           ((not (class? owner))
@@ -778,6 +778,23 @@ answer the class precedence list."
     (unless (member allocation '(instance class each-subclass constant virtual))
       (dylan-call dylan/error "dylan%add-slot -- bad allocation type"
                   allocation))
+    ;; Chapter 6's slot options.
+    (when (and type (not (or (class? type) (singleton? type))))
+      (dylan-call dylan/error "slot -- type: is not a class or singleton"
+                  debug-name type))
+    (dolist (keyword (list init-keyword required-init-keyword))
+      (when (and keyword (not (keyword? keyword)))
+        (dylan-call dylan/error "slot -- init-keyword: is not a keyword"
+                    debug-name keyword)))
+    (when (and (eq allocation 'constant) (not has-init-value?))
+      (dylan-call dylan/error "slot -- a constant slot needs an init-value:"
+                  debug-name))
+    (when (and (eq allocation 'virtual)
+               (or has-init-value? init-function init-keyword
+                   required-init-keyword))
+      (dylan-call dylan/error
+                  "slot -- a virtual slot takes no initialization options"
+                  debug-name))
     (when (and (member allocation '(class each-subclass))
                (or init-function required-init-keyword init-keyword))
       (dylan-call dylan/error

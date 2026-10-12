@@ -481,12 +481,27 @@ irrational functions; an exact real stays exact."
                           ;; REMOVE-SLOT leaves empty entries behind.
                           (remove nil (class.slots class))))))
 
+(defvar *sealed-classes* '()
+  "The classes SEAL has sealed.")
+
+(defun slot-of-sealed-class? (slot)
+  (some (lambda (class) (find slot (class.slots class))) *sealed-classes*))
+
+;;; Chapter 11: #f for a slot in a sealed class.
 (defparameter dylan/slot-getter
   (dylan%generic-fn 'slot-getter one-slot
-                    (lambda (slot) (or-false (slot.getter slot)))))
+                    (lambda (slot)
+                      (if (slot-of-sealed-class? slot)
+                          dylan%false
+                          (or-false (slot.getter slot))))))
 (defparameter dylan/slot-setter
   (dylan%generic-fn 'slot-setter one-slot
-                    (lambda (slot) (or-false (slot.setter slot)))))
+                    (lambda (slot)
+                      (if (or (slot-of-sealed-class? slot)
+                              ;; Chapter 6: a constant slot has no setter.
+                              (eq (slot.allocation slot) 'constant))
+                          dylan%false
+                          (or-false (slot.setter slot))))))
 (defparameter dylan/slot-type
   (dylan%generic-fn 'slot-type one-slot #'slot.type))
 (defparameter dylan/slot-allocation

@@ -649,6 +649,9 @@ module its header names (design note 33), or DYLAN-USER."
                            (dylan%check-assignable
                             ',(name->module-variable (variable->name name))
                             ',name)
+                           (dylan%note-redefinition
+                            ',(name->module-variable (variable->name name))
+                            ',name)
                            (,(name->module-setter name) ,compiled-value)
                            ',name)
                         new-module-vars)))))

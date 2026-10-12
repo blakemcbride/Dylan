@@ -114,9 +114,10 @@
                        ((keyword? (car this-param))
                         (let ((the-key (car this-param))
                               (the-rest (cdr this-param)))
+                          ;; Chapter 6: the parameter may be any variable,
+                          ;; a setter variable included.
                           (if (and (consp the-rest)
-                                   (symbolp (car the-rest))
-                                   (not (null (car the-rest))))
+                                   (variable-name? (car the-rest)))
                               (let ((variable (car the-rest))
                                     (the-rest (cdr the-rest)))
                                 (cond

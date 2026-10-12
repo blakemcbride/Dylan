@@ -388,6 +388,7 @@ to INSTANCE's singleton rather than one of its class's slots."
                     (lambda (class)
                       (setf (class.sealed? class) t)
                       (setf (class.read-only? class) t)
+                      (pushnew class *sealed-classes*)
                       class)))
 
 (defparameter dylan/remove-slot

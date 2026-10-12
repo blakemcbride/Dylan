@@ -80,6 +80,12 @@
   (when (gethash variable *read-only-variables*)
     (dylan-call dylan/error "variable is read-only" name)))
 
+(defun dylan%note-redefinition (variable name)
+  "Chapter 4: DEFINE of a variable that already has a value warns."
+  (when (and (boundp variable)
+             (not (eq (symbol-value variable) the-unassigned-value)))
+    (implementation-specific/warning "redefining variable ~a" (list name))))
+
 (defun dylan%check-generic-function-definition (generic-function name
                                                 nrequired keys rest?)
   "Signal an error unless a DEFINE-GENERIC-FUNCTION of NAME with this

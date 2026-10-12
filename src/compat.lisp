@@ -242,6 +242,12 @@ can vanish while a caller walks it."
 
 (defun dylan-symbol->string (symbol)
   (or (gethash symbol *symbol-spellings*)
+      ;; #key, #rest and #next are read as !key, !rest and !next.
+      (and (eq (symbol-package symbol) (find-package '#:dylan))
+           (cdr (assoc (symbol-name symbol)
+                       '(("!KEY" . "#key") ("!REST" . "#rest")
+                         ("!NEXT" . "#next"))
+                       :test #'string=)))
       (string-downcase (symbol-name symbol))))
 
 ;;;; Sorting

@@ -879,7 +879,8 @@
                                   (symbol ,<symbol>)) nil nil nil)
                (lambda (class symbol)
                  (declare (ignore class))
-                 (dylan-symbol->string symbol))))
+                 ;; A copy: changing it must not rename the symbol.
+                 (copy-seq (dylan-symbol->string symbol)))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <string>))
@@ -888,7 +889,7 @@
                  (declare (ignore class))
                  ;; A Dylan keyword is a Common Lisp keyword here, so
                  ;; unlike the Scheme there is no trailing colon to strip.
-                 (dylan-symbol->string keyword))))
+                 (copy-seq (dylan-symbol->string keyword)))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <symbol>))

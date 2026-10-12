@@ -176,14 +176,15 @@
             (let ((start (dylan-call dylan/get-range-start range))
                   (end (dylan-call dylan/get-range-end range))
                   (step (dylan-call dylan/get-range-step range)))
-              ;; An integer: END is on the range's grid (see RANGE).
+              ;; END is on the range's grid (see RANGE), so (END - START)/STEP
+              ;; is an integer -- up to float rounding, which ROUND undoes.
               (cond
                 ((zerop step)
                  (or-false (dylan-call dylan/get-range-count range)))
                 (end
                   (if (funcall (if (plusp step) #'< #'>) end start)
                       0
-                      (+ (floor (- end start) step) 1)))
+                      (+ (round (- end start) step) 1)))
                 (t dylan%false))))))
 
 (add-method dylan/class-for-copy

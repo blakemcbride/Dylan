@@ -225,11 +225,10 @@
             do (if state
                    (let ((a (current-element seq-1 state)))
                      (setf state (next-state seq-1 state))
-                     (when (true? (dylan-call dylan/any?
-                                              (make-dylan-callable
-                                               (lambda (b) (dylan-call test? a b))
-                                               1)
-                                              seq-2))
+                     ;; MEMBER?, so that a range answers by arithmetic,
+                     ;; even an unbounded one.
+                     (when (true? (dylan-call dylan/member? a seq-2
+                                              :test test?))
                        (setf result (dylan-call dylan/add result a))))
                    (return (dylan-call dylan/reverse result))))))))
 

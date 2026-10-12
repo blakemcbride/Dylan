@@ -67,6 +67,9 @@
                     (setq ,(name->lexical name) !saved-value)
                     !saved-value)
                  `(let ((!saved-value ,value-code))
+                    ;; Chapter 7: an error if there is no such variable.
+                    (dylan%free-variable-ref ,(name->module-variable name)
+                                             ',place)
                     (dylan%check-assignable ',(name->module-variable name)
                                             ',place)
                     (setq ,(name->module-variable name) !saved-value)

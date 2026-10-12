@@ -146,24 +146,15 @@ unbounded collection)."
             (state-method-1 'deque <deque>
                      (lambda (deque)
                        (dylan-call dylan/get-deque-front deque))))
+;;; A range's state is the index of its element, which is FROM + k*BY.
+;;; Computing each element from its index, rather than adding BY to the
+;;; last, keeps a range with a float step in agreement with its own SIZE,
+;;; LAST and ELEMENT.
 (add-method dylan/initial-state
             (state-method-1 'range <range>
                      (lambda (range)
-                       (let ((start (dylan-call dylan/get-range-start range))
-                             (end (dylan-call dylan/get-range-end range))
-                             (step (dylan-call dylan/get-range-step range)))
-                         ;; A by: 0 range's state is an index: the elements
-                         ;; are all the same.
-                         (cond
-                           ((zerop step)
-                            (if (eql 0 (dylan-call dylan/get-range-count range))
-                                nil
-                                0))
-                           (end
-                             (if (funcall (if (minusp step) #'>= #'<=) start end)
-                                 start
-                                 nil))
-                           (t start))))))
+                       (let ((size (collection-size range)))
+                         (if (or (null size) (plusp size)) 0 nil)))))
 (add-method dylan/initial-state
             (state-method-1 'table <table>
                      (lambda (table)
@@ -270,18 +261,8 @@ unbounded collection)."
  (state-method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
-    (let* ((end (dylan-call dylan/get-range-end range))
-           (step (dylan-call dylan/get-range-step range))
-           (next (+ state step))
-           (count (dylan-call dylan/get-range-count range)))
-      (cond
-        ((zerop step)
-         (if (or (null count) (< (+ state 1) count)) (+ state 1) nil))
-        (end
-          (if (funcall (if (minusp step) #'< #'>) next end)
-              nil
-              next))
-        (t next))))))                   ; Unbounded range
+    (let ((size (collection-size range)))
+      (if (or (null size) (< (+ state 1) size)) (+ state 1) nil)))))
 
 (add-method
  dylan/next-state
@@ -347,14 +328,8 @@ unbounded collection)."
  (state-method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
-    (let* ((start (dylan-call dylan/get-range-start range))
-           (step (dylan-call dylan/get-range-step range))
-           (prev (- state step)))
-      (if (zerop step)
-          (if (plusp state) (- state 1) nil)
-      (if (funcall (if (minusp step) #'> #'<) prev start)
-          nil
-          prev))))))
+    (declare (ignore range))
+    (if (plusp state) (- state 1) nil))))
 
 ;;
 ;; CURRENT-ELEMENT
@@ -410,9 +385,11 @@ unbounded collection)."
  (dylan%function->method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
-    (if (zerop (dylan-call dylan/get-range-step range))
-        (dylan-call dylan/get-range-start range)
-        state))))
+    (let ((step (dylan-call dylan/get-range-step range)))
+      ;; The first element is FROM itself, exact or not.
+      (if (or (zerop step) (zerop state))
+          (dylan-call dylan/get-range-start range)
+          (+ (dylan-call dylan/get-range-start range) (* state step)))))))
 (add-method
  dylan/current-element
  (dylan%function->method
@@ -630,8 +607,9 @@ runs out before the DONE? test causes an exit."
   one-sequence
   (lambda (seq)
     (let ((size (collection-size seq)))
+      ;; An unbounded sequence's keys are all the non-negative integers.
       (if (not size)
-          seq                           ; Must be unbounded range
+          (dylan-call dylan/range :from 0)
           (dylan-call dylan/range :from 0 :through (- size 1) :by 1))))))
 
 (defparameter dylan/current-key

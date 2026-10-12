@@ -124,8 +124,12 @@
 (add-method
  dylan/add
  (dylan%function->method one-deque-and-an-object
+                         ;; A new deque: ADD! is the one that may change
+                         ;; its argument (chapter 12).
                          (lambda (deque new-element)
-                           (dylan-call dylan/push deque new-element))))
+                           (dylan-call dylan/push
+                                       (dylan-call dylan/copy-sequence deque)
+                                       new-element))))
 
 (defun dylan%push (deque new-value)
   (let* ((old-deque-front (dylan-call dylan/get-deque-front deque))

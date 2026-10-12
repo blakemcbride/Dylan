@@ -191,14 +191,21 @@
   (subclass? (get-type collection) <sequence>))
 
 (defun aligned-keys (collections)
-  "Chapter 12's collection alignment: the keys common to COLLECTIONS."
-  (let ((test (make-dylan-callable (lambda (a b) (dylan-call dylan/= a b)))))
-    (cl:reduce (lambda (keys collection)
-                 (dylan-call dylan/intersection keys
-                             (dylan-call dylan/key-sequence collection)
-                             :test test))
-               (cdr collections)
-               :initial-value (dylan-call dylan/key-sequence (car collections)))))
+  "Chapter 12's collection alignment: the keys common to COLLECTIONS.  A
+bounded key sequence goes first, so that the intersection, which walks its
+first argument, ends."
+  (let ((key-sequences (stable-sort (mapcar (lambda (collection)
+                                              (dylan-call dylan/key-sequence
+                                                          collection))
+                                            collections)
+                                    (lambda (a b)
+                                      (and (collection-size a)
+                                           (not (collection-size b)))))))
+    (cl:reduce (lambda (keys key-sequence)
+                 (dylan-call dylan/intersection keys key-sequence
+                             :test dylan/=))
+               (cdr key-sequences)
+               :initial-value (car key-sequences))))
 
 (defun map-aligned-by-keys (proc first collections)
   "MAP over collections that are not all sequences: apply PROC to the

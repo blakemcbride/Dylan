@@ -247,39 +247,52 @@
                   (dylan%function->method param-list lisp-operation)))
     generic-function))
 
+(defun required-init-keywords (class)
+  "The required init keywords of CLASS's slots.  They are cached as
+(EPOCH SLOTS . KEYWORDS), good while *CLASS-STRUCTURE-EPOCH* (advanced
+when a class is rebuilt or a slot added) and the slots vector stay the
+same."
+  (let ((cached (class.required-init-keywords class)))
+    (if (and cached
+             (eql (car cached) *class-structure-epoch*)
+             (eq (cadr cached) (class.slots class)))
+        (cddr cached)
+        (let ((keywords '()))
+          (map nil (lambda (slot)
+                     (let ((k (and slot (slot-storage slot)
+                                   (slot.required-init-keyword
+                                    (slot-storage slot)))))
+                       (when k (push k keywords))))
+               (class.slots class))
+          (setf (class.required-init-keywords class)
+                (list* *class-structure-epoch* (class.slots class) keywords))
+          keywords))))
+
 (defun dylan%make-<object> (class &rest rest)
-  (flet ((gather-from-slots (slot-fn)
-           (let ((keywords '()))
-             (map nil (lambda (slot)
-                        (let ((k (and slot (slot-storage slot)
-                                      (funcall slot-fn (slot-storage slot)))))
-                          (when k (push k keywords))))
-                  (class.slots class))
-             keywords)))
-    (dylan%keyword-validate nil rest t)
-    (when (class.abstract? class)
-      (dylan-call dylan/error "make -- cannot instantiate this class" class))
-    ;; MIT Scheme's (MAKE-VECTOR n) left the elements #F, and the slot
-    ;; initialisation relies on that for the slots it does not touch.
-    (let ((instance-data (make-array (class.instance-data-size class)
-                                     :initial-element nil))
-          (slots (class.slots class)))
-      (let ((required (gather-from-slots #'slot.required-init-keyword)))
-        (dolist (k required)
-          (dylan%find-keyword
-           rest k (lambda ()
-                    (dylan-call dylan/error
-                                "make -- missing required keyword" k rest))))
-        (vector-iterate slots
-                        (lambda (i slot)
-                          (declare (ignore i))
-                          (when slot
-                            (initialize-slot! slot rest instance-data
-                                              '(instance)))))
-        (let ((result (make-dylan-instance class nil instance-data)))
-          (add-new-to-population! (class.instances class) result)
-          (dylan-apply dylan/initialize result rest)
-          result)))))
+  (dylan%keyword-validate nil rest t)
+  (when (class.abstract? class)
+    (dylan-call dylan/error "make -- cannot instantiate this class" class))
+  ;; MIT Scheme's (MAKE-VECTOR n) left the elements #F, and the slot
+  ;; initialisation relies on that for the slots it does not touch.
+  (let ((instance-data (make-array (class.instance-data-size class)
+                                   :initial-element nil))
+        (slots (class.slots class)))
+    (let ((required (required-init-keywords class)))
+      (dolist (k required)
+        (dylan%find-keyword
+         rest k (lambda ()
+                  (dylan-call dylan/error
+                              "make -- missing required keyword" k rest))))
+      (vector-iterate slots
+                      (lambda (i slot)
+                        (declare (ignore i))
+                        (when slot
+                          (initialize-slot! slot rest instance-data
+                                            '(instance)))))
+      (let ((result (make-dylan-instance class nil instance-data)))
+        (add-new-to-population! (class.instances class) result)
+        (dylan-apply dylan/initialize result rest)
+        result))))
 
 (defparameter dylan/make
   (dylan%generic-fn 'make

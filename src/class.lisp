@@ -101,7 +101,8 @@
   abstract?                             ; Is the class abstract?
   specificity                           ; Longest path from root.
   specificity-token                     ; Unique to a specificity labeling.
-  (precedence-list nil))                ; Cached; see CLASS-PRECEDENCE-LIST
+  (precedence-list nil)                 ; Cached; see CLASS-PRECEDENCE-LIST
+  (required-init-keywords nil))         ; Cached; see DYLAN%MAKE-<OBJECT>
 
 ;;;; Lisp structure for representing Dylan singletons
 
@@ -350,7 +351,8 @@ slot vector, the class-data size and the instance-data size."
 ;;; Generic dispatch caches the methods it finds for each combination of
 ;;; argument classes (see CACHED-APPLICABLE-METHODS in generic.lisp).  Any
 ;;; change to a precedence list makes those caches stale; bumping this
-;;; counter tells them so.
+;;; counter tells them so.  Adding or removing a slot bumps it too, for
+;;; REQUIRED-INIT-KEYWORDS (runtime-methods.lisp).
 (defvar *class-structure-epoch* 0)
 
 (defun forget-precedence-lists! (classes)
@@ -561,6 +563,7 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
               (missing "setter"))))))))
 
 (defun remove-this-slot-only! (owner slot-vector slot)
+  (incf *class-structure-epoch*)        ; See REQUIRED-INIT-KEYWORDS
   (vector-iterate
    slot-vector
    (lambda (index entry)
@@ -606,6 +609,7 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
 current vector of slot descriptors and UPDATER to store the modified vector
 back if needed.  FIXIT-FN is then called with the owner and the slot
 descriptor to update the instances as needed."
+  (incf *class-structure-epoch*)        ; See REQUIRED-INIT-KEYWORDS
   (let* ((current-descriptors (funcall accessor owner))
          (getter (slot.getter new-slot))
          (old-slot (same-slot-getter-in-slot-vector->slot

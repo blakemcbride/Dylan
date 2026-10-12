@@ -304,9 +304,10 @@ checked them; a direct call (next-method #f) is checked here."
 
 (defvar no-argument (make-symbol "NO-ARGUMENT"))
 
-(defmacro cached-entry (data &rest arguments)
+(defmacro cached-dispatch (data &rest arguments)
   "When the cache knows the methods for ARGUMENTS (one for each required
-argument) and just one applies, what to call for it; else NIL."
+argument) and just one applies, the cache's entry for them (see
+CACHED-APPLICABLE-METHODS); else NIL."
   (let ((table (gensym "TABLE")) (singletons (gensym "SINGLETONS")))
     `(let* ((,table (dispatch-cache ,data))
             (,singletons (generic-function-data.cache-singletons ,data)))
@@ -318,47 +319,76 @@ argument) and just one applies, what to call for it; else NIL."
                                                           ,argument)
                                             ,table))
                     when more collect `(hash-table-p ,table))
+            (car ,table)
             (null (cdar ,table))
-            (caar ,table)))))
+            ,table))))
+
+(defun keyword-error (&rest args)
+  (dylan-apply dylan/error args))
+
+(defun check-extra-arguments (data extra cached)
+  "What GENERIC-DISPATCH checks of the EXTRA arguments, after the required
+ones, of a call to a generic function that takes #key or #rest, given the
+cache's entry for the call."
+  (when (generic-function-data.keys data)
+    ;; Chapter 6: when the generic function takes #key, the arguments
+    ;; after the required ones are keyword/value pairs, whatever its
+    ;; methods take.
+    (validate-keywords extra t #'keyword-error))
+  (check-handled-keywords extra (cddr cached)))
 
 (defun dylan%create-generic-function (name nrequired keys rest?)
-  (let ((data (make-generic-function-data name
-                                          (guarantee-integer nrequired)
-                                          (guarantee-keys keys)
-                                          (guarantee-boolean rest?)
-                                          '() nil))
-        (generic-function nil))
-    ;; With one or two required arguments, a call with just those whose
-    ;; one applicable method the cache knows goes straight to it, without
-    ;; the argument list GENERIC-DISPATCH works on.
+  (let* ((data (make-generic-function-data name
+                                           (guarantee-integer nrequired)
+                                           (guarantee-keys keys)
+                                           (guarantee-boolean rest?)
+                                           '() nil))
+         (extra-arguments? (or (generic-function-data.keys data)
+                               (generic-function-data.rest? data)))
+         (generic-function nil))
+    ;; With one or two required arguments, a call whose one applicable
+    ;; method the cache knows goes straight to it, without the argument
+    ;; list GENERIC-DISPATCH works on when there are no others.
     (setf generic-function
           (case nrequired
             (1 (lambda (multiple-values next-method
                         &optional (a no-argument) &rest more)
                  (declare (ignore next-method))
-                 (let ((entry (and (null more) (not (eq a no-argument))
-                                   (cached-entry data a))))
-                   (if entry
-                       (funcall entry multiple-values
-                                next-method/last-applicable a)
-                       (generic-dispatch multiple-values
-                                         (if (eq a no-argument)
-                                             '()
-                                             (cons a more))
-                                         generic-function data)))))
+                 (let ((cached (and (or (null more) extra-arguments?)
+                                    (not (eq a no-argument))
+                                    (cached-dispatch data a))))
+                   (cond ((null cached)
+                          (generic-dispatch multiple-values
+                                            (if (eq a no-argument)
+                                                '()
+                                                (cons a more))
+                                            generic-function data))
+                         ((null more)
+                          (funcall (caar cached) multiple-values
+                                   next-method/last-applicable a))
+                         (t
+                          (check-extra-arguments data more cached)
+                          (apply (caar cached) multiple-values
+                                 next-method/last-applicable a more))))))
             (2 (lambda (multiple-values next-method
                         &optional (a no-argument) (b no-argument) &rest more)
                  (declare (ignore next-method))
-                 (let ((entry (and (null more) (not (eq b no-argument))
-                                   (cached-entry data a b))))
-                   (if entry
-                       (funcall entry multiple-values
-                                next-method/last-applicable a b)
-                       (generic-dispatch multiple-values
-                                         (cond ((eq a no-argument) '())
-                                               ((eq b no-argument) (list a))
-                                               (t (list* a b more)))
-                                         generic-function data)))))
+                 (let ((cached (and (or (null more) extra-arguments?)
+                                    (not (eq b no-argument))
+                                    (cached-dispatch data a b))))
+                   (cond ((null cached)
+                          (generic-dispatch multiple-values
+                                            (cond ((eq a no-argument) '())
+                                                  ((eq b no-argument) (list a))
+                                                  (t (list* a b more)))
+                                            generic-function data))
+                         ((null more)
+                          (funcall (caar cached) multiple-values
+                                   next-method/last-applicable a b))
+                         (t
+                          (check-extra-arguments data more cached)
+                          (apply (caar cached) multiple-values
+                                 next-method/last-applicable a b more))))))
             (t (lambda (&rest args)
                  (generic-dispatch (car args) (cddr args)
                                    generic-function data)))))
@@ -392,15 +422,7 @@ argument) and just one applies, what to call for it; else NIL."
         (let ((non-req-args (but-first nreq original-args)))
           (if (or (generic-function-data.keys data)
                   (generic-function-data.rest? data))
-              (progn
-                ;; Chapter 6: when the generic function takes #key, the
-                ;; arguments after the required ones are keyword/value
-                ;; pairs, whatever its methods take.
-                (when (generic-function-data.keys data)
-                  (validate-keywords non-req-args t
-                                     (lambda (&rest args)
-                                       (dylan-apply dylan/error args))))
-                (check-handled-keywords non-req-args (cddr applicable)))
+              (check-extra-arguments data non-req-args applicable)
               (dylan-call dylan/error
                           "generic-dispatch -- too many arguments supplied"
                           generic-function nreq original-args))))

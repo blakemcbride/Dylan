@@ -122,15 +122,14 @@ checked them; a direct call (next-method #f) is checked here."
         (method nil))
     (setf method
           (lambda (multiple-values next-method &rest arguments)
-            (cond ((eq next-method next-method/last-applicable)
-                   (setf next-method dylan%false))
-                  ((functionp next-method))
-                  (t (loop for specializer in specializers
-                           for rest on arguments
-                           unless (match-specializer? (car rest) specializer)
-                             do (dylan-call dylan/error
-                                            "method called with an argument that does not match its specializer"
-                                            (car rest) specializer method))))
+            (unless (or (eq next-method next-method/last-applicable)
+                        (functionp next-method))
+              (loop for specializer in specializers
+                    for rest on arguments
+                    unless (match-specializer? (car rest) specializer)
+                    do (dylan-call dylan/error
+                                   "method called with an argument that does not match its specializer"
+                                   (car rest) specializer method)))
             (apply lambda multiple-values next-method arguments)))
     (dylan%make-method param-list method)))
 
@@ -289,20 +288,23 @@ checked them; a direct call (next-method #f) is checked here."
       (when (> ngiven nreq)             ; More supplied than required
         (if (or (generic-function-data.keys data)
                 (generic-function-data.rest? data))
-            (check-handled-keywords non-req-args applicable-methods)
+            (progn
+              ;; Chapter 6: when the generic function takes #key, the
+              ;; arguments after the required ones are keyword/value
+              ;; pairs, whatever its methods take.
+              (when (generic-function-data.keys data)
+                (validate-keywords non-req-args t
+                                   (lambda (&rest args)
+                                     (dylan-apply dylan/error args))))
+              (check-handled-keywords non-req-args applicable-methods))
             (dylan-call dylan/error
                         "generic-dispatch -- too many arguments supplied"
                         generic-function nreq original-args)))
       (labels ((next-method-loop (remaining-methods multiple-values current-args)
                  (if (null (cdr remaining-methods))
-                     (let ((*prevalidated-keywords*
-                             (and (eq current-args original-args)
-                                  (param-list.keys
-                                   (method.param-list (car remaining-methods)))
-                                  (cons t non-req-args))))
-                       (apply (car remaining-methods)
-                              multiple-values next-method/last-applicable
-                              current-args))
+                     (apply (car remaining-methods)
+                            multiple-values next-method/last-applicable
+                            current-args)
                      (apply (car remaining-methods)
                             multiple-values
                             (lambda (multiple-values next-method &rest these-args)

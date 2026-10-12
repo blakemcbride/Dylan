@@ -480,6 +480,13 @@
 (defparameter dylan/binary<
   (dylan%generic-fn 'binary< two-numbers (boolean-function #'<)))
 
+;;; Chapter 9: characters compare by their codes, so case is significant.
+(add-method dylan/binary<
+            (dylan%function->method
+             (make-param-list `((char-1 ,<character>) (char-2 ,<character>))
+                              nil nil nil)
+             (boolean-function #'char<)))
+
 (defparameter dylan/binary=
   ;; Use EQ if the objects are not of the same class.
   (dylan%generic-fn 'binary= two-objects (boolean-function #'eq)))

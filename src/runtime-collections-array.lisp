@@ -264,7 +264,8 @@ wrong number or out of bounds (chapter 12)."
   (dylan%generic-fn
    'dimensions
    (make-param-list `((array ,<array>)) nil nil nil)
-   (lambda (array) (dylan-call dylan/get-array-dimensions array))))
+   ;; A copy: the array's own list is what it checks subscripts against.
+   (lambda (array) (copy-list (dylan-call dylan/get-array-dimensions array)))))
 
 (add-method
  dylan/element

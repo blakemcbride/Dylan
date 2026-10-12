@@ -62,11 +62,11 @@ dispatch mechanism: chapter 10 says #next is then #f.")
 applicable method.  A compiled method's #next is then #f, as for a direct
 call, but the method knows its arguments were checked by the dispatch.")
 
-(defvar *prevalidated-keywords* nil
-  "Bound by generic dispatch around the call of the last applicable method,
-when that method takes keywords, to the keyword arguments it has already
-validated against all the applicable methods.  DYLAN%KEYWORD-VALIDATE
-consumes it.")
+(defun dylan%next-method-value (next-method)
+  "The value of a method's #next parameter for the NEXT-METHOD it was
+passed."
+  (if (eq next-method next-method/last-applicable) dylan%false next-method))
+
 
 ;;; Create a new symbol from two strings (prefix and postfix) and an
 ;;; existing symbol or string.

@@ -205,7 +205,7 @@
                                keys)
                        keys)))
         (flet ((lambda-list (req-names)
-                 `(!multi-values ,next ,@req-names
+                 `(!multi-values !raw-next ,@req-names
                    ,@(cond (rest (list '&rest rest))
                            (keys (list '&rest '!keys))
                            (t '())))))
@@ -228,13 +228,17 @@
                             ',next ',rest
                             ',(if (consp keys) (mapcar #'car keys) keys))
                            (lambda ,(lambda-list req-names)
-                             (declare (ignorable !multi-values ,next
+                             (declare (ignorable !multi-values
                                                  ,@req-names
                                                  ,@(if rest (list rest) '())
                                                  ,@(if (and (not rest) keys)
                                                        (list '!keys)
                                                        '())))
-                             ,@validation-code))
+                             ;; #next is #f for the last method of a
+                             ;; dispatch, as for a direct call.
+                             (let ((,next (dylan%next-method-value !raw-next)))
+                               (declare (ignorable ,next))
+                               ,@validation-code)))
                          mod-vars)))
                  (compile-forms
                   forms mod-vars
@@ -247,7 +251,7 @@
                       ((not keys) (generate mod-vars body-forms))
                       ((eq keys t)
                        (generate mod-vars
-                                 `((dylan%keyword-validate ,next ,key-name t)
+                                 `((dylan%keyword-validate !raw-next ,key-name t)
                                    ,@body-forms)))
                       (t
                        (compile-let*-forms
@@ -259,7 +263,7 @@
                           (generate
                            mod-vars
                            `((dylan%keyword-validate
-                              ,next ,key-name
+                              !raw-next ,key-name
                               ,(if rest t `',(mapcar #'car keys)))
                              (let* (,@(mapcar
                                        (lambda (var key default)

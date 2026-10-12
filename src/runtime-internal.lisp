@@ -60,10 +60,18 @@
 ;;; Read-only module variables (chapter 5): DEFINE-CLASS and
 ;;; DEFINE-GENERIC-FUNCTION make them, and SET! and DEFINE may not assign
 ;;; them.  The defining forms themselves assign without the check, so a
-;;; class or generic function can still be redefined.  Predefined variables
-;;; are not read-only: chapter 7's own example assigns (SETTER ELEMENT).
+;;; class or generic function can still be redefined.  The predefined
+;;; classes are read-only too.  The predefined generic functions are not:
+;;; chapter 7's own example assigns (SETTER ELEMENT).
 
 (defvar *read-only-variables* (make-hash-table :test #'eq))
+
+(do-symbols (symbol '#:dylan)
+  (when (and (eq (symbol-package symbol) (find-package '#:dylan))
+             (boundp symbol)
+             (class? (symbol-value symbol))
+             (eq symbol (class.debug-name (symbol-value symbol))))
+    (setf (gethash symbol *read-only-variables*) t)))
 
 (defun dylan%make-variable-read-only (variable)
   (setf (gethash variable *read-only-variables*) t))

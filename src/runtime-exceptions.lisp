@@ -199,8 +199,11 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
           (lambda (condition) (declare (ignore condition)) t))
          "Continue from breakpoint."
          (lambda ()
+           ;; Chapter 13: the condition is made as SIGNAL makes one, and
+           ;; with no arguments a default message is used.
            (implementation-specific/enter-debugger
-            (make-default-condition args <simple-error> 'break))
+            (make-default-condition (or args (list "Break"))
+                                    <simple-warning> 'break))
            dylan%false)))))))
 
 (defparameter dylan/check-type

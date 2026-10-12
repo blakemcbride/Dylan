@@ -383,7 +383,11 @@
  dylan/concatenate
  (dylan%function->method
   (make-param-list `((range ,<range>)) nil 'rest nil)
+  ;; Ranges that continue one another's arithmetic run make a range; any
+  ;; other arguments give the elements as a <list>, the range's
+  ;; class-for-copy (chapter 12).
   (lambda (range-1 &rest rest)
+   (block range-concatenate
     (let ((end-1 (dylan-call dylan/get-range-end range-1))
           (step-1 (dylan-call dylan/get-range-step range-1))
           (result (dylan-call dylan/copy-sequence range-1)))
@@ -391,44 +395,45 @@
         (dylan-call dylan/error
                     "(concatenate <range> !rest) -- range is unbound"
                     range-1 rest))
-      (loop with rest-ranges = (mapcar (lambda (collection)
-                                         (dylan-call dylan/as <range>
-                                                     collection))
-                                       rest)
-            do (if (null rest-ranges)
-                   (return result)
-                   (let* ((next-range (car rest-ranges))
-                          (start-2 (dylan-call dylan/get-range-start next-range))
-                          (end-2 (dylan-call dylan/get-range-end next-range))
-                          (step-2 (dylan-call dylan/get-range-step next-range))
-                          (size (collection-size next-range)))
-                     (unless end-2
-                       (dylan-call
-                        dylan/error
-                        "(concatenate <range> !rest) -- range is unbound"
-                        next-range range-1 rest))
-                     (if (plusp size)
-                         (if (and (zerop step-1) (zerop step-2)
-                                  (= start-2 end-1))
-                             ;; Runs of the same value join up.
-                             (progn
-                               (dylan-call dylan/set-range-count!
-                                           result
-                                           (+ (collection-size result)
-                                              size))
-                               (pop rest-ranges))
-                         (if (and (not (zerop step-1))
-                                  (= start-2 (+ end-1 step-1))
-                                  (or (= step-1 step-2) (= size 1)))
-                             (progn
-                               (dylan-call dylan/set-range-end! result end-2)
-                               (setf end-1 end-2)
-                               (pop rest-ranges))
-                             (dylan-call
-                              dylan/error
-                              "(concatenate <range> !rest) -- incompatible ranges"
-                              next-range result range-1 rest)))
-                         (pop rest-ranges)))))))))
+      (flet ((elements ()
+               (return-from range-concatenate
+                 (mapcan #'sequence->list (cons range-1 rest)))))
+       (unless (every (lambda (collection)
+                        (true? (dylan-call dylan/instance? collection <range>)))
+                      rest)
+         (elements))
+       (loop with rest-ranges = rest
+             do (if (null rest-ranges)
+                    (return result)
+                    (let* ((next-range (car rest-ranges))
+                           (start-2 (dylan-call dylan/get-range-start next-range))
+                           (end-2 (dylan-call dylan/get-range-end next-range))
+                           (step-2 (dylan-call dylan/get-range-step next-range))
+                           (size (collection-size next-range)))
+                      (unless end-2
+                        (dylan-call
+                         dylan/error
+                         "(concatenate <range> !rest) -- range is unbound"
+                         next-range range-1 rest))
+                      (if (plusp size)
+                          (if (and (zerop step-1) (zerop step-2)
+                                   (= start-2 end-1))
+                              ;; Runs of the same value join up.
+                              (progn
+                                (dylan-call dylan/set-range-count!
+                                            result
+                                            (+ (collection-size result)
+                                               size))
+                                (pop rest-ranges))
+                          (if (and (not (zerop step-1))
+                                   (= start-2 (+ end-1 step-1))
+                                   (or (= step-1 step-2) (= size 1)))
+                              (progn
+                                (dylan-call dylan/set-range-end! result end-2)
+                                (setf end-1 end-2)
+                                (pop rest-ranges))
+                              (elements)))
+                          (pop rest-ranges)))))))))))
 
 (add-method
  dylan/reverse

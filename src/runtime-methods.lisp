@@ -77,7 +77,7 @@
    at-least-one-number
    (lambda (num &rest rest-num)
      (if (null rest-num)
-         (- num)
+         (dylan-call dylan/unary- num)    ; Chapter 14: extensible
          (let ((sum num))
            (dolist (x rest-num sum)
              (setf sum (dylan-call dylan/binary- sum x))))))))
@@ -87,7 +87,7 @@
    at-least-one-number
    (lambda (num &rest rest-num)
      (if (null rest-num)
-         (/ num)
+         (dylan-call dylan/unary/ num)    ; Chapter 14: extensible
          (let ((sum num))
            (dolist (x rest-num sum)
              (setf sum (dylan-call dylan/binary/ sum x))))))))
@@ -752,11 +752,14 @@
    (make-param-list `((fn ,<function>)) nil t nil)
    (lambda (fn &rest args)
      ;; METHOD-APPLICABLE? answers a list of specificities; Dylan wants #t.
-     (bool (cond ((dylan%generic-function? fn)
-                  (any? (lambda (method) (method-applicable? method args))
-                        (generic-function.methods fn)))
-                 ((dylan%method? fn) (method-applicable? fn args))
-                 (t nil))))))
+     ;; Too few sample arguments make a method inapplicable, not an error.
+     (flet ((applicable? (method)
+              (and (>= (length args) (method.nrequired method))
+                   (method-applicable? method args))))
+       (bool (cond ((dylan%generic-function? fn)
+                    (any? #'applicable? (generic-function.methods fn)))
+                   ((dylan%method? fn) (applicable? fn))
+                   (t nil)))))))
 
 (defparameter dylan/apply
   (dylan%generic-fn 'apply (make-param-list `((fn ,<function>)) nil t nil) nil))

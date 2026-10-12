@@ -519,7 +519,36 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
                   "conflict-test -- new slot type not a subclass of inherited type"
                   'owner owner
                   'new-slot new-slot
-                  'new-slot-type (slot.type new-slot)))))
+                  'new-slot-type (slot.type new-slot)))
+    ;; Chapter 6: redefining an inherited slot respecifies every feature
+    ;; the inherited definition specified.
+    (dolist (class (class.superclasses
+                    (if (class? owner)
+                        owner
+                        (instance.class (singleton.object owner)))))
+      (let ((old (same-slot-getter-in-slot-vector->slot (slot.getter new-slot)
+                                                        (class.slots class))))
+        (when old
+          (flet ((missing (feature)
+                   (dylan-call dylan/error
+                               (concatenate 'string
+                                            "slot redefinition -- must respecify the inherited "
+                                            feature)
+                               (slot.debug-name new-slot) owner)))
+            (when (and (or (slot.has-initial-value? old) (slot.init-function old))
+                       (not (or (slot.has-initial-value? new-slot)
+                                (slot.init-function new-slot))))
+              (missing "init-value or init-function"))
+            (when (and (or (slot.init-keyword old)
+                           (slot.required-init-keyword old))
+                       (not (or (slot.init-keyword new-slot)
+                                (slot.required-init-keyword new-slot))))
+              (missing "init-keyword"))
+            (when (and (not (eq (slot.allocation old) 'instance))
+                       (eq (slot.allocation new-slot) 'instance))
+              (missing "allocation"))
+            (when (and (slot.setter old) (not (slot.setter new-slot)))
+              (missing "setter"))))))))
 
 (defun remove-this-slot-only! (owner slot-vector slot)
   (vector-iterate

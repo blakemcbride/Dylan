@@ -350,3 +350,16 @@
     (declare (ignore deque))
     (setf (deque-entry.value state) new-value)
     new-value)))
+
+;;; Design note 12.
+(add-method
+ dylan/setter/size/
+ (dylan%function->method
+  (make-param-list `((deque ,<deque>) (n ,<object>)) nil nil nil)
+  (lambda (deque n)
+    (check-new-size deque n)
+    (loop while (> (collection-size deque) n)
+          do (dylan-call dylan/pop-last deque))
+    (loop while (< (collection-size deque) n)
+          do (dylan-call dylan/push-last deque dylan%false))
+    n)))

@@ -193,42 +193,6 @@
 
 (add-method dylan/reverse (dylan%function->method one-list #'reverse))
 
-(add-method
- dylan/first
- (dylan%function->method
-  one-list
-  (lambda (list)
-    (if (null list)
-        (dylan-call dylan/error "first -- list is empty" list)
-        (car list)))))
-
-(add-method
- dylan/second
- (dylan%function->method
-  one-list
-  (lambda (list)
-    (if (or (null list) (null (cdr list)))
-        (dylan-call dylan/error "second -- list doesn't have 2 elements" list)
-        (cadr list)))))
-
-(add-method
- dylan/third
- (dylan%function->method
-  one-list
-  (lambda (list)
-    (if (or (null list) (null (cdr list)) (null (cddr list)))
-        (dylan-call dylan/error "third -- list doesn't have 3 elements" list)
-        (caddr list)))))
-
-(add-method
- dylan/last
- (dylan%function->method
-  one-list
-  (lambda (list)
-    (if (null list)
-        (dylan-call dylan/error "last -- list is empty")
-        (last list)))))
-
 ;;;;
 ;;;; Operations on LISTS (page 115)
 ;;;;

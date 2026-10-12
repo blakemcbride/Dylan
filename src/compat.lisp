@@ -837,17 +837,51 @@ native Lisp one.")
   (break "Dylan breakpoint: ~a" (with-output-to-string (s)
                                    (dylan-write dylan-condition s))))
 
+(declaim (special <restart>))
+
+(defun call-with-dylan-restarts (thunk)
+  "Call THUNK -- which enters the Lisp debugger -- with a Lisp restart for
+each Dylan restart handler in effect.  Chapter 13: the debugger ought to
+offer the user every restart for which a restart handler is applicable.
+Choosing one signals an instance of the handler's restart class."
+  (labels ((bind (frames)
+             (if (null frames)
+                 (funcall thunk)
+                 (destructuring-bind (type function test description)
+                     (car frames)
+                   (declare (ignore function test))
+                   (if (and (class? type) (subclass? type <restart>))
+                       (restart-bind
+                           ((dylan-restart
+                              (lambda ()
+                                (dylan-call dylan/signal
+                                            (dylan-call dylan/make type)))
+                              :report-function
+                              (lambda (stream)
+                                (if (stringp description)
+                                    (write-string description stream)
+                                    (format stream "Signal a Dylan ~a"
+                                            (dylan-symbol->string
+                                             (class.debug-name type)))))))
+                         (bind (cdr frames)))
+                       (bind (cdr frames)))))))
+    (bind (reverse *dylan-handler-frames*))))
+
 (defun implementation-specific/induce-error (format-string format-args)
-  (error 'dylan-condition
-         :offered t
-         :message format-string
-         :irritants format-args))
+  (call-with-dylan-restarts
+   (lambda ()
+     (error 'dylan-condition
+            :offered t
+            :message format-string
+            :irritants format-args))))
 
 (defun implementation-specific/induce-type-error (value class-name)
-  (error 'dylan-condition
-         :offered t
-         :message "~s is not an instance of ~a"
-         :irritants (list value class-name)))
+  (call-with-dylan-restarts
+   (lambda ()
+     (error 'dylan-condition
+            :offered t
+            :message "~s is not an instance of ~a"
+            :irritants (list value class-name)))))
 
 (defun implementation-specific/return-from-error (dylan-condition)
   "Chapter 13: if a handler returns from ERROR, error bombs directly to the
@@ -859,7 +893,9 @@ handlers."
                    :irritants (list dylan-condition))))
 
 (defun implementation-specific/signal-unhandled-dylan-condition (dylan-condition)
-  (error 'unhandled-dylan-condition :dylan-condition dylan-condition))
+  (call-with-dylan-restarts
+   (lambda ()
+     (error 'unhandled-dylan-condition :dylan-condition dylan-condition))))
 
 (defun implementation-specific/warning (format-string format-args)
   (warn "~a" (dylan-format-message format-string format-args)))

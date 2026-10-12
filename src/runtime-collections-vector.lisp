@@ -352,51 +352,6 @@
                                              (true? (dylan-call test? x y))))))
       s-vector))))                      ; Not the internal simple vector
 
-(add-method
- dylan/first
- (dylan%function->method
-  one-vector
-  (lambda (vector)
-    (let ((value (dylan-call dylan/get-array-value vector)))
-      (if (= (length value) 0)
-          (dylan-call dylan/error "(first <vector>) -- vector is empty" vector)
-          (aref value 0))))))
-
-(add-method
- dylan/second
- (dylan%function->method
-  one-vector
-  (lambda (vector)
-    (let ((value (dylan-call dylan/get-array-value vector)))
-      (if (< (length value) 2)
-          (dylan-call dylan/error
-                      "(second <vector>) -- vector doesn't have 2 elements"
-                      vector)
-          (aref value 1))))))
-
-(add-method
- dylan/third
- (dylan%function->method
-  one-vector
-  (lambda (vector)
-    (let ((value (dylan-call dylan/get-array-value vector)))
-      (if (< (length value) 3)
-          (dylan-call dylan/error
-                      "(third <vector>) -- vector doesn't have 3 elements"
-                      vector)
-          (aref value 2))))))
-
-(add-method
- dylan/last
- (dylan%function->method
-  one-vector
-  (lambda (vector)
-    (let* ((vector-value (dylan-call dylan/get-array-value vector))
-           (vl (length vector-value)))
-      (if (zerop vl)
-          (dylan-call dylan/error "(last <vector>) -- vector is empty" vector)
-          (aref vector-value (- vl 1)))))))
-
 (defparameter dylan/vector
   (dylan%function->method
    (make-param-list '() nil 'rest-args nil)
@@ -475,3 +430,18 @@
                     vector-instance index))
       (setf (aref vector index) new-value)
       new-value))))
+
+;;; Design note 12: elements past the old size are what MAKE gives without
+;;; fill:, #f.
+(add-method
+ dylan/setter/size/
+ (dylan%function->method
+  one-stretchy-vector-and-an-object
+  (lambda (s-vector n)
+    (check-new-size s-vector n)
+    (let ((old (dylan-call dylan/get-array-value s-vector))
+          (new (make-array n :initial-element dylan%false)))
+      (replace new old)
+      (dylan-call dylan/set-array-value! s-vector new)
+      (dylan-call dylan/set-array-dimensions! s-vector (list n))
+      n))))

@@ -361,6 +361,8 @@
           dylan/setter/second/
           dylan/setter/slot-value/
           dylan/setter/third/
+          dylan/setter/last/
+          dylan/setter/size/
           dylan/shallow-copy
           dylan/signal
           dylan/sin

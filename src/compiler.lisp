@@ -383,6 +383,8 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     (,(name->setter 'first) dylan/setter/first/)
     (,(name->setter 'second) dylan/setter/second/)
     (,(name->setter 'third) dylan/setter/third/)
+    (,(name->setter 'last) dylan/setter/last/)
+    (,(name->setter 'size) dylan/setter/size/)
     (,(name->setter 'aref) dylan/setter/aref/)
     (,(name->setter 'car) dylan/setter/car/)
     (,(name->setter 'cdr) dylan/setter/cdr/)

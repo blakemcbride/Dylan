@@ -472,16 +472,22 @@
 
 (add-method
  dylan/last
- (dylan%function->method
-  one-range
-  (lambda (range)
+ (dylan%dylan-callable->method
+  (make-param-list `((range ,<range>)) nil nil '(:default))
+  (lambda (multiple-values next-method range &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:default))
     (let ((end (dylan-call dylan/get-range-end range)))
       (cond ((not end)
              (dylan-call dylan/error
                          "(last <range>) -- no end in sight for this range"
                          range))
             ((zerop (collection-size range))
-             (dylan-call dylan/error "(last <range>) -- range is empty" range))
+             (dylan%find-keyword
+              rest :default
+              (lambda ()
+                (dylan-call dylan/error "(last <range>) -- range is empty"
+                            range))))
             (t end))))))
 
 ;;;;

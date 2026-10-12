@@ -361,12 +361,20 @@
      (list->sequence-like seq-1
                           (mapcan #'sequence->list (cons seq-1 rest))))))
 
+;;; The subsequence from START to END is replaced by INSERT-SEQUENCE, whose
+;;; size may differ (design note 15).  END defaults as chapter 12 has it:
+;;; as many elements as are inserted are overwritten, as far as the
+;;; sequence goes.  (Design note 15 would default END to the size of the
+;;; sequence, which contradicts the chapter's own example.)  When the sizes
+;;; agree the sequence is changed in place; otherwise the result is a new
+;;; instance of its class-for-copy.
+
 (defparameter dylan/replace-subsequence!
   (dylan%generic-fn
    'replace-subsequence!
    (make-param-list `((mutable-sequence ,<mutable-sequence>)
                       (insert-sequence ,<sequence>))
-                    nil nil '(:start))
+                    nil nil '(:start :end))
    nil))
 
 (add-method
@@ -374,35 +382,32 @@
  (dylan%dylan-callable->method
   (make-param-list `((mutable-sequence ,<mutable-sequence>)
                      (insert-sequence ,<sequence>))
-                   nil nil '(:start))
+                   nil nil '(:start :end))
   (lambda (multiple-values next-method mutable insert &rest rest)
     (declare (ignore multiple-values))
-    (dylan%keyword-validate next-method rest '(:start))
-    (let ((start (dylan%find-keyword rest :start (lambda () 0)))
-          (m-state (initial-state mutable)))
-      (when (< (- (collection-size mutable) start)
-               (collection-size insert))
+    (dylan%keyword-validate next-method rest '(:start :end))
+    (let* ((size (collection-size mutable))
+           (inserted (sequence->list insert))
+           (start (dylan%find-keyword rest :start (lambda () 0)))
+           (end (dylan%find-keyword
+                 rest :end
+                 (lambda ()
+                   (and size (integerp start)
+                        (min size (+ start (length inserted))))))))
+      (unless (and (integerp start) (integerp end) size (<= 0 start end size))
         (dylan-call dylan/error
-                    "replace-subsequence! -- not enough elements in target"
-                    mutable insert start))
-      (when (minusp start)
-        (dylan-call dylan/error
-                    "replace-subsequence! -- index cannot be negative"
-                    mutable insert start))
-      (do ((count 0 (+ count 1)))
-          ((= count start) 'done)
-        (setf m-state (next-state mutable m-state)))
-      (loop with i-state = (initial-state insert)
-            do (if i-state
-                   (progn
-                     (set-current-element
-                                 mutable m-state
-                                 (current-element
-                                             insert i-state))
-                     (setf i-state (next-state insert i-state))
-                     (setf m-state (next-state
-                                               mutable m-state)))
-                   (return mutable)))))))
+                    "replace-subsequence! -- invalid start: or end:"
+                    mutable start end))
+      (if (= (length inserted) (- end start))
+          (let ((state (dylan-call dylan/get-state mutable start)))
+            (dolist (element inserted mutable)
+              (set-current-element mutable state element)
+              (setf state (next-state mutable state))))
+          (let ((elements (sequence->list mutable)))
+            (list->sequence-like mutable
+                                 (append (subseq elements 0 start)
+                                         inserted
+                                         (subseq elements end)))))))))
 
 (defparameter dylan/reverse
   (dylan%generic-fn
@@ -451,33 +456,43 @@
           (stable (dylan%find-keyword rest :stable (lambda () dylan%false))))
       (dylan-call dylan/sort seq :test test? :stable stable)))))
 
-(defparameter dylan/first
-  (dylan%generic-fn
-   'first one-sequence
-   (lambda (sequence-1)
-     (let ((state (initial-state sequence-1)))
-       (if state
-           (current-element sequence-1 state)
-           (dylan-call dylan/error "first -- no element in sequence"
-                       sequence-1))))))
+;;; First, second, third and last take default: (design note 2): the value
+;;; when the sequence has no such element, which is otherwise an error.
 
-(defparameter dylan/second
-  (dylan%generic-fn
-   'second one-sequence
-   (lambda (sequence-1)
-     (let ((state (dylan-call dylan/get-state sequence-1 1)))
-       (if state
-           (current-element sequence-1 state)
-           (dylan-call dylan/error "second -- sequence size < 2" sequence-1))))))
+(defun sequence-accessor (name locate)
+  "The generic function NAME of a sequence and #key default.  LOCATE
+answers a list of the wanted element, or NIL when there is none."
+  (let* ((param-list (make-param-list `((sequence ,<sequence>))
+                                      nil nil '(:default)))
+         (generic-function (dylan%generic-fn name param-list nil)))
+    (add-method
+     generic-function
+     (dylan%dylan-callable->method
+      param-list
+      (lambda (multiple-values next-method sequence &rest rest)
+        (declare (ignore multiple-values))
+        (dylan%keyword-validate next-method rest '(:default))
+        (let ((found (funcall locate sequence)))
+          (if found
+              (car found)
+              (dylan%find-keyword
+               rest :default
+               (lambda ()
+                 (dylan-call dylan/error
+                             (format nil "~(~a~) -- no such element" name)
+                             sequence))))))))
+    generic-function))
 
-(defparameter dylan/third
-  (dylan%generic-fn
-   'third one-sequence
-   (lambda (sequence-1)
-     (let ((state (dylan-call dylan/get-state sequence-1 2)))
-       (if state
-           (current-element sequence-1 state)
-           (dylan-call dylan/error "third -- sequence size < 3" sequence-1))))))
+(defun nth-element-of (index)
+  (lambda (sequence)
+    (let ((state (if (zerop index)
+                     (initial-state sequence)
+                     (dylan-call dylan/get-state sequence index))))
+      (and state (list (current-element sequence state))))))
+
+(defparameter dylan/first (sequence-accessor 'first (nth-element-of 0)))
+(defparameter dylan/second (sequence-accessor 'second (nth-element-of 1)))
+(defparameter dylan/third (sequence-accessor 'third (nth-element-of 2)))
 
 (defparameter dylan/setter/first/
   (dylan%generic-fn
@@ -523,18 +538,36 @@
                        sequence-1 new-value))))))
 
 (defparameter dylan/last
+  (sequence-accessor
+   'last
+   (lambda (sequence)
+     (let ((size (collection-size sequence)))
+       (cond ((null size)
+              (dylan-call dylan/error "last -- unbounded sequence" sequence))
+             ((plusp size)
+              (list (dylan-call dylan/element sequence (- size 1)))))))))
+
+;;; Design note 12: the methods are on <stretchy-vector> and <deque>.
+(defparameter dylan/setter/size/
+  (dylan%generic-fn 'setter/size/ one-sequence-and-an-object nil))
+
+(defun check-new-size (sequence n)
+  (unless (and (integerp n) (not (minusp n)))
+    (dylan-call dylan/error "(setter size) -- not a non-negative integer"
+                sequence n)))
+
+;;; Design note 11.
+(defparameter dylan/setter/last/
   (dylan%generic-fn
-   'last one-sequence
-   (lambda (sequence-1)
-     (let ((prev-state nil))
-       (do ((state (initial-state sequence-1)
-                   (next-state sequence-1 state)))
-           ((not state)
-            (if prev-state
-                (current-element sequence-1 prev-state)
-                (dylan-call dylan/error "last -- sequence is empty"
-                            sequence-1)))
-         (setf prev-state state))))))
+   'setter/last/ one-mutable-sequence-and-an-object
+   (lambda (sequence new-value)
+     (let ((size (collection-size sequence)))
+       (unless (and size (plusp size))
+         (dylan-call dylan/error
+                     "(setter last) -- sequence is empty or unbounded"
+                     sequence))
+       (dylan-call dylan/setter/element/ sequence (- size 1) new-value)
+       new-value))))
 
 (defun check-subsequence (test? big big-state pattern pattern-state)
   (labels ((check-loop (big-state pattern-state)

@@ -582,6 +582,22 @@ runs out before the DONE? test causes an exit."
                               seq key rest))
                  (t default))))))))
 
+;;; A sequence's keys are integers, so any other key is not among them: the
+;;; answer is default:, as chapter 12 says for a key that is absent.
+(add-method
+ dylan/element
+ (dylan%dylan-callable->method
+  (make-param-list `((sequence ,<sequence>) (key ,<object>))
+                   nil nil '(:default))
+  (lambda (multiple-values next-method seq key &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:default))
+    (dylan%find-keyword rest :default
+                        (lambda ()
+                          (dylan-call dylan/error
+                                      "element -- no such element in collection"
+                                      seq key rest))))))
+
 (defparameter dylan/key-sequence
   (dylan%generic-fn
    'key-sequence one-collection

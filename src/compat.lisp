@@ -502,11 +502,8 @@ consuming it, or NIL at end of file."
                     (let ((next (read-char stream nil nil)))
                       (when (null next)
                         (error "End of file inside a Dylan string constant."))
-                      (write-char (case next
-                                    (#\n #\Newline)
-                                    (#\t #\Tab)
-                                    (t next))
-                                  out)))
+                      ;; Chapter 3: a backslash quotes the next character.
+                      (write-char next out)))
                    (t (write-char ch out))))))
 
 (defun read-dylan-character (stream)

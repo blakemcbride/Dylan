@@ -50,14 +50,23 @@
 ;;;;
 ;;;; FUNCTIONS FOR SEQUENCES (page 104)
 ;;;;
+;;;; Chapter 12: the run-time system provides default implementations of
+;;;; all of these, which work on any sequence through its elements and
+;;;; answer an instance of the class-for-copy of the (first) sequence.
+
+(defun sequence->list (sequence)
+  (iterate->list #'identity sequence))
+
+(defun list->sequence-like (sequence list)
+  "LIST as an instance of SEQUENCE's class-for-copy."
+  (dylan-call dylan/as (dylan-call dylan/class-for-copy sequence) list))
 
 (defparameter dylan/add
   (dylan%generic-fn
    'add one-sequence-and-an-object
-   (lambda (&rest rest)
-     (dylan-call dylan/error
-                 "add -- generic method not specialized for this collection"
-                 rest))))
+   (lambda (sequence new-element)
+     (list->sequence-like sequence
+                          (cons new-element (sequence->list sequence))))))
 
 (defparameter dylan/add!
   (dylan%generic-fn 'add! one-sequence-and-an-object
@@ -247,16 +256,19 @@
   (lambda (multiple-values next-method seq-1 seq-2 &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
-    (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?))))
-      (dylan-call dylan/remove-duplicates
-                  (dylan-call dylan/concatenate
-                              (dylan-call dylan/as
-                                          (dylan-call dylan/class-for-copy seq-1)
-                                          seq-1)
-                              (dylan-call dylan/as
-                                          (dylan-call dylan/class-for-copy seq-1)
-                                          seq-2))
-                  :test test?)))))
+    ;; Chapter 12: the test is always called with an element of SEQUENCE-1
+    ;; first and one of SEQUENCE-2 second.  The result is SEQUENCE-1's
+    ;; elements and those of SEQUENCE-2 that match none of them; duplicates
+    ;; within one argument may remain (design note 14).
+    (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
+           (elements-1 (iterate->list #'identity seq-1))
+           (extra (remove-if (lambda (b)
+                               (some (lambda (a)
+                                       (true? (dylan-call test? a b)))
+                                     elements-1))
+                             (iterate->list #'identity seq-2))))
+      (dylan-call dylan/as (dylan-call dylan/class-for-copy seq-1)
+                  (append elements-1 extra))))))
 
 (defparameter dylan/remove-duplicates
   (dylan%generic-fn
@@ -340,15 +352,14 @@
                    "concatenate-as -- target class not a mutable sequence"
                    class seq-1 rest))
      (dylan-call dylan/as class
-                 (dylan-call dylan/apply dylan/concatenate
-                             (cons seq-1 rest))))))
+                 (mapcan #'sequence->list (cons seq-1 rest))))))
 
 (defparameter dylan/concatenate
   (dylan%generic-fn
    'concatenate at-least-one-sequence
    (lambda (seq-1 &rest rest)
-     (dylan-call dylan/error "concatenate -- not specialized for argument"
-                 seq-1 rest))))
+     (list->sequence-like seq-1
+                          (mapcan #'sequence->list (cons seq-1 rest))))))
 
 (defparameter dylan/replace-subsequence!
   (dylan%generic-fn
@@ -397,8 +408,7 @@
   (dylan%generic-fn
    'reverse one-sequence
    (lambda (seq-1)
-     (dylan-call dylan/error "reverse -- not defined for this sequence type"
-                 seq-1))))
+     (list->sequence-like seq-1 (reverse (sequence->list seq-1))))))
 
 (defparameter dylan/reverse!
   (dylan%generic-fn 'reverse! one-sequence

@@ -258,11 +258,16 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 (add-method
  dylan/default-handler
  (dylan%function->method
-  (make-param-list `((condition ,<simple-warning>)) nil nil nil)
+  ;; Chapter 13: the default handler for <warning> displays the warning
+  ;; and returns #f.  A warning without a format string is shown as the
+  ;; printer shows it.
+  (make-param-list `((condition ,<warning>)) nil nil nil)
   (lambda (warning)
-    (implementation-specific/warning
-     (dylan-call dylan/condition-format-string warning)
-     (dylan-call dylan/condition-format-arguments warning))
+    (if (subclass? (get-type warning) <simple-warning>)
+        (implementation-specific/warning
+         (dylan-call dylan/condition-format-string warning)
+         (dylan-call dylan/condition-format-arguments warning))
+        (implementation-specific/warning "~a" (list warning)))
     dylan%false)))
 
 (add-method

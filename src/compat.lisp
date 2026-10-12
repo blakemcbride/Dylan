@@ -273,6 +273,29 @@ can vanish while a caller walks it."
 (defvar *dylan-print-escape* t
   "True for WRITE-style output, false for DISPLAY-style output.")
 
+(defun dylan-function-name (name)
+  "The Dylan name of a generic function the runtime knows as NAME: the
+compiler's Lisp names for (SETTER FOO) -- dylan/setter/foo/, or setter/foo/
+for the predefined ones -- and for a variable of module M -- foo@m -- are
+shown as Dylan writes them."
+  (if (not (symbolp name))
+      name
+      (let* ((string (dylan-symbol->string name))
+             (setter (loop for prefix in '("dylan/setter/" "setter/")
+                           when (and (> (length string) (1+ (length prefix)))
+                                     (string-equal prefix string
+                                                   :end2 (length prefix))
+                                     (char= #\/ (char string
+                                                      (1- (length string)))))
+                             return (subseq string (length prefix)
+                                            (1- (length string)))))
+             (base (or setter string))
+             (at (position #\@ base))
+             (base (if (and at (plusp at)) (subseq base 0 at) base)))
+        (if setter
+            (format nil "(setter ~a)" base)
+            base))))
+
 (defun dylan-print (object &optional (stream *standard-output*))
   (labels ((out (x) (write-string x stream))
            (rec (x) (dylan-print x stream)))
@@ -343,8 +366,8 @@ can vanish while a caller walks it."
       ((functionp object)
        (cond ((dylan%generic-function? object)
               (format stream "#[generic function ~a]"
-                      (let ((n (generic-function.name object)))
-                        (if (symbolp n) (dylan-symbol->string n) n))))
+                      (dylan-function-name
+                       (generic-function.name object))))
              ((dylan%method? object) (out "#[method]"))
              (t (out "#[compiled-procedure]"))))
       ((floatp object) (write-string (dylan-float-string object) stream))

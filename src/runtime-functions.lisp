@@ -72,6 +72,28 @@
                   (and (true? keys) (or keys t)))))
       (dylan%create-generic-function name nrequired keys rest?)))))
 
+;;; Chapter 11: classes can be made with MAKE as well as DEFINE-CLASS.
+;;; superclasses: is a class or a sequence of them (default <object>);
+;;; slots are added afterwards with ADD-SLOT.
+(add-method
+ dylan/make
+ (dylan%function->method
+  (make-param-list `((class ,(dylan%make-singleton <class>)))
+                   nil nil '(:superclasses :debug-name))
+  (lambda (class &rest rest)
+    (validate-keywords rest '(:superclasses :debug-name)
+                       (lambda (&rest args) (dylan-apply dylan/error args)))
+    (let ((superclasses (dylan%find-keyword rest :superclasses
+                                            (lambda () <object>)))
+          (name (dylan%find-keyword rest :debug-name
+                                    (lambda () '|anonymous class|))))
+      (declare (ignore class))
+      (dylan%make-a-class name
+                          (if (class? superclasses)
+                              (list superclasses)
+                              (iterate->list #'identity superclasses))
+                          '())))))
+
 (add-method
  dylan/make
  (dylan%function->method

@@ -87,6 +87,22 @@
        (car input)
        (string-equal (symbol-name (car input)) "DYLAN:IN-MODULE")))
 
+(defun with-abort-handler (thunk)
+  "Call THUNK with a handler for <abort>.  Chapter 13: signalling an
+<abort> returns control to the command loop -- here, the next prompt."
+  (call-with-escape-continuation
+   (lambda (return)
+     (dylan%handler-bind
+      <abort>
+      (make-dylan-callable
+       (lambda (condition next-handler)
+         (declare (ignore condition next-handler))
+         (format t "~&;Aborted~%")
+         (funcall return nil)))
+      (make-dylan-callable (lambda (condition) (declare (ignore condition)) t))
+      "Return to the read-eval-print loop."
+      thunk))))
+
 (defun rep ()
   "Start a Dylan read-eval-print loop."
   (terpri)
@@ -111,8 +127,11 @@
              (compile-expression
               input '!multiple-values rep-module-variables
               (lambda (new-vars preamble compiled-output)
-                (implementation-specific/eval
-                 (append preamble (list (make-result-form compiled-output))))
+                (with-abort-handler
+                  (lambda ()
+                    (implementation-specific/eval
+                     (append preamble
+                             (list (make-result-form compiled-output))))))
                 (setf rep-module-variables
                       (append new-vars rep-module-variables)))))))))))
 

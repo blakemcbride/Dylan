@@ -372,3 +372,29 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
                                condition)
                :format-arguments (implementation-specific/get-error-arguments
                                   condition))))
+
+;;; Chapter 2: every Dylan function is a method or a generic function.
+;;; These predefined functions are Lisp closures, made methods here with
+;;; the parameter lists the manual gives them.
+
+(flet ((methodize (function required rest?)
+         (dylan%make-method
+          (make-param-list (mapcar (lambda (name) `(,name ,<object>)) required)
+                           nil rest? nil)
+          function)))
+  (methodize dylan/values '() t)
+  (methodize dylan/not '(thing) nil)
+  (methodize dylan/signal '() t)
+  (methodize dylan/error '() t)
+  (methodize dylan/cerror '(restart-description) t)
+  (methodize dylan/break '() t)
+  (methodize dylan/check-type '(value type) nil)
+  (methodize dylan/abort '() nil)
+  (methodize dylan/do-handlers '(function) nil)
+  (methodize dylan/display '(object) nil)
+  (methodize dylan/newline '() nil)
+  (methodize dylan/write-line '(object) nil)
+  (methodize dylan/print '(object) nil)
+  (methodize dylan/pp '(object) nil)
+  (methodize dylan/lisp-variable '(name) nil)
+  (methodize dylan/lisp-procedure '(name) nil))

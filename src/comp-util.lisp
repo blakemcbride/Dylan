@@ -118,6 +118,7 @@ current module: see comp-module.lisp."
            (and (symbolp x)
                 (not (null x))
                 (not (keyword? x))
+                (not (eq x 'setter))   ; Chapter 3: never a variable name
                 (not (dylan-special-name? x)))))
     (or (simple-variable-name? x)
         (and (list-of-length? x 2)

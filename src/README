@@ -24,8 +24,10 @@ the 1992 Thomas README, and still describes the Scheme directory layout as
 it stood then.
 
 It is developed and tested on SBCL.  Nothing in it is SBCL-specific except
-weak hash tables (SB-EXT) and one SB-INT query for whether a symbol is a
-special variable, all in compat.lisp with portable fallbacks.
+weak hash tables and weak pointers (SB-EXT) and one SB-INT query for whether
+a symbol is a special variable, all in compat.lisp with portable fallbacks.
+load-dylan.lisp compiles the files into fasl/<lisp>-<version>/ the first
+time, and afterwards recompiles only a changed file and those after it.
 
                              RUNNING IT
 

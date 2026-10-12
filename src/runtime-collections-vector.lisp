@@ -210,15 +210,19 @@
  dylan/add!
  (dylan%function->method
   one-stretchy-vector-and-an-object
+  ;; The Scheme copied the whole vector to add each element.  Here the
+  ;; vector is made adjustable, with a fill pointer, the first time, and
+  ;; then grows by doubling; LENGTH and the rest see only the elements.
   (lambda (s-vector new-element)
-    (let* ((vector (dylan-call dylan/get-array-value s-vector))
-           (size (car (dylan-call dylan/get-array-dimensions s-vector)))
-           (new-vector (make-array (+ size 1))))
-      (do ((count 0 (+ count 1)))
-          ((= count size) 'done)
-        (setf (aref new-vector count) (aref vector count)))
-      (setf (aref new-vector size) new-element)
-      (dylan-call dylan/set-array-value! s-vector new-vector)
+    (let ((vector (dylan-call dylan/get-array-value s-vector))
+          (size (car (dylan-call dylan/get-array-dimensions s-vector))))
+      (unless (and (adjustable-array-p vector)
+                   (array-has-fill-pointer-p vector)
+                   (= (fill-pointer vector) size))
+        (setf vector (make-array size :adjustable t :fill-pointer size
+                                      :initial-contents (subseq vector 0 size)))
+        (dylan-call dylan/set-array-value! s-vector vector))
+      (vector-push-extend new-element vector (max 8 size))
       (dylan-call dylan/set-array-dimensions! s-vector (list (+ size 1)))
       s-vector))))
 

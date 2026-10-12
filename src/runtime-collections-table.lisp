@@ -113,18 +113,38 @@
 ;;;; Operations on Tables (page 120)
 ;;;;
 
+;;; For a key that is a real, a character or a symbol other than NIL (the
+;;; empty list), the predefined BINARY= methods compare with = when the
+;;; other key is a number and EQ otherwise, and =HASH hashes it as below.
+;;; While no other method could apply to such a key (*FAST-KEY=*, see
+;;; runtime-fast-paths.lisp), tables do that themselves.
+
+(defun fast-key? (key)
+  (and *fast-key=*
+       (or (realp key) (characterp key) (and key (symbolp key)))))
+
 (defun dylan-assoc (key alist)
   "Use DYLAN/BINARY= to compare keys."
-  (loop for rest-alist = alist then (cdr rest-alist)
-        do (if rest-alist
-               (when (true? (dylan-call dylan/binary= key (caar rest-alist)))
-                 (return (car rest-alist)))
-               (return nil))))
+  (cond ((not (fast-key? key))
+         (loop for rest-alist = alist then (cdr rest-alist)
+               do (if rest-alist
+                      (when (true? (dylan-call dylan/binary= key
+                                               (caar rest-alist)))
+                        (return (car rest-alist)))
+                      (return nil))))
+        ((realp key)
+         (loop for entry in alist
+               when (let ((other (car entry))) (and (numberp other) (= key other)))
+                 return entry))
+        (t (assoc key alist :test #'eq))))
 
 (defun table-bucket (hash-table key)
   "The index in HASH-TABLE of KEY's bucket.  MOD, unlike the Scheme's
 REMAINDER, never answers a negative index."
-  (mod (dylan-call dylan/=hash key) (length hash-table)))
+  (mod (if (fast-key? key)
+           (if (realp key) (real-hash key) (sxhash key))
+           (dylan-call dylan/=hash key))
+       (length hash-table)))
 
 (defparameter dylan/remove-key!
   (dylan%generic-fn

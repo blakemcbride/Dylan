@@ -577,19 +577,20 @@ irrational functions; an exact real stays exact."
                           (sxhash object)
                           (object-id object)))))
 
+(defun real-hash (real)
+  (cond ((integerp real) (sxhash real))
+        ((and (floatp real) (not (ignore-errors (rational real))))
+         0)                             ; Infinities and NaNs
+        (t (sxhash (rational real)))))
+
 (add-method dylan/=hash
             (dylan%function->method
              one-number
              (lambda (number)
-               (flet ((real-hash (real)
-                        (if (and (floatp real)
-                                 (not (ignore-errors (rational real))))
-                            0           ; Infinities and NaNs
-                            (sxhash (rational real)))))
-                 (if (complexp number)
-                     (combine-hash (real-hash (realpart number))
-                                   (real-hash (imagpart number)))
-                     (real-hash number))))))
+               (if (complexp number)
+                   (combine-hash (real-hash (realpart number))
+                                 (real-hash (imagpart number)))
+                   (real-hash number)))))
 
 (add-method dylan/=hash
             (dylan%function->method

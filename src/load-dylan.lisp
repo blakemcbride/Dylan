@@ -93,13 +93,41 @@
     "runtime-exceptions"                ; Exceptions
     "runtime-fast-paths"))              ; Inline arithmetic and element
 
+(defparameter *dylan-fasl-directory*
+  (merge-pathnames
+   (make-pathname :directory
+                  (list :relative "fasl"
+                        (substitute-if #\- (lambda (c)
+                                             (not (alphanumericp c)))
+                                       (format nil "~a-~a"
+                                               (lisp-implementation-type)
+                                               (lisp-implementation-version)))))
+   *dylan-directory*)
+  "Where the compiled files go: one directory for each Lisp and version,
+since their fasls differ.")
+
 (defun dylan-load (names)
-  "Load the named source files.  Nearly every file refers to things
-that later files define, so the style warnings that produces are muffled."
-  (handler-bind ((style-warning #'muffle-warning))
-    (dolist (name names)
-      (load (merge-pathnames (concatenate 'string name ".lisp")
-                             *dylan-directory*)))))
+  "Load the named files, compiling each to a fasl first when the fasl is
+missing or older than its source.  Once one file is compiled, so are all
+after it, since they may use its macros and inline functions.  Nearly every
+file refers to things that later files define, so the style warnings that
+produces are muffled."
+  (let ((stale nil))
+    (handler-bind ((style-warning #'muffle-warning))
+      (dolist (name names)
+        (let ((source (merge-pathnames (concatenate 'string name ".lisp")
+                                       *dylan-directory*))
+              (fasl (merge-pathnames (make-pathname :name name
+                                                    :type "fasl")
+                                     *dylan-fasl-directory*)))
+          (when (or stale
+                    (not (probe-file fasl))
+                    (> (file-write-date source) (file-write-date fasl)))
+            (setf stale t)
+            (ensure-directories-exist fasl)
+            (let ((*compile-verbose* nil) (*compile-print* nil))
+              (compile-file source :output-file fasl)))
+          (load fasl))))))
 
 (dylan-load (append *dylan-common-files*
                     *dylan-compiler-files*

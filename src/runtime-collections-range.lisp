@@ -169,23 +169,25 @@
 ;;;
 ;;; FUNCTIONS FOR COLLECTIONS (page 99)
 ;;;
+(defun range-size (range)
+  "The size of RANGE, or NIL if it is unbounded."
+  (let ((start (dylan-call dylan/get-range-start range))
+        (end (dylan-call dylan/get-range-end range))
+        (step (dylan-call dylan/get-range-step range)))
+    ;; END is on the range's grid (see RANGE), so (END - START)/STEP is an
+    ;; integer -- up to float rounding, which ROUND undoes.
+    (cond
+      ((zerop step) (dylan-call dylan/get-range-count range))
+      (end
+       (if (funcall (if (plusp step) #'< #'>) end start)
+           0
+           (+ (round (- end start) step) 1)))
+      (t nil))))
+
 (add-method
  dylan/size
  (one-arg 'range <range>
-          (lambda (range)
-            (let ((start (dylan-call dylan/get-range-start range))
-                  (end (dylan-call dylan/get-range-end range))
-                  (step (dylan-call dylan/get-range-step range)))
-              ;; END is on the range's grid (see RANGE), so (END - START)/STEP
-              ;; is an integer -- up to float rounding, which ROUND undoes.
-              (cond
-                ((zerop step)
-                 (or-false (dylan-call dylan/get-range-count range)))
-                (end
-                  (if (funcall (if (plusp step) #'< #'>) end start)
-                      0
-                      (+ (round (- end start) step) 1)))
-                (t dylan%false))))))
+          (lambda (range) (or-false (range-size range)))))
 
 (add-method dylan/class-for-copy
             (dylan%function->method one-range

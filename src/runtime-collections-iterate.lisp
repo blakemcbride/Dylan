@@ -96,17 +96,25 @@
   "The Dylan form of a state the runtime holds."
   (if (eq state +empty-list-state+) '() state))
 
-;;; While no method but the predefined ones could apply to a list or a
-;;; simple vector (*FAST-ITERATE-LIST* and *FAST-ITERATE-VECTOR*, see
-;;; runtime-fast-paths.lisp), INITIAL-STATE, NEXT-STATE and CURRENT-ELEMENT
-;;; do for one what its predefined methods do, making the same states: the
-;;; pair itself for a list, and a vector of one index for a simple vector.
+;;; While no method but the predefined ones could apply to a list, a simple
+;;; vector or a range (*FAST-ITERATE-LIST*, *FAST-ITERATE-VECTOR* and
+;;; *FAST-ITERATE-RANGE*, see runtime-fast-paths.lisp), INITIAL-STATE,
+;;; NEXT-STATE and CURRENT-ELEMENT do for one what its predefined methods
+;;; do, making the same states: the pair itself for a list, a vector of one
+;;; index for a simple vector, and the index for a range.  A range is read
+;;; afresh each time, as the methods do, since ADD! and REVERSE! change it.
+
+(declaim (ftype function range-size))
 
 (defun initial-state (collection)
   (cond ((and (listp collection) *fast-iterate-list*)
          (if (consp collection) collection nil))
         ((and (simple-vector-p collection) *fast-iterate-vector*)
          (if (plusp (length collection)) (vector 0) nil))
+        ((and *fast-iterate-range* (instance? collection)
+              (eq (instance.class collection) <range>))
+         (let ((size (range-size collection)))
+           (if (or (null size) (plusp size)) 0 nil)))
         (t (lisp-state (dylan-call dylan/initial-state collection)))))
 (defun final-state (collection)
   (lisp-state (dylan-call dylan/final-state collection)))
@@ -119,6 +127,10 @@
               (< (svref state 0) (length collection)))
          (let ((next (1+ (svref state 0))))
            (if (< next (length collection)) (vector next) nil)))
+        ((and *fast-iterate-range* (integerp state) (instance? collection)
+              (eq (instance.class collection) <range>))
+         (let ((size (range-size collection)))
+           (if (or (null size) (< (+ state 1) size)) (+ state 1) nil)))
         (t (lisp-state (dylan-call dylan/next-state collection
                                    (dylan-state state))))))
 (defun previous-state (collection state)
@@ -133,6 +145,14 @@
               (typep (svref state 0) 'fixnum)
               (< -1 (svref state 0) (length collection)))
          (svref collection (svref state 0)))
+        ((and *fast-iterate-range* (integerp state) (instance? collection)
+              (eq (instance.class collection) <range>))
+         (let ((step (dylan-call dylan/get-range-step collection)))
+           ;; The first element is FROM itself, exact or not.
+           (if (or (zerop step) (zerop state))
+               (dylan-call dylan/get-range-start collection)
+               (+ (dylan-call dylan/get-range-start collection)
+                  (* state step)))))
         (t (dylan-call dylan/current-element collection
                        (dylan-state state)))))
 (defun current-key (collection state)

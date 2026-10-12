@@ -346,52 +346,44 @@ cache's entry for the call."
          (extra-arguments? (or (generic-function-data.keys data)
                                (generic-function-data.rest? data)))
          (generic-function nil))
-    ;; With one or two required arguments, a call whose one applicable
+    ;; With one to three required arguments, a call whose one applicable
     ;; method the cache knows goes straight to it, without the argument
     ;; list GENERIC-DISPATCH works on when there are no others.
-    (setf generic-function
-          (case nrequired
-            (1 (lambda (multiple-values next-method
-                        &optional (a no-argument) &rest more)
-                 (declare (ignore next-method))
-                 (let ((cached (and (or (null more) extra-arguments?)
-                                    (not (eq a no-argument))
-                                    (cached-dispatch data a))))
-                   (cond ((null cached)
-                          (generic-dispatch multiple-values
-                                            (if (eq a no-argument)
-                                                '()
-                                                (cons a more))
-                                            generic-function data))
-                         ((null more)
-                          (funcall (caar cached) multiple-values
-                                   next-method/last-applicable a))
-                         (t
-                          (check-extra-arguments data more cached)
-                          (apply (caar cached) multiple-values
-                                 next-method/last-applicable a more))))))
-            (2 (lambda (multiple-values next-method
-                        &optional (a no-argument) (b no-argument) &rest more)
-                 (declare (ignore next-method))
-                 (let ((cached (and (or (null more) extra-arguments?)
-                                    (not (eq b no-argument))
-                                    (cached-dispatch data a b))))
-                   (cond ((null cached)
-                          (generic-dispatch multiple-values
-                                            (cond ((eq a no-argument) '())
-                                                  ((eq b no-argument) (list a))
-                                                  (t (list* a b more)))
-                                            generic-function data))
-                         ((null more)
-                          (funcall (caar cached) multiple-values
-                                   next-method/last-applicable a b))
-                         (t
-                          (check-extra-arguments data more cached)
-                          (apply (caar cached) multiple-values
-                                 next-method/last-applicable a b more))))))
-            (t (lambda (&rest args)
-                 (generic-dispatch (car args) (cddr args)
-                                   generic-function data)))))
+    (macrolet ((fast-dispatcher (&rest required)
+                 (let ((last (car (cl:last required))))
+                   `(lambda (multiple-values next-method
+                             &optional ,@(mapcar (lambda (v) `(,v no-argument))
+                                                 required)
+                             &rest more)
+                      (declare (ignore next-method))
+                      (let ((cached (and (or (null more) extra-arguments?)
+                                         (not (eq ,last no-argument))
+                                         (cached-dispatch data ,@required))))
+                        (cond ((null cached)
+                               (generic-dispatch
+                                multiple-values
+                                (append (loop for v in (list ,@required)
+                                              until (eq v no-argument)
+                                              collect v)
+                                        more)
+                                generic-function data))
+                              ((null more)
+                               (funcall (caar cached) multiple-values
+                                        next-method/last-applicable
+                                        ,@required))
+                              (t
+                               (check-extra-arguments data more cached)
+                               (apply (caar cached) multiple-values
+                                      next-method/last-applicable
+                                      ,@required more))))))))
+      (setf generic-function
+            (case nrequired
+              (1 (fast-dispatcher a))
+              (2 (fast-dispatcher a b))
+              (3 (fast-dispatcher a b c))
+              (t (lambda (&rest args)
+                   (generic-dispatch (car args) (cddr args)
+                                     generic-function data))))))
     (oned-table/put! *generic-function-data* generic-function data)
     (setf *last-function-type* (cons nil nil)) ; see FUNCTION-TYPE
     generic-function))

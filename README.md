@@ -108,10 +108,14 @@ $ sbcl --eval '(load "src/load-runtime.lisp")' --eval '(load "program.lisp")'
 ## Requirements
 
 SBCL, which is what it is developed and tested on (currently 2.6.3).
-Nothing is SBCL-specific except weak hash tables (`SB-EXT`), used for
-class populations and the method tables, and one `SB-INT` query that the
-compiler uses to tell whether a symbol is a special variable. All of them
-are in `src/compat.lisp`, with portable fallbacks.
+Nothing is SBCL-specific except weak hash tables and weak pointers
+(`SB-EXT`), used for class populations and the method tables, and one
+`SB-INT` query that the compiler uses to tell whether a symbol is a special
+variable. All of them are in `src/compat.lisp`, with portable fallbacks.
+
+The first load compiles the sources into `src/fasl/<lisp>-<version>/`;
+later loads use those compiled files, recompiling a source file that has
+changed and every file loaded after it.
 
 ## Testing
 
@@ -128,6 +132,22 @@ The expected results are in `src/reference/`, the transcripts Thomas
 produced from the same file in 1992. Where the two disagree, the manual
 decides; the few remaining differences are listed in
 [`src/README`](src/README).
+
+## Benchmarks
+
+`bench/benchmarks.dyl` holds small Dylan programs (tables, sorting,
+strings, deques, stretchy vectors, ranges, non-local exits, conditions,
+`next-method` chains, recursion, floating point), and
+`bench/reference.lisp` the same programs in plain Common Lisp. To compare
+them:
+
+```console
+$ sbcl --script bench/run.lisp            # all of them
+$ sbcl --script bench/run.lisp table tak  # just these
+```
+
+Each line gives the best of three runs for each, their ratio, and
+`MISMATCH` if the two answered differently.
 
 ## Differences from the 1992 manual
 
@@ -167,10 +187,11 @@ false and the empty list, the reader and printer — is described in
 
 | | |
 |---|---|
-| `src/` | the implementation — 37 Lisp files, ~13,000 lines |
+| `src/` | the implementation — 38 Lisp files, ~14,700 lines |
 | `src/README` | the translation notes, and which file came from which Thomas file |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the regression baseline |
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
+| `bench/` | benchmarks against plain Common Lisp |
 | `examples-from-book.text` | the raw extraction those were edited from |
 | `README.thomas` | the original 1992 Thomas README |
 | `RELEASE` | the 1992 release notes |

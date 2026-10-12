@@ -773,11 +773,16 @@ module its header names (design note 33), or DYLAN-USER."
                    (funcall continue
                             (if (null code)
                                 'dylan%false
+                                ;; A fixed name, not a GENSYM, which would
+                                ;; not survive being written to a file and
+                                ;; read back (COMPILE-FILE); each binding
+                                ;; only shadows the enclosing one.
                                 (cl:reduce (lambda (form rest)
-                                          (let ((value (gensym "OR")))
-                                            `(let ((,value ,form))
-                                               (if (true? ,value) ,value ,rest))))
-                                        code :from-end t))
+                                             `(let ((!or-value ,form))
+                                                (if (true? !or-value)
+                                                    !or-value
+                                                    ,rest)))
+                                           code :from-end t))
                             mod-vars))))
 
 ;;; Backquote.  The template is turned into a skeleton in which each

@@ -274,6 +274,8 @@ initial NIL next-method argument."
 
 (defvar *fast-iterate-vector* nil)
 (defvar *fast-iterate-list* nil)
+(defvar *fast-iterate-range* nil)
+(defvar *fast-key=* nil)                ; See runtime-collections-table.lisp
 
 (defun dylan%for-each (fn &rest collections)
   ;; A single simple vector or proper list is walked directly while no
@@ -294,6 +296,14 @@ initial NIL next-method argument."
                (loop for tail = collection then (cdr tail)
                      while (consp tail)
                      do (visit (car tail)))
+               (return-from dylan%for-each dylan%false))
+              ;; Any other single collection, by the iteration protocol
+              ;; (as COLLECTIONS-ITERATE does), without its lists.
+              ((subclass? (get-type collection) <collection>)
+               (loop for state = (initial-state collection)
+                       then (next-state collection state)
+                     while state
+                     do (visit (current-element collection state)))
                (return-from dylan%for-each dylan%false))))))
   (dolist (collection collections)
     (unless (subclass? (get-type collection) <collection>)

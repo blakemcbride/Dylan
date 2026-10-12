@@ -1,1 +1,3 @@
 Bugs*.md
+bench/build/
+src/fasl/

@@ -124,67 +124,72 @@ continuations, so a CATCH/THROW pair suffices."
 ;;; operator, as DYLAN%APPLY below does with thunks (it remains for code
 ;;; compiled before DYLAN%CALL existed).  A call of one of the functions in
 ;;; *FAST-PATHS* with the right number of arguments is compiled inline for
-;;; the arguments its fast path handles, while its guard holds.
+;;; the arguments its fast paths handle, while their guards hold.
 
 (defvar *fast-paths* '()
   "Entries (OPERATOR NARGS GUARD TEST-FN EXPANSION-FN): when TEST-FN's form
 of the argument variables is true and GUARD is, the call is EXPANSION-FN's
 form of them.  NARGS :N-ARY means any number of arguments from two up, and
-the functions then take the list of argument variables.")
+the functions then take the list of argument variables.  An operator may
+have several entries for the same NARGS, tried in the order defined.")
 
 (defmacro define-fast-path (operator guard args test expansion)
   "ARGS is a list of variables, or a single variable for an :N-ARY fast
 path."
-  `(progn
-     (defvar ,guard nil)
-     (setf *fast-paths*
-           (cons (list ',operator ,(if (listp args) (length args) :n-ary)
-                       ',guard
-                       (lambda ,(if (listp args) args (list args))
-                         (list ,test))
-                       (lambda ,(if (listp args) args (list args))
-                         ,expansion))
-                 (remove-if (lambda (entry)
-                              (and (eq (first entry) ',operator)
-                                   (eql (second entry)
-                                        ,(if (listp args)
-                                             (length args)
-                                             :n-ary))))
-                            *fast-paths*)))
-     ',operator))
+  (let ((nargs (if (listp args) (length args) :n-ary))
+        (lambda-list (if (listp args) args (list args))))
+    `(progn
+       (defvar ,guard nil)
+       (setf *fast-paths*
+             (append (remove-if (lambda (entry)
+                                  (and (eq (first entry) ',operator)
+                                       (eql (second entry) ',nargs)
+                                       (eq (third entry) ',guard)))
+                                *fast-paths*)
+                     (list (list ',operator ',nargs ',guard
+                                 (lambda ,lambda-list ,test)
+                                 (lambda ,lambda-list ,expansion)))))
+       ',operator)))
 
 (defmacro dylan%call (multiple-values? operator &rest operands)
   (let* ((vars (loop repeat (length operands) collect (gensym "ARG")))
+         (nargs (length operands))
          (fast (and (symbolp operator)
-                    (or (find-if (lambda (entry)
-                                   (and (eq (first entry) operator)
-                                        (eql (second entry)
-                                             (length operands))))
-                                 *fast-paths*)
-                        (and (>= (length operands) 2)
-                             (find-if (lambda (entry)
-                                        (and (eq (first entry) operator)
-                                             (eq (second entry) :n-ary)))
-                                      *fast-paths*)))))
+                    (or (remove-if-not (lambda (entry)
+                                         (and (eq (first entry) operator)
+                                              (eql (second entry) nargs)))
+                                       *fast-paths*)
+                        (and (>= nargs 2)
+                             (remove-if-not (lambda (entry)
+                                              (and (eq (first entry) operator)
+                                                   (eq (second entry) :n-ary)))
+                                            *fast-paths*)))))
          (general `(funcall ,operator ,multiple-values?
                             next-method/not-generic ,@vars)))
-    `(let* ,(mapcar #'list vars operands)
-       ,(if fast
-            (flet ((call (fn)
-                     (if (eq (second fast) :n-ary)
-                         (funcall fn vars)
-                         (apply fn vars))))
-              `(if (and ,(third fast) ,@(call (fourth fast)))
-                   ,(call (fifth fast))
-                   ,general))
-            general))))
+    (flet ((call (entry fn)
+             (if (eq (second entry) :n-ary)
+                 (funcall fn vars)
+                 (apply fn vars))))
+      `(let* ,(mapcar #'list vars operands)
+         (cond ,@(mapcar (lambda (entry)
+                           `((and ,(third entry) ,(call entry (fourth entry)))
+                             ,(call entry (fifth entry))))
+                         fast)
+               (t ,general))))))
 
-(define-fast-path dylan/+ *fast-binary+* (a b)
-  `(and (realp ,a) (realp ,b)) `(+ ,a ,b))
-(define-fast-path dylan/- *fast-binary-* (a b)
-  `(and (realp ,a) (realp ,b)) `(- ,a ,b))
-(define-fast-path dylan/* *fast-binary** (a b)
-  `(and (realp ,a) (realp ,b)) `(* ,a ,b))
+(defmacro define-real-fast-paths (guard &rest operators-and-lisp-functions)
+  "Fast paths for two reals, answering what the Lisp function does."
+  `(progn
+     ,@(loop for (operator lisp-function boolean?) in operators-and-lisp-functions
+             collect `(define-fast-path ,operator ,guard (a b)
+                        `(and (realp ,a) (realp ,b))
+                        ,(if boolean?
+                             ``(bool (,',lisp-function ,a ,b))
+                             ``(,',lisp-function ,a ,b))))))
+
+(define-real-fast-paths *fast-binary+* (dylan/+ +))
+(define-real-fast-paths *fast-binary-* (dylan/- -))
+(define-real-fast-paths *fast-binary** (dylan/* *))
 ;;; More than two: + and * fold their arguments left to right, as the
 ;;; Dylan functions do.
 (define-fast-path dylan/+ *fast-binary+* args
@@ -193,24 +198,45 @@ path."
 (define-fast-path dylan/* *fast-binary** args
   `(and ,@(mapcar (lambda (a) `(realp ,a)) args))
   (cl:reduce (lambda (x y) `(* ,x ,y)) args))
-(define-fast-path dylan/< *fast-binary<* (a b)
-  `(and (realp ,a) (realp ,b)) `(bool (< ,a ,b)))
-(define-fast-path dylan/>= *fast-binary<* (a b)
-  `(and (realp ,a) (realp ,b)) `(bool (>= ,a ,b)))
-(define-fast-path dylan/= *fast-binary=* (a b)
-  `(and (realp ,a) (realp ,b)) `(bool (= ,a ,b)))
-(define-fast-path dylan/> *fast-binary<=* (a b)
-  `(and (realp ,a) (realp ,b)) `(bool (> ,a ,b)))
-(define-fast-path dylan/<= *fast-binary<=* (a b)
-  `(and (realp ,a) (realp ,b)) `(bool (<= ,a ,b)))
+(define-real-fast-paths *fast-binary<* (dylan/< < t) (dylan/>= >= t))
+(define-real-fast-paths *fast-binary=* (dylan/= = t))
+(define-real-fast-paths *fast-binary<=* (dylan/> > t) (dylan/<= <= t))
+
+;;; Characters compare by code (binary< and binary= on characters).
+(defmacro define-character-fast-paths (&rest operators-and-lisp-functions)
+  `(progn
+     ,@(loop for (operator lisp-function) in operators-and-lisp-functions
+             collect `(define-fast-path ,operator *fast-character-compare* (a b)
+                        `(and (characterp ,a) (characterp ,b))
+                        `(bool (,',lisp-function ,a ,b))))))
+
+(define-character-fast-paths (dylan/= char=) (dylan/< char<) (dylan/> char>)
+  (dylan/<= char<=) (dylan/>= char>=))
+
+;;; Integers only: for them MODULO (by way of FLOOR/) and REMAINDER answer
+;;; what MOD and REM do.
+(define-fast-path dylan/modulo *fast-modulo* (a b)
+  `(and (integerp ,a) (integerp ,b) (not (zerop ,b)))
+  `(mod ,a ,b))
+(define-fast-path dylan/remainder *fast-remainder* (a b)
+  `(and (integerp ,a) (integerp ,b) (not (zerop ,b)))
+  `(rem ,a ,b))
+
 (define-fast-path dylan/element *fast-element* (v i)
   `(and (simple-vector-p ,v) (typep ,i 'fixnum)
         (< -1 ,i (length (the simple-vector ,v))))
   `(svref ,v ,i))
+(define-fast-path dylan/element *fast-string-element* (s i)
+  `(and (stringp ,s) (typep ,i 'fixnum) (< -1 ,i (length (the string ,s))))
+  `(char ,s ,i))
 (define-fast-path dylan/setter/element/ *fast-setter-element* (v i x)
   `(and (simple-vector-p ,v) (typep ,i 'fixnum)
         (< -1 ,i (length (the simple-vector ,v))))
   `(setf (svref ,v ,i) ,x))
+(define-fast-path dylan/setter/element/ *fast-string-setter-element* (s i c)
+  `(and (stringp ,s) (typep ,i 'fixnum) (< -1 ,i (length (the string ,s)))
+        (characterp ,c))
+  `(setf (char ,s ,i) ,c))
 
 (defun dylan%apply (multiple-values? operator-thunk &rest operand-thunks)
   "Used for combinations.  Forces left-to-right evaluation, and adds an

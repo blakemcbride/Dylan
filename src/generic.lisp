@@ -132,6 +132,11 @@ only with arguments that match its specializers.  Generic dispatch has
 checked them; a direct call (next-method #f) is checked here."
   (let ((specializers (param-list.specializers param-list))
         (method nil))
+    ;; With no specializer but <object>, there is nothing to check.
+    (when (every (lambda (specializer) (eq specializer <object>))
+                 specializers)
+      (return-from dylan%make-compiled-method
+        (dylan%make-method param-list lambda)))
     (setf method
           (lambda (multiple-values next-method &rest arguments)
             (unless (or (eq next-method next-method/last-applicable)

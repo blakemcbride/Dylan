@@ -347,6 +347,16 @@ slot vector, the class-data size and the instance-data size."
                      (setf remaining (remove next remaining)))))
         (reverse result)))))
 
+;;; Generic dispatch caches the methods it finds for each combination of
+;;; argument classes (see CACHED-APPLICABLE-METHODS in generic.lisp).  Any
+;;; change to a precedence list makes those caches stale; bumping this
+;;; counter tells them so.
+(defvar *class-structure-epoch* 0)
+
+(defun forget-precedence-lists! (classes)
+  (incf *class-structure-epoch*)
+  (dolist (c classes) (setf (class.precedence-list c) nil)))
+
 (defun class-precedence-list (class)
   (or (class.precedence-list class)
       (setf (class.precedence-list class)
@@ -1041,7 +1051,7 @@ it has now)."
 (defun rebuild-with-descendants! (class &optional (own-slots (own-slots class)))
   "Rebuild CLASS, with OWN-SLOTS, and every class below it."
   (let ((affected (cons class (class-descendants class))))
-    (dolist (c affected) (setf (class.precedence-list c) nil))
+    (forget-precedence-lists! affected)
     ;; A class's precedence list is longer than any of its superclasses',
     ;; so this order rebuilds parents before children.
     (dolist (c (sort (copy-list affected) #'<
@@ -1049,7 +1059,8 @@ it has now)."
       (if (eq c class)
           (rebuild-class! c own-slots)
           (rebuild-class! c)))
-    (recompute-class-specificities!)))
+    (recompute-class-specificities!)
+    (incf *class-structure-epoch*)))
 
 ;;; Chapter 6: DEFINE-CLASS on a variable that already holds a class
 ;;; modifies that class in place, and its existing instances are updated.
@@ -1111,12 +1122,12 @@ it has now)."
       (unwind-protect
            (progn
              (setf (class.superclasses class) supers)
-             (dolist (c affected) (setf (class.precedence-list c) nil))
+             (forget-precedence-lists! affected)
              (mapc #'class-precedence-list affected)
              (setf done t))
         (unless done
           (setf (class.superclasses class) old-supers)
-          (dolist (c affected) (setf (class.precedence-list c) nil))))
+          (forget-precedence-lists! affected)))
       (dolist (super old-supers)
         (remove-from-population! (class.subclasses super) class))
       (dolist (super supers)

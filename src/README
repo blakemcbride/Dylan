@@ -104,6 +104,8 @@ not within this one, and they no longer exist here.
   class-structure.lisp     src/class-structure.scm
   runtime-*.lisp           src/runtime-*.scm
   runtime-extensions.lisp  the language extensions the MIT kit added
+  runtime-fast-paths.lisp  new -- guards for the inline arithmetic and
+                             element calls the compiler emits
   rep.lisp                 src/portable-rep.scm
   full-test.lisp           full-test.scm
   load-dylan.lisp          src/load-*.scm and the kits' loaders

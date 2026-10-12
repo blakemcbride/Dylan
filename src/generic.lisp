@@ -114,6 +114,13 @@
   (oned-table/put! *method-data* method (guarantee-param-list param-list))
   method)
 
+(defvar *dispatch-entries* (make-oned-table)
+  "For a compiled method, its LAMBDA without the specializer check, which
+generic dispatch, having checked the arguments, calls instead.")
+
+(defun dispatch-entry (method)
+  (oned-table/get *dispatch-entries* method method))
+
 (defun dylan%make-compiled-method (param-list lambda)
   "The method of a Dylan METHOD form.  Chapter 6: a method can be called
 only with arguments that match its specializers.  Generic dispatch has
@@ -131,6 +138,7 @@ checked them; a direct call (next-method #f) is checked here."
                                    "method called with an argument that does not match its specializer"
                                    (car rest) specializer method)))
             (apply lambda multiple-values next-method arguments)))
+    (oned-table/put! *dispatch-entries* method lambda)
     (dylan%make-method param-list method)))
 
 (defun guarantee-param-list (param-list)
@@ -147,7 +155,12 @@ checked them; a direct call (next-method #f) is checked here."
             (:constructor make-generic-function-data
                 (name nrequired keys rest? methods read-only?)))
   name nrequired keys rest? methods read-only?
-  (frozen '()))                         ; specializer lists FREEZE-METHODS gave
+  (frozen '())                          ; specializer lists FREEZE-METHODS gave
+  (cache nil)                           ; see CACHED-APPLICABLE-METHODS
+  (cache-epoch 0)
+  (cache-singletons nil)
+  (fast-path-guards '())                ; see DYLAN%CALL in runtime-internal
+  (fast-path-classes '()))
 
 (defvar *generic-function-data* (make-oned-table))
 
@@ -212,6 +225,8 @@ checked them; a direct call (next-method #f) is checked here."
                     method generic-function)
         (setf (generic-function-data.methods data)
               (delete-pair! pair (generic-function-data.methods data))))
+    (setf (generic-function-data.cache data) nil)
+    (check-fast-path data method)
     method))
 
 (defun delete-pair! (pair list)
@@ -269,12 +284,33 @@ checked them; a direct call (next-method #f) is checked here."
       (when old-method
         (delete-method! generic-function old-method))
       (push method (generic-function-data.methods data))
+      (setf (generic-function-data.cache data) nil)
+      (check-fast-path data method)
       (if multi-value-receiver
           (funcall (car multi-value-receiver) method old-method)
           old-method))))
 
 (defun dylan%generic-function? (obj)
   (and (oned-table/get *generic-function-data* obj nil) t))
+
+(defvar no-argument (make-symbol "NO-ARGUMENT"))
+
+(defmacro cached-entry (data &rest arguments)
+  "When the cache knows the methods for ARGUMENTS (one for each required
+argument) and just one applies, what to call for it; else NIL."
+  (let ((table (gensym "TABLE")) (singletons (gensym "SINGLETONS")))
+    `(let* ((,table (dispatch-cache ,data))
+            (,singletons (generic-function-data.cache-singletons ,data)))
+       (declare (ignorable ,singletons))
+       (and ,@(loop for (argument . more) on arguments
+                    for i from 0
+                    collect `(setf ,table
+                                   (gethash (dispatch-key ,singletons ,i
+                                                          ,argument)
+                                            ,table))
+                    when more collect `(hash-table-p ,table))
+            (null (cddr ,table))
+            (cadr ,table)))))
 
 (defun dylan%create-generic-function (name nrequired keys rest?)
   (let ((data (make-generic-function-data name
@@ -283,9 +319,40 @@ checked them; a direct call (next-method #f) is checked here."
                                           (guarantee-boolean rest?)
                                           '() nil))
         (generic-function nil))
+    ;; With one or two required arguments, a call with just those whose
+    ;; one applicable method the cache knows goes straight to it, without
+    ;; the argument list GENERIC-DISPATCH works on.
     (setf generic-function
-          (lambda (&rest args)
-            (generic-dispatch (car args) (cddr args) generic-function data)))
+          (case nrequired
+            (1 (lambda (multiple-values next-method
+                        &optional (a no-argument) &rest more)
+                 (declare (ignore next-method))
+                 (let ((entry (and (null more) (not (eq a no-argument))
+                                   (cached-entry data a))))
+                   (if entry
+                       (funcall entry multiple-values
+                                next-method/last-applicable a)
+                       (generic-dispatch multiple-values
+                                         (if (eq a no-argument)
+                                             '()
+                                             (cons a more))
+                                         generic-function data)))))
+            (2 (lambda (multiple-values next-method
+                        &optional (a no-argument) (b no-argument) &rest more)
+                 (declare (ignore next-method))
+                 (let ((entry (and (null more) (not (eq b no-argument))
+                                   (cached-entry data a b))))
+                   (if entry
+                       (funcall entry multiple-values
+                                next-method/last-applicable a b)
+                       (generic-dispatch multiple-values
+                                         (cond ((eq a no-argument) '())
+                                               ((eq b no-argument) (list a))
+                                               (t (list* a b more)))
+                                         generic-function data)))))
+            (t (lambda (&rest args)
+                 (generic-dispatch (car args) (cddr args)
+                                   generic-function data)))))
     (oned-table/put! *generic-function-data* generic-function data)
     generic-function))
 
@@ -294,33 +361,39 @@ checked them; a direct call (next-method #f) is checked here."
 (defun generic-dispatch (multiple-values original-args generic-function data)
   (let ((nreq (generic-function-data.nrequired data))
         (ngiven (length original-args)))
+    (declare (fixnum nreq ngiven))
     (when (> nreq ngiven)
       (dylan-call dylan/error
                   "generic-dispatch -- too few arguments supplied"
                   nreq original-args))
-    (let ((applicable-methods
-            (sorted-applicable-methods (generic-function-data.methods data)
-                                       original-args))
-          (non-req-args (but-first nreq original-args)))
+    (let* ((applicable (cached-applicable-methods data original-args))
+           (applicable-methods (car applicable))
+           (entries (cdr applicable)))
+      ;; The usual case: the required arguments only, and one method.
+      (when (and (= ngiven nreq) entries (null (cdr entries)))
+        (return-from generic-dispatch
+          (apply (car entries) multiple-values next-method/last-applicable
+                 original-args)))
       (unless (consp applicable-methods)
         (dylan-call dylan/error
                     "generic-dispatch -- no applicable methods"
                     generic-function original-args))
       (when (> ngiven nreq)             ; More supplied than required
-        (if (or (generic-function-data.keys data)
-                (generic-function-data.rest? data))
-            (progn
-              ;; Chapter 6: when the generic function takes #key, the
-              ;; arguments after the required ones are keyword/value
-              ;; pairs, whatever its methods take.
-              (when (generic-function-data.keys data)
-                (validate-keywords non-req-args t
-                                   (lambda (&rest args)
-                                     (dylan-apply dylan/error args))))
-              (check-handled-keywords non-req-args applicable-methods))
-            (dylan-call dylan/error
-                        "generic-dispatch -- too many arguments supplied"
-                        generic-function nreq original-args)))
+        (let ((non-req-args (but-first nreq original-args)))
+          (if (or (generic-function-data.keys data)
+                  (generic-function-data.rest? data))
+              (progn
+                ;; Chapter 6: when the generic function takes #key, the
+                ;; arguments after the required ones are keyword/value
+                ;; pairs, whatever its methods take.
+                (when (generic-function-data.keys data)
+                  (validate-keywords non-req-args t
+                                     (lambda (&rest args)
+                                       (dylan-apply dylan/error args))))
+                (check-handled-keywords non-req-args applicable-methods))
+              (dylan-call dylan/error
+                          "generic-dispatch -- too many arguments supplied"
+                          generic-function nreq original-args))))
       (labels ((next-method-loop (remaining-methods multiple-values current-args)
                  (if (null (cdr remaining-methods))
                      (apply (car remaining-methods)
@@ -336,7 +409,7 @@ checked them; a direct call (next-method #f) is checked here."
                                                     current-args
                                                     these-args)))
                             current-args))))
-        (next-method-loop applicable-methods multiple-values original-args)))))
+        (next-method-loop entries multiple-values original-args)))))
 
 (defun check-handled-keywords (non-req-args methods)
   ;;   gather the keywords for all of the applicable methods
@@ -367,6 +440,100 @@ checked them; a direct call (next-method #f) is checked here."
             (cond (all-!rest? 'ok)
                   (any-!key? (dylan%keyword-validate t non-req-args t))
                   (t (dylan%keyword-validate t non-req-args keywords))))))))
+
+;;;; Fast paths
+;;;;
+;;;; Calls of a few predefined functions on Lisp numbers and simple vectors
+;;;; are compiled inline (see DYLAN%CALL in runtime-internal.lisp), guarded
+;;;; by variables that stay true only while the generic functions behind
+;;;; them have no method but the predefined ones that could apply to those
+;;;; arguments.  FAST-PATH-GUARDS are the variables a generic function's
+;;;; methods guard.  FAST-PATH-CLASSES holds, for each leading required
+;;;; argument, the classes of the arguments the fast path handles.
+
+(defun method-touches-fast-path? (method fast-path-classes)
+  (loop for specializer in (method.specializers method)
+        for classes in fast-path-classes
+        always (if (singleton? specializer)
+                   (member (get-type (singleton.object specializer)) classes)
+                   (some (lambda (class) (subclass? class specializer))
+                         classes))))
+
+(defun check-fast-path (data method)
+  (when (and (generic-function-data.fast-path-guards data)
+             (method-touches-fast-path?
+              method (generic-function-data.fast-path-classes data)))
+    (dolist (guard (generic-function-data.fast-path-guards data))
+      (setf (symbol-value guard) nil))))
+
+;;;; Caching applicable methods.
+;;;;
+;;;; Which methods apply to a call, and in what order, depends only on the
+;;;; class of each required argument -- except where some method has a
+;;;; singleton specializer for that argument, and the argument is one of
+;;;; those singletons' objects.  So the sorted method list is cached in
+;;;; nested EQ tables, one level for each required argument, keyed on its
+;;;; class or else the index of the singleton object it is.  The cache is
+;;;; dropped when a method is added or removed, and when any class's
+;;;; precedence list changes (*CLASS-STRUCTURE-EPOCH*).
+
+(defun singleton-objects-by-position (methods nrequired)
+  "A vector holding, for each required argument, the list of objects that
+singleton specializers of METHODS name in that position."
+  (let ((objects (make-array nrequired :initial-element '())))
+    (dolist (method methods objects)
+      (loop for specializer in (method.specializers method)
+            for i from 0 below nrequired
+            when (singleton? specializer)
+              do (pushnew (singleton.object specializer) (aref objects i)
+                          :test #'id?)))))
+
+(declaim (inline dispatch-key))
+(defun dispatch-key (singletons i argument)
+  (let ((objects (svref singletons i)))
+    (or (and objects (position argument objects :test #'id?))
+        (get-type argument))))
+
+(defun dispatch-cache (data)
+  "DATA's cache, emptied first if it is stale."
+  (let ((table (generic-function-data.cache data)))
+    (if (and table
+             (eql (generic-function-data.cache-epoch data)
+                  *class-structure-epoch*))
+        table
+        (setf (generic-function-data.cache-epoch data) *class-structure-epoch*
+              (generic-function-data.cache-singletons data)
+              (singleton-objects-by-position
+               (generic-function-data.methods data)
+               (generic-function-data.nrequired data))
+              (generic-function-data.cache data)
+              (make-hash-table :test 'eq)))))
+
+(defun cached-applicable-methods (data arguments)
+  "The applicable methods for ARGUMENTS, sorted, consed onto the list of
+what to call for each (see DISPATCH-ENTRY)."
+  (let ((table (dispatch-cache data)))
+    (let ((singletons (generic-function-data.cache-singletons data))
+          (last (1- (generic-function-data.nrequired data)))
+          (key nil))
+      ;; Descend a level for each required argument but the last, whose
+      ;; key finds the methods.  With none required, the key is NIL.
+      (loop for i from 0 below last
+            for argument in arguments
+            do (let ((k (dispatch-key singletons i argument)))
+                 (setf table (or (gethash k table)
+                                 (setf (gethash k table)
+                                       (make-hash-table :test 'eq))))))
+      (when (>= last 0)
+        (setf key (dispatch-key singletons last (nth last arguments))))
+      (multiple-value-bind (methods found) (gethash key table)
+        (if found
+            methods
+            (setf (gethash key table)
+                  (let ((methods (sorted-applicable-methods
+                                  (generic-function-data.methods data)
+                                  arguments)))
+                    (cons methods (mapcar #'dispatch-entry methods)))))))))
 
 ;;;; Finding and sorting applicable methods.
 

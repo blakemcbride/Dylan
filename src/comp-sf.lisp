@@ -82,11 +82,8 @@
            (lambda (subform-codes mod-vars)
              (funcall continue
                       `(let ((!saved-value ,value-code))
-                         (dylan%apply
-                          ,multiple-values?
-                          ,@(mapcar (lambda (x) `(lambda () ,x))
-                                    subform-codes)
-                          (lambda () !saved-value))
+                         (dylan%call ,multiple-values? ,@subform-codes
+                                     !saved-value)
                          !saved-value)
                       mod-vars))))
          (t (dylan%error "SET! -- bad place specification")))))))
@@ -222,11 +219,8 @@
                                `(or ,@(mapcar
                                        (lambda (code)
                                          `(true?
-                                           (dylan%apply
-                                            nil
-                                            (lambda () !select-test)
-                                            (lambda () !select-target)
-                                            (lambda () ,code))))
+                                           (dylan%call nil !select-test
+                                                       !select-target ,code)))
                                        matches)))))
                            (t (dylan%error "SELECT -- bad match list"
                                            clause)))))

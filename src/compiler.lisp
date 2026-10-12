@@ -526,10 +526,7 @@ module its header names (design note 33), or DYLAN-USER."
        (compile-forms e module-vars bound-vars #'really-compile nil
                       (lambda (forms module-vars)
                         (funcall continue
-                                 `(dylan%apply
-                                   ,multiple-values?
-                                   ,@(mapcar (lambda (x) `(lambda () ,x))
-                                             forms))
+                                 `(dylan%call ,multiple-values? ,@forms)
                                  module-vars))))
       (t (dylan%error "ill-formed expression" e)))))
 

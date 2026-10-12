@@ -52,6 +52,7 @@
 
 (in-package #:dylan)
 
+(declaim (inline dylan%free-variable-ref))
 (defun dylan%free-variable-ref (value name)
   (if (eq value the-unassigned-value)
       (dylan-call dylan/error "unbound variable" name)
@@ -118,6 +119,98 @@ continuations, so a CATCH/THROW pair suffices."
 (defun dylan%while (test thunk)
   ;; Used for the UNTIL and WHILE special forms
   (loop while (funcall test) do (funcall thunk) finally (return dylan%false)))
+
+;;; A combination.  The operands are evaluated left to right, then the
+;;; operator, as DYLAN%APPLY below does with thunks (it remains for code
+;;; compiled before DYLAN%CALL existed).  A call of one of the functions in
+;;; *FAST-PATHS* with the right number of arguments is compiled inline for
+;;; the arguments its fast path handles, while its guard holds.
+
+(defvar *fast-paths* '()
+  "Entries (OPERATOR NARGS GUARD TEST-FN EXPANSION-FN): when TEST-FN's form
+of the argument variables is true and GUARD is, the call is EXPANSION-FN's
+form of them.  NARGS :N-ARY means any number of arguments from two up, and
+the functions then take the list of argument variables.")
+
+(defmacro define-fast-path (operator guard args test expansion)
+  "ARGS is a list of variables, or a single variable for an :N-ARY fast
+path."
+  `(progn
+     (defvar ,guard nil)
+     (setf *fast-paths*
+           (cons (list ',operator ,(if (listp args) (length args) :n-ary)
+                       ',guard
+                       (lambda ,(if (listp args) args (list args))
+                         (list ,test))
+                       (lambda ,(if (listp args) args (list args))
+                         ,expansion))
+                 (remove-if (lambda (entry)
+                              (and (eq (first entry) ',operator)
+                                   (eql (second entry)
+                                        ,(if (listp args)
+                                             (length args)
+                                             :n-ary))))
+                            *fast-paths*)))
+     ',operator))
+
+(defmacro dylan%call (multiple-values? operator &rest operands)
+  (let* ((vars (loop repeat (length operands) collect (gensym "ARG")))
+         (fast (and (symbolp operator)
+                    (or (find-if (lambda (entry)
+                                   (and (eq (first entry) operator)
+                                        (eql (second entry)
+                                             (length operands))))
+                                 *fast-paths*)
+                        (and (>= (length operands) 2)
+                             (find-if (lambda (entry)
+                                        (and (eq (first entry) operator)
+                                             (eq (second entry) :n-ary)))
+                                      *fast-paths*)))))
+         (general `(funcall ,operator ,multiple-values?
+                            next-method/not-generic ,@vars)))
+    `(let* ,(mapcar #'list vars operands)
+       ,(if fast
+            (flet ((call (fn)
+                     (if (eq (second fast) :n-ary)
+                         (funcall fn vars)
+                         (apply fn vars))))
+              `(if (and ,(third fast) ,@(call (fourth fast)))
+                   ,(call (fifth fast))
+                   ,general))
+            general))))
+
+(define-fast-path dylan/+ *fast-binary+* (a b)
+  `(and (realp ,a) (realp ,b)) `(+ ,a ,b))
+(define-fast-path dylan/- *fast-binary-* (a b)
+  `(and (realp ,a) (realp ,b)) `(- ,a ,b))
+(define-fast-path dylan/* *fast-binary** (a b)
+  `(and (realp ,a) (realp ,b)) `(* ,a ,b))
+;;; More than two: + and * fold their arguments left to right, as the
+;;; Dylan functions do.
+(define-fast-path dylan/+ *fast-binary+* args
+  `(and ,@(mapcar (lambda (a) `(realp ,a)) args))
+  (cl:reduce (lambda (x y) `(+ ,x ,y)) args))
+(define-fast-path dylan/* *fast-binary** args
+  `(and ,@(mapcar (lambda (a) `(realp ,a)) args))
+  (cl:reduce (lambda (x y) `(* ,x ,y)) args))
+(define-fast-path dylan/< *fast-binary<* (a b)
+  `(and (realp ,a) (realp ,b)) `(bool (< ,a ,b)))
+(define-fast-path dylan/>= *fast-binary<* (a b)
+  `(and (realp ,a) (realp ,b)) `(bool (>= ,a ,b)))
+(define-fast-path dylan/= *fast-binary=* (a b)
+  `(and (realp ,a) (realp ,b)) `(bool (= ,a ,b)))
+(define-fast-path dylan/> *fast-binary<=* (a b)
+  `(and (realp ,a) (realp ,b)) `(bool (> ,a ,b)))
+(define-fast-path dylan/<= *fast-binary<=* (a b)
+  `(and (realp ,a) (realp ,b)) `(bool (<= ,a ,b)))
+(define-fast-path dylan/element *fast-element* (v i)
+  `(and (simple-vector-p ,v) (typep ,i 'fixnum)
+        (< -1 ,i (length (the simple-vector ,v))))
+  `(svref ,v ,i))
+(define-fast-path dylan/setter/element/ *fast-setter-element* (v i x)
+  `(and (simple-vector-p ,v) (typep ,i 'fixnum)
+        (< -1 ,i (length (the simple-vector ,v))))
+  `(setf (svref ,v ,i) ,x))
 
 (defun dylan%apply (multiple-values? operator-thunk &rest operand-thunks)
   "Used for combinations.  Forces left-to-right evaluation, and adds an

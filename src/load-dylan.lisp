@@ -90,7 +90,8 @@
     "runtime-collections-string"        ; Strings
     "runtime-collections-table"         ; Tables
     "runtime-collections-vector"        ; Vectors
-    "runtime-exceptions"))              ; Exceptions
+    "runtime-exceptions"                ; Exceptions
+    "runtime-fast-paths"))              ; Inline arithmetic and element
 
 (defun dylan-load (names)
   "Load the named source files.  Nearly every file refers to things

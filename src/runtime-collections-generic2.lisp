@@ -95,7 +95,7 @@
 
 (defparameter dylan/add-new!
   (dylan%generic-fn
-   'add-new
+   'add-new!
    (make-param-list `((sequence ,<sequence>) (object ,<object>))
                     nil nil '(:test))
    nil))
@@ -494,7 +494,7 @@
 
 (defparameter dylan/setter/second/
   (dylan%generic-fn
-   'setter/first/ one-mutable-sequence-and-an-object
+   'setter/second/ one-mutable-sequence-and-an-object
    (lambda (sequence-1 new-value)
      (let ((size (collection-size sequence-1)))
        (if (or (not size) (>= size 2))
@@ -509,7 +509,7 @@
 
 (defparameter dylan/setter/third/
   (dylan%generic-fn
-   'setter/first/ one-mutable-sequence-and-an-object
+   'setter/third/ one-mutable-sequence-and-an-object
    (lambda (sequence-1 new-value)
      (let ((size (collection-size sequence-1)))
        (if (or (not size) (>= size 3))

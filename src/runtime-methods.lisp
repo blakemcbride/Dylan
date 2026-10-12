@@ -338,7 +338,7 @@
 (defparameter dylan/zero?
   (dylan%generic-fn 'zero? one-number (boolean-function #'zerop)))
 (defparameter dylan/positive?
-  (dylan%generic-fn 'positive? one-number (boolean-function #'plusp)))
+  (dylan%generic-fn 'positive? one-real (boolean-function #'plusp)))
 (defparameter dylan/negative?
   (dylan%generic-fn 'negative? one-real (boolean-function #'minusp)))
 (defparameter dylan/integral?
@@ -369,7 +369,12 @@
 (defun inexact-function (fn)
   (lambda (&rest numbers) (apply fn (mapcar #'->inexact-argument numbers))))
 
-(defparameter dylan/abs (dylan%generic-fn 'abs one-number #'abs))
+(defun complex-magnitude (number)
+  "ABS, with an exact complex argument made inexact first, as for the other
+irrational functions; an exact real stays exact."
+  (abs (if (complexp number) (->inexact-argument number) number)))
+
+(defparameter dylan/abs (dylan%generic-fn 'abs one-number #'complex-magnitude))
 (defparameter dylan/sin (dylan%generic-fn 'sin one-number (inexact-function #'sin)))
 (defparameter dylan/cos (dylan%generic-fn 'cos one-number (inexact-function #'cos)))
 (defparameter dylan/tan (dylan%generic-fn 'tan one-number (inexact-function #'tan)))
@@ -729,8 +734,10 @@
                           (float (numerator (rational real)) real)
                           (numerator real)))))
 
-(defparameter dylan/angle (dylan%generic-fn 'angle one-number #'phase))
-(defparameter dylan/magnitude (dylan%generic-fn 'magnitude one-number #'abs))
+(defparameter dylan/angle
+  (dylan%generic-fn 'angle one-number (inexact-function #'phase)))
+(defparameter dylan/magnitude
+  (dylan%generic-fn 'magnitude one-number #'complex-magnitude))
 (defparameter dylan/imag-part (dylan%generic-fn 'imag-part one-number #'imagpart))
 (defparameter dylan/real-part (dylan%generic-fn 'real-part one-number #'realpart))
 (defparameter dylan/rationalize

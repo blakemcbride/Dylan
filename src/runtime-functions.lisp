@@ -166,7 +166,20 @@
                     (make-param-list `((generic-function ,<generic-function>))
                                      nil t nil)
                     (lambda (generic-function &rest specializers)
-                      (declare (ignore specializers)) ; Ignored for now
+                      (unless (= (length specializers)
+                                 (generic-function.nrequired generic-function))
+                        (dylan-call dylan/error
+                                    "freeze-methods -- one specializer per required argument"
+                                    generic-function specializers))
+                      (dolist (specializer specializers)
+                        (unless (or (class? specializer)
+                                    (singleton? specializer))
+                          (dylan-call dylan/error
+                                      "freeze-methods -- not a class or singleton"
+                                      specializer)))
+                      (push specializers
+                            (generic-function-data.frozen
+                             (generic-function-data generic-function)))
                       generic-function)))
 
 (defparameter dylan/function-arguments
@@ -287,7 +300,10 @@ to INSTANCE's singleton rather than one of its class's slots."
                  ((class) (aref (class.class-data (car loc)) (cdr loc)))
                  ((each-subclass)
                   (aref (class.class-data (get-type instance)) loc))
-                 ((virtual) (dylan-call (slot.getter slot-desc) instance))
+                 ;; Chapter 11: an error for a virtual slot.
+                 ((virtual)
+                  (dylan-call dylan/error "slot-value -- a virtual slot"
+                              instance (slot.debug-name slot-desc)))
                  ((constant) loc)
                  (t (dylan-call dylan/error "slot-value -- internal error"
                                 slot-desc allocation)))))
@@ -320,12 +336,8 @@ to INSTANCE's singleton rather than one of its class's slots."
          ((each-subclass)
           (setf (aref (class.class-data (get-type instance)) loc) new-value))
          ((virtual)
-          (let ((setter (slot.setter slot-desc)))
-            (unless setter
-              (dylan-call dylan/error
-                          "(setter slot-value) -- no setter for virtual slot"
-                          instance slot-desc new-value))
-            (dylan-call setter instance new-value)))
+          (dylan-call dylan/error "(setter slot-value) -- a virtual slot"
+                      instance (slot.debug-name slot-desc) new-value))
          ((constant)
           (dylan-call dylan/error
                       "(setter slot-value) -- can't set a constant slot"

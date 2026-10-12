@@ -146,7 +146,8 @@ checked them; a direct call (next-method #f) is checked here."
             (:print-object print-opaque-object)
             (:constructor make-generic-function-data
                 (name nrequired keys rest? methods read-only?)))
-  name nrequired keys rest? methods read-only?)
+  name nrequired keys rest? methods read-only?
+  (frozen '()))                         ; specializer lists FREEZE-METHODS gave
 
 (defvar *generic-function-data* (make-oned-table))
 
@@ -184,7 +185,26 @@ checked them; a direct call (next-method #f) is checked here."
     (when (specializers=? specializers (method.specializers method))
       (return method))))
 
+(defun specializer-within? (specializer frozen)
+  "Does SPECIALIZER match FROZEN or is it more specific (chapter 10)?"
+  (if (singleton? frozen)
+      (and (singleton? specializer)
+           (id? (singleton.object specializer) (singleton.object frozen)))
+      (if (singleton? specializer)
+          (subclass? (get-type (singleton.object specializer)) frozen)
+          (subclass? specializer frozen))))
+
+(defun check-not-frozen (generic-function method operation)
+  (dolist (frozen (generic-function-data.frozen
+                   (generic-function-data generic-function)))
+    (when (every #'specializer-within? (method.specializers method) frozen)
+      (dylan-call dylan/error
+                  (concatenate 'string operation
+                               " -- the methods are frozen (freeze-methods)")
+                  generic-function method))))
+
 (defun delete-method! (generic-function method)
+  (check-not-frozen generic-function method "remove-method")
   (let* ((data (generic-function-data generic-function))
          (pair (member method (generic-function-data.methods data))))
     (if (not pair)
@@ -243,6 +263,7 @@ checked them; a direct call (next-method #f) is checked here."
                                             "add-method -- parameter lists not congruent, "
                                             specific-error)
                                generic-function method))))))
+    (check-not-frozen generic-function method "add-method")
     (let ((old-method (find-method generic-function
                                    (method.specializers method))))
       (when old-method

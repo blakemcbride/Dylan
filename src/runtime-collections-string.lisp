@@ -53,15 +53,15 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <byte-string>)
+    (if (true? (dylan-call dylan/instance? collection <byte-string>))
         collection
-        (let* ((size (dylan-call dylan/size collection))
+        (let* ((size (collection-size collection))
                (new-string (make-string size)))
-          (do ((state (dylan-call dylan/initial-state collection)
-                      (dylan-call dylan/next-state collection state))
+          (do ((state (initial-state collection)
+                      (next-state collection state))
                (index 0 (+ index 1)))
               ((not state) new-string)
-            (let ((cur-element (dylan-call dylan/current-element
+            (let ((cur-element (current-element
                                            collection state)))
               (setf (char new-string index)
                     (dylan-call dylan/as <character> cur-element)))))))))
@@ -73,7 +73,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <string>)
+    (if (true? (dylan-call dylan/instance? collection <string>))
         collection
         (dylan-call dylan/as <byte-string> collection)))))
 
@@ -283,7 +283,7 @@
 
 (add-method dylan/binary<
             (dylan%function->method two-strings
-                                    (lambda (a b) (and (string< a b) t))))
+                                    (lambda (a b) (bool (string< a b)))))
 
 ;;; The generic function DYLAN/AS-LOWERCASE is defined in
 ;;; runtime-methods.lisp.

@@ -73,11 +73,11 @@
                   "as -- cannot convert a non-collection to a collection"
                   class object (dylan-call dylan/object-class object)))
     (let ((new-deque (dylan-call dylan/make <deque>)))
-      (do ((state (dylan-call dylan/initial-state object)
-                  (dylan-call dylan/next-state object state)))
+      (do ((state (initial-state object)
+                  (next-state object state)))
           ((not state) new-deque)
         (dylan-call dylan/push-last new-deque
-                    (dylan-call dylan/current-element object state)))))))
+                    (current-element object state)))))))
 
 ;;;
 ;;; DEQUE SPECIALIZED MAKE
@@ -107,7 +107,7 @@
     (declare (ignore multiple-values class))
     (dylan%keyword-validate next-method rest '(:size :fill))
     (let ((size (dylan%find-keyword rest :size (lambda () 0)))
-          (fill (dylan%find-keyword rest :fill (lambda () nil))))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error "make -- deque size invalid" size))
       (let ((instance (dylan%make-<object> <deque>)))
@@ -149,20 +149,20 @@
     (dylan%keyword-validate next-method rest '(:test :count))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
           (count (dylan%find-keyword rest :count
-                                     (lambda () (dylan-call dylan/size deque))))
+                                     (lambda () (collection-size deque))))
           (num-changed 0)
           (front-entry (dylan-call dylan/get-deque-front deque)))
-      (cond ((null front-entry) front-entry)
+      (cond ((null front-entry) deque)
             ((null (deque-entry.next front-entry))
              (when (and (> count 0)
-                        (dylan-call test? (deque-entry.value front-entry) value))
+                        (true? (dylan-call test? (deque-entry.value front-entry) value)))
                (dylan-call dylan/set-deque-front! deque nil)
                (dylan-call dylan/set-deque-last! deque nil))
              deque)
             (t
              (loop
                (if (and (> count num-changed)
-                        (dylan-call test? (deque-entry.value front-entry) value))
+                        (true? (dylan-call test? (deque-entry.value front-entry) value)))
                    (let ((next-entry (deque-entry.next front-entry)))
                      (incf num-changed)
                      (dylan-call dylan/set-deque-front! deque next-entry)
@@ -181,9 +181,9 @@
                                           (and front (deque-entry.next front)))
                    do (if (or (null current-entry) (>= num-changed count))
                           (return deque)
-                          (if (dylan-call test?
+                          (if (true? (dylan-call test?
                                           (deque-entry.value current-entry)
-                                          value)
+                                          value))
                               (let ((prev (deque-entry.previous current-entry))
                                     (next (deque-entry.next current-entry)))
                                 (if prev
@@ -212,10 +212,10 @@
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
            (new-deque (dylan-call dylan/remove-duplicates old-deque
                                   :test test?)))
-      (do ((count (dylan-call dylan/size old-deque) (- count 1)))
+      (do ((count (collection-size old-deque) (- count 1)))
           ((<= count 0) 'done)
         (dylan-call dylan/pop old-deque))
-      (do ((count (dylan-call dylan/size new-deque) (- count 1)))
+      (do ((count (collection-size new-deque) (- count 1)))
           ((<= count 0) old-deque)
         (dylan-call dylan/push-last old-deque
                     (dylan-call dylan/pop new-deque)))))))
@@ -237,11 +237,11 @@
   one-deque
   (lambda (deque-1)
     (let ((result (dylan-call dylan/make <deque>)))
-      (do ((state (dylan-call dylan/initial-state deque-1)
-                  (dylan-call dylan/next-state deque-1 state)))
+      (do ((state (initial-state deque-1)
+                  (next-state deque-1 state)))
           ((not state) result)
         (dylan-call dylan/push result
-                    (dylan-call dylan/current-element deque-1 state)))))))
+                    (current-element deque-1 state)))))))
 
 (add-method
  dylan/reverse!
@@ -249,7 +249,7 @@
   one-deque
   (lambda (deque-1)
     (let ((tmp-deque (dylan-call dylan/make <deque>))
-          (size (dylan-call dylan/size deque-1)))
+          (size (collection-size deque-1)))
       (if (<= size 0)
           deque-1
           (progn
@@ -270,14 +270,14 @@
     (dylan%keyword-validate next-method rest '(:test :stable))
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/<)))
            (deque-list (scheme-sort (iterate->list #'identity deque)
-                                    (lambda (x y) (dylan-call test? x y)))))
+                                    (lambda (x y) (true? (dylan-call test? x y))))))
       (dylan%find-keyword rest :stable (lambda () nil)) ; Ignored
       (dylan%empty-deque! deque)
       (dolist (x deque-list) (dylan-call dylan/push-last deque x))
       deque))))
 
 (defun dylan%empty-deque! (deque)
-  (let ((size (dylan-call dylan/size deque)))
+  (let ((size (collection-size deque)))
     (do ((i 0 (+ i 1)))
         ((= i size) deque)
       (dylan-call dylan/pop deque))))

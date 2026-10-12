@@ -60,7 +60,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <vector>)
+    (if (true? (dylan-call dylan/instance? collection <vector>))
         collection
         (dylan-call dylan/as <simple-object-vector> collection)))))
 
@@ -71,16 +71,16 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <simple-object-vector>)
+    (if (true? (dylan-call dylan/instance? collection <simple-object-vector>))
         collection
-        (let* ((size (dylan-call dylan/size collection))
+        (let* ((size (collection-size collection))
                (new-vector (make-array size)))
-          (do ((state (dylan-call dylan/initial-state collection)
-                      (dylan-call dylan/next-state collection state))
+          (do ((state (initial-state collection)
+                      (next-state collection state))
                (index 0 (+ index 1)))
               ((not state) new-vector)
             (setf (aref new-vector index)
-                  (dylan-call dylan/current-element collection state))))))))
+                  (current-element collection state))))))))
 
 (add-method
  dylan/as
@@ -89,18 +89,18 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <stretchy-vector>)
+    (if (true? (dylan-call dylan/instance? collection <stretchy-vector>))
         collection
-        (let* ((size (dylan-call dylan/size collection))
+        (let* ((size (collection-size collection))
                (new-s-vector (dylan-call dylan/make <stretchy-vector>
                                          :size size))
                (vector-value (dylan-call dylan/get-array-value new-s-vector)))
-          (do ((state (dylan-call dylan/initial-state collection)
-                      (dylan-call dylan/next-state collection state))
+          (do ((state (initial-state collection)
+                      (next-state collection state))
                (index 0 (+ index 1)))
               ((not state) new-s-vector)
             (setf (aref vector-value index)
-                  (dylan-call dylan/current-element collection state))))))))
+                  (current-element collection state))))))))
 
 ;;;
 ;;; VECTOR SPECIALIZED MAKE
@@ -127,7 +127,7 @@
     (declare (ignore multiple-values class))
     (dylan%keyword-validate next-method rest '(:size :fill))
     (let ((size (dylan%find-keyword rest :size (lambda () 0)))
-          (fill (dylan%find-keyword rest :fill (lambda () nil))))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call
          dylan/error
@@ -149,7 +149,7 @@
     (declare (ignore multiple-values class))
     (dylan%keyword-validate next-method rest '(:size :fill))
     (let ((size (dylan%find-keyword rest :size (lambda () 0)))
-          (fill (dylan%find-keyword rest :fill (lambda () nil))))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error
                     "(make (singleton <stretchy-vector>)) size: invalid" size))
@@ -349,7 +349,7 @@
                   (dylan-call dylan/as <simple-object-vector>
                               (scheme-sort (dylan-call dylan/as <pair> s-vector)
                                            (lambda (x y)
-                                             (dylan-call test? x y)))))
+                                             (true? (dylan-call test? x y))))))
       s-vector))))                      ; Not the internal simple vector
 
 (add-method

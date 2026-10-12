@@ -61,55 +61,58 @@
   (lambda (coll-1 coll-2)
     (let ((key-sequence-1 (dylan-call dylan/key-sequence coll-1))
           (key-sequence-2 (dylan-call dylan/key-sequence coll-2))
-          (size-1 (dylan-call dylan/size coll-1))
-          (size-2 (dylan-call dylan/size coll-2)))
-      (cond ((not (and size-1 size-2)) nil)
-            ;; if either one is unbound, then false, since specific methods
-            ;; will handle infinite ranges and circular lists
-            ((not (= size-1 size-2)) nil)
-            (t
-             (loop with state = (dylan-call dylan/initial-state key-sequence-1)
-                   do (if (not state)
-                          (return t)
-                          (let ((key (dylan-call dylan/current-element
-                                                 key-sequence-1 state)))
-                            (if (and (dylan-call dylan/member? key key-sequence-2
-                                                 :test
-                                                 (make-dylan-callable
-                                                  (lambda (a b)
-                                                    (dylan-call dylan/= a b))))
-                                     (dylan-call
-                                      dylan/=
-                                      (dylan-call dylan/element coll-1 key)
-                                      (dylan-call dylan/element coll-2 key)))
-                                (setf state (dylan-call dylan/next-state
-                                                        key-sequence-1 state))
-                                (return nil)))))))))))
+          (size-1 (collection-size coll-1))
+          (size-2 (collection-size coll-2)))
+      (bool
+       (cond ((not (and size-1 size-2)) nil)
+             ;; if either one is unbound, then false, since specific methods
+             ;; will handle infinite ranges and circular lists
+             ((not (= size-1 size-2)) nil)
+             (t
+              (loop with state = (initial-state key-sequence-1)
+                    do (if (not state)
+                           (return t)
+                           (let ((key (current-element
+                                                  key-sequence-1 state)))
+                             (if (and (true?
+                                       (dylan-call dylan/member? key key-sequence-2
+                                                   :test
+                                                   (make-dylan-callable
+                                                    (lambda (a b)
+                                                      (dylan-call dylan/= a b)))))
+                                      (true?
+                                       (dylan-call
+                                        dylan/=
+                                        (dylan-call dylan/element coll-1 key)
+                                        (dylan-call dylan/element coll-2 key))))
+                                 (setf state (next-state key-sequence-1 state))
+                                 (return nil))))))))))))
 
 (add-method
  dylan/binary=
  (dylan%function->method
   two-sequences
   (lambda (seq-1 seq-2)
-    (let ((size-1 (dylan-call dylan/size seq-1))
-          (size-2 (dylan-call dylan/size seq-2)))
-      (cond ((not (and size-1 size-2)) nil)
-            ;; if either one is unbound, then false, since specific methods
-            ;; will handle infinite ranges and circular lists
-            ((not (= size-1 size-2)) nil)
-            (t
-             (do ((state-1 (dylan-call dylan/initial-state seq-1)
-                           (dylan-call dylan/next-state seq-1 state-1))
-                  (state-2 (dylan-call dylan/initial-state seq-2)
-                           (dylan-call dylan/next-state seq-2 state-2)))
-                 ;; Elements are compared with = (chapter 9), not id?.
-                 ((or (or (not state-1) (not state-2))
-                      (not (dylan-call dylan/=
-                                       (dylan-call dylan/current-element
-                                                   seq-1 state-1)
-                                       (dylan-call dylan/current-element
-                                                   seq-2 state-2))))
-                  (if (or state-1 state-2) nil t)))))))))
+    (let ((size-1 (collection-size seq-1))
+          (size-2 (collection-size seq-2)))
+      (bool
+       (cond ((not (and size-1 size-2)) nil)
+             ;; if either one is unbound, then false, since specific methods
+             ;; will handle infinite ranges and circular lists
+             ((not (= size-1 size-2)) nil)
+             (t
+              (do ((state-1 (initial-state seq-1)
+                            (next-state seq-1 state-1))
+                   (state-2 (initial-state seq-2)
+                            (next-state seq-2 state-2)))
+                  ;; Elements are compared with = (chapter 9), not id?.
+                  ((or (or (not state-1) (not state-2))
+                       (false? (dylan-call dylan/=
+                                           (current-element
+                                                       seq-1 state-1)
+                                           (current-element
+                                                       seq-2 state-2))))
+                   (if (or state-1 state-2) nil t))))))))))
 
 (add-method
  dylan/shallow-copy
@@ -171,7 +174,7 @@
    'empty?
    (make-param-list `((collection ,<collection>)) nil nil nil)
    (lambda (collection)
-     (if (dylan-call dylan/initial-state collection) nil t))))
+     (bool (not (initial-state collection))))))
 
 (defparameter dylan/do
   (dylan%generic-fn
@@ -181,7 +184,7 @@
    (lambda (fn &rest collections)
      (collections-iterate fn
                           (lambda (val) (declare (ignore val)) nil)
-                          nil
+                          dylan%false
                           collections))))
 
 (defun sequence? (collection)
@@ -224,7 +227,7 @@ new instance of FIRST's class-for-copy."
            (map-aligned-by-keys proc li all-lists)
            (loop with result = '()
                  with next-states = (mapcar (lambda (li)
-                                              (dylan-call dylan/initial-state li))
+                                              (initial-state li))
                                             all-lists)
                  do (if (any? #'not next-states)
                         (return (dylan-call dylan/as
@@ -234,14 +237,13 @@ new instance of FIRST's class-for-copy."
                                 (dylan-call dylan/apply
                                             proc
                                             (mapcar (lambda (li st)
-                                                      (dylan-call
-                                                       dylan/current-element
+                                                      (current-element
                                                        li st))
                                                     all-lists next-states))))
                           (push next-value result)
                           (setf next-states
                                 (mapcar (lambda (li st)
-                                          (dylan-call dylan/next-state li st))
+                                          (next-state li st))
                                         all-lists next-states))))))))))
 
 (defparameter dylan/map-as
@@ -274,24 +276,23 @@ new instance of FIRST's class-for-copy."
    (lambda (mut-coll proc coll-1 &rest rest)
      (let ((sources (list* coll-1 rest)))
        (if (and (sequence? mut-coll) (every #'sequence? sources))
-           (loop with target-state = (dylan-call dylan/initial-state mut-coll)
+           (loop with target-state = (initial-state mut-coll)
                  with states = (mapcar (lambda (c)
-                                         (dylan-call dylan/initial-state c))
+                                         (initial-state c))
                                        sources)
                  until (or (not target-state) (some #'not states))
-                 do (dylan-call dylan/setter/current-element/ mut-coll
+                 do (set-current-element mut-coll
                                 target-state
                                 (dylan-call dylan/apply proc
                                             (mapcar (lambda (c st)
-                                                      (dylan-call
-                                                       dylan/current-element
+                                                      (current-element
                                                        c st))
                                                     sources states)))
                     (setf target-state
-                          (dylan-call dylan/next-state mut-coll target-state)
+                          (next-state mut-coll target-state)
                           states
                           (mapcar (lambda (c st)
-                                    (dylan-call dylan/next-state c st))
+                                    (next-state c st))
                                   sources states))
                  finally (return mut-coll))
            (let ((keys (aligned-keys (cons mut-coll sources))))
@@ -314,8 +315,8 @@ new instance of FIRST's class-for-copy."
                     nil t nil)
    (lambda (fn &rest collections)
      (collections-iterate fn
-                          (lambda (val) (if val (lambda () val) nil))
-                          nil
+                          (lambda (val) (if (true? val) (lambda () val) nil))
+                          dylan%false
                           collections))))
 
 (defparameter dylan/every?
@@ -325,7 +326,8 @@ new instance of FIRST's class-for-copy."
                     nil t nil)
    (lambda (fn &rest collections)
      (collections-iterate fn
-                          (lambda (val) (if val nil (lambda () nil)))
+                          (lambda (val)
+                            (if (true? val) nil (lambda () dylan%false)))
                           t
                           collections))))
 
@@ -336,16 +338,16 @@ new instance of FIRST's class-for-copy."
                       (collection ,<collection>))
                     nil nil nil)
    (lambda (proc init-value collection)
-     (if (dylan-call dylan/empty? collection)
+     (if (true? (dylan-call dylan/empty? collection))
          init-value
          (loop with cur-value = init-value
-               with state = (dylan-call dylan/initial-state collection)
+               with state = (initial-state collection)
                do (if state
                       (let ((next-value
                               (dylan-call proc cur-value
-                                          (dylan-call dylan/current-element
+                                          (current-element
                                                       collection state))))
-                        (setf state (dylan-call dylan/next-state
+                        (setf state (next-state
                                                 collection state))
                         (setf cur-value next-value))
                       (return cur-value)))))))
@@ -356,21 +358,21 @@ new instance of FIRST's class-for-copy."
    (make-param-list `((procedure ,<function>) (collection ,<collection>))
                     nil nil nil)
    (lambda (proc collection)
-     (if (dylan-call dylan/empty? collection)
+     (if (true? (dylan-call dylan/empty? collection))
          (dylan-call dylan/error "reduce1 -- collection argument is empty"
                      proc collection)
-         (loop with cur-value = (dylan-call dylan/current-element collection
-                                            (dylan-call dylan/initial-state
+         (loop with cur-value = (current-element collection
+                                            (initial-state
                                                         collection))
-               with state = (dylan-call dylan/next-state collection
-                                        (dylan-call dylan/initial-state
+               with state = (next-state collection
+                                        (initial-state
                                                     collection))
                do (if state
                       (let ((next-value
                               (dylan-call proc cur-value
-                                          (dylan-call dylan/current-element
+                                          (current-element
                                                       collection state))))
-                        (setf state (dylan-call dylan/next-state
+                        (setf state (next-state
                                                 collection state))
                         (setf cur-value next-value))
                       (return cur-value)))))))
@@ -395,9 +397,10 @@ new instance of FIRST's class-for-copy."
        (lambda (return-value)
          (iterate! (lambda (obj)
                      (let ((test-value (dylan-call test value obj)))
-                       (when test-value (funcall return-value test-value))))
+                       (when (true? test-value)
+                         (funcall return-value test-value))))
                    collection)
-         (funcall return-value nil)))))))
+         (funcall return-value dylan%false)))))))
 
 (defparameter dylan/find-key
   (dylan%generic-fn
@@ -415,25 +418,25 @@ new instance of FIRST's class-for-copy."
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:skip :failure))
     (let ((skip (dylan%find-keyword rest :skip (lambda () 0)))
-          (failure (dylan%find-keyword rest :failure (lambda () nil)))
+          (failure (dylan%find-keyword rest :failure (lambda () dylan%false)))
           (key-sequence (dylan-call dylan/key-sequence collection)))
-      (loop with key-state = (dylan-call dylan/initial-state key-sequence)
+      (loop with key-state = (initial-state key-sequence)
             with satisfied = 0
             do (cond ((not key-state) (return failure))
-                     ((dylan-call predicate
+                     ((true? (dylan-call predicate
                                   (dylan-call dylan/element
                                               collection
-                                              (dylan-call dylan/current-element
+                                              (current-element
                                                           key-sequence
-                                                          key-state)))
+                                                          key-state))))
                       (if (> satisfied (- skip 1))
-                          (return (dylan-call dylan/current-element
+                          (return (current-element
                                               key-sequence key-state))
                           (progn
-                            (setf key-state (dylan-call dylan/next-state
+                            (setf key-state (next-state
                                                         key-sequence key-state))
                             (incf satisfied))))
-                     (t (setf key-state (dylan-call dylan/next-state
+                     (t (setf key-state (next-state
                                                     key-sequence
                                                     key-state)))))))))
 
@@ -456,21 +459,22 @@ new instance of FIRST's class-for-copy."
   (lambda (multiple-values next-method coll predicate new-val-fn &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:count))
-    (let* ((size (dylan-call dylan/size coll))
+    (let* ((size (collection-size coll))
            (count (dylan%find-keyword rest :count (lambda () size))))
-      (loop with state = (dylan-call dylan/initial-state coll)
+      (loop with state = (initial-state coll)
             with num-changed = 0
             do (cond ((or (>= num-changed count) (not state)) (return coll))
-                     ((dylan-call predicate
-                                  (dylan-call dylan/current-element coll state))
-                      (dylan-call dylan/setter/current-element/
+                     ((true? (dylan-call predicate
+                                         (current-element
+                                                     coll state)))
+                      (set-current-element
                                   coll state
                                   (dylan-call new-val-fn
-                                              (dylan-call dylan/current-element
+                                              (current-element
                                                           coll state)))
-                      (setf state (dylan-call dylan/next-state coll state))
+                      (setf state (next-state coll state))
                       (incf num-changed))
-                     (t (setf state (dylan-call dylan/next-state
+                     (t (setf state (next-state
                                                 coll state)))))))))
 
 (defparameter dylan/fill!
@@ -492,11 +496,11 @@ new instance of FIRST's class-for-copy."
     (dylan%keyword-validate next-method rest '(:start :end))
     (let ((start (dylan%find-keyword rest :start (lambda () 0)))
           (end (dylan%find-keyword
-                rest :end (lambda () (dylan-call dylan/size collection)))))
-      (do ((state (dylan-call dylan/initial-state collection)
-                  (dylan-call dylan/next-state collection state))
+                rest :end (lambda () (collection-size collection)))))
+      (do ((state (initial-state collection)
+                  (next-state collection state))
            (index 0 (+ index 1)))
           ((or (not state) (>= index end)) collection)
         (when (and state (>= index start))
-          (dylan-call dylan/setter/current-element/
+          (set-current-element
                       collection state new-value)))))))

@@ -51,22 +51,22 @@
  (dylan%function->method
   two-lists
   (lambda (list-1 list-2)
-    (let ((size-1 (dylan-call dylan/size list-1))
-          (size-2 (dylan-call dylan/size list-2)))
+    (let ((size-1 (collection-size list-1))
+          (size-2 (collection-size list-2)))
       (if (not (= size-1 size-2))
-          nil
-          (do ((state-1 (dylan-call dylan/initial-state list-1)
-                        (dylan-call dylan/next-state list-1 state-1))
-               (state-2 (dylan-call dylan/initial-state list-2)
-                        (dylan-call dylan/next-state list-2 state-2)))
+          dylan%false
+          (do ((state-1 (initial-state list-1)
+                        (next-state list-1 state-1))
+               (state-2 (initial-state list-2)
+                        (next-state list-2 state-2)))
               ;; Elements are compared with = (chapter 9), not id?.
               ((or (or (not state-1) (not state-2))
-                   (not (dylan-call dylan/=
-                                    (dylan-call dylan/current-element
-                                                list-1 state-1)
-                                    (dylan-call dylan/current-element
-                                                list-2 state-2))))
-               (if (or state-1 state-2) nil t))))))))
+                   (false? (dylan-call dylan/=
+                                       (current-element
+                                                   list-1 state-1)
+                                       (current-element
+                                                   list-2 state-2))))
+               (bool (not (or state-1 state-2))))))))))
 
 (add-method
  dylan/as
@@ -75,7 +75,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <list>)
+    (if (true? (dylan-call dylan/instance? collection <list>))
         collection
         (iterate->list #'identity collection)))))
 
@@ -86,7 +86,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <pair>)
+    (if (true? (dylan-call dylan/instance? collection <pair>))
         collection
         (iterate->list #'identity collection)))))
 
@@ -103,7 +103,7 @@
     (declare (ignore multiple-values class))
     (dylan%keyword-validate next-method rest '(:size :fill))
     (let ((size (dylan%find-keyword rest :size (lambda () 0)))
-          (fill (dylan%find-keyword rest :fill (lambda () nil))))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error "make -- list size: invalid" size))
       (make-list size :initial-element fill)))))
@@ -120,7 +120,7 @@
     (declare (ignore multiple-values class))
     (dylan%keyword-validate next-method rest '(:size :fill))
     (let ((size (dylan%find-keyword rest :size (lambda () 0)))
-          (fill (dylan%find-keyword rest :fill (lambda () nil))))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error "make -- list size invalid" size))
       (make-list size :initial-element fill)))))
@@ -146,7 +146,7 @@
  (one-arg 'list <list>
           (lambda (list)
             (let ((length (dylan-list-length list)))
-              (if (= length -1) nil length)))))
+              (if (= length -1) dylan%false length)))))
 
 (add-method dylan/size
             (one-arg 'pair <empty-list>
@@ -162,8 +162,8 @@
     (dylan%keyword-validate next-method keys '(:test))
     (let ((test (dylan%find-keyword keys :test (lambda () dylan/id?))))
       (loop for tail = list then (cdr tail)
-            do (cond ((null tail) (return nil))
-                     ((dylan-call test value (car tail)) (return tail))))))))
+            do (cond ((null tail) (return dylan%false))
+                     ((true? (dylan-call test value (car tail))) (return tail))))))))
 
 ;;;;
 ;;;; Functions for Sequences (page 104)
@@ -333,14 +333,14 @@
     (dylan%keyword-validate next-method rest '(:test))
     (let ((test-fn (dylan%find-keyword rest :test (lambda () dylan/id?))))
       (loop for rest-list = list then (cdr rest-list)
-            do (cond ((null rest-list) (return nil))
+            do (cond ((null rest-list) (return dylan%false))
                      ;; N.B. the Scheme tested (car LIST) rather than
                      ;; (car REST-LIST) here; fixed.
                      ((not (consp (car rest-list)))
                       (return (dylan-call dylan/error
                                           "find-pair -- list element not a pair"
                                           (car rest-list))))
-                     ((dylan-call test-fn item (caar rest-list))
+                     ((true? (dylan-call test-fn item (caar rest-list)))
                       (return (car rest-list)))))))))
 
 ;;;

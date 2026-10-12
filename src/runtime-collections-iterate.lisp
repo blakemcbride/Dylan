@@ -68,6 +68,57 @@
 (declaim (special dylan/next-state dylan/initial-state dylan/current-element
                   dylan/copy-state dylan/final-state dylan/previous-state))
 
+;;; The built-in state methods are written in Lisp, with NIL for "no more
+;;; states"; Dylan sees #f.  The runtime's own iteration goes through
+;;; INITIAL-STATE, NEXT-STATE and the other functions below, which hand the
+;;; Lisp code NIL for #f.  A state may be any other object, the empty list
+;;; included (a user's collection may use one), so a state of () is carried
+;;; inside the runtime as +EMPTY-LIST-STATE+ and turned back into () when it
+;;; goes to a Dylan function.
+
+(defun state-method (param-list lisp-function)
+  (dylan%function->method param-list
+                          (lambda (&rest arguments)
+                            (or-false (apply lisp-function arguments)))))
+
+(defun state-method-1 (name class lisp-function)
+  (state-method (make-param-list `((,name ,class)) nil nil nil) lisp-function))
+
+(defvar +empty-list-state+ (make-symbol "EMPTY-LIST-STATE"))
+
+(defun lisp-state (state)
+  "The runtime's form of a state from Dylan: NIL for #f."
+  (cond ((false? state) nil)
+        ((null state) +empty-list-state+)
+        (t state)))
+
+(defun dylan-state (state)
+  "The Dylan form of a state the runtime holds."
+  (if (eq state +empty-list-state+) '() state))
+
+(defun initial-state (collection)
+  (lisp-state (dylan-call dylan/initial-state collection)))
+(defun final-state (collection)
+  (lisp-state (dylan-call dylan/final-state collection)))
+(defun next-state (collection state)
+  (lisp-state (dylan-call dylan/next-state collection (dylan-state state))))
+(defun previous-state (collection state)
+  (lisp-state (dylan-call dylan/previous-state collection (dylan-state state))))
+(defun copy-state (collection state)
+  (lisp-state (dylan-call dylan/copy-state collection (dylan-state state))))
+(defun current-element (collection state)
+  (dylan-call dylan/current-element collection (dylan-state state)))
+(defun current-key (collection state)
+  (dylan-call dylan/current-key collection (dylan-state state)))
+(defun set-current-element (collection state new-value)
+  (dylan-call dylan/setter/current-element/ collection (dylan-state state)
+              new-value))
+
+(defun collection-size (collection)
+  "The size of COLLECTION, or NIL where Dylan's SIZE answers #f (an
+unbounded collection)."
+  (false->nil (dylan-call dylan/size collection)))
+
 ;;
 ;; INITIAL-STATE
 ;;
@@ -80,23 +131,23 @@
                  collection))))
 
 (add-method dylan/initial-state
-            (one-arg 'null <empty-list>
+            (state-method-1 'null <empty-list>
                      (lambda (null) (declare (ignore null)) nil)))
 (add-method dylan/initial-state
-            (one-arg 'list <list> #'identity))
+            (state-method-1 'list <list> #'identity))
 (add-method dylan/initial-state
-            (one-arg 'array <array>
+            (state-method-1 'array <array>
                      (lambda (array)
                        (let ((dimensions (dylan-call dylan/dimensions array)))
                          (if (all? #'plusp (iterate->list #'identity dimensions))
                              (make-array (length dimensions) :initial-element 0)
                              nil)))))
 (add-method dylan/initial-state
-            (one-arg 'deque <deque>
+            (state-method-1 'deque <deque>
                      (lambda (deque)
                        (dylan-call dylan/get-deque-front deque))))
 (add-method dylan/initial-state
-            (one-arg 'range <range>
+            (state-method-1 'range <range>
                      (lambda (range)
                        (let ((start (dylan-call dylan/get-range-start range))
                              (end (dylan-call dylan/get-range-end range))
@@ -114,7 +165,7 @@
                                  nil))
                            (t start))))))
 (add-method dylan/initial-state
-            (one-arg 'table <table>
+            (state-method-1 'table <table>
                      (lambda (table)
                        (let* ((hash-table (dylan-call dylan/get-hash-table table))
                               (next-bucket (find-next-non-empty-bucket
@@ -129,11 +180,11 @@
 (defparameter dylan/final-state (dylan%generic-fn 'final-state one-object nil))
 
 (add-method dylan/final-state
-            (one-arg 'empty-list <empty-list>
+            (state-method-1 'empty-list <empty-list>
                      (lambda (emp-list) (declare (ignore emp-list)) nil)))
 ;;; Not specified in the manual; only for efficiency:
 ;;; (add-method dylan/final-state
-;;;             (one-arg 'string <byte-string>
+;;;             (state-method-1 'string <byte-string>
 ;;;                      (lambda (string)
 ;;;                        (let ((length (length string)))
 ;;;                          (if (zerop length) nil (- length 1))))))
@@ -142,16 +193,16 @@
 ;;; integer for simple vectors, which the other state functions could not
 ;;; take back.
 (add-method dylan/final-state           ; Not specified in the manual
-            (one-arg 'array <array>
+            (state-method-1 'array <array>
                      (lambda (array)
-                       (if (dylan-call dylan/empty? array)
+                       (if (true? (dylan-call dylan/empty? array))
                            nil
                            (map 'simple-vector (lambda (index) (- index 1))
                                 (iterate->list
                                  #'identity
                                  (dylan-call dylan/dimensions array)))))))
 (add-method dylan/final-state
-            (one-arg 'deque <deque>
+            (state-method-1 'deque <deque>
                      (lambda (deque)
                        (dylan-call dylan/get-deque-last deque))))
 
@@ -163,7 +214,7 @@
 
 (add-method
  dylan/next-state
- (dylan%function->method
+ (state-method
   (make-param-list `((list ,<list>) (state ,<object>)) nil nil nil)
   (lambda (list state)
     (declare (ignore list))
@@ -177,7 +228,7 @@
 
 (add-method                             ; Array => "Odometer style"
  dylan/next-state
- (dylan%function->method
+ (state-method
   (make-param-list `((array ,<array>) (state ,<simple-object-vector>))
                    nil nil nil)
   (lambda (array state)
@@ -202,13 +253,13 @@
 
 (add-method
  dylan/next-state
- (dylan%function->method
+ (state-method
   (make-param-list `((null ,<empty-list>) (state ,<object>)) nil nil nil)
   (lambda (emp-list state) (declare (ignore emp-list state)) nil)))
 
 (add-method
  dylan/next-state
- (dylan%function->method
+ (state-method
   (make-param-list `((deque ,<deque>) (state ,<object>)) nil nil nil)
   (lambda (deque state)
     (declare (ignore deque))
@@ -216,7 +267,7 @@
 
 (add-method
  dylan/next-state
- (dylan%function->method
+ (state-method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
     (let* ((end (dylan-call dylan/get-range-end range))
@@ -234,7 +285,7 @@
 
 (add-method
  dylan/next-state
- (dylan%function->method
+ (state-method
   (make-param-list `((table ,<table>) (state ,<object>)) nil nil nil)
   (lambda (table state)
     (let ((hash-index (car state))
@@ -260,7 +311,7 @@
 
 (add-method                             ; Array => "Odometer style"
  dylan/previous-state
- (dylan%function->method
+ (state-method
   (make-param-list `((array ,<array>) (state ,<sequence>)) nil nil nil)
   ;; The odometer run backwards: decrement the last index that can be, and
   ;; set every index after it to its maximum.  The state passed in is not
@@ -279,13 +330,13 @@
 
 (add-method
  dylan/previous-state
- (dylan%function->method
+ (state-method
   (make-param-list `((null ,<empty-list>) (state ,<object>)) nil nil nil)
   (lambda (emp-list state) (declare (ignore emp-list state)) nil)))
 
 (add-method
  dylan/previous-state
- (dylan%function->method
+ (state-method
   (make-param-list `((deque ,<deque>) (state ,<object>)) nil nil nil)
   (lambda (deque state)
     (declare (ignore deque))
@@ -293,7 +344,7 @@
 
 (add-method                             ; Not defined in the manual
  dylan/previous-state
- (dylan%function->method
+ (state-method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
     (let* ((start (dylan-call dylan/get-range-start range))
@@ -381,29 +432,31 @@
 (defun iterate-until (fn collection)
   "Given FN and a collection, iterate until the collection runs out of
 elements or FN returns a non-NIL value."
-  (loop with state = (dylan-call dylan/initial-state collection)
+  (loop with state = (initial-state collection)
         do (if (not state)
                (return nil)
-               (let ((result (funcall fn (dylan-call dylan/current-element
+               (let ((result (funcall fn (current-element
                                                      collection state))))
                  (if result
                      (return result)
-                     (setf state (dylan-call dylan/next-state
+                     (setf state (next-state
                                              collection state)))))))
 
 (defun iterate->list (fn collection)
-  (loop with state = (dylan-call dylan/initial-state collection)
+  (loop with state = (initial-state collection)
         with value = '()
         do (if state
-               (let ((new-value (funcall fn (dylan-call dylan/current-element
+               (let ((new-value (funcall fn (current-element
                                                         collection state))))
-                 (setf state (dylan-call dylan/next-state collection state))
+                 (setf state (next-state collection state))
                  (push new-value value))
                (return (nreverse value)))))
 
 ;;;; The Iteration Protocol (page 122)
 ;;;; Actually, these are internal procedures used elsewhere to iterate over
 ;;;; collections or sets of collections
+
+(declaim (ftype function aligned-keys sequence?))
 
 (defun collections-iterate (fn done? default-value collections)
   "FN is a Dylan function to be applied to parallel elements from each
@@ -416,13 +469,32 @@ runs out before the DONE? test causes an exit."
                 collections)
     (dylan-call dylan/error "do -- not all arguments are collections"
                 collections))
+  ;; Chapter 12, "Collection Alignment": unless they are all sequences,
+  ;; several collections are aligned by key, and FN sees the elements at
+  ;; each key they share.
+  (when (and (cdr collections) (notevery #'sequence? collections))
+    (let ((keys (aligned-keys collections)))
+      (when (sequence? (car collections))
+        (setf keys (sort (iterate->list #'identity keys) #'<)))
+      (let ((result? (iterate-until
+                      (lambda (key)
+                        (funcall done?
+                                 (dylan-apply fn
+                                              (mapcar (lambda (collection)
+                                                        (dylan-call
+                                                         dylan/element
+                                                         collection key))
+                                                      collections))))
+                      keys)))
+        (return-from collections-iterate
+          (if result? (funcall result?) default-value)))))
   (loop with states = (mapcar (lambda (collection)
-                                (dylan-call dylan/initial-state collection))
+                                (initial-state collection))
                               collections)
         do (if (any? #'not states)
                (return default-value)
                (let* ((ins (mapcar (lambda (collection state)
-                                     (dylan-call dylan/current-element
+                                     (current-element
                                                  collection state))
                                    collections states))
                       (next-val (dylan-apply fn ins))
@@ -430,15 +502,15 @@ runs out before the DONE? test causes an exit."
                  (if result?
                      (return (funcall result?))
                      (setf states (mapcar (lambda (collection state)
-                                            (dylan-call dylan/next-state
+                                            (next-state
                                                         collection state))
                                           collections states)))))))
 
 (defun iterate! (fn collection)
-  (loop with state = (dylan-call dylan/initial-state collection)
+  (loop with state = (initial-state collection)
         while state
-        do (funcall fn (dylan-call dylan/current-element collection state))
-           (setf state (dylan-call dylan/next-state collection state))))
+        do (funcall fn (current-element collection state))
+           (setf state (next-state collection state))))
 
 (defun find-next-non-empty-bucket (hash-table index)
   (loop for i from (+ index 1) below (length hash-table)
@@ -457,8 +529,8 @@ runs out before the DONE? test causes an exit."
                     nil nil nil)
    (lambda (collection index)
      (do ((i 0 (+ i 1))
-          (state (dylan-call dylan/initial-state collection)
-                 (dylan-call dylan/next-state collection state)))
+          (state (initial-state collection)
+                 (next-state collection state)))
          ((or (= i index) (not state)) state)))))
 
 ;;;;
@@ -498,12 +570,13 @@ runs out before the DONE? test causes an exit."
            ;; never found; fixed.
            (default (dylan%find-keyword rest :default
                                         (lambda () default-marker))))
-      (do ((state (dylan-call dylan/initial-state exp-coll)
-                  (dylan-call dylan/next-state exp-coll state)))
+      (do ((state (initial-state exp-coll)
+                  (next-state exp-coll state)))
           ((or (not state)
-               (dylan-call dylan/= (dylan-call dylan/current-key exp-coll state)
-                           key))
-           (cond (state (dylan-call dylan/current-element exp-coll state))
+               (true? (dylan-call dylan/=
+                                  (current-key exp-coll state)
+                                  key)))
+           (cond (state (current-element exp-coll state))
                  ((eq default default-marker)
                   (dylan-call dylan/error
                               "element -- no such element in collection"
@@ -521,11 +594,11 @@ runs out before the DONE? test causes an exit."
     (let* ((default-marker (cons 1 2))
            (default (dylan%find-keyword rest :default
                                         (lambda () default-marker))))
-      (do ((state (dylan-call dylan/initial-state seq)
-                  (dylan-call dylan/next-state seq state))
+      (do ((state (initial-state seq)
+                  (next-state seq state))
            (k 0 (+ k 1)))
           ((or (not state) (= k key))
-           (cond (state (dylan-call dylan/current-element seq state))
+           (cond (state (current-element seq state))
                  ((eq default default-marker)
                   (dylan-call dylan/error
                               "element -- no such element in collection"
@@ -546,9 +619,9 @@ runs out before the DONE? test causes an exit."
   (make-param-list `((explicit-key-collection ,<explicit-key-collection>))
                    nil nil nil)
   (lambda (exp-coll)
-    (do ((state (dylan-call dylan/initial-state exp-coll)
-                (dylan-call dylan/next-state exp-coll state))
-         (keys '() (cons (dylan-call dylan/current-key exp-coll state) keys)))
+    (do ((state (initial-state exp-coll)
+                (next-state exp-coll state))
+         (keys '() (cons (current-key exp-coll state) keys)))
         ((not state) (reverse keys))))))
 
 (add-method
@@ -556,7 +629,7 @@ runs out before the DONE? test causes an exit."
  (dylan%function->method
   one-sequence
   (lambda (seq)
-    (let ((size (dylan-call dylan/size seq)))
+    (let ((size (collection-size seq)))
       (if (not size)
           seq                           ; Must be unbounded range
           (dylan-call dylan/range :from 0 :through (- size 1) :by 1))))))

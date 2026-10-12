@@ -132,11 +132,7 @@ decides; the few remaining differences are listed in
 ## Differences from the 1992 manual
 
 The standard is the manual itself (an annotated copy is in
-`manual/Dylan-1992/`). Thomas's own 1992 list is in
-[`DIFFERENCES`](DIFFERENCES); several of its items — `#key` and `#rest`,
-the case of symbols, sealed and abstract classes, read-only module variables, `remove-slot`,
-`(setter direct-superclasses)`, filtered slots, collection alignment for
-tables, the full set of character names — are no longer differences.
+`manual/Dylan-1992/`).
 
 **Different behavior**
 
@@ -161,7 +157,7 @@ tables, the full set of character names — are no longer differences.
 - `display`, `newline`, `print` and `write-line` (from Thomas).
 - `pp` pretty-prints a Dylan object.
 - `lisp-variable` and `lisp-procedure` reach Common Lisp values and
-  functions from Dylan.
+  functions from Dylan. Lisp's `NIL` arrives as the empty list, not `#f`.
 
 How the Scheme was turned into Common Lisp — naming, the treatment of
 false and the empty list, the reader and printer — is described in
@@ -177,7 +173,6 @@ false and the empty list, the reader and printer — is described in
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
 | `examples-from-book.text` | the raw extraction those were edited from |
 | `README.thomas` | the original 1992 Thomas README |
-| `DIFFERENCES` | Thomas's 1992 list of differences from the book |
 | `RELEASE` | the 1992 release notes |
 | `LICENSE` | Digital's notice, and what it permits |
 

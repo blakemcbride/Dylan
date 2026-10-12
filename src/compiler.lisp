@@ -494,6 +494,7 @@ module its header names (design note 33), or DYLAN-USER."
 (defun really-compile (e module-vars bound-vars multiple-values? continue)
   (let ((binding (and (consp e) (assoc (car e) compilation-functions))))
     (cond
+      ((false? e) (funcall continue 'dylan%false module-vars))
       ((or (null e) (eq e t) (stringp e) (characterp e) (numberp e))
        (funcall continue e module-vars))
       ((or (keyword? e) (and (vectorp e) (not (stringp e))))
@@ -566,7 +567,7 @@ module its header names (design note 33), or DYLAN-USER."
     (while          . compile-while-form)))
 
 (defparameter compiled-sharp-f
-  (really-compile nil '() '() nil
+  (really-compile dylan%false '() '() nil
                   (lambda (compiled free) (declare (ignore free)) compiled)))
 
 (defun compile-and-form (forms module-vars bound-vars really-compile
@@ -576,7 +577,11 @@ module its header names (design note 33), or DYLAN-USER."
       (compile-forms forms module-vars bound-vars really-compile
                      multiple-values?
                      (lambda (code mod-vars)
-                       (funcall continue `(and ,@code) mod-vars)))))
+                       (funcall continue
+                                (cl:reduce (lambda (form rest)
+                                          `(if (true? ,form) ,rest dylan%false))
+                                        code :from-end t)
+                                mod-vars)))))
 
 (defun compile-begin-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
@@ -657,7 +662,7 @@ module its header names (design note 33), or DYLAN-USER."
                                      "DOTIMES: Bad var/count/result list")
     (let ((var (car v/c/r))
           (count-form (cadr v/c/r))
-          (result (if (consp (cddr v/c/r)) (caddr v/c/r) nil)))
+          (result (if (consp (cddr v/c/r)) (caddr v/c/r) dylan%false)))
       (unless (variable-name? var)
         (dylan%error "DOTIMES -- invalid variable" var forms))
       (unless (or (null (cddr v/c/r)) (null (cdddr v/c/r)))
@@ -699,7 +704,9 @@ module its header names (design note 33), or DYLAN-USER."
      collections module-vars bound-vars really-compile nil
      (lambda (compiled-collections module-vars)
        (compile-forms
-        (if (null end-test-and-return-vals) '(nil) end-test-and-return-vals)
+        (if (null end-test-and-return-vals)
+            (list dylan%false)
+            end-test-and-return-vals)
         module-vars (append names bound-vars) really-compile multiple-values?
         (lambda (compiled-et module-vars)
           (compile-forms
@@ -718,7 +725,7 @@ module its header names (design note 33), or DYLAN-USER."
                                       !dylan/next-method))
                   ,(if (null end-test-and-return-vals)
                        `(progn ,@compiled-forms nil)
-                       `(if ,(car compiled-et)
+                       `(if (true? ,(car compiled-et))
                             (dylan%list
                              (lambda ()
                                ,@(if (null (cdr compiled-et))
@@ -746,16 +753,25 @@ module its header names (design note 33), or DYLAN-USER."
           (funcall
            really-compile alter module-vars bound-vars multiple-values?
            (lambda (c-alter module-vars)
-             (funcall continue `(if ,c-pred ,c-conseq ,c-alter)
+             (funcall continue `(if (true? ,c-pred) ,c-conseq ,c-alter)
                       module-vars)))))))))
 
 ;;; COMPILE-METHOD-FORM is in the file comp-method.lisp
 
 (defun compile-or-form (forms module-vars bound-vars really-compile
                         multiple-values? continue)
+  ;; The first true value, or the value(s) of the last form.
   (compile-forms forms module-vars bound-vars really-compile multiple-values?
                  (lambda (code mod-vars)
-                   (funcall continue `(or ,@code) mod-vars))))
+                   (funcall continue
+                            (if (null code)
+                                'dylan%false
+                                (cl:reduce (lambda (form rest)
+                                          (let ((value (gensym "OR")))
+                                            `(let ((,value ,form))
+                                               (if (true? ,value) ,value ,rest))))
+                                        code :from-end t))
+                            mod-vars))))
 
 ;;; Backquote.  The template is turned into a skeleton in which each
 ;;; expression to be evaluated is replaced by a marker holding its index:
@@ -857,11 +873,11 @@ module its header names (design note 33), or DYLAN-USER."
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)
                    (funcall continue
-                            `(if (dylan%not ,(car forms))
+                            `(if (true? ,(car forms))
+                                 dylan%false
                                  (progn ,@(if (null (cdr forms))
-                                              (list nil)
-                                              (cdr forms)))
-                                 nil)
+                                              (list 'dylan%false)
+                                              (cdr forms))))
                             module-vars))))
 
 (defun compile-until-form (forms module-vars bound-vars really-compile
@@ -871,10 +887,10 @@ module its header names (design note 33), or DYLAN-USER."
   (compile-forms forms module-vars bound-vars really-compile nil
                  (lambda (forms module-vars)
                    (funcall continue
-                            `(dylan%while (lambda () (dylan%not ,(car forms)))
+                            `(dylan%while (lambda () (false? ,(car forms)))
                                           (lambda ()
                                             ,@(if (null (cdr forms))
-                                                  (list nil)
+                                                  (list 'dylan%false)
                                                   (cdr forms))))
                             module-vars))))
 
@@ -900,11 +916,11 @@ module its header names (design note 33), or DYLAN-USER."
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)
                    (funcall continue
-                            `(if ,(car forms)
+                            `(if (true? ,(car forms))
                                  (progn ,@(if (null (cdr forms))
-                                              (list nil)
+                                              (list 'dylan%false)
                                               (cdr forms)))
-                                 nil)
+                                 dylan%false)
                             module-vars))))
 
 (defun compile-while-form (forms module-vars bound-vars really-compile
@@ -914,10 +930,10 @@ module its header names (design note 33), or DYLAN-USER."
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)
                    (funcall continue
-                            `(dylan%while (lambda () ,(car forms))
+                            `(dylan%while (lambda () (true? ,(car forms)))
                                           (lambda ()
                                             ,@(if (null (cdr forms))
-                                                  (list nil)
+                                                  (list 'dylan%false)
                                                   (cdr forms))))
                             module-vars))))
 

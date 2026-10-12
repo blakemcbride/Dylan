@@ -103,7 +103,7 @@ continuations, so a CATCH/THROW pair suffices."
 
 (defun dylan%while (test thunk)
   ;; Used for the UNTIL and WHILE special forms
-  (loop while (funcall test) do (funcall thunk) finally (return nil)))
+  (loop while (funcall test) do (funcall thunk) finally (return dylan%false)))
 
 (defun dylan%apply (multiple-values? operator-thunk &rest operand-thunks)
   "Used for combinations.  Forces left-to-right evaluation, and adds an
@@ -145,7 +145,7 @@ initial NIL next-method argument."
       (dylan-call dylan/error "for-each -- not a collection" collection)))
   (collections-iterate fn
                        (lambda (result) (and result (car result)))
-                       nil
+                       dylan%false
                        collections))
 
 (defun dylan%quasi (skeleton values)

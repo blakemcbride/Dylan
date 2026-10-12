@@ -118,9 +118,10 @@
                          ,(funcall ->restriction restriction)))
                      restricted))
        (let* ((!multi-value
+                ;; Variables the values don't reach are bound to #f.
                 (dylan%vector ,@(mapcar (lambda (name)
                                           (declare (ignore name))
-                                          nil)
+                                          'dylan%false)
                                         bound-names)
                               nil))
               (!first-value (funcall !bind-init-form !multi-value)))
@@ -154,7 +155,7 @@
                   (let ((call `(funcall !bind-body !first-value
                                         ,@(mapcar (lambda (name)
                                                     (declare (ignore name))
-                                                    nil)
+                                                    'dylan%false)
                                                   (cdr bound-names))
                                         ,@(if rest-name '('()) '()))))
                     (if (null restricted)
@@ -164,7 +165,7 @@
                                        `(dylan%type-check
                                          ,(if (= (funcall ->offset entry) 0)
                                               '!first-value
-                                              nil)
+                                              'dylan%false)
                                          ,(funcall ->name entry)))
                                      restricted)
                            ,call)))))))))
@@ -345,11 +346,12 @@
                         (dylan%error "slot expander -- no getter name"
                                      pairs)))))
                (setter
-                 (dylan%find-keyword
-                  pairs :setter (lambda ()
-                                  (if (variable-name? getter)
-                                      `(setter ,getter)
-                                      nil))))
+                 (let ((setter (dylan%find-keyword
+                                pairs :setter (lambda ()
+                                                (if (variable-name? getter)
+                                                    `(setter ,getter)
+                                                    nil)))))
+                   (if (false? setter) nil setter)))   ; setter: #f
                (type (dylan%find-keyword pairs :type (lambda () '<object>)))
                (has-initial-value? t))
            (let ((init-value

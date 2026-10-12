@@ -367,11 +367,20 @@ slot vector, the class-data size and the instance-data size."
                   (lambda (subclass) (level-me subclass sublevel))))))
       (level-me <object> 0))))
 
+(defun check-slot-value (slot value)
+  "Chapter 6: a slot's type is enforced by the slot storage itself, so a
+value stored when the slot is initialized is checked as the setter's is."
+  (let ((type (slot.type slot)))
+    (unless (or (null type) (eq type <object>)
+                (eq value *the-uninitialized-slot-value*))
+      (dylan-call dylan/check-type value type))
+    value))
+
 (defun get-initial-slot-value (slot)
   (let ((f (slot.init-function slot)))
-    (cond (f (dylan-call f))
+    (cond (f (check-slot-value slot (dylan-call f)))
           ((not (slot.has-initial-value? slot)) *the-uninitialized-slot-value*)
-          (t (slot.init-value slot)))))
+          (t (check-slot-value slot (slot.init-value slot))))))
 
 (defun initialize-slot! (slot keywords vector which-allocation-types)
   (when (slot.filtered slot)
@@ -386,8 +395,10 @@ slot vector, the class-data size and the instance-data size."
                             (slot.init-keyword slot))))
            (setf (aref vector (slot.data-location slot))
                  (if keyword
-                     (dylan%find-keyword keywords keyword
-                                          (lambda () (get-initial-slot-value slot)))
+                     (check-slot-value
+                      slot
+                      (dylan%find-keyword keywords keyword
+                                          (lambda () (get-initial-slot-value slot))))
                      (get-initial-slot-value slot)))))
         ((class)
          (setf (aref vector (cdr (slot.data-location slot)))
@@ -686,6 +697,11 @@ answer the class precedence list."
 (defun dylan%add-slot (owner type allocation setter getter debug-name
                         init-value has-init-value? init-function init-keyword
                         required-init-keyword)
+  ;; #f given for any of these from Dylan means none.
+  (setf setter (false->nil setter)
+        init-function (false->nil init-function)
+        init-keyword (false->nil init-keyword)
+        required-init-keyword (false->nil required-init-keyword))
   (labels ((figure-data-location (current-class allocation)
              (if (class? current-class)
                  (case allocation      ; CLASS

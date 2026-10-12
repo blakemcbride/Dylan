@@ -54,7 +54,8 @@
                  (lambda () '(method (condition) condition t))))
           (desc (dylan%find-keyword
                  keywords :description
-                 (lambda () '(method (stream) stream nil)))))
+                 ;; Chapter 13: #f when the handler supplies none.
+                 (lambda () dylan%false))))
       (compile-forms
        (list type test desc)
        module-vars bound-vars really-compile nil
@@ -72,7 +73,7 @@
                                   multiple-values? continue)
   (must-be-list-of-at-least-length e 1 "HANDLER-BIND: bad syntax")
   (let ((handler-spec (car e))
-        (form (if (null (cdr e)) nil `(begin ,@(cdr e)))))
+        (form (if (null (cdr e)) dylan%false `(begin ,@(cdr e)))))
     (must-be-list-of-at-least-length
      handler-spec 2 "HANDLER-BIND: bad syntax for handler specification")
     (let ((keywords (cddr handler-spec)))
@@ -122,7 +123,7 @@
                                          (variable->lexical condition))))
                     (funcall
                      really-compile
-                     (if forms `(begin ,@forms) nil) module-vars
+                     (if forms `(begin ,@forms) dylan%false) module-vars
                      (if condition (cons condition bound-vars) bound-vars)
                      multiple-values?
                      (lambda (compiled-function-body module-vars)

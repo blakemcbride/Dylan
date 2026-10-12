@@ -65,8 +65,11 @@
                (dylan-call dylan/error
                            "(make (singleton <generic-function>)) -- required: not supplied"
                            class rest))))
-          (rest? (dylan%find-keyword rest :rest? (lambda () nil)))
-          (keys (dylan%find-keyword rest :key? (lambda () nil))))
+          (rest? (true? (dylan%find-keyword rest :rest?
+                                            (lambda () dylan%false))))
+          (keys (let ((keys (dylan%find-keyword rest :key?
+                                                (lambda () dylan%false))))
+                  (and (true? keys) (or keys t)))))
       (dylan%create-generic-function name nrequired keys rest?)))))
 
 (add-method
@@ -120,7 +123,8 @@
                     (make-param-list `((generic-function ,<generic-function>)
                                        (specializers ,<list>))
                                      nil nil nil)
-                    #'find-method))
+                    (lambda (generic-function specializers)
+                      (or-false (find-method generic-function specializers)))))
 
 (defparameter dylan/generic-function-methods
   (dylan%generic-fn 'generic-function-methods
@@ -175,8 +179,8 @@
     (lambda (multiple-values next-method method)
       (dylan-full-call dylan/values multiple-values next-method
                        (method.nrequired method)
-                       (method.rest? method)
-                       (method.keys method)))))
+                       (bool (method.rest? method))
+                       (or-false (method.keys method))))))
   (add-method
    dylan/function-arguments
    (dylan%dylan-callable->method
@@ -184,8 +188,8 @@
     (lambda (multiple-values next-method generic-function)
       (dylan-full-call dylan/values multiple-values next-method
                        (generic-function.nrequired generic-function)
-                       (generic-function.rest? generic-function)
-                       (generic-function.keys generic-function))))))
+                       (bool (generic-function.rest? generic-function))
+                       (or-false (generic-function.keys generic-function)))))))
 
 (defparameter dylan/make-polar
   (dylan%generic-fn 'make-polar two-reals
@@ -243,13 +247,14 @@
    (make-param-list `((instance ,<object>) (getter ,<generic-function>))
                     nil nil nil)
    (lambda (obj getter)
-     (or (and (instance? obj)
-              (instance.singleton obj)
-              (same-slot-getter-in-slot-vector->slot
-               getter
-               (singleton.extra-slot-descriptors (instance.singleton obj))))
-         (same-slot-getter-in-slot-vector->slot
-          getter (class.slots (get-type obj)))))))
+     (or-false
+      (or (and (instance? obj)
+               (instance.singleton obj)
+               (same-slot-getter-in-slot-vector->slot
+                getter
+                (singleton.extra-slot-descriptors (instance.singleton obj))))
+          (same-slot-getter-in-slot-vector->slot
+           getter (class.slots (get-type obj))))))))
 
 (defparameter dylan/slot-value
   (dylan%generic-fn
@@ -315,7 +320,8 @@
  (dylan%function->method
   (make-param-list `((generic-function ,<generic-function>)) nil nil nil)
   (lambda (generic-function)
-    (set-generic-function.read-only?! generic-function t))))
+    (set-generic-function.read-only?! generic-function t)
+    generic-function)))
 
 (defparameter dylan/seal
   (dylan%generic-fn 'seal one-class

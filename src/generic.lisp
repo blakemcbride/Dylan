@@ -281,7 +281,7 @@
                                    (method.param-list (car remaining-methods)))
                                   (cons t non-req-args))))
                        (apply (car remaining-methods)
-                              multiple-values nil current-args))
+                              multiple-values dylan%false current-args))
                      (apply (car remaining-methods)
                             multiple-values
                             (lambda (multiple-values next-method &rest these-args)

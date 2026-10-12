@@ -18,7 +18,7 @@ which have been removed, and took the name src/ from the first of them.  The
 file correspondence below records where each file came from, and the three
 transcripts those kits produced are kept in reference/.  What is left outside
 this directory is the documentation (../README.md, ../README.thomas,
-../DIFFERENCES, ../RELEASE, ../LICENSE) and the examples
+../RELEASE, ../LICENSE) and the examples
 (../dylan-examples.dyl, ../examples-from-book.text).  ../README.thomas is
 the 1992 Thomas README, and still describes the Scheme directory layout as
 it stood then.
@@ -129,11 +129,19 @@ implementation-specific/X, and the internal compiler temporaries that were
 spelled !HANDLER-CASE:EXIT and the like are now !HANDLER-CASE/EXIT.
 
 Truth.  Thomas was developed on MIT CScheme 7.2, in which #F and '() are
-the same object -- generic.scm even remarks on it.  The class heterarchy
-has no <boolean>; false is simply an instance of <empty-list> (see GET-TYPE
-in runtime-top.lisp).  Common Lisp's NIL therefore models that
-false/empty-list object exactly, and T models #T.  This is what makes the
-translation of the truth-testing code completely mechanical.
+the same object.  The manual makes them distinct -- #f is the only false
+value, and the empty list is true (chapters 3 and 8) -- and so are they
+here.  Dylan lists are Lisp lists, so the empty list is Common Lisp's NIL;
+#f is an object of its own, the value of DYLAN%FALSE, and #t is T.  A
+Dylan value is therefore tested with TRUE? or FALSE?, never with Lisp's own
+IF, and a Lisp truth value handed back to Dylan goes through BOOL (or
+OR-FALSE, for "the object, or #f for none").  The runtime iterates through
+INITIAL-STATE, NEXT-STATE and the other helpers in
+runtime-collections-iterate.lisp, which hand it NIL for the protocol's #f;
+a state of () is carried as +EMPTY-LIST-STATE+ and given back to Dylan as
+().  Compiled code that contains a
+literal #f is written to a file as #.dylan::dylan%false, which reads back
+as the same object.
 
 Records.  Every record type is statically known, so
 portable/record.scm is gone and the six record types are DEFSTRUCTs with
@@ -199,8 +207,11 @@ IMPLEMENTATION-SPECIFIC/EVAL muffles the host compiler's style warnings.
                     DIFFERENCES FROM THE SCHEME VERSION
 
 The regression suite (../dylan-examples.dyl) produces the same values as
-reference/MIT.output except for these.  The first four are where the manual
+reference/MIT.output except for these.  The first five are where the manual
 and Scheme disagree, and the manual is followed:
+
+  * #f and () are different objects, and #f prints as #f.  MIT Scheme
+    printed both as (), and took (whatitis #f) for the empty list.
 
   * Floats print as the manual's examples print them: 9.0 and 0.5 where MIT
     Scheme wrote 9. and .5.  Numbers read as in Common Lisp, so 3. is the

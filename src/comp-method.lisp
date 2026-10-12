@@ -107,7 +107,7 @@
                     ((and (symbolp this-param) (not (null this-param)))
                      (walk (cdr l)
                            (cons (list (name->keyword this-param)
-                                       this-param nil)
+                                       this-param dylan%false)
                                  keys)))
                     ((consp this-param)
                      (cond
@@ -122,7 +122,7 @@
                                 (cond
                                   ((null the-rest)
                                    (walk (cdr l)
-                                         (cons (list the-key variable nil)
+                                         (cons (list the-key variable dylan%false)
                                                keys)))
                                   ((and (consp the-rest)
                                         (null (cdr the-rest)))
@@ -140,7 +140,7 @@
                             ((null the-rest)
                              (walk (cdr l)
                                    (cons (list (name->keyword variable)
-                                               variable nil)
+                                               variable dylan%false)
                                          keys)))
                             ((consp the-rest)
                              (let ((expr (car the-rest))
@@ -191,7 +191,7 @@
   (declare (ignore multiple-values?))   ; No reductions
   (must-be-list-of-at-least-length e 1 "METHOD -- invalid syntax")
   (let ((params (car e))
-        (forms (cdr e)))
+        (forms (or (cdr e) (list dylan%false))))   ; An empty body answers #f
     (parse-method-parameter-list
      params '!next-method
      (lambda (reqs next rest keys)

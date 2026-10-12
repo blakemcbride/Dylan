@@ -85,7 +85,7 @@
    (lambda (index integer)
      (when (minusp index)
        (dylan-call dylan/error "logbit? -- negative index" index integer))
-     (logbitp index integer))))
+     (bool (logbitp index integer)))))
 
 (defparameter dylan/logeqv
   (dylan%generic-fn 'logeqv only-rest-args

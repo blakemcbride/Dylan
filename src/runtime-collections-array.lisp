@@ -57,12 +57,12 @@
     (let* ((dimensions (dylan-call dylan/dimensions array))
            (new-array (dylan-call dylan/make <array> :dimensions dimensions))
            (key-sequence (dylan-call dylan/key-sequence array)))
-      (do ((state (dylan-call dylan/initial-state key-sequence)
-                  (dylan-call dylan/next-state key-sequence state)))
+      (do ((state (initial-state key-sequence)
+                  (next-state key-sequence state)))
           ((not state)
            (dylan-call dylan/as (dylan-call dylan/class-for-copy array)
                        new-array))
-        (let ((key (dylan-call dylan/current-element key-sequence state)))
+        (let ((key (current-element key-sequence state)))
           (dylan-call dylan/setter/element/ new-array key
                       (dylan-call dylan/element array key))))))))
 
@@ -73,17 +73,17 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <array>)
+    (if (true? (dylan-call dylan/instance? collection <array>))
         collection
-        (let* ((size (dylan-call dylan/size collection))
+        (let* ((size (collection-size collection))
                (new-array (dylan-call dylan/make <array> :dimensions (list size)))
                (vector-value (dylan-call dylan/get-array-value new-array)))
-          (do ((state (dylan-call dylan/initial-state collection)
-                      (dylan-call dylan/next-state collection state))
+          (do ((state (initial-state collection)
+                      (next-state collection state))
                (index 0 (+ index 1)))
               ((not state) new-array)
             (setf (aref vector-value index)
-                  (dylan-call dylan/current-element collection state))))))))
+                  (current-element collection state))))))))
 
 ;;;
 ;;; ARRAY SPECIALIZED MAKE
@@ -180,7 +180,7 @@
                (lambda ()
                  (dylan-call dylan/error "make -- array needs dimensions"
                              class rest))))
-            (fill-value (dylan%find-keyword rest :fill (lambda () nil))))
+            (fill-value (dylan%find-keyword rest :fill (lambda () dylan%false))))
         (unless (subclass? (get-type dimensions) <sequence>)
           (dylan-call dylan/error "make -- array dimensions not a sequence"
                       class dimensions))

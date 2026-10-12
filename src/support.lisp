@@ -53,9 +53,9 @@
 (defvar the-unassigned-value '<<the-unassigned-value>>)
 (defvar *the-uninitialized-slot-value* (list '<<uninitialized>>))
 
-(defvar next-method/not-generic t
-  "Passed as the default next-method parameter when not going through the
-generic dispatch mechanism.")
+(defvar next-method/not-generic dylan%false
+  "Passed as the next-method parameter when not going through the generic
+dispatch mechanism: chapter 10 says #next is then #f.")
 
 (defvar *prevalidated-keywords* nil
   "Bound by generic dispatch around the call of the last applicable method,

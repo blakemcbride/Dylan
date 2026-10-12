@@ -57,14 +57,14 @@
   (make-param-list `((class ,(dylan%make-singleton <range>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
-    (if (dylan-call dylan/instance? collection <range>)
+    (if (true? (dylan-call dylan/instance? collection <range>))
         collection
-        (let ((size (dylan-call dylan/size collection)))
+        (let ((size (collection-size collection)))
           (cond ((= size 0) (empty-range))
                 ((= size 1)
                  (dylan-call dylan/range
-                             :from (dylan-call dylan/current-element collection
-                                               (dylan-call dylan/initial-state
+                             :from (current-element collection
+                                               (initial-state
                                                            collection))
                              :size 1))
                 ((minusp size)
@@ -72,30 +72,29 @@
                              "(as (singleton <range>) <collection>) -- internal error.size retured negative number"
                              size class collection))
                 (t
-                 (let* ((state (dylan-call dylan/initial-state collection))
-                        (first (dylan-call dylan/current-element
+                 (let* ((state (initial-state collection))
+                        (first (current-element
                                            collection state))
-                        (state-2 (dylan-call dylan/next-state collection state))
-                        (second (dylan-call dylan/current-element
+                        (state-2 (next-state collection state))
+                        (second (current-element
                                             collection state-2)))
-                   (if (and (dylan-call dylan/subclass? (get-type first) <number>)
-                            (dylan-call dylan/subclass? (get-type second)
-                                        <number>))
+                   (if (and (true? (dylan-call dylan/subclass? (get-type first) <number>))
+                            (true? (dylan-call dylan/subclass? (get-type second)
+                                        <number>)))
                        (let ((step (dylan-call dylan/- second first)))
-                         (loop with state = (dylan-call dylan/next-state
+                         (loop with state = (next-state
                                                         collection state-2)
                                with prev = second
                                do (if state
-                                      (let ((cur (dylan-call
-                                                  dylan/current-element
+                                      (let ((cur (current-element
                                                   collection state)))
-                                        (if (dylan-call dylan/= step
+                                        (if (true? (dylan-call dylan/= step
                                                         (dylan-call dylan/-
-                                                                    cur prev))
+                                                                    cur prev)))
                                             (progn
                                               (setf prev cur)
                                               (setf state
-                                                    (dylan-call dylan/next-state
+                                                    (next-state
                                                                 collection
                                                                 state)))
                                             (return
@@ -179,12 +178,13 @@
                   (step (dylan-call dylan/get-range-step range)))
               ;; An integer: END is on the range's grid (see RANGE).
               (cond
-                ((zerop step) (dylan-call dylan/get-range-count range))
+                ((zerop step)
+                 (or-false (dylan-call dylan/get-range-count range)))
                 (end
                   (if (funcall (if (plusp step) #'< #'>) end start)
                       0
                       (+ (floor (- end start) step) 1)))
-                (t nil))))))
+                (t dylan%false))))))
 
 (add-method dylan/class-for-copy
             (dylan%function->method one-range
@@ -197,25 +197,37 @@
   (lambda (multiple-values next-method val range &rest keys)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method keys '(:test))
-    (let ((test (dylan%find-keyword keys :test (lambda () nil))))
-      (when test
-        (dylan-call
-         dylan/error
-         "(member? <object> <range>) -- test: keyword argument not supported"
-         test)))
-    (let ((start (dylan-call dylan/get-range-start range))
-          (end (dylan-call dylan/get-range-end range))
-          (step (dylan-call dylan/get-range-step range)))
+    ;; Chapter 12 and design note 18: the test defaults to id?.  With id?
+    ;; or = the range's arithmetic answers; any other test is tried on each
+    ;; element, which a finite range has to have.
+    (let ((test (dylan%find-keyword keys :test (lambda () dylan/id?))))
       (cond
-        ((not (numberp val)) nil)
-        ((zerop step)
-         (and (not (eql 0 (dylan-call dylan/get-range-count range)))
-              (= val start)))
+        ((not (or (eq test dylan/id?) (eq test dylan/=)))
+         (if (collection-size range)
+             (bool (iterate-until (lambda (element)
+                                    (true? (dylan-call test val element)))
+                                  range))
+             (dylan-call
+              dylan/error
+              "(member? <object> <range>) -- test: on an unbounded range"
+              test)))
+        ((not (realp val)) dylan%false)
         (t
-          (and (funcall (if (minusp step) #'<= #'>=) val start)
-               (or (not end)
-                   (funcall (if (minusp step) #'>= #'<=) val end))
-               (= 0 (rem (- val start) step)))))))))
+         (let ((start (dylan-call dylan/get-range-start range))
+               (end (dylan-call dylan/get-range-end range))
+               (step (dylan-call dylan/get-range-step range))
+               (same? (if (eq test dylan/=) #'= #'eql)))
+           (bool
+            (if (zerop step)
+                (and (not (eql 0 (dylan-call dylan/get-range-count range)))
+                     (funcall same? val start))
+                (and (funcall (if (minusp step) #'<= #'>=) val start)
+                     (or (not end)
+                         (funcall (if (minusp step) #'>= #'<=) val end))
+                     (let ((k (/ (- (rational val) (rational start))
+                                 (rational step))))
+                       (and (integerp k)
+                            (funcall same? val (+ start (* k step)))))))))))))))
 
 ;;;;
 ;;;; Functions for Sequences (page 104)
@@ -226,12 +238,12 @@
  (dylan%function->method
   one-range-and-an-object
   (lambda (the-range new-element)
-    (unless (dylan-call dylan/subclass?
-                        (dylan-call dylan/object-class new-element) <number>)
+    (unless (true? (dylan-call dylan/subclass?
+                        (dylan-call dylan/object-class new-element) <number>))
       (dylan-call dylan/error
                   "(add <range> <object>) -- new element not a number"
                   the-range new-element))
-    (let ((size (dylan-call dylan/size the-range))
+    (let ((size (collection-size the-range))
           (start (dylan-call dylan/get-range-start the-range))
           (end (dylan-call dylan/get-range-end the-range))
           (step (dylan-call dylan/get-range-step the-range)))
@@ -270,12 +282,12 @@
  (dylan%function->method
   one-range-and-an-object
   (lambda (the-range new-element)
-    (unless (dylan-call dylan/subclass?
-                        (dylan-call dylan/object-class new-element) <number>)
+    (unless (true? (dylan-call dylan/subclass?
+                        (dylan-call dylan/object-class new-element) <number>))
       (dylan-call dylan/error
                   "(add! <range> <object>) -- new element not a number"
                   the-range new-element))
-    (let ((size (dylan-call dylan/size the-range))
+    (let ((size (collection-size the-range))
           (start (dylan-call dylan/get-range-start the-range))
           (end (dylan-call dylan/get-range-end the-range))
           (step (dylan-call dylan/get-range-step the-range)))
@@ -325,7 +337,7 @@
     (dylan%keyword-validate next-method rest '(:count :test))
     (let ((test (dylan%find-keyword rest :test (lambda () dylan/id?)))
           (count (dylan%find-keyword rest :count
-                                     (lambda () (dylan-call dylan/size range)))))
+                                     (lambda () (collection-size range)))))
       (if count
           (dylan-call dylan/remove range value :test test :count count)
           (dylan-call dylan/remove range value :test test))))))
@@ -349,7 +361,7 @@
     (dylan%keyword-validate next-method rest '(:start :end))
     ;; START and END are indices, END exclusive (chapter 12), as for any
     ;; sequence.  (The Scheme took them as element values, END inclusive.)
-    (let* ((size (dylan-call dylan/size range))
+    (let* ((size (collection-size range))
            (start (dylan%find-keyword rest :start (lambda () 0)))
            (end (dylan%find-keyword rest :end (lambda () size)))
            (step (dylan-call dylan/get-range-step range))
@@ -388,7 +400,7 @@
                           (start-2 (dylan-call dylan/get-range-start next-range))
                           (end-2 (dylan-call dylan/get-range-end next-range))
                           (step-2 (dylan-call dylan/get-range-step next-range))
-                          (size (dylan-call dylan/size next-range)))
+                          (size (collection-size next-range)))
                      (unless end-2
                        (dylan-call
                         dylan/error
@@ -401,7 +413,7 @@
                              (progn
                                (dylan-call dylan/set-range-count!
                                            result
-                                           (+ (dylan-call dylan/size result)
+                                           (+ (collection-size result)
                                               size))
                                (pop rest-ranges))
                          (if (and (not (zerop step-1))
@@ -430,7 +442,7 @@
                          "(reverse <range>) -- can't reverse unbounded range"
                          range))
             ((zerop step)
-             (zero-step-range start (dylan-call dylan/size range)))
+             (zero-step-range start (collection-size range)))
             (t (dylan-call dylan/range :from end :through start
                            :by (- step))))))))
 
@@ -462,7 +474,7 @@
              (dylan-call dylan/error
                          "(last <range>) -- no end in sight for this range"
                          range))
-            ((zerop (dylan-call dylan/size range))
+            ((zerop (collection-size range))
              (dylan-call dylan/error "(last <range>) -- range is empty" range))
             (t end))))))
 
@@ -479,9 +491,9 @@
 
 (defun make-zero-step-range (rest)
   (let* ((from (dylan%find-keyword rest :from (lambda () 0)))
-         (up-to (dylan%find-keyword rest :up-to (lambda () nil)))
-         (through (dylan%find-keyword rest :through (lambda () nil)))
-         (size (dylan%find-keyword rest :size (lambda () nil)))
+         (up-to (false->nil (dylan%find-keyword rest :up-to (lambda () nil))))
+         (through (false->nil (dylan%find-keyword rest :through (lambda () nil))))
+         (size (false->nil (dylan%find-keyword rest :size (lambda () nil))))
          (count (if (or (and up-to (not (< from up-to)))
                         (and through (not (<= from through))))
                     0
@@ -504,10 +516,11 @@
     (when (zerop (dylan%find-keyword rest :by (lambda () 1)))
       (return-from range-zero-step (make-zero-step-range rest)))
     (let* ((from (dylan%find-keyword rest :from (lambda () 0)))
-           (up-to (dylan%find-keyword rest :up-to (lambda () nil)))
-           (through (dylan%find-keyword rest :through (lambda () nil)))
+           (up-to (false->nil (dylan%find-keyword rest :up-to (lambda () nil))))
+           (through (false->nil
+                     (dylan%find-keyword rest :through (lambda () nil))))
            (by (dylan%find-keyword rest :by (lambda () 1)))
-           (size (dylan%find-keyword rest :size (lambda () nil)))
+           (size (false->nil (dylan%find-keyword rest :size (lambda () nil))))
            (by-negative? (minusp by))
            ;; The last element each given bound allows.  Chapter 12: the
            ;; range is the largest satisfying every bound given, so the
@@ -542,21 +555,22 @@
           (start-2 (dylan-call dylan/get-range-start range-2))
           (end-2 (dylan-call dylan/get-range-end range-2))
           (step-2 (dylan-call dylan/get-range-step range-2))
-          (size-1 (dylan-call dylan/size range-1))
-          (size-2 (dylan-call dylan/size range-2)))
+          (size-1 (collection-size range-1))
+          (size-2 (collection-size range-2)))
       ;; Equal when their elements are: a range of one element has no
       ;; step to compare.
-      (cond ((or (and size-1 (not size-2))
-                 (and (not size-1) size-2))
-             nil)                       ; One is unbound
-            ((not (and size-1 size-2))  ; Both unbound
-             (and (= start-1 start-2) (= step-1 step-2)))
-            ((/= size-1 size-2) nil)
-            ((= 0 size-1) t)            ; Empty ranges are binary=
-            ((= 1 size-1) (= start-1 start-2))
-            (t (and (= start-1 start-2)
-                    (= step-1 step-2)
-                    (= end-1 end-2))))))))
+      (bool
+       (cond ((or (and size-1 (not size-2))
+                  (and (not size-1) size-2))
+              nil)                      ; One is unbound
+             ((not (and size-1 size-2)) ; Both unbound
+              (and (= start-1 start-2) (= step-1 step-2)))
+             ((/= size-1 size-2) nil)
+             ((= 0 size-1) t)           ; Empty ranges are binary=
+             ((= 1 size-1) (= start-1 start-2))
+             (t (and (= start-1 start-2)
+                     (= step-1 step-2)
+                     (= end-1 end-2)))))))))
 
 ;;
 ;; INTERSECTION of two ranges is a range (chapter 12), and always
@@ -631,22 +645,23 @@
              (general-intersection next-method range-1 range-2 rest))
             ((zero-step? range-1)
              ;; Range-1's elements are kept if its value is in range-2.
-             (if (dylan-call dylan/member?
-                             (dylan-call dylan/get-range-start range-1) range-2)
+             (if (true? (dylan-call dylan/member?
+                                    (dylan-call dylan/get-range-start range-1)
+                                    range-2))
                  (dylan-call dylan/copy-sequence range-1)
                  (empty-range)))
             ((zero-step? range-2)
              (let ((value (dylan-call dylan/get-range-start range-2)))
-               (if (and (dylan-call dylan/member? value range-2)
-                        (dylan-call dylan/member? value range-1))
+               (if (and (true? (dylan-call dylan/member? value range-2))
+                        (true? (dylan-call dylan/member? value range-1)))
                    (dylan-call dylan/range :from value :size 1)
                    (empty-range))))
             ((every (lambda (r)
                       (rationalp (dylan-call dylan/get-range-step r)))
                     (list range-1 range-2))
              (ranges-intersection range-1 range-2))
-            ((and (dylan-call dylan/size range-1)
-                  (dylan-call dylan/size range-2))
+            ((and (collection-size range-1)
+                  (collection-size range-2))
              ;; Float steps: intersect the elements.
              (dylan-call dylan/as <range>
                          (general-intersection next-method range-1 range-2

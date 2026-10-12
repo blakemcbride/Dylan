@@ -147,7 +147,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
                                          (eq condition
                                              (singleton.object handler-type)))
                                     (subclass? condition-type handler-type))
-                                (dylan-call handler-test condition))
+                                (true? (dylan-call handler-test condition)))
                            (let ((handler (cadar frames)))
                              (dylan-mv-call
                               handler multiple-values condition
@@ -178,7 +178,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
          (make-dylan-callable       ; Called if restart attempted
           (lambda (condition next-handler)
             (declare (ignore condition next-handler))
-            (funcall continue nil)))
+            (funcall continue dylan%false)))
          (make-dylan-callable       ; Test: always ready to handle
           (lambda (condition) (declare (ignore condition)) t))
          restart-description
@@ -194,19 +194,19 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
          (make-dylan-callable
           (lambda (condition next-handler)
             (declare (ignore condition next-handler))
-            (funcall continue nil)))
+            (funcall continue dylan%false)))
          (make-dylan-callable
           (lambda (condition) (declare (ignore condition)) t))
          "Continue from breakpoint."
          (lambda ()
            (implementation-specific/enter-debugger
             (make-default-condition args <simple-error> 'break))
-           nil)))))))
+           dylan%false)))))))
 
 (defparameter dylan/check-type
   (make-dylan-callable
    (lambda (value type)
-     (if (not (dylan-call dylan/instance? value type))
+     (if (false? (dylan-call dylan/instance? value type))
          (let ((condition (dylan-call dylan/make <type-error>
                                       :value value :type type)))
            (dylan-call dylan/signal condition))
@@ -224,7 +224,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (dylan%generic-fn
    'default-handler
    (make-param-list `((condition ,<condition>)) nil nil nil)
-   (lambda (condition) (declare (ignore condition)) nil)))
+   (lambda (condition) (declare (ignore condition)) dylan%false)))
 
 (add-method
  dylan/default-handler
@@ -263,7 +263,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
     (implementation-specific/warning
      (dylan-call dylan/condition-format-string warning)
      (dylan-call dylan/condition-format-arguments warning))
-    nil)))
+    dylan%false)))
 
 (add-method
  dylan/default-handler
@@ -309,17 +309,18 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 (defparameter dylan/do-handlers
   (make-dylan-callable
    (lambda (funarg)
+     ;; Chapter 13: the arguments are type, test, function and description.
+     ;; A frame holds them as (type function test description).
      (dolist (frame (implementation-specific/get-dylan-handler-frames))
-       (dylan-call funarg (car frame) (cadr frame)
-                   (caddr frame) (cadddr frame)))
-     ;; No value???
-     nil)
+       (destructuring-bind (type function test description) frame
+         (dylan-call funarg type test function description)))
+     dylan%false)
    1))
 
 (defparameter dylan/return-allowed?
   (dylan%generic-fn 'return-allowed?
                     (make-param-list `((condition ,<condition>)) nil nil nil)
-                    (lambda (condition) (declare (ignore condition)) nil)))
+                    (lambda (condition) (declare (ignore condition)) dylan%false)))
 
 (defparameter dylan/return-description
   (dylan%generic-fn

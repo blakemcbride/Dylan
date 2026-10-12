@@ -101,12 +101,17 @@
             compiler predicate mod-vars bound-vars nil
             (lambda (pred-code mod-vars)
               (if (null consequents)
-                  (funcall continue (list pred-code) mod-vars)
+                  ;; A clause of a test alone answers the test's value.
+                  (funcall continue
+                           `((true? (setq !cond-value ,pred-code))
+                             !cond-value)
+                           mod-vars)
                   (compile-forms consequents mod-vars bound-vars
                                  compiler multiple-values?
                                  (lambda (consequent-code mod-vars)
                                    (funcall continue
-                                            `(,pred-code ,@consequent-code)
+                                            `((true? ,pred-code)
+                                              ,@consequent-code)
                                             mod-vars))))))))
        (compile-remaining-clauses (clauses mod-vars continue)
          (if (null clauses)
@@ -124,7 +129,10 @@
       (dylan%error "COND -- bad syntax" clauses))
     (compile-remaining-clauses clauses module-vars
                                (lambda (clause-code mod-vars)
-                                 (funcall continue `(cond ,@clause-code)
+                                 (funcall continue
+                                          `(let ((!cond-value nil))
+                                             (declare (ignorable !cond-value))
+                                             (cond ,@clause-code))
                                           mod-vars)))))
 
 ;;; CASE
@@ -210,11 +218,12 @@
                                (setf mod-vars new-mod-vars)
                                `(or ,@(mapcar
                                        (lambda (code)
-                                         `(dylan%apply
-                                           nil
-                                           (lambda () !select-test)
-                                           (lambda () !select-target)
-                                           (lambda () ,code)))
+                                         `(true?
+                                           (dylan%apply
+                                            nil
+                                            (lambda () !select-test)
+                                            (lambda () !select-target)
+                                            (lambda () ,code))))
                                        matches)))))
                            (t (dylan%error "SELECT -- bad match list"
                                            clause)))))
@@ -301,10 +310,11 @@
                                     (tagbody
                                      !for/top
                                        (let ,(mapcar #'list vars temps)
-                                         (when ,(car end-code)
+                                         (when ,(and end-code
+                                                     `(true? ,(car end-code)))
                                            (return-from !for
                                              (progn ,@(or (cdr end-code)
-                                                          (list nil)))))
+                                                          (list 'dylan%false)))))
                                          ,@body-code
                                          (setq ,@(mapcan #'list
                                                          temps step-code)))

@@ -99,60 +99,62 @@
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (and (dylan-call dylan/binary= obj1 obj2)
-          (every (lambda (x) (dylan-call dylan/binary= obj1 x)) rest-objs)
-          t))))
+     (bool (and (true? (dylan-call dylan/binary= obj1 obj2))
+                (every (lambda (x) (true? (dylan-call dylan/binary= obj1 x)))
+                       rest-objs))))))
 
 (defparameter dylan//=
   (dylan%function->method
    two-objects
-   (lambda (obj1 obj2) (not (dylan-call dylan/binary= obj1 obj2)))))
+   (lambda (obj1 obj2) (bool (false? (dylan-call dylan/binary= obj1 obj2))))))
 
 (defparameter dylan/<
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (and (dylan-call dylan/binary< obj1 obj2)
-          (let ((prev-obj obj2))
-            (dolist (x rest-objs t)
-              (unless (dylan-call dylan/binary< prev-obj x) (return nil))
-              (setf prev-obj x)))))))
+     (bool (and (true? (dylan-call dylan/binary< obj1 obj2))
+                (let ((prev-obj obj2))
+                  (dolist (x rest-objs t)
+                    (unless (true? (dylan-call dylan/binary< prev-obj x))
+                      (return nil))
+                    (setf prev-obj x))))))))
 
 (defparameter dylan/>=
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (and (not (dylan-call dylan/binary< obj1 obj2))
-          (let ((prev-obj obj2))
-            (dolist (x rest-objs t)
-              (when (dylan-call dylan/binary< prev-obj x) (return nil))
-              (setf prev-obj x)))))))
+     (bool (and (false? (dylan-call dylan/binary< obj1 obj2))
+                (let ((prev-obj obj2))
+                  (dolist (x rest-objs t)
+                    (when (true? (dylan-call dylan/binary< prev-obj x))
+                      (return nil))
+                    (setf prev-obj x))))))))
 
 (defparameter dylan/>
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (and (not (or (dylan-call dylan/binary< obj1 obj2)
-                   (dylan-call dylan/binary= obj1 obj2)))
-          (let ((prev-obj obj2))
-            (dolist (x rest-objs t)
-              (when (or (dylan-call dylan/binary< prev-obj x)
-                        (dylan-call dylan/binary= prev-obj x))
-                (return nil))
-              (setf prev-obj x)))))))
+     (bool (and (not (or (true? (dylan-call dylan/binary< obj1 obj2))
+                         (true? (dylan-call dylan/binary= obj1 obj2))))
+                (let ((prev-obj obj2))
+                  (dolist (x rest-objs t)
+                    (when (or (true? (dylan-call dylan/binary< prev-obj x))
+                              (true? (dylan-call dylan/binary= prev-obj x)))
+                      (return nil))
+                    (setf prev-obj x))))))))
 
 (defparameter dylan/<=
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (and (or (dylan-call dylan/binary< obj1 obj2)
-              (dylan-call dylan/binary= obj1 obj2))
-          (let ((prev-obj obj2))
-            (dolist (x rest-objs t)
-              (unless (or (dylan-call dylan/binary< prev-obj x)
-                          (dylan-call dylan/binary= prev-obj x))
-                (return nil))
-              (setf prev-obj x)))))))
+     (bool (and (or (true? (dylan-call dylan/binary< obj1 obj2))
+                    (true? (dylan-call dylan/binary= obj1 obj2)))
+                (let ((prev-obj obj2))
+                  (dolist (x rest-objs t)
+                    (unless (or (true? (dylan-call dylan/binary< prev-obj x))
+                                (true? (dylan-call dylan/binary= prev-obj x)))
+                      (return nil))
+                    (setf prev-obj x))))))))
 
 (defparameter dylan/always
   (dylan%function->method
@@ -163,7 +165,7 @@
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 &rest others)
-     (every (lambda (x) (id? obj1 x)) others))))
+     (bool (every (lambda (x) (id? obj1 x)) others)))))
 
 (defparameter dylan/min
   (dylan%function->method
@@ -174,7 +176,7 @@
      (let ((min-so-far real1))
        (dolist (x others min-so-far)
          (setf min-so-far
-               (if (dylan-call dylan/binary< min-so-far x) min-so-far x)))))))
+               (if (true? (dylan-call dylan/binary< min-so-far x)) min-so-far x)))))))
 
 (defparameter dylan/max
   (dylan%function->method
@@ -185,7 +187,7 @@
      (let ((max-so-far real1))
        (dolist (x others max-so-far)
          (setf max-so-far
-               (if (not (dylan-call dylan/binary< max-so-far x)) max-so-far x)))))))
+               (if (false? (dylan-call dylan/binary< max-so-far x)) max-so-far x)))))))
 
 (defun reduce (l fn init-value)
   (let ((value init-value))
@@ -219,7 +221,7 @@
   (lambda (multiple-values? next-method &rest values)
     (declare (ignore next-method))
     (if (not multiple-values?)
-        (if (null values) nil (car values))
+        (if (null values) dylan%false (car values))
         (let ((last-loc (- (length multiple-values?) 1)))
           (do ((index 0 (+ index 1))
                (rest values (cdr rest)))
@@ -228,7 +230,8 @@
                multiple-values?)        ; Return vector itself.  See BIND
             (setf (aref multiple-values? index) (car rest)))))))
 
-(defparameter dylan/not (make-dylan-callable #'not 1))
+(defparameter dylan/not
+  (make-dylan-callable (lambda (object) (bool (false? object))) 1))
 
 ;;; Generic functions
 
@@ -302,7 +305,7 @@
        (unless the-slot
          (dylan-call dylan/error "slot-initialized? -- no such slot"
                      instance getter class))
-       (not (eq *the-uninitialized-slot-value*
+       (bool (not (eq *the-uninitialized-slot-value*
                 (case (slot.allocation the-slot)
                   ((virtual constant) 'initialized)
                   ((class) (let ((data-loc (slot.data-location the-slot)))
@@ -315,23 +318,29 @@
                   (t (dylan-call dylan/error
                                  "slot-initialized? -- bad allocation"
                                  (slot.allocation the-slot)
-                                 instance getter class)))))))))
+                                 instance getter class))))))))))
 
 ;;; Arithmetic
 
-(defparameter dylan/odd? (dylan%generic-fn 'odd? one-integer #'oddp))
-(defparameter dylan/even? (dylan%generic-fn 'even? one-integer #'evenp))
-(defparameter dylan/zero? (dylan%generic-fn 'zero? one-number #'zerop))
-(defparameter dylan/positive? (dylan%generic-fn 'positive? one-number #'plusp))
-(defparameter dylan/negative? (dylan%generic-fn 'negative? one-real #'minusp))
+(defparameter dylan/odd?
+  (dylan%generic-fn 'odd? one-integer (boolean-function #'oddp)))
+(defparameter dylan/even?
+  (dylan%generic-fn 'even? one-integer (boolean-function #'evenp)))
+(defparameter dylan/zero?
+  (dylan%generic-fn 'zero? one-number (boolean-function #'zerop)))
+(defparameter dylan/positive?
+  (dylan%generic-fn 'positive? one-number (boolean-function #'plusp)))
+(defparameter dylan/negative?
+  (dylan%generic-fn 'negative? one-real (boolean-function #'minusp)))
 (defparameter dylan/integral?
   ;; True of any number with an integer value, as Scheme's INTEGER?
   ;; (2.0 included).
   (dylan%generic-fn 'integral? one-number
                     (lambda (number)
-                      (or (integerp number)
-                          (and (floatp number)
-                               (ignore-errors (= number (ffloor number))))))))
+                      (bool (or (integerp number)
+                                (and (floatp number)
+                                     (ignore-errors
+                                      (= number (ffloor number)))))))))
 
 ;;; Chapter 14: abs, the trigonometric and hyperbolic functions, exp, log,
 ;;; expt and sqrt are as defined in Common Lisp -- so the square root of an
@@ -432,13 +441,20 @@
   (dylan%generic-fn 'instance?
                     (make-param-list `((object ,<object>) (class ,<class>))
                                      nil nil nil)
-                    (lambda (obj class) (subclass? (get-type obj) class))))
+                    (lambda (obj class) (bool (subclass? (get-type obj) class)))))
+
+;;; Chapters 4, 6 and 13: a singleton is a type too.
+(add-method dylan/instance?
+            (dylan%function->method
+             (make-param-list `((object ,<object>) (type ,<singleton>))
+                              nil nil nil)
+             (lambda (obj type) (bool (id? obj (singleton.object type))))))
 
 (defparameter dylan/subclass?
   (dylan%generic-fn 'subclass?
                     (make-param-list `((class-1 ,<class>) (class-2 ,<class>))
                                      nil nil nil)
-                    #'subclass?))
+                    (boolean-function #'subclass?)))
 
 (defparameter dylan/object-class
   (dylan%generic-fn 'object-class one-object #'get-type))
@@ -451,21 +467,25 @@
                           (class.slots class)))))
 
 (defparameter dylan/slot-getter
-  (dylan%generic-fn 'slot-getter one-slot #'slot.getter))
+  (dylan%generic-fn 'slot-getter one-slot
+                    (lambda (slot) (or-false (slot.getter slot)))))
 (defparameter dylan/slot-setter
-  (dylan%generic-fn 'slot-setter one-slot #'slot.setter))
+  (dylan%generic-fn 'slot-setter one-slot
+                    (lambda (slot) (or-false (slot.setter slot)))))
 (defparameter dylan/slot-type
   (dylan%generic-fn 'slot-type one-slot #'slot.type))
 (defparameter dylan/slot-allocation
   (dylan%generic-fn 'slot-allocation one-slot #'slot.allocation))
 
-(defparameter dylan/binary< (dylan%generic-fn 'binary< two-numbers #'<))
+(defparameter dylan/binary<
+  (dylan%generic-fn 'binary< two-numbers (boolean-function #'<)))
 
 (defparameter dylan/binary=
   ;; Use EQ if the objects are not of the same class.
-  (dylan%generic-fn 'binary= two-objects #'eq))
+  (dylan%generic-fn 'binary= two-objects (boolean-function #'eq)))
 
-(add-method dylan/binary= (dylan%function->method two-numbers #'=))
+(add-method dylan/binary=
+            (dylan%function->method two-numbers (boolean-function #'=)))
 
 (defparameter dylan/as-lowercase
   ;; Takes <character>s or <string>s.
@@ -523,36 +543,35 @@
 
 (add-method dylan/=hash
             (dylan%function->method
-             one-sequence
-             (lambda (sequence)
-               (let ((hash 17))
-                 (iterate-until (lambda (element)
-                                  (setf hash (combine-hash
-                                              hash
-                                              (dylan-call dylan/=hash element)))
-                                  nil)
-                                sequence)
-                 hash))))
-
-(add-method dylan/=hash
-            (dylan%function->method
-             (make-param-list
-              `((collection ,<explicit-key-collection>)) nil nil nil)
+             one-collection
              (lambda (collection)
-               ;; Independent of iteration order, which need not be stable.
+               ;; Collections are = when their keys and elements are
+               ;; (chapter 12), whatever their classes -- a list, a vector
+               ;; and a table can all be = -- so every collection hashes
+               ;; its key/element pairs, independent of iteration order.
+               ;; An unbounded collection is = only to one with the same
+               ;; elements, so its first two elements are enough, and
+               ;; hashing them terminates.
                (let ((hash 0)
-                     (keys (dylan-call dylan/key-sequence collection)))
-                 (iterate-until
-                  (lambda (key)
-                    (setf hash
-                          (logxor hash
-                                  (combine-hash
-                                   (dylan-call dylan/=hash key)
-                                   (dylan-call dylan/=hash
-                                               (dylan-call dylan/element
-                                                           collection key)))))
-                    nil)
-                  keys)
+                     (index 0)
+                     (sequence? (true? (dylan-call dylan/instance? collection
+                                            <sequence>)))
+                     (limit (if (collection-size collection) nil 2)))
+                 (loop for state = (initial-state collection)
+                         then (next-state collection state)
+                       while (and state (or (null limit) (< index limit)))
+                       do (let ((key (if sequence?
+                                         index
+                                         (current-key
+                                                     collection state))))
+                            (setf hash
+                                  (logxor hash
+                                          (combine-hash
+                                           (dylan-call dylan/=hash key)
+                                           (dylan-call dylan/=hash
+                                                       (current-element
+                                                        collection state)))))
+                            (incf index)))
                  hash))))
 
 (defparameter dylan/floor (dylan%generic-fn 'floor one-real nil))
@@ -664,7 +683,8 @@
         (declare (ignore next-method))
         (add-method generic-function method
                     (lambda (new old)
-                      (dylan-mv-call dylan/values multiple-values new old))))))
+                      (dylan-mv-call dylan/values multiple-values
+                                     new (or-false old)))))))
     generic-function))
 
 (defparameter dylan/shallow-copy
@@ -700,10 +720,12 @@
   (dylan%generic-fn 'rationalize one-number #'rationalize))
 
 (defparameter dylan/init-function
-  (dylan%generic-fn 'init-function one-slot #'slot.init-function))
+  (dylan%generic-fn 'init-function one-slot
+                    (lambda (slot) (or-false (slot.init-function slot)))))
 
 (defparameter dylan/init-keyword
-  (dylan%generic-fn 'init-keyword one-slot #'slot.init-keyword))
+  (dylan%generic-fn 'init-keyword one-slot
+                    (lambda (slot) (or-false (slot.init-keyword slot)))))
 
 (defparameter dylan/init-value (dylan%generic-fn 'init-value one-slot nil))
 
@@ -715,7 +737,7 @@
     (declare (ignore next-method))
     (if (slot.has-initial-value? slot)
         (dylan-mv-call dylan/values multiple-values (slot.init-value slot) t)
-        (dylan-mv-call dylan/values multiple-values nil nil)))))
+        (dylan-mv-call dylan/values multiple-values dylan%false dylan%false)))))
 
 (defparameter dylan/applicable-method?
   (dylan%generic-fn
@@ -723,12 +745,11 @@
    (make-param-list `((fn ,<function>)) nil t nil)
    (lambda (fn &rest args)
      ;; METHOD-APPLICABLE? answers a list of specificities; Dylan wants #t.
-     (cond ((dylan%generic-function? fn)
-            (and (any? (lambda (method) (method-applicable? method args))
-                       (generic-function.methods fn))
-                 t))
-           ((dylan%method? fn) (and (method-applicable? fn args) t))
-           (t nil)))))
+     (bool (cond ((dylan%generic-function? fn)
+                  (any? (lambda (method) (method-applicable? method args))
+                        (generic-function.methods fn)))
+                 ((dylan%method? fn) (method-applicable? fn args))
+                 (t nil))))))
 
 (defparameter dylan/apply
   (dylan%generic-fn 'apply (make-param-list `((fn ,<function>)) nil t nil) nil))
@@ -752,7 +773,7 @@
    'as
    (make-param-list `((class ,<class>) (object ,<object>)) nil nil nil)
    (lambda (class obj)
-     (if (dylan-call dylan/instance? obj class)
+     (if (true? (dylan-call dylan/instance? obj class))
          obj
          (dylan-call dylan/error "as -- not specialized for this class type"
                      class obj)))))
@@ -891,7 +912,7 @@
    one-function
    (lambda (fn)
      (make-dylan-callable
-      (lambda (&rest args) (not (dylan-apply fn args)))))))
+      (lambda (&rest args) (bool (false? (dylan-apply fn args))))))))
 
 (defparameter dylan/compose
   (dylan%function->method
@@ -922,7 +943,7 @@
                  do (if (null remaining)
                         (return (dylan-mv-apply current multiple-values args))
                         (let ((value (dylan-apply current args)))
-                          (if value
+                          (if (true? value)
                               (return value)
                               (progn (setf current (car remaining))
                                      (pop remaining)))))))))))
@@ -939,10 +960,10 @@
                  with remaining = rest-fns
                  do (if (null remaining)
                         (return (dylan-mv-apply current multiple-values args))
-                        (if (dylan-apply current args)
+                        (if (true? (dylan-apply current args))
                             (progn (setf current (car remaining))
                                    (pop remaining))
-                            (return nil)))))))))
+                            (return dylan%false)))))))))
 
 (defparameter dylan/curry
   (dylan%function->method

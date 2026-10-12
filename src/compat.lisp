@@ -59,11 +59,58 @@
 ;;;; Truth
 ;;;
 ;;; Thomas was developed on MIT CScheme 7.2, in which #F and '() are the
-;;; same object -- generic.scm even remarks on it ("MIT-Scheme bogosity.
-;;; (eq? #F '()) => #T!!!").  The class heterarchy has no <boolean>: FALSE
-;;; is simply an instance of <empty-list> (see GET-TYPE in runtime-top).
-;;; Common Lisp's NIL therefore models the Thomas false/empty-list object
-;;; exactly, and T models #T.
+;;; same object.  The Dylan manual says otherwise: #f is the only false
+;;; value, and the empty list is true (chapters 3 and 8, footnote 17).  Here
+;;; the empty list is Common Lisp's NIL -- Dylan lists are Lisp lists -- and
+;;; #f is an object of its own, the value of DYLAN%FALSE.  #t is T.
+;;;
+;;; So a Dylan value is tested with TRUE?, never by Lisp's own IF, and a
+;;; Lisp truth value handed to Dylan is turned into #t or #f with BOOL.
+;;; Inside the runtime, Lisp functions that are not seen by Dylan keep
+;;; Lisp's NIL as their false.
+
+(defstruct (dylan-false (:constructor %make-dylan-false ())
+                        (:predicate nil)
+                        (:copier nil)))
+
+(defvar *print-false-for-lisp* nil
+  "True while compiled code is written to a file, so that #f is written
+as a form that reads back as the same object.")
+
+(defmethod print-object ((object dylan-false) stream)
+  (write-string (if *print-false-for-lisp* "#.dylan::dylan%false" "#f")
+                stream))
+
+(defvar dylan%false (%make-dylan-false)
+  "Dylan's #f.")
+
+(defmethod make-load-form ((object dylan-false) &optional environment)
+  (declare (ignore environment))
+  'dylan%false)
+
+(declaim (inline true? false? bool))
+(defun true? (object)
+  "Is the Dylan value OBJECT true -- anything but #f?"
+  (not (eq object dylan%false)))
+(defun false? (object)
+  (eq object dylan%false))
+(defun bool (generalized-boolean)
+  "Dylan's #t or #f for a Lisp truth value."
+  (if generalized-boolean t dylan%false))
+
+(defun or-false (object)
+  "OBJECT, or #f for Lisp's NIL -- for a Lisp function answering an object
+or NIL for none, where Dylan wants the object or #f."
+  (if object object dylan%false))
+
+(defun false->nil (object)
+  "NIL for #f, else OBJECT -- for a Dylan value about to be tested by Lisp."
+  (if (false? object) nil object))
+
+(defun boolean-function (lisp-predicate)
+  "A function answering Dylan's #t or #f where LISP-PREDICATE answers a
+Lisp truth value."
+  (lambda (&rest arguments) (bool (apply lisp-predicate arguments))))
 
 ;;;; Populations
 ;;;
@@ -232,6 +279,7 @@ can vanish while a caller walks it."
     (cond
       ((null object) (out "()"))
       ((eq object t) (out "#t"))
+      ((false? object) (out "#f"))
       ((keywordp object) (format stream "~a:" (dylan-symbol->string object)))
       ((symbolp object) (out (dylan-symbol->string object)))
       ((stringp object)
@@ -361,7 +409,7 @@ their exponent marker (1.5f0), so that they read back as themselves."
 
 (defun dylan-newline (&optional (stream *standard-output*))
   (terpri stream)
-  nil)
+  dylan%false)
 
 (defun dylan-write-line (object &optional (stream *standard-output*))
   (terpri stream)
@@ -375,6 +423,10 @@ their exponent marker (1.5f0), so that they read back as themselves."
     (set-pprint-dispatch 'null
                          (lambda (s x) (declare (ignore x))
                            (write-string "()" s))
+                         2 table)
+    (set-pprint-dispatch 'dylan-false
+                         (lambda (s x) (declare (ignore x))
+                           (write-string "#f" s))
                          2 table)
     (set-pprint-dispatch '(eql t)
                          (lambda (s x) (declare (ignore x))
@@ -639,7 +691,7 @@ introduces the tail of a dotted list."
        (let ((name (concatenate 'string (string ch)
                                 (read-dylan-token-string stream))))
          (cond ((string-equal name "t") t)
-               ((string-equal name "f") nil)
+               ((string-equal name "f") dylan%false)
                ((member name '("key" "rest" "next") :test #'string-equal)
                 (dylan-symbol (canonicalize-string-for-symbol
                                (concatenate 'string "!" name))))
@@ -715,7 +767,8 @@ introduces the tail of a dotted list."
         (dylan-write arg out)))))
 
 (define-condition dylan-condition (error)
-  ((message :initarg :message :initform "" :reader dylan-condition-message)
+  ((offered :initarg :offered :initform nil :reader offered-to-dylan-p)
+   (message :initarg :message :initform "" :reader dylan-condition-message)
    (irritants :initarg :irritants :initform '()
               :reader dylan-condition-irritants))
   (:report (lambda (condition stream)
@@ -726,7 +779,8 @@ introduces the tail of a dotted list."
                            stream))))
 
 (define-condition unhandled-dylan-condition (error)
-  ((dylan-condition :initarg :dylan-condition :reader unhandled-dylan-condition-object))
+  ((offered :initarg :offered :initform t :reader offered-to-dylan-p)
+   (dylan-condition :initarg :dylan-condition :reader unhandled-dylan-condition-object))
   (:report (lambda (condition stream)
              (write-string "Unhandled Dylan condition: " stream)
              (dylan-write (unhandled-dylan-condition-object condition) stream))))
@@ -759,11 +813,13 @@ native Lisp one.")
 
 (defun implementation-specific/induce-error (format-string format-args)
   (error 'dylan-condition
+         :offered t
          :message format-string
          :irritants format-args))
 
 (defun implementation-specific/induce-type-error (value class-name)
   (error 'dylan-condition
+         :offered t
          :message "~s is not an instance of ~a"
          :irritants (list value class-name)))
 
@@ -786,7 +842,16 @@ handlers."
   ;; A handler that returns normally declines, and the condition goes on to
   ;; the next Lisp handler -- which is what
   ;; IMPLEMENTATION-SPECIFIC/LET-LISP-HANDLE-IT relies on.
-  (handler-bind ((error handler))
+  ;;
+  ;; A Lisp error raised by a Dylan default handler has already been
+  ;; offered to every Dylan handler, which all declined (chapter 13), so it
+  ;; is not reflected back into Dylan a second time.
+  (handler-bind ((error (lambda (condition)
+                          (unless (and (typep condition
+                                              '(or dylan-condition
+                                                   unhandled-dylan-condition))
+                                       (offered-to-dylan-p condition))
+                            (funcall handler condition)))))
     (funcall thunk)))
 
 (defun implementation-specific/get-error-message (condition)
@@ -835,7 +900,8 @@ can be read back."
         (*print-right-margin* 79)
         (*print-readably* nil)
         (*print-pretty* t)
-        (*package* (find-package '#:dylan)))
+        (*package* (find-package '#:dylan))
+        (*print-false-for-lisp* t))
     (pprint object stream))
   object)
 

@@ -55,12 +55,12 @@
   (lambda (table)
     (let* ((new-table (dylan-call dylan/make <table>))
            (key-sequence (dylan-call dylan/key-sequence table)))
-      (do ((state (dylan-call dylan/initial-state key-sequence)
-                  (dylan-call dylan/next-state key-sequence state)))
+      (do ((state (initial-state key-sequence)
+                  (next-state key-sequence state)))
           ((not state)
            (dylan-call dylan/as (dylan-call dylan/class-for-copy table)
                        new-table))
-        (let ((key (dylan-call dylan/current-element key-sequence state)))
+        (let ((key (current-element key-sequence state)))
           (dylan-call dylan/setter/element/ new-table key
                       (dylan-call dylan/element table key))))))))
 
@@ -71,14 +71,14 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (if (dylan-call dylan/instance? collection <table>)
+    (if (true? (dylan-call dylan/instance? collection <table>))
         collection
         (let ((table (dylan-call dylan/make <table>))
               (key-sequence (dylan-call dylan/key-sequence collection)))
-          (do ((state (dylan-call dylan/initial-state key-sequence)
-                      (dylan-call dylan/next-state key-sequence state)))
+          (do ((state (initial-state key-sequence)
+                      (next-state key-sequence state)))
               ((not state) table)
-            (let ((cur-element (dylan-call dylan/current-element
+            (let ((cur-element (current-element
                                            key-sequence state)))
               (dylan-call dylan/setter/element/ table cur-element
                           (dylan-call dylan/element collection
@@ -117,7 +117,7 @@
   "Use DYLAN/BINARY= to compare keys."
   (loop for rest-alist = alist then (cdr rest-alist)
         do (if rest-alist
-               (when (dylan-call dylan/binary= key (caar rest-alist))
+               (when (true? (dylan-call dylan/binary= key (caar rest-alist)))
                  (return (car rest-alist)))
                (return nil))))
 
@@ -157,9 +157,48 @@ REMAINDER, never answers a negative index."
                  (match (dylan-assoc key hash-entry)))
             (if match
                 (setf (cdr match) (list new-value))
-                (setf (aref hash-table hash-index)
-                      (cons (list key new-value) hash-entry)))
+                (progn
+                  (setf (aref hash-table hash-index)
+                        (cons (list key new-value) hash-entry))
+                  (when (> (length hash-entry) 8)
+                    (maybe-grow-table table hash-table))))
             new-value))))))
+
+(defun maybe-grow-table (table hash-table)
+  "Double TABLE's bucket vector once it holds more entries than buckets, so
+that buckets stay short.  Not done when one bucket is long only because
+many keys share a hash code; growing would not help them."
+  (when (> (loop for bucket across hash-table sum (length bucket))
+           (length hash-table))
+    (let ((new-table (make-array (* 2 (length hash-table))
+                                 :initial-element '())))
+      (loop for bucket across hash-table
+            do (dolist (entry bucket)
+                 (push entry (aref new-table
+                                   (table-bucket new-table (car entry))))))
+      (dylan-call dylan/set-hash-table! table new-table))))
+
+;;; Chapter 12 calls a table a hashtable: ELEMENT looks in the key's bucket
+;;; rather than leaving it to the linear search of the generic
+;;; <explicit-key-collection> method.
+(add-method
+ dylan/element
+ (dylan%dylan-callable->method
+  (make-param-list `((table ,<table>) (key ,<object>)) nil nil '(:default))
+  (lambda (multiple-values next-method table key &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:default))
+    (let* ((hash-table (dylan-call dylan/get-hash-table table))
+           (match (dylan-assoc key (aref hash-table
+                                         (table-bucket hash-table key)))))
+      (if match
+          (cadr match)
+          (dylan%find-keyword
+           rest :default
+           (lambda ()
+             (dylan-call dylan/error
+                         "element -- no such element in collection"
+                         table key rest))))))))
 
 (defun grow-vector-by (v increase)
   (let ((new-v (make-array (+ (length v) increase))))
@@ -184,11 +223,11 @@ REMAINDER, never answers a negative index."
                    (pop rest-coll))
                  (let ((all-collections (cons coll-1 rest)))
                    (return
-                     (do ((state (dylan-call dylan/initial-state key-sequence)
-                                 (dylan-call dylan/next-state key-sequence
+                     (do ((state (initial-state key-sequence)
+                                 (next-state key-sequence
                                              state)))
                          ((not state) table)
-                       (let ((current-key (dylan-call dylan/current-element
+                       (let ((current-key (current-element
                                                       key-sequence state)))
                          (dylan-call
                           dylan/setter/element/
@@ -210,5 +249,5 @@ REMAINDER, never answers a negative index."
                    nil nil nil)
   (lambda (table state new-value)
     (dylan-call dylan/setter/element/ table
-                (dylan-call dylan/current-key table state)
+                (current-key table state)
                 new-value))))

@@ -102,7 +102,7 @@
         ;; checked again here against this method's alone, so a keyword
         ;; meant for a more specific method was rejected once that method
         ;; reached this one through NEXT-METHOD.)
-        ((and (null next-method)
+        ((and (false? next-method)
               *prevalidated-keywords*
               (equal arglist (cdr *prevalidated-keywords*)))
          (setf *prevalidated-keywords* nil)

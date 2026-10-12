@@ -246,7 +246,29 @@ initial NIL next-method argument."
   (add-method generic-function method))
 (defun dylan%null? (x) (null x))                        ; COND
 
+(defvar *fast-iterate-vector* nil)
+(defvar *fast-iterate-list* nil)
+
 (defun dylan%for-each (fn &rest collections)
+  ;; A single simple vector or proper list is walked directly while no
+  ;; method of the iteration protocol but the predefined ones could apply
+  ;; to it (see runtime-fast-paths.lisp).
+  (let ((collection (car collections)))
+    (when (null (cdr collections))
+      (flet ((visit (element)
+               (let ((result (funcall fn nil next-method/not-generic element)))
+                 (when (and result (car result))
+                   (return-from dylan%for-each (funcall (car result)))))))
+        (cond ((and (simple-vector-p collection) *fast-iterate-vector*)
+               (dotimes (i (length collection))
+                 (visit (svref collection i)))
+               (return-from dylan%for-each dylan%false))
+              ((and (listp collection) *fast-iterate-list*
+                    (>= (dylan-list-length collection) 0))
+               (loop for tail = collection then (cdr tail)
+                     while (consp tail)
+                     do (visit (car tail)))
+               (return-from dylan%for-each dylan%false))))))
   (dolist (collection collections)
     (unless (subclass? (get-type collection) <collection>)
       (dylan-call dylan/error "for-each -- not a collection" collection)))

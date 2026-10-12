@@ -95,6 +95,10 @@
 
 (defvar *method-data* (make-oned-table))
 
+(defvar *last-function-type* (cons nil nil)
+  "The last function GET-TYPE was asked about, and its class (see
+FUNCTION-TYPE in runtime-top.lisp).")
+
 (defun method-data (method)
   (let ((data (oned-table/get *method-data* method nil)))
     (if (not data)
@@ -112,6 +116,7 @@
 
 (defun dylan%make-method (param-list method)
   (oned-table/put! *method-data* method (guarantee-param-list param-list))
+  (setf *last-function-type* (cons nil nil)) ; see FUNCTION-TYPE
   method)
 
 (defvar *dispatch-entries* (make-oned-table)
@@ -159,8 +164,7 @@ checked them; a direct call (next-method #f) is checked here."
   (cache nil)                           ; see CACHED-APPLICABLE-METHODS
   (cache-epoch 0)
   (cache-singletons nil)
-  (fast-path-guards '())                ; see DYLAN%CALL in runtime-internal
-  (fast-path-classes '()))
+  (fast-paths '()))                     ; see CHECK-FAST-PATH
 
 (defvar *generic-function-data* (make-oned-table))
 
@@ -309,8 +313,8 @@ argument) and just one applies, what to call for it; else NIL."
                                                           ,argument)
                                             ,table))
                     when more collect `(hash-table-p ,table))
-            (null (cddr ,table))
-            (cadr ,table)))))
+            (null (cdar ,table))
+            (caar ,table)))))
 
 (defun dylan%create-generic-function (name nrequired keys rest?)
   (let ((data (make-generic-function-data name
@@ -354,6 +358,7 @@ argument) and just one applies, what to call for it; else NIL."
                  (generic-dispatch (car args) (cddr args)
                                    generic-function data)))))
     (oned-table/put! *generic-function-data* generic-function data)
+    (setf *last-function-type* (cons nil nil)) ; see FUNCTION-TYPE
     generic-function))
 
 ;;;; Generic Dispatch
@@ -367,8 +372,8 @@ argument) and just one applies, what to call for it; else NIL."
                   "generic-dispatch -- too few arguments supplied"
                   nreq original-args))
     (let* ((applicable (cached-applicable-methods data original-args))
-           (applicable-methods (car applicable))
-           (entries (cdr applicable)))
+           (entries (car applicable))
+           (applicable-methods (cadr applicable)))
       ;; The usual case: the required arguments only, and one method.
       (when (and (= ngiven nreq) entries (null (cdr entries)))
         (return-from generic-dispatch
@@ -390,7 +395,7 @@ argument) and just one applies, what to call for it; else NIL."
                   (validate-keywords non-req-args t
                                      (lambda (&rest args)
                                        (dylan-apply dylan/error args))))
-                (check-handled-keywords non-req-args applicable-methods))
+                (check-handled-keywords non-req-args (cddr applicable)))
               (dylan-call dylan/error
                           "generic-dispatch -- too many arguments supplied"
                           generic-function nreq original-args))))
@@ -411,7 +416,9 @@ argument) and just one applies, what to call for it; else NIL."
                             current-args))))
         (next-method-loop entries multiple-values original-args)))))
 
-(defun check-handled-keywords (non-req-args methods)
+(defun handled-keywords (methods)
+  "What CHECK-HANDLED-KEYWORDS allows for a call to which METHODS apply:
+:ANY, T for keyword/value pairs with any keywords, or a list of keywords."
   ;;   gather the keywords for all of the applicable methods
   ;;   if ALL methods specify !rest without !key then the call is allowable
   ;;   if ANY method specifies !rest (or !key with no specific keys), then
@@ -436,20 +443,26 @@ argument) and just one applies, what to call for it; else NIL."
                   ((consp keys)
                    (setf keywords (append keys keywords))))
             (pop methods))
-          (return
-            (cond (all-!rest? 'ok)
-                  (any-!key? (dylan%keyword-validate t non-req-args t))
-                  (t (dylan%keyword-validate t non-req-args keywords))))))))
+          (return (cond (all-!rest? :any)
+                        (any-!key? t)
+                        (t keywords)))))))
+
+(defun check-handled-keywords (non-req-args handled-keywords)
+  (if (eq handled-keywords :any)
+      'ok
+      (dylan%keyword-validate t non-req-args handled-keywords)))
 
 ;;;; Fast paths
 ;;;;
 ;;;; Calls of a few predefined functions on Lisp numbers and simple vectors
-;;;; are compiled inline (see DYLAN%CALL in runtime-internal.lisp), guarded
-;;;; by variables that stay true only while the generic functions behind
-;;;; them have no method but the predefined ones that could apply to those
-;;;; arguments.  FAST-PATH-GUARDS are the variables a generic function's
-;;;; methods guard.  FAST-PATH-CLASSES holds, for each leading required
-;;;; argument, the classes of the arguments the fast path handles.
+;;;; are compiled inline (see DYLAN%CALL in runtime-internal.lisp), and
+;;;; FOR-EACH over a simple vector or a list is done directly (see
+;;;; DYLAN%FOR-EACH there).  Each fast path is guarded by a variable that
+;;;; stays true only while the generic functions behind it have no method
+;;;; but the predefined ones that could apply to its arguments.  A generic
+;;;; function's FAST-PATHS are entries (GUARD CLASSES), where CLASSES holds,
+;;;; for each leading required argument, the classes of the arguments that
+;;;; fast path handles.
 
 (defun method-touches-fast-path? (method fast-path-classes)
   (loop for specializer in (method.specializers method)
@@ -460,11 +473,9 @@ argument) and just one applies, what to call for it; else NIL."
                          classes))))
 
 (defun check-fast-path (data method)
-  (when (and (generic-function-data.fast-path-guards data)
-             (method-touches-fast-path?
-              method (generic-function-data.fast-path-classes data)))
-    (dolist (guard (generic-function-data.fast-path-guards data))
-      (setf (symbol-value guard) nil))))
+  (loop for (guard classes) in (generic-function-data.fast-paths data)
+        when (method-touches-fast-path? method classes)
+          do (setf (symbol-value guard) nil)))
 
 ;;;; Caching applicable methods.
 ;;;;
@@ -478,20 +489,26 @@ argument) and just one applies, what to call for it; else NIL."
 ;;;; precedence list changes (*CLASS-STRUCTURE-EPOCH*).
 
 (defun singleton-objects-by-position (methods nrequired)
-  "A vector holding, for each required argument, the list of objects that
-singleton specializers of METHODS name in that position."
-  (let ((objects (make-array nrequired :initial-element '())))
+  "A vector holding, for each required argument, NIL or an EQL table
+mapping each object that singleton specializers of METHODS name in that
+position to an index of its own."
+  (let ((objects (make-array nrequired :initial-element nil)))
     (dolist (method methods objects)
       (loop for specializer in (method.specializers method)
             for i from 0 below nrequired
             when (singleton? specializer)
-              do (pushnew (singleton.object specializer) (aref objects i)
-                          :test #'id?)))))
+              do (let ((table (or (aref objects i)
+                                  (setf (aref objects i)
+                                        (make-hash-table :test 'eql)))))
+                   (unless (nth-value 1 (gethash (singleton.object specializer)
+                                                 table))
+                     (setf (gethash (singleton.object specializer) table)
+                           (hash-table-count table))))))))
 
 (declaim (inline dispatch-key))
 (defun dispatch-key (singletons i argument)
   (let ((objects (svref singletons i)))
-    (or (and objects (position argument objects :test #'id?))
+    (or (and objects (values (gethash argument objects)))
         (get-type argument))))
 
 (defun dispatch-cache (data)
@@ -510,8 +527,9 @@ singleton specializers of METHODS name in that position."
               (make-hash-table :test 'eq)))))
 
 (defun cached-applicable-methods (data arguments)
-  "The applicable methods for ARGUMENTS, sorted, consed onto the list of
-what to call for each (see DISPATCH-ENTRY)."
+  "For ARGUMENTS, (ENTRIES METHODS . HANDLED-KEYWORDS): the applicable
+methods, sorted, what to call for each (see DISPATCH-ENTRY), and what
+HANDLED-KEYWORDS answers for them."
   (let ((table (dispatch-cache data)))
     (let ((singletons (generic-function-data.cache-singletons data))
           (last (1- (generic-function-data.nrequired data)))
@@ -533,7 +551,9 @@ what to call for each (see DISPATCH-ENTRY)."
                   (let ((methods (sorted-applicable-methods
                                   (generic-function-data.methods data)
                                   arguments)))
-                    (cons methods (mapcar #'dispatch-entry methods)))))))))
+                    (list* (mapcar #'dispatch-entry methods)
+                           methods
+                           (handled-keywords methods)))))))))
 
 ;;;; Finding and sorting applicable methods.
 

@@ -96,18 +96,45 @@
   "The Dylan form of a state the runtime holds."
   (if (eq state +empty-list-state+) '() state))
 
+;;; While no method but the predefined ones could apply to a list or a
+;;; simple vector (*FAST-ITERATE-LIST* and *FAST-ITERATE-VECTOR*, see
+;;; runtime-fast-paths.lisp), INITIAL-STATE, NEXT-STATE and CURRENT-ELEMENT
+;;; do for one what its predefined methods do, making the same states: the
+;;; pair itself for a list, and a vector of one index for a simple vector.
+
 (defun initial-state (collection)
-  (lisp-state (dylan-call dylan/initial-state collection)))
+  (cond ((and (listp collection) *fast-iterate-list*)
+         (if (consp collection) collection nil))
+        ((and (simple-vector-p collection) *fast-iterate-vector*)
+         (if (plusp (length collection)) (vector 0) nil))
+        (t (lisp-state (dylan-call dylan/initial-state collection)))))
 (defun final-state (collection)
   (lisp-state (dylan-call dylan/final-state collection)))
 (defun next-state (collection state)
-  (lisp-state (dylan-call dylan/next-state collection (dylan-state state))))
+  (cond ((and (listp collection) *fast-iterate-list*)
+         (and (consp state) (cdr state)))
+        ((and (simple-vector-p collection) *fast-iterate-vector*
+              (simple-vector-p state) (= (length state) 1)
+              (typep (svref state 0) 'fixnum)
+              (< (svref state 0) (length collection)))
+         (let ((next (1+ (svref state 0))))
+           (if (< next (length collection)) (vector next) nil)))
+        (t (lisp-state (dylan-call dylan/next-state collection
+                                   (dylan-state state))))))
 (defun previous-state (collection state)
   (lisp-state (dylan-call dylan/previous-state collection (dylan-state state))))
 (defun copy-state (collection state)
   (lisp-state (dylan-call dylan/copy-state collection (dylan-state state))))
 (defun current-element (collection state)
-  (dylan-call dylan/current-element collection (dylan-state state)))
+  (cond ((and (listp collection) *fast-iterate-list*)
+         (if (consp state) (car state) state))
+        ((and (simple-vector-p collection) *fast-iterate-vector*
+              (simple-vector-p state) (= (length state) 1)
+              (typep (svref state 0) 'fixnum)
+              (< -1 (svref state 0) (length collection)))
+         (svref collection (svref state 0)))
+        (t (dylan-call dylan/current-element collection
+                       (dylan-state state)))))
 (defun current-key (collection state)
   (dylan-call dylan/current-key collection (dylan-state state)))
 (defun set-current-element (collection state new-value)

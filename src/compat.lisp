@@ -120,12 +120,30 @@ Lisp truth value."
 ;;; kept in a weak EQ hash table, each with a serial number, so adding one
 ;;; costs constant time; mapping runs newest first, as in the Scheme.
 ;;; Without weak tables (other than SBCL) members are simply never dropped.
+;;;
+;;; An object known not to be a member yet -- a new instance -- is added
+;;; with ADD-NEW-TO-POPULATION!, which skips the table (SBCL locks a weak
+;;; table on every access) and pushes (SERIAL . WEAK-POINTER) onto FRESH.
+;;; FRESH is cleared of dead entries when it has grown to twice its length
+;;; after the last clearing.
 
 (defstruct (population (:constructor %make-population ())
                        (:print-object print-opaque-object))
   (table #+sbcl (make-hash-table :test 'eq :weakness :key :synchronized nil)
          #-sbcl (make-hash-table :test 'eq))
-  (serial 0 :type fixnum))
+  (serial 0 :type fixnum)
+  (fresh '())
+  (fresh-count 0 :type fixnum)
+  (fresh-limit 1024 :type fixnum))
+
+(defun make-weak-reference (object)
+  #+sbcl (sb-ext:make-weak-pointer object)
+  #-sbcl object)
+
+(defun weak-reference-value (reference)
+  "The object REFERENCE holds, or NIL if it has been collected."
+  #+sbcl (values (sb-ext:weak-pointer-value reference))
+  #-sbcl reference)
 
 (defun globally-special-p (symbol)
   "True if SYMBOL is proclaimed special (or global), so that binding it
@@ -143,6 +161,9 @@ can vanish while a caller walks it."
   (let ((pairs '()))
     (maphash (lambda (object serial) (push (cons serial object) pairs))
              (population-table population))
+    (dolist (entry (population-fresh population))
+      (let ((object (weak-reference-value (cdr entry))))
+        (when object (push (cons (car entry) object) pairs))))
     (mapcar #'cdr (sort pairs #'> :key #'car))))
 
 (defun add-to-population! (population object)
@@ -151,8 +172,31 @@ can vanish while a caller walks it."
       (setf (gethash object table) (incf (population-serial population)))))
   population)
 
+(defun add-new-to-population! (population object)
+  "Add OBJECT, which is not a member of POPULATION."
+  (push (cons (incf (population-serial population))
+              (make-weak-reference object))
+        (population-fresh population))
+  (when (> (incf (population-fresh-count population))
+           (population-fresh-limit population))
+    (let ((live (delete-if-not (lambda (entry)
+                                 (weak-reference-value (cdr entry)))
+                               (population-fresh population))))
+      (setf (population-fresh population) live
+            (population-fresh-count population) (length live)
+            (population-fresh-limit population)
+            (max 1024 (* 2 (length live))))))
+  population)
+
 (defun remove-from-population! (population object)
   (remhash object (population-table population))
+  (when (population-fresh population)
+    (setf (population-fresh population)
+          (delete-if (lambda (entry)
+                       (eq (weak-reference-value (cdr entry)) object))
+                     (population-fresh population))
+          (population-fresh-count population)
+          (length (population-fresh population))))
   population)
 
 (defun map-over-population (population procedure)

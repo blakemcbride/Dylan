@@ -277,7 +277,7 @@
                             (initialize-slot! slot rest instance-data
                                               '(instance)))))
         (let ((result (make-dylan-instance class nil instance-data)))
-          (add-to-population! (class.instances class) result)
+          (add-new-to-population! (class.instances class) result)
           (dylan-apply dylan/initialize result rest)
           result)))))
 

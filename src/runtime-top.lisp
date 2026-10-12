@@ -46,6 +46,23 @@
 
 (in-package #:dylan)
 
+;;; Whether a function is a generic function or a method is looked up in
+;;; weak tables, which SBCL locks on every access; a loop calling one
+;;; function over and over (MAP's or REDUCE's argument, say) asks about the
+;;; same one each time, so the last answer is kept.  Making a method or a
+;;; generic function forgets it (DYLAN%MAKE-METHOD and
+;;; DYLAN%CREATE-GENERIC-FUNCTION).
+
+(defun function-type (fn)
+  (let ((last *last-function-type*))
+    (if (eq (car last) fn)
+        (cdr last)
+        (let ((type (cond ((dylan%generic-function? fn) <generic-function>)
+                          ((dylan%method? fn) <method>)
+                          (t <function>))))
+          (setf *last-function-type* (cons fn type))
+          type))))
+
 (defun get-type (obj)
   (cond ((instance? obj) (instance.class obj))
         ((numberp obj)
@@ -68,10 +85,7 @@
         ((stringp obj) <byte-string>)
         ((vectorp obj) <simple-object-vector>)
         ((characterp obj) <character>)
-        ((functionp obj)
-         (cond ((dylan%generic-function? obj) <generic-function>)
-               ((dylan%method? obj) <method>)
-               (t <function>)))
+        ((functionp obj) (function-type obj))
         ((keyword? obj) <keyword>)
         ((symbolp obj) <symbol>)
         (t <object>)))

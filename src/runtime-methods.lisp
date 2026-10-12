@@ -759,7 +759,8 @@
  (dylan%dylan-callable->method
   (make-param-list `((fn ,<function>)) nil t nil)
   (lambda (multiple-values next-method fn &rest args)
-    (dylan-full-apply fn multiple-values next-method
+    (declare (ignore next-method))
+    (dylan-full-apply fn multiple-values next-method/not-generic
                       (split-last
                        args
                        (lambda (early end)

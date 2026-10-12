@@ -114,6 +114,26 @@
   (oned-table/put! *method-data* method (guarantee-param-list param-list))
   method)
 
+(defun dylan%make-compiled-method (param-list lambda)
+  "The method of a Dylan METHOD form.  Chapter 6: a method can be called
+only with arguments that match its specializers.  Generic dispatch has
+checked them; a direct call (next-method #f) is checked here."
+  (let ((specializers (param-list.specializers param-list))
+        (method nil))
+    (setf method
+          (lambda (multiple-values next-method &rest arguments)
+            (cond ((eq next-method next-method/last-applicable)
+                   (setf next-method dylan%false))
+                  ((functionp next-method))
+                  (t (loop for specializer in specializers
+                           for rest on arguments
+                           unless (match-specializer? (car rest) specializer)
+                             do (dylan-call dylan/error
+                                            "method called with an argument that does not match its specializer"
+                                            (car rest) specializer method))))
+            (apply lambda multiple-values next-method arguments)))
+    (dylan%make-method param-list method)))
+
 (defun guarantee-param-list (param-list)
   (if (param-list? param-list)
       param-list
@@ -281,7 +301,8 @@
                                    (method.param-list (car remaining-methods)))
                                   (cons t non-req-args))))
                        (apply (car remaining-methods)
-                              multiple-values dylan%false current-args))
+                              multiple-values next-method/last-applicable
+                              current-args))
                      (apply (car remaining-methods)
                             multiple-values
                             (lambda (multiple-values next-method &rest these-args)

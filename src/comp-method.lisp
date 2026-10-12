@@ -219,7 +219,7 @@
                (flet ((generate (mod-vars validation-code)
                         (funcall
                          continue
-                         `(dylan%make-method
+                         `(dylan%make-compiled-method
                            (dylan%make-param-list
                             (dylan%list
                              ,@(mapcar (lambda (name code)

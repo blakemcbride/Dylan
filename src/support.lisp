@@ -57,6 +57,11 @@
   "Passed as the next-method parameter when not going through the generic
 dispatch mechanism: chapter 10 says #next is then #f.")
 
+(defvar next-method/last-applicable (make-symbol "LAST-APPLICABLE-METHOD")
+  "Passed by generic dispatch as the next-method parameter of the last
+applicable method.  A compiled method's #next is then #f, as for a direct
+call, but the method knows its arguments were checked by the dispatch.")
+
 (defvar *prevalidated-keywords* nil
   "Bound by generic dispatch around the call of the last applicable method,
 when that method takes keywords, to the keyword arguments it has already

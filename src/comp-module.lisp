@@ -113,6 +113,17 @@ it has there."
         (values (car import) (cdr import))
         (values module symbol))))
 
+(defun check-not-imported (dylan-variable form-name)
+  "Chapter 5: a module may not create a variable under a name it imports;
+the conflict is an error, which cancels the definition."
+  (let ((symbol (if (consp dylan-variable) (cadr dylan-variable) dylan-variable)))
+    (unless (or (gethash symbol *resolved-names*) (dylan-special-name? symbol))
+      (let ((owner (resolve-symbol (find-module *current-module*) symbol)))
+        (unless (eq (module.name owner) *current-module*)
+          (dylan%error (concatenate 'string form-name
+                                    " -- the variable is imported from module")
+                       dylan-variable (module.name owner)))))))
+
 (defun resolve-variable-name (dylan-variable)
   "The Lisp name of the variable DYLAN-VARIABLE -- a symbol or (SETTER
 symbol) -- refers to in the current module."

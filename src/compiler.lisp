@@ -635,6 +635,7 @@ module its header names (design note 33), or DYLAN-USER."
         (value (cadr forms)))
     (unless (variable-name? name)
       (dylan%error "bad DEFINE variable" forms))
+    (check-not-imported name "DEFINE")
     (funcall really-compile value
              (add-module-variable (variable->name name) nil module-vars)
              bound-vars nil

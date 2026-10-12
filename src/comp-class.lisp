@@ -464,7 +464,9 @@
                                     (dylan%list ,@superclasses)
                                     (dylan%list ,@getter-code))))
                              ,@(reverse add-slot-calls)
-                             ,(funcall set '!class)
+                             (if (dylan%class? ,ref)
+                                 (dylan%redefine-class ,ref !class)
+                                 ,(funcall set '!class))
                              (dylan%make-variable-read-only
                               ',(name->module-variable (variable->name name)))
                              ',name)))))

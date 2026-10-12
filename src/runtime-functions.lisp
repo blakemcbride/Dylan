@@ -256,6 +256,14 @@
           (same-slot-getter-in-slot-vector->slot
            getter (class.slots (get-type obj))))))))
 
+(defun singleton-slot-values (instance slot-desc)
+  "The extra-slot-values vector holding SLOT-DESC, when it is a slot added
+to INSTANCE's singleton rather than one of its class's slots."
+  (let ((singleton (and (instance? instance) (instance.singleton instance))))
+    (and singleton
+         (find slot-desc (singleton.extra-slot-descriptors singleton))
+         (singleton.extra-slot-values singleton))))
+
 (defparameter dylan/slot-value
   (dylan%generic-fn
    'slot-value
@@ -267,14 +275,24 @@
        ;; The Scheme applied VECTOR-REF straight to the instance and to the
        ;; class, which worked only because MIT Scheme records were vectors;
        ;; the data vectors are what was meant.
-       (case allocation
-         ((instance) (aref (instance.data instance) loc))
-         ((class) (aref (class.class-data (car loc)) (cdr loc)))
-         ((each-subclass) (aref (class.class-data (get-type instance)) loc))
-         ((virtual) (dylan-call (slot.getter slot-desc) instance))
-         ((constant) loc)
-         (t (dylan-call dylan/error "slot-value -- internal error"
-                        slot-desc allocation)))))))
+       (let ((value
+               (case allocation
+                 ((instance)
+                  (aref (or (singleton-slot-values instance slot-desc)
+                            (instance.data instance))
+                        loc))
+                 ((class) (aref (class.class-data (car loc)) (cdr loc)))
+                 ((each-subclass)
+                  (aref (class.class-data (get-type instance)) loc))
+                 ((virtual) (dylan-call (slot.getter slot-desc) instance))
+                 ((constant) loc)
+                 (t (dylan-call dylan/error "slot-value -- internal error"
+                                slot-desc allocation)))))
+         ;; Chapter 6: getting an uninitialized slot is an error.
+         (if (eq value *the-uninitialized-slot-value*)
+             (dylan-call dylan/error "uninitialized slot accessed"
+                         instance (slot.debug-name slot-desc))
+             value))))))
 
 (defparameter dylan/setter/slot-value/
   (dylan%generic-fn
@@ -289,7 +307,11 @@
      (let ((allocation (slot.allocation slot-desc))
            (loc (slot.data-location slot-desc)))
        (case allocation
-         ((instance) (setf (aref (instance.data instance) loc) new-value))
+         ((instance)
+          (setf (aref (or (singleton-slot-values instance slot-desc)
+                          (instance.data instance))
+                      loc)
+                new-value))
          ((class)
           (setf (aref (class.class-data (car loc)) (cdr loc)) new-value))
          ((each-subclass)

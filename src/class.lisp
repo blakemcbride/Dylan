@@ -901,12 +901,16 @@ answer the class precedence list."
                          (not (slot.inherited? slot)))))
        (remove-slot-accessors! class slot)))))
 
-(defun rebuild-class! (class)
+(defun own-slots (class)
+  (loop for slot across (class.slots class)
+        when (and slot (not (slot.inherited? slot)))
+          collect slot))
+
+(defun rebuild-class! (class &optional (own-slots (own-slots class)))
+  "Rebuild CLASS from its superclasses and OWN-SLOTS (by default the slots
+it has now)."
   (let* ((old-slots (class.slots class))
          (old-class-data (class.class-data class))
-         (own-slots (loop for slot across old-slots
-                          when (and slot (not (slot.inherited? slot)))
-                            collect slot))
          (instances (class.instances class)))
     (remove-class-accessors! class)
     ;; Build the new layout with no instances attached, so that adding the
@@ -988,6 +992,46 @@ answer the class precedence list."
                             (get-initial-slot-value slot)))))))
            (setf (instance.data instance) data)))))))
 
+(defun rebuild-with-descendants! (class &optional (own-slots (own-slots class)))
+  "Rebuild CLASS, with OWN-SLOTS, and every class below it."
+  (let ((affected (cons class (class-descendants class))))
+    (dolist (c affected) (setf (class.precedence-list c) nil))
+    ;; A class's precedence list is longer than any of its superclasses',
+    ;; so this order rebuilds parents before children.
+    (dolist (c (sort (copy-list affected) #'<
+                     :key (lambda (c) (length (class-precedence-list c)))))
+      (if (eq c class)
+          (rebuild-class! c own-slots)
+          (rebuild-class! c)))
+    (recompute-class-specificities!)))
+
+;;; Chapter 6: DEFINE-CLASS on a variable that already holds a class
+;;; modifies that class in place, and its existing instances are updated.
+;;; The compiled DEFINE-CLASS builds the new definition as a class of its
+;;; own, NEW; its superclasses and own slots are moved onto OLD, which is
+;;; rebuilt with the classes below it, and NEW is discarded.  Instances
+;;; keep the value of each slot whose getter survives.
+
+(defun dylan%redefine-class (old new)
+  (let ((supers (class.superclasses new))
+        (own (own-slots new)))
+    ;; Discard NEW: its accessor methods and its place below its supers.
+    (remove-class-accessors! new)
+    (dolist (super supers)
+      (remove-from-population! (class.subclasses super) new))
+    (cond ((class.read-only? old)
+           (dylan-call dylan/error "define-class -- class is read-only" old))
+          ((some (lambda (super) (subclass? super old)) supers)
+           (dylan-call dylan/error "define-class -- circular inheritance"
+                       old supers)))
+    (dolist (super (class.superclasses old))
+      (remove-from-population! (class.subclasses super) old))
+    (setf (class.superclasses old) supers)
+    (dolist (super supers)
+      (add-to-population! (class.subclasses super) old))
+    (rebuild-with-descendants! old own)
+    old))
+
 (defun dylan%set-direct-superclasses (class new-superclasses)
   (let ((supers (dylan-call dylan/as <list> new-superclasses)))
     (cond ((class.read-only? class)
@@ -1031,12 +1075,7 @@ answer the class precedence list."
         (remove-from-population! (class.subclasses super) class))
       (dolist (super supers)
         (add-to-population! (class.subclasses super) class))
-      ;; A class's precedence list is longer than any of its superclasses',
-      ;; so this order rebuilds parents before children.
-      (dolist (c (sort (copy-list affected) #'<
-                       :key (lambda (c) (length (class-precedence-list c)))))
-        (rebuild-class! c))
-      (recompute-class-specificities!)
+      (rebuild-with-descendants! class)
       new-superclasses)))
 
 (defun make-getter-param-list (class)

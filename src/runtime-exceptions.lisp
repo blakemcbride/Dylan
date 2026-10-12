@@ -74,7 +74,7 @@
                 'condition-format-string nil nil nil :format-string nil)
 (dylan%add-slot <simple-error>
                 nil 'instance nil dylan/condition-format-arguments
-                'condition-format-arguments nil nil nil :format-arguments nil)
+                'condition-format-arguments '() t nil :format-arguments nil)
 
 (defparameter dylan/type-error-value
   (dylan%generic-fn
@@ -106,7 +106,7 @@
                 'condition-format-string nil nil nil :format-string nil)
 (dylan%add-slot <simple-warning>
                 nil 'instance nil dylan/condition-format-arguments
-                'condition-format-arguments nil nil nil :format-arguments nil)
+                'condition-format-arguments '() t nil :format-arguments nil)
 
 ;;; Basic Operators (pages 138 and 139)
 

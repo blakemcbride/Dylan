@@ -94,7 +94,7 @@
     ;; Functions, classes and the rest (chapters 6, 11, 15, 16)
     ("<function>" ("<object>") :none :abstract)
     ("<generic-function>" ("<function>") :none)
-    ("<method>" ("<function>") :none :abstract)
+    ("<method>" ("<function>") :function :abstract)
     ("<class>" ("<object>") :class :abstract)
     ("<slot-descriptor>" ("<object>") :none :abstract)
     ("<singleton>" ("<object>") :none :abstract)

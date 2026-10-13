@@ -90,7 +90,8 @@ enum {
     DY_KIND_SIMPLE_OBJECT_VECTOR,
     DY_KIND_SYMBOL,
     DY_KIND_KEYWORD,
-    DY_KIND_CLASS
+    DY_KIND_CLASS,
+    DY_KIND_FUNCTION               /* DyFunction                        */
 };
 
 /* Wrapper flags */
@@ -193,7 +194,7 @@ extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
     dy_wrapper_unicode_string, dy_wrapper_simple_object_vector,
     dy_wrapper_symbol, dy_wrapper_keyword, dy_wrapper_class,
     dy_wrapper_number, dy_wrapper_rational, dy_wrapper_float,
-    dy_wrapper_real;
+    dy_wrapper_real, dy_wrapper_method;
 
 /* The program's symbols and keywords, which the runtime interns when it
  * starts.  Defined by the compiler's output. */
@@ -341,6 +342,144 @@ D dy_pair(D head, D tail);
  * that name, making it if need be.  Safe to call from any thread. */
 D dy_intern_symbol(const char *name, size_t size);
 D dy_intern_keyword(const char *name, size_t size);
+
+/* ---------------------------------------------------------- Functions
+ *
+ * Every function is called through its uniform entry (CompilerPlan.md,
+ * Phase 4):
+ *
+ *     D entry(D self, D a0, D a1, D a2, D a3, intptr_t argc)
+ *
+ * SELF is the function object called.  The first four arguments are
+ * A0..A3 (unused ones are 0); argument i >= 4 is in the thread's argument
+ * area, dy_thread->args[i - 4], which the callee reads before it calls
+ * anything.  One prototype for every function is what lets a tail call
+ * be compiled as a jump (musttail).
+ *
+ * A function returns its first value.  The number of values, and all of
+ * them when there is not exactly one, are in dy_thread->mv_count and
+ * dy_thread->mv.  A caller that wants every value sets mv_count to 1
+ * before the call; a function returns a single value without touching
+ * mv_count, except that one that has made a call (which may have left
+ * another count there) sets it to 1 first.  values sets it. */
+
+typedef D (*DyEntry)(D self, D a0, D a1, D a2, D a3, intptr_t argc);
+
+typedef struct DyFunction {
+    DyWrapper *wrapper;
+    DyEntry entry;
+    D env[];                       /* a closure's free variables         */
+} DyFunction;
+
+#define DY_MAX_ARGUMENTS 1024
+#define DY_MAX_VALUES    1024
+
+typedef struct DyThread {
+    intptr_t mv_count;
+    D mv[DY_MAX_VALUES];
+    D args[DY_MAX_ARGUMENTS - 4];  /* arguments 4 and up                 */
+    /* A pending tail call, in trampoline mode */
+    D tail_function;
+    D tail_a[4];
+    intptr_t tail_argc;
+} DyThread;
+
+/* Each thread's state, allocated uncollectable so that the collector
+ * scans it. */
+extern _Thread_local DyThread *dy_thread;
+void dy_init_thread(void);
+
+/* Markers no Dylan program can see */
+extern DyHeader dy_unbound_object, dy_unsupplied_object, dy_tail_call_object;
+#define DY_UNBOUND     DY_OBJ(&dy_unbound_object)
+#define DY_UNSUPPLIED  DY_OBJ(&dy_unsupplied_object)
+#define DY_TAIL_MARKER DY_OBJ(&dy_tail_call_object)
+
+_Noreturn void dy_not_a_function(D f);
+_Noreturn void dy_wrong_argument_count(D f, intptr_t argc);
+_Noreturn void dy_unbound_variable(const char *name);
+_Noreturn void dy_odd_keyword_arguments(D f);
+_Noreturn void dy_unknown_keyword(D f, D keyword);
+_Noreturn void dy_too_many_arguments(void);
+
+/* A module variable's value, which it must have. */
+static inline D dy_check_bound(D value, const char *name) {
+    if (value == DY_UNBOUND) dy_unbound_variable(name);
+    return value;
+}
+
+/* VALUES[START..END) as a list. */
+D dy_list_of(const D *values, intptr_t start, intptr_t end);
+
+static inline DyEntry dy_entry(D f) {
+    if (!dy_kind_p(f, DY_KIND_FUNCTION)) dy_not_a_function(f);
+    return ((DyFunction *)DY_PTR(f))->entry;
+}
+
+D dy_make_closure(DyEntry entry, size_t env_size);
+
+/* A cell holds a variable that is both captured and assigned. */
+static inline D dy_make_cell(D value) {
+    D *cell = GC_MALLOC(sizeof(D));
+    if (!cell) dy_error("out of memory", 0);
+    *cell = value;
+    return (D)cell;
+}
+#define DY_CELL(c) (*(D *)(c))
+
+/* The arguments from index START on, as a list. */
+D dy_collect_arguments(intptr_t argc, intptr_t start, D a0, D a1, D a2, D a3);
+
+static inline D dy_head(D pair) { return ((DyPair *)DY_PTR(pair))->head; }
+static inline D dy_tail(D pair) { return ((DyPair *)DY_PTR(pair))->tail; }
+
+/* Type checks of bound values (bind's typed variables). */
+void dy_check_type(D value, D type);
+
+/* Calls.  In the default mode a tail call is a C tail call the compiler
+ * must make a jump (musttail).  Built with -DDY_TRAMPOLINE, a tail call
+ * instead stores the call in the thread and returns DY_TAIL_MARKER, and
+ * every other call makes the pending calls until a real value comes back:
+ * slower, but it needs nothing beyond standard C. */
+
+#ifdef DY_TRAMPOLINE
+static inline D dy_bounce(D r) {
+    while (r == DY_TAIL_MARKER) {
+        DyThread *t = dy_thread;
+        D f = t->tail_function;
+        r = dy_entry(f)(f, t->tail_a[0], t->tail_a[1], t->tail_a[2],
+                        t->tail_a[3], t->tail_argc);
+    }
+    return r;
+}
+#define DY_CALL(f, a0, a1, a2, a3, n) \
+    dy_bounce(dy_entry(f)((f), (a0), (a1), (a2), (a3), (n)))
+#define DY_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
+    dy_bounce(fn((f), (a0), (a1), (a2), (a3), (n)))
+#define DY_TAIL_CALL(f, a0, a1, a2, a3, n) do {                          \
+        DyThread *t_ = dy_thread;                                       \
+        t_->tail_function = (f);                                        \
+        t_->tail_a[0] = (a0); t_->tail_a[1] = (a1);                     \
+        t_->tail_a[2] = (a2); t_->tail_a[3] = (a3);                     \
+        t_->tail_argc = (n);                                            \
+        return DY_TAIL_MARKER;                                          \
+    } while (0)
+#define DY_TAIL_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
+    DY_TAIL_CALL(f, a0, a1, a2, a3, n)
+#else
+#define DY_CALL(f, a0, a1, a2, a3, n) \
+    dy_entry(f)((f), (a0), (a1), (a2), (a3), (n))
+#define DY_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
+    fn((f), (a0), (a1), (a2), (a3), (n))
+#define DY_TAIL_CALL(f, a0, a1, a2, a3, n) \
+    __attribute__((musttail)) return dy_entry(f)((f), (a0), (a1), (a2), (a3), (n))
+#define DY_TAIL_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
+    __attribute__((musttail)) return fn((f), (a0), (a1), (a2), (a3), (n))
+#endif
+
+/* Runtime support for backquote */
+D dy_append2(D list, D tail);
+D dy_list_to_vector(D list);
 
 /* ------------------------------------------------------------- Debug */
 

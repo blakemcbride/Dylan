@@ -196,6 +196,19 @@ emits small fixed-size allocations inline.
 
 ## Phase 4 — Functions, calls and proper tail calls
 
+**Status: done**, except as noted. `compiler/backend/codegen.lisp` generates
+the C; `runtime/c/function.c` holds the calling support. `(dylanc:build
+files exe)` compiles and links a program. Local methods whose every call is
+a jump are *contified*: compiled as labelled blocks of their host function,
+their calls as `goto`. Programs can use only the provisional functions of
+`runtime/c/primitives.c` until the library exists (Phase 8), and functions
+are defined with `define` and `method` until generic functions exist
+(Phase 5); a method's `#next` is `#f` when it is called directly. Not done
+yet: specialized direct entries, compile-time `#key` parsing, and
+stack-allocated `#rest` lists (all optimizations, Phase 9). Tests:
+`sbcl --script tests/codegen/run.lisp` (gcc and clang, musttail and
+trampolines, each with a 256 KB stack).
+
 **Tail calls are the constraint that shapes the calling convention.** C
 does not guarantee them, so:
 

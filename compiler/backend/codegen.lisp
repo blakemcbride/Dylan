@@ -1,0 +1,667 @@
+;;;; Copyright 2026 Blake McBride.  See ../../LICENSE.
+;;;;
+;;;; C code generation: functions, calls and proper tail calls
+;;;; (CompilerPlan.md, Phase 4).
+;;;;
+;;;; Every function of the IR becomes a C function with the uniform entry
+;;;; of runtime/c/dylan.h -- unless it is CONTIFIED: a local method that
+;;;; does not escape and whose every call is a jump (a loop, most often) is
+;;;; compiled as a labelled block of the C function that hosts it, its
+;;;; calls as assignments to its parameters and a goto.  A tail call of a
+;;;; function from its own body is likewise a goto to its top.  Every
+;;;; other tail call is a C tail call the C compiler must make a jump
+;;;; (musttail), or, built with -DDY_TRAMPOLINE, a return to a trampoline.
+;;;;
+;;;; Closures are flat: a closure holds the values of its free variables.
+;;;; A variable that is both captured and assigned lives in a cell, which
+;;;; the closures share.  A function with no free variables is a static
+;;;; object.
+;;;;
+;;;; The generator walks the A-normal form with a DEST saying what to do
+;;;; with each value: return it, bind or set a variable with it, keep it as
+;;;; the first of several values (:MV), or drop it.  A dest may also name a
+;;;; label to go to afterwards, which is how a contified block returns to
+;;;; the one place that entered it.
+
+(in-package #:dylan-compiler)
+
+;;; ------------------------------------------------------------ Contification
+
+(defstruct (group (:constructor make-group (letrec fns mode entry)))
+  letrec
+  fns                                   ; the contified IR-FNs
+  mode                                  ; :TAIL or :SINGLE
+  entry                                 ; :SINGLE: the one entering call
+  dest                                  ; where their values go
+  (labels (make-hash-table :test #'eq))) ; fn -> entry label
+
+(defvar *groups* nil "IR-FN -> its GROUP, for contified fns.")
+
+(defun direct-calls (e)
+  "The calls in E outside any function E contains, each as (call . tail-p),
+TAIL-P meaning in tail position with respect to E."
+  (let ((calls '()))
+    (labels ((walk (e tail)
+               (typecase e
+                 (ir-call (push (cons e tail) calls))
+                 (ir-let (walk (ir-let-value e) nil) (walk (ir-let-body e) tail))
+                 (ir-mv-let (walk (ir-mv-let-value e) nil) (walk (ir-mv-let-body e) tail))
+                 (ir-seq (loop for (f . more) on (ir-seq-forms e)
+                               do (walk f (and tail (null more)))))
+                 (ir-if (walk (ir-if-then e) tail) (walk (ir-if-else e) tail))
+                 (ir-letrec (walk (ir-letrec-body e) tail))
+                 (ir-bind-exit (walk (ir-bind-exit-body e) nil))
+                 (ir-unwind (walk (ir-unwind-protected e) nil)
+                            (walk (ir-unwind-cleanup e) nil)))))
+      (walk e t))
+    calls))
+
+(defun letrecs-in (e)
+  "The letrec forms in E outside any function E contains."
+  (let ((found '()))
+    (labels ((walk (e)
+               (typecase e
+                 (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
+                 (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+                 (ir-seq (mapc #'walk (ir-seq-forms e)))
+                 (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-letrec (push e found) (walk (ir-letrec-body e)))
+                 (ir-bind-exit (walk (ir-bind-exit-body e)))
+                 (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
+      (walk e))
+    found))
+
+(defun call-target (call)
+  (let ((f (ir-call-function call)))
+    (and (ivar-p f) (ivar-value-fn f))))
+
+(defun simple-fn-p (fn)
+  "Only required parameters?"
+  (and (null (ir-fn-next fn)) (null (ir-fn-rest fn)) (null (ir-fn-keys fn))))
+
+(defun decide-contification (letrec)
+  (let* ((arity-ok (lambda (fn)
+                     (every (lambda (c) (= (length (ir-call-arguments c))
+                                           (length (ir-fn-required fn))))
+                            (ir-fn-call-sites fn))))
+         (candidates (remove-if-not
+                      (lambda (fn)
+                        (and (not (ir-fn-escapes-p fn))
+                             (simple-fn-p fn)
+                             (funcall arity-ok fn)))
+                      (ir-letrec-fns letrec)))
+         (body-calls (make-hash-table :test #'eq))
+         (fn-calls (make-hash-table :test #'eq)))  ; call -> (fn . tail-p)
+    (loop for (c . tail) in (direct-calls (ir-letrec-body letrec))
+          do (setf (gethash c body-calls) tail))
+    (dolist (fn candidates)
+      (loop for (c . tail) in (direct-calls (ir-fn-body fn))
+            do (setf (gethash c fn-calls) (cons fn tail))))
+    ;; Keep only those every call of which is in the letrec's body or a
+    ;; tail call in a member's body.
+    (loop
+      (let ((before (length candidates)))
+        (setf candidates
+              (remove-if-not
+               (lambda (fn)
+                 (every (lambda (c)
+                          (or (nth-value 1 (gethash c body-calls))
+                              (let ((owner (gethash c fn-calls)))
+                                (and owner (member (car owner) candidates)
+                                     (cdr owner)))))
+                        (ir-fn-call-sites fn)))
+               candidates))
+        (when (= before (length candidates)) (return))))
+    (when candidates
+      (let ((entries (loop for c being the hash-keys of body-calls using (hash-value tail)
+                           when (member (call-target c) candidates)
+                             collect (cons c tail))))
+        (let ((group (cond ((every #'cdr entries)
+                            (make-group letrec candidates :tail nil))
+                           ((= (length entries) 1)
+                            (make-group letrec candidates :single (car (first entries)))))))
+          (when group
+            (dolist (fn candidates)
+              (setf (gethash fn *groups*) group))))))))
+
+;;; ---------------------------------------------------------- C functions
+
+(defconstant +max-arguments+ 1024 "As DY_MAX_ARGUMENTS in dylan.h.")
+
+(defstruct (cfun (:constructor make-cfun (fn c-name)))
+  fn
+  c-name
+  (env '())                             ; free variables, in env order
+  (extra-locals '())                    ; C temporaries: (name . type)
+  (needs-mv-reset nil)
+  (self-tail-call nil))                 ; did it jump to its own top?
+
+(defvar *cfuns* nil "IR-FN -> CFUN, for every fn that is a C function.")
+(defvar *cfun* nil "The CFUN being generated.")
+(defvar *cdata* nil)
+(defvar *classes* nil)
+(defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
+(defvar *used-primitives* nil)
+(defvar *lines* nil "The lines of the function being generated, newest first.")
+(defvar *indent* 1)
+(defvar *label-counter* 0)
+(defvar *temp-counter* 0)
+
+(defun emit (control &rest arguments)
+  (push (concatenate 'string (make-string (* 4 *indent*) :initial-element #\Space)
+                     (apply #'format nil control arguments))
+        *lines*))
+
+(defmacro indented (&body body)
+  `(let ((*indent* (1+ *indent*))) ,@body))
+
+(defun new-label (stem) (format nil "~a_~d" stem (incf *label-counter*)))
+
+(defun new-temp (&optional (type "D"))
+  (let ((name (format nil "t~d" (incf *temp-counter*))))
+    (push (cons name type) (cfun-extra-locals *cfun*))
+    name))
+
+(defun host-fn (fn)
+  "The fn whose C function FN's code goes in."
+  (let ((group (gethash fn *groups*)))
+    (if group
+        (host-fn (ir-fn-parent fn))
+        fn)))
+
+;;; Variables
+
+(defvar *closed-over* nil
+  "The variables some C function holds in its environment: those captured
+by a real closure, not just by a contified fn.")
+
+(defun cell-var-p (var)
+  (and (ivar-assigned-p var) (gethash var *closed-over*)))
+(defun v-name (var) (format nil "v~d" (ivar-id var)))
+
+(defun var-read (var)
+  (if (cell-var-p var) (format nil "DY_CELL(~a)" (v-name var)) (v-name var)))
+
+(defun emit-bind (var value)
+  (if (cell-var-p var)
+      (emit "~a = dy_make_cell(~a);" (v-name var) value)
+      (emit "~a = ~a;" (v-name var) value)))
+
+(defun emit-set (var value)
+  (emit "~a = ~a;" (var-read var) value))
+
+(defun atom-c (a)
+  (etypecase a
+    (const (c-constant *cdata* (const-value a)))
+    (ivar (var-read a))))
+
+(defun global-c-name (var)
+  (or (gethash var *globals*)
+      (setf (gethash var *globals*) (format nil "dyg~d" (hash-table-count *globals*)))))
+
+(defun unsupported (node what)
+  (let ((*location* (or (and (ir-node-p node) (ir-node-location node)) *location*)))
+    (compile-error "~a is not supported yet" what)))
+
+;;; Destinations
+
+(defstruct (dest (:constructor make-dest (kind &optional var label)))
+  kind                                  ; :return :bind :set :effect :mv :c
+  var                                   ; :bind/:set: IVAR; :mv/:c: C name
+  label)                                ; go here afterwards, if non-NIL
+
+(defun with-label (dest label)
+  (make-dest (dest-kind dest) (dest-var dest) label))
+
+(defun deliver (dest expr)
+  "Give the C expression EXPR to DEST."
+  (ecase (dest-kind dest)
+    (:return
+     (when (cfun-needs-mv-reset *cfun*) (emit "dy_thread->mv_count = 1;"))
+     (emit "return ~a;" expr))
+    (:bind (emit-bind (dest-var dest) expr))
+    (:set (emit-set (dest-var dest) expr))
+    (:effect (unless (pure-c-p expr) (emit "(void)(~a);" expr)))
+    (:mv (emit "~a = ~a;" (dest-var dest) expr)
+         (emit "dy_thread->mv_count = 1;"))
+    (:c (emit "~a = ~a;" (dest-var dest) expr)))
+  (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
+
+;;; Expressions
+
+(defun pure-c-p (expr)
+  "Is the C expression EXPR a variable or constant, whose value can be
+dropped unevaluated?"
+  (or (every (lambda (c) (or (alphanumericp c) (char= c #\_))) expr)
+      (some (lambda (prefix)
+              (and (> (length expr) (length prefix))
+                   (string= prefix expr :end2 (length prefix))))
+            '("DY_INT(" "DY_CHAR(" "DY_OBJ(&" "DY_CELL("))))
+
+(defun gen (e dest)
+  (let ((*location* (or (and (ir-node-p e) (ir-node-location e)) *location*)))
+    (etypecase e
+      ((or const ivar) (deliver dest (atom-c e)))
+      (ir-global-ref (deliver dest (global-ref-c e)))
+      (ir-global-set
+       (let ((var (ir-global-set-var e)))
+         (when (module-var-predefined-p var)
+           (unsupported e "Assigning a variable of the dylan module"))
+         (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))
+         (deliver dest (atom-c (ir-global-set-value e)))))
+      (ir-set
+       (emit-set (ir-set-var e) (atom-c (ir-set-value e)))
+       (deliver dest (atom-c (ir-set-value e))))
+      (ir-prim (gen-primitive e dest))
+      (ir-if
+       (let ((test (ir-if-test e)))
+         (if (const-p test)
+             (gen (if (false-p (const-value test)) (ir-if-else e) (ir-if-then e)) dest)
+             (progn
+               (emit "if (~a != DY_FALSE) {" (atom-c test))
+               (indented (gen (ir-if-then e) dest))
+               (emit "} else {")
+               (indented (gen (ir-if-else e) dest))
+               (emit "}")))))
+      (ir-seq
+       (loop for (f . more) on (ir-seq-forms e)
+             do (gen f (if more (make-dest :effect) dest))))
+      (ir-let
+       (gen (ir-let-value e) (make-dest :bind (ir-let-var e)))
+       (gen (ir-let-body e) dest))
+      (ir-mv-let (gen-mv-let e dest))
+      (ir-call (gen-call e dest))
+      (ir-letrec (gen-letrec e dest))
+      (ir-lambda (deliver dest (closure-c (ir-lambda-fn e))))
+      (ir-define-variable
+       (let ((var (ir-define-variable-var e)))
+         (emit "~a = ~a;" (global-c-name var) (atom-c (ir-define-variable-value e)))
+         (deliver dest (c-constant *cdata* (name-symbol (module-var-name var))))))
+      (ir-bind-exit (unsupported e "bind-exit (Phase 6)"))
+      (ir-unwind (unsupported e "unwind-protect (Phase 6)"))
+      (ir-define-generic (unsupported e "define-generic-function (Phase 5)"))
+      (ir-define-method (unsupported e "define-method (Phase 5)"))
+      (ir-define-class (unsupported e "define-class (Phase 5)"))
+      (ir-define-slot (unsupported e "define-slot (Phase 5)")))))
+
+(defun global-ref-c (e)
+  (let ((var (ir-global-ref-var e)))
+    (if (module-var-predefined-p var)
+        (let ((c (predefined-c-value var *classes*)))
+          (unless c
+            (unsupported e (format nil "~a (it has no definition in the runtime yet)"
+                                   (module-var-string var))))
+          (let ((primitive (search "dy_prim_" c)))
+            (when primitive
+              (pushnew (subseq c (+ primitive) (1- (length c))) *used-primitives*
+                       :test #'string=)))
+          c)
+        (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
+                (c-string-literal (map 'list #'char-code (module-var-string var)))))))
+
+(defun gen-primitive (e dest)
+  (let ((args (mapcar #'atom-c (ir-prim-arguments e))))
+    (case (ir-prim-name e)
+      (:check-type
+       (emit "dy_check_type(~a, ~a);" (first args) (second args))
+       (deliver dest "DY_FALSE"))
+      (:pair (deliver dest (format nil "dy_pair(~a, ~a)" (first args) (second args))))
+      (:append2 (deliver dest (format nil "dy_append2(~a, ~a)" (first args) (second args))))
+      (:list->vector (deliver dest (format nil "dy_list_to_vector(~a)" (first args))))
+      (:handler-bind (unsupported e "handler-bind and handler-case (Phase 6)"))
+      (t (unsupported e (format nil "the primitive ~(~a~)" (ir-prim-name e)))))))
+
+(defun gen-mv-let (e dest)
+  (let ((primary (new-temp))
+        (count (new-temp "intptr_t"))
+        (values (new-temp "const D *")))
+    (gen (ir-mv-let-value e) (make-dest :mv primary))
+    (emit "~a = dy_thread->mv_count;" count)
+    (emit "~a = ~a == 1 ? &~a : dy_thread->mv;" values count primary)
+    (loop for var in (ir-mv-let-vars e)
+          for i from 0
+          do (emit-bind var (format nil "~a > ~d ? ~a[~d] : DY_FALSE" count i values i)))
+    (when (ir-mv-let-rest e)
+      (emit-bind (ir-mv-let-rest e)
+                 (format nil "dy_list_of(~a, ~d, ~a)" values
+                         (length (ir-mv-let-vars e)) count)))
+    (gen (ir-mv-let-body e) dest)))
+
+;;; Calls
+
+(defun call-arguments-c (args)
+  "Store the arguments past the fourth in the argument area; answer the
+C expressions for a0..a3 and the count."
+  (let ((cs (mapcar #'atom-c args)))
+    (when (> (length cs) +max-arguments+)
+      (compile-error "a call with more than ~d arguments" +max-arguments+))
+    (loop for c in (nthcdr 4 cs)
+          for i from 0
+          do (emit "dy_thread->args[~d] = ~a;" i c))
+    (values (loop for i below 4 collect (or (nth i cs) "0"))
+            (length cs))))
+
+(defun gen-call (e dest)
+  (let* ((f (ir-call-function e))
+         (target (call-target e))
+         (group (and target (gethash target *groups*)))
+         (tail (and (eq (dest-kind dest) :return) (ir-call-tail-p e))))
+    (cond
+      (group (gen-contified-call e target group dest))
+      ((and tail target (eq target (cfun-fn *cfun*)) (simple-fn-p target)
+            (= (length (ir-call-arguments e)) (length (ir-fn-required target))))
+       ;; A tail call of itself: a jump to its top.
+       (gen-jump (ir-fn-required target) (ir-call-arguments e))
+       (setf (cfun-self-tail-call *cfun*) t)
+       (emit "goto top;"))
+      (t
+       (multiple-value-bind (as n) (call-arguments-c (ir-call-arguments e))
+         (let* ((direct (and target (gethash target *cfuns*)))
+                (fexpr (atom-c f))
+                (call (if direct
+                          (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
+                                  (cfun-c-name direct) fexpr as n)
+                          (format nil "DY_CALL(~a, ~{~a, ~}~d)" fexpr as n))))
+           (cond (tail
+                  (emit "~a;" (if direct
+                                  (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
+                                          (cfun-c-name direct) fexpr as n)
+                                  (format nil "DY_TAIL_CALL(~a, ~{~a, ~}~d)" fexpr as n))))
+                 ((eq (dest-kind dest) :return)
+                  (emit "return ~a;" call))
+                 ((eq (dest-kind dest) :mv)
+                  (emit "dy_thread->mv_count = 1;")
+                  (emit "~a = ~a;" (dest-var dest) call)
+                  (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
+                 ((eq (dest-kind dest) :effect)
+                  (emit "(void)~a;" call)
+                  (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
+                 (t (deliver dest call)))))))))
+
+(defun gen-jump (params args)
+  "Bind PARAMS to ARGS afresh, all at once."
+  (let ((temps (mapcar (lambda (a)
+                         (declare (ignore a))
+                         (new-temp))
+                       args)))
+    (loop for temp in temps for a in args
+          do (emit "~a = ~a;" temp (atom-c a)))
+    (loop for p in params for temp in temps
+          do (emit-bind p temp))))
+
+(defun gen-contified-call (e target group dest)
+  (cond ((eq dest (group-dest group)))
+        ((and (eq (group-mode group) :single) (eq e (group-entry group))
+              (null (group-dest group)))
+         (setf (group-dest group) (with-label dest (new-label "after"))))
+        (t (error "Internal error: a contified call with a stray destination.")))
+  (gen-jump (ir-fn-required target) (ir-call-arguments e))
+  (emit "goto ~a;" (group-label group target))
+  (when (eq e (group-entry group))
+    (emit "~a:;" (dest-label (group-dest group)))))
+
+(defun group-label (group fn)
+  (or (gethash fn (group-labels group))
+      (setf (gethash fn (group-labels group))
+            (new-label (format nil "~a" (c-identifier (name-string (ir-fn-name fn))))))))
+
+;;; Letrec and closures
+
+(defun closure-c (fn)
+  "A C expression for a closure of FN made now."
+  (let ((cfun (gethash fn *cfuns*)))
+    (if (null (cfun-env cfun))
+        (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun))
+        (let ((temp (new-temp)))
+          (emit "~a = dy_make_closure(~a, ~d);" temp (cfun-c-name cfun)
+                (length (cfun-env cfun)))
+          (fill-env temp cfun)
+          temp))))
+
+(defun fill-env (closure cfun)
+  (loop for var in (cfun-env cfun)
+        for i from 0
+        ;; A cell variable's cell, not its value.
+        do (emit "((DyFunction *)DY_PTR(~a))->env[~d] = ~a;" closure i (v-name var))))
+
+(defun gen-letrec (e dest)
+  (let* ((fns (ir-letrec-fns e))
+         (contified (remove-if-not (lambda (f) (gethash f *groups*)) fns))
+         (group (and contified (gethash (first contified) *groups*))))
+    ;; The closures, all made before any is filled, since they may refer
+    ;; to each other.
+    (let ((pending '()))
+      (loop for var in (ir-letrec-vars e)
+            for fn in fns
+            unless (member fn contified)
+              do (let ((cfun (gethash fn *cfuns*)))
+                   (if (null (cfun-env cfun))
+                       (emit-bind var (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun)))
+                       (progn
+                         (emit-bind var (format nil "dy_make_closure(~a, ~d)"
+                                                (cfun-c-name cfun) (length (cfun-env cfun))))
+                         (push (cons var cfun) pending)))))
+      (loop for (var . cfun) in (reverse pending)
+            do (fill-env (var-read var) cfun)))
+    (if (null group)
+        (gen (ir-letrec-body e) dest)
+        (let ((end (and (not (eq (dest-kind dest) :return)) (new-label "end"))))
+          (when (eq (group-mode group) :tail)
+            (setf (group-dest group) (if end (with-label dest end) dest)))
+          (gen (ir-letrec-body e) (if (eq (group-mode group) :tail) (group-dest group) dest))
+          (when end (emit "goto ~a;" end))
+          (unless (group-dest group)
+            ;; Never entered.
+            (setf (group-dest group) (make-dest :effect nil end)))
+          (dolist (fn contified)
+            (emit "~a:;" (group-label group fn))
+            (gen (ir-fn-body fn) (group-dest group)))
+          (when end (emit "~a:;" end))))))
+
+;;; Functions
+
+(defun owned-vars (fn)
+  "The variables a C function for FN declares: those its own code binds,
+and those of the fns contified into it."
+  (let ((vars '()))
+    (labels ((fn-vars (f)
+               (dolist (v (ir-fn-required f)) (push v vars))
+               (when (ir-fn-next f) (push (ir-fn-next f) vars))
+               (when (ir-fn-rest f) (push (ir-fn-rest f) vars))
+               (when (listp (ir-fn-keys f))
+                 (dolist (k (ir-fn-keys f))
+                   (walk (ir-key-default k))
+                   (push (ir-key-var k) vars)))
+               (walk (ir-fn-body f)))
+             (walk (e)
+               (typecase e
+                 (ir-let (walk (ir-let-value e)) (push (ir-let-var e) vars)
+                         (walk (ir-let-body e)))
+                 (ir-mv-let (walk (ir-mv-let-value e))
+                            (dolist (v (ir-mv-let-vars e)) (push v vars))
+                            (when (ir-mv-let-rest e) (push (ir-mv-let-rest e) vars))
+                            (walk (ir-mv-let-body e)))
+                 (ir-seq (mapc #'walk (ir-seq-forms e)))
+                 (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-letrec (loop for v in (ir-letrec-vars e)
+                                  for f in (ir-letrec-fns e)
+                                  do (if (gethash f *groups*)
+                                         (fn-vars f)    ; no closure, no variable
+                                         (push v vars)))
+                            (walk (ir-letrec-body e)))
+                 (ir-bind-exit (push (ir-bind-exit-var e) vars)
+                               (walk (ir-bind-exit-body e)))
+                 (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
+      (fn-vars fn))
+    (remove-duplicates vars)))
+
+(defun makes-calls-p (fn)
+  "Might FN's C function call another function other than in tail
+position?  (If so, a call may have changed the count of values.)"
+  (labels ((walk (e)
+             (typecase e
+               (ir-call (and (not (gethash (call-target e) *groups*))
+                             (not (ir-call-tail-p e))))
+               (ir-let (or (walk (ir-let-value e)) (walk (ir-let-body e))))
+               (ir-mv-let (or (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e))))
+               (ir-seq (some #'walk (ir-seq-forms e)))
+               (ir-if (or (walk (ir-if-then e)) (walk (ir-if-else e))))
+               (ir-letrec (or (some (lambda (f) (and (gethash f *groups*) (walk (ir-fn-body f))))
+                                    (ir-letrec-fns e))
+                              (walk (ir-letrec-body e))))
+               (t nil)))
+           (fn-walk (f)
+             (or (walk (ir-fn-body f))
+                 (and (listp (ir-fn-keys f))
+                      (some (lambda (k) (walk (ir-key-default k))) (ir-fn-keys f))))))
+    (fn-walk fn)))
+
+(defun gen-function (cfun)
+  "The C text of CFUN's function."
+  (let* ((fn (cfun-fn cfun))
+         (*cfun* cfun)
+         (*lines* '())
+         (*indent* 1)
+         (*location* (ir-fn-location fn))
+         (required (ir-fn-required fn))
+         (r (length required))
+         (keys (ir-fn-keys fn)))
+    (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn))
+    ;; Arguments
+    (cond ((and (null (ir-fn-rest fn)) (null keys))
+           (emit "if (argc != ~d) dy_wrong_argument_count(self, argc);" r))
+          ((> r 0)
+           (emit "if (argc < ~d) dy_wrong_argument_count(self, argc);" r)))
+    (when (> r +max-arguments+) (compile-error "a method with more than ~d parameters"
+                                               +max-arguments+))
+    (loop for var in required
+          for i from 0
+          do (emit-bind var (if (< i 4)
+                                (format nil "a~d" i)
+                                (format nil "dy_thread->args[~d]" (- i 4)))))
+    (when (or (ir-fn-rest fn) keys)
+      (let ((rest (or (ir-fn-rest fn) (new-temp))))
+        (if (ivar-p rest)
+            (emit-bind rest (format nil "dy_collect_arguments(argc, ~d, a0, a1, a2, a3)" r))
+            (emit "~a = dy_collect_arguments(argc, ~d, a0, a1, a2, a3);" rest r))
+        (when keys (gen-keyword-parsing fn (if (ivar-p rest) (var-read rest) rest)))))
+    (when (ir-fn-next fn)
+      ;; Called directly, a method has no next method (Phase 5 adds the
+      ;; calls from generic functions).
+      (emit-bind (ir-fn-next fn) "DY_FALSE"))
+    (loop for var in (cfun-env cfun)
+          for i from 0
+          do (emit "~a = ((DyFunction *)DY_PTR(self))->env[~d];" (v-name var) i))
+    (let ((top-index (length *lines*)))
+      (gen (ir-fn-body fn) (make-dest :return))
+      (when (cfun-self-tail-call cfun)
+        ;; The label goes after the prologue.
+        (let ((tail (nthcdr (- (length *lines*) top-index) *lines*))
+              (head (subseq *lines* 0 (- (length *lines*) top-index))))
+          (setf *lines* (append head (list "top:;") tail)))))
+    (with-output-to-string (out)
+      (format out "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {~%"
+              (cfun-c-name cfun))
+      (format out "    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;~%")
+      (let ((vars (sort (copy-list (append (owned-vars fn) (cfun-env cfun))) #'<
+                        :key #'ivar-id)))
+        (when vars
+          (format out "    D ~{~a~^, ~};~%" (mapcar #'v-name vars))))
+      (dolist (local (reverse (cfun-extra-locals cfun)))
+        (format out "    ~a ~a;~%" (cdr local) (car local)))
+      (dolist (line (reverse *lines*))
+        (format out "~a~%" line))
+      (format out "}~%"))))
+
+(defun gen-keyword-parsing (fn list)
+  (let* ((keys (ir-fn-keys fn))
+         (any (or (eq keys :any) (ir-fn-rest fn)))
+         (keys (if (listp keys) keys '()))
+         (l (new-temp)))
+    (dolist (k keys) (emit "~a = DY_UNSUPPLIED;" (v-name (ir-key-var k))))
+    (emit "for (~a = ~a; ~a != DY_EMPTY; ~a = dy_tail(dy_tail(~a))) {" l list l l l)
+    (indented
+      (emit "if (dy_tail(~a) == DY_EMPTY) dy_odd_keyword_arguments(self);" l)
+      (if (and (null keys) any)
+          nil
+          (progn
+            (loop for k in keys
+                  for first = t then nil
+                  do (emit "~:[} else ~;~]if (dy_head(~a) == ~a) {" first l
+                           (c-constant *cdata* (ir-key-keyword k)))
+                     (indented
+                       (emit "if (~a == DY_UNSUPPLIED) ~a = dy_head(dy_tail(~a));"
+                             (v-name (ir-key-var k)) (v-name (ir-key-var k)) l)))
+            (cond ((null keys)
+                   (emit "dy_unknown_keyword(self, dy_head(~a));" l))
+                  (any (emit "}"))
+                  (t (emit "} else {")
+                     (indented (emit "dy_unknown_keyword(self, dy_head(~a));" l))
+                     (emit "}"))))))
+    (emit "}")
+    ;; Defaults, in order: each sees the parameters before it.
+    (dolist (k keys)
+      (let ((var (ir-key-var k)))
+        (emit "if (~a == DY_UNSUPPLIED) {" (v-name var))
+        (indented
+          (gen (ir-key-default k) (make-dest :c (v-name var))))
+        (emit "}")
+        (when (cell-var-p var)
+          (emit "~a = dy_make_cell(~a);" (v-name var) (v-name var)))))))
+
+;;; Programs
+
+(defun generate-c (ir stream)
+  "Write the C program for IR to STREAM."
+  (let ((*groups* (make-hash-table :test #'eq))
+        (*cfuns* (make-hash-table :test #'eq))
+        (*cdata* (make-cdata))
+        (*classes* (prepare-classes (built-in-class-infos)))
+        (*globals* (make-hash-table :test #'eq))
+        (*closed-over* (make-hash-table :test #'eq))
+        (*used-primitives* '())
+        (*label-counter* 0)
+        (*temp-counter* 0)
+        (fns (ir-fns ir)))
+    (dolist (fn fns)
+      (dolist (letrec (letrecs-in (ir-fn-body fn)))
+        (decide-contification letrec)))
+    (let ((cfuns '()))
+      (loop for fn in fns
+            for i from 0
+            unless (gethash fn *groups*)
+              do (let ((cfun (make-cfun fn (format nil "fn~d_~a" i
+                                                   (if (ir-fn-name fn)
+                                                       (c-identifier (name-string (ir-fn-name fn)))
+                                                       (string-downcase (ir-fn-kind fn)))))))
+                   (setf (cfun-env cfun)
+                         (sort (copy-list (ir-fn-free-vars fn)) #'< :key #'ivar-id))
+                   (setf (gethash fn *cfuns*) cfun)
+                   (push cfun cfuns)))
+      (setf cfuns (nreverse cfuns))
+      (dolist (cfun cfuns)
+        (dolist (var (cfun-env cfun))
+          (setf (gethash var *closed-over*) t)))
+      (let ((texts (mapcar #'gen-function cfuns)))
+        (emit-program-data *classes* *cdata* stream)
+        (format stream "~%/* Program */~%~%")
+        (dolist (p *used-primitives*)
+          (format stream "extern DyFunction ~a;~%" p))
+        (dolist (cfun cfuns)
+          (format stream "static D ~a(D, D, D, D, D, intptr_t);~%" (cfun-c-name cfun)))
+        (terpri stream)
+        (dolist (cfun cfuns)
+          (when (null (cfun-env cfun))
+            (format stream "static DyFunction ~a_closure = { &dy_wrapper_method, ~a };~%"
+                    (cfun-c-name cfun) (cfun-c-name cfun))))
+        (terpri stream)
+        (loop for var being the hash-keys of *globals* using (hash-value name)
+              do (format stream "static D ~a = DY_UNBOUND;   /* ~a */~%"
+                         name (module-var-string var)))
+        (terpri stream)
+        (dolist (text texts) (format stream "~a~%" text))
+        (format stream "int main(void) {~%    dy_init();~%")
+        (dolist (top (ir-program-toplevels ir))
+          (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
+                  (cfun-c-name (gethash top *cfuns*))))
+        (format stream "    return 0;~%}~%")))))

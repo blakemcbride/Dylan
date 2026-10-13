@@ -35,7 +35,10 @@
     "ir/analyze"
     "ir/check"
     "backend/classes"
-    "backend/cdata"))
+    "backend/cdata"
+    "backend/primitives"
+    "backend/codegen"
+    "driver"))
 
 (defparameter *dylanc-fasl-directory*
   (merge-pathnames

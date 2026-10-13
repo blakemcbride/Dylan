@@ -25,7 +25,9 @@
            #:compile-error
            #:to-ir                      ; program -> IR (Phase 2)
            #:ir-program-toplevels
-           #:print-ir-program))
+           #:print-ir-program
+           #:compile-files              ; Dylan files -> a C file
+           #:build))                    ; Dylan files -> an executable
 
 (in-package #:dylan-compiler)
 

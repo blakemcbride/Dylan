@@ -17,6 +17,7 @@ void dy_intern_static_symbols(void);    /* string.c */
 void dy_init(void) {
     GC_INIT();
     GC_allow_register_threads();
+    dy_init_thread();
     dy_intern_static_symbols();
 }
 
@@ -143,6 +144,9 @@ void dy_debug_write(FILE *out, D x) {
     case DY_KIND_KEYWORD:
         print_symbol_name(out, ((DySymbol *)DY_PTR(x))->name);
         fputc(':', out);
+        return;
+    case DY_KIND_FUNCTION:
+        fputs("{method}", out);
         return;
     case DY_KIND_CLASS:
         fputs("{class ", out);

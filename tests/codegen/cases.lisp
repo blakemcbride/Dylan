@@ -105,7 +105,8 @@ applied
 
  ;; Chapter 6: #rest (the manual's show-rest), #rest with #key (the
  ;; manual's test), defaults that see the parameters before them, the
- ;; leftmost of a repeated keyword winning, and #key alone.
+ ;; leftmost of a repeated keyword winning, and #key alone, which accepts
+ ;; no keywords.
  (rest-and-keys
   "(define show-rest (method (a #rest b) (print a) (print b) #t))
    (print (show-rest 10 20 30 40))
@@ -115,8 +116,8 @@ applied
    (define k (method (x #key (y (+ x 1)) z) (list x y z)))
    (print (k 1))
    (print (k 1 z: 5 y: 2 y: 9))
-   (define any (method (#key) 'any))
-   (print (any foo: 1 bar: 2))"
+   (define none (method (#key) 'none))
+   (print (none))"
   "10
 (20 30 40)
 #t
@@ -129,7 +130,7 @@ applied
 3
 (1 2 #f)
 (1 2 5)
-any
+none
 ")
 
  ;; More than four arguments: the rest go in the thread's argument area,
@@ -215,6 +216,10 @@ w
   :error "wrong number of arguments")
  (unknown-keyword
   "(define f (method (#key a) a)) (f b: 1)"
+  ""
+  :error "keyword argument not accepted")
+ (key-alone
+  "(define f (method (#key) 'none)) (f a: 1)"
   ""
   :error "keyword argument not accepted")
  (odd-keywords

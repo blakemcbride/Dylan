@@ -4,7 +4,7 @@
 ;;;;
 ;;;;     sbcl --script tests/codegen/run.lisp [quick]
 ;;;;
-;;;; Each program in cases.lisp is compiled to C once, then built and run
+;;;; Each program in the cases*.lisp files is compiled to C once, then built and run
 ;;;; in four configurations -- gcc and clang, each with musttail and with
 ;;;; trampolines -- or, given quick, in the first only.  Every run has a
 ;;;; 256 KB stack.
@@ -35,16 +35,22 @@
 
 (defun run-case (case)
   "A list of failure descriptions for CASE."
-  (destructuring-bind (name source expected &key error) case
+  (destructuring-bind (name source expected &key error compile-error) case
     (let* ((stem (merge-pathnames (string-downcase (symbol-name name)) *build-directory*))
            (c-file (format nil "~a.c" (namestring stem)))
            (diagnostics (make-string-output-stream)))
       (ensure-directories-exist stem)
-      (unless (let ((*error-output* diagnostics))
-                (compile-program (front-end-string source) c-file))
-        (return-from run-case
-          (list (format nil "~(~a~): does not compile:~%~a" name
-                        (get-output-stream-string diagnostics)))))
+      (let ((ok (let ((*error-output* diagnostics))
+                  (compile-program (front-end-string source) c-file)))
+            (text (get-output-stream-string diagnostics)))
+        (cond (compile-error
+               (return-from run-case
+                 (unless (and (not ok) (search compile-error text))
+                   (list (format nil "~(~a~): expected the compile error ~s, got:~%~a"
+                                 name compile-error text)))))
+              ((not ok)
+               (return-from run-case
+                 (list (format nil "~(~a~): does not compile:~%~a" name text))))))
       (loop for (cc trampoline) in *configurations*
             for exe = (format nil "~a-~a~:[~;-trampoline~]" (namestring stem) cc trampoline)
             for config = (format nil "~(~a~) [~a~:[~;, trampoline~]]" name cc trampoline)
@@ -64,10 +70,11 @@
                                   (list (format nil "~a: status ~d: ~a" config status err))))))))))))
 
 (defun run-tests ()
-  (let* ((cases (with-open-file (in (merge-pathnames "cases.lisp"
-                                                     cl-user::*codegen-test-directory*))
-                  (let ((*package* (find-package '#:dylan-compiler)))
-                    (read in))))
+  (let* ((cases (loop for file in (directory (merge-pathnames "cases*.lisp"
+                                                             cl-user::*codegen-test-directory*))
+                      append (with-open-file (in file)
+                               (let ((*package* (find-package '#:dylan-compiler)))
+                                 (read in)))))
          (failures (loop for case in cases append (run-case case))))
     (dolist (f failures) (format t "FAIL ~a~%" f))
     (format t "~d program~:p in ~d configuration~:p, ~d failure~:p~%"

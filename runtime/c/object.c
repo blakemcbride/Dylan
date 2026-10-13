@@ -63,6 +63,20 @@ static void print_symbol_name(FILE *out, D name) {
     fwrite(s->data, 1, DY_INT_VALUE(s->size), out);
 }
 
+/* A float, with a decimal point, and its format's exponent marker. */
+static void write_float(FILE *out, double value, int digits, char marker) {
+    char buffer[64];
+    snprintf(buffer, sizeof buffer, "%.*g", digits, value);
+    char *e = strchr(buffer, 'e');
+    if (!strpbrk(buffer, ".ein")) strcat(buffer, ".0");
+    if (e) {
+        *e = '\0';
+        fprintf(out, "%s%s%c%s", buffer, strchr(buffer, '.') ? "" : ".0", marker, e + 1);
+    } else {
+        fprintf(out, "%s%c0", buffer, marker);
+    }
+}
+
 void dy_debug_write(FILE *out, D x) {
     if (DY_IS_INT(x)) {
         fprintf(out, "%ld", (long)DY_INT_VALUE(x));
@@ -102,13 +116,13 @@ void dy_debug_write(FILE *out, D x) {
         return;
     }
     case DY_KIND_SINGLE_FLOAT:
-        fprintf(out, "%.9gs0", (double)((DySingleFloat *)DY_PTR(x))->value);
+        write_float(out, ((DySingleFloat *)DY_PTR(x))->value, 9, 's');
         return;
     case DY_KIND_DOUBLE_FLOAT:
-        fprintf(out, "%.17gd0", ((DyDoubleFloat *)DY_PTR(x))->value);
+        write_float(out, ((DyDoubleFloat *)DY_PTR(x))->value, 17, 'd');
         return;
     case DY_KIND_EXTENDED_FLOAT:
-        fprintf(out, "%.17gl0", ((DyDoubleFloat *)DY_PTR(x))->value);
+        write_float(out, ((DyDoubleFloat *)DY_PTR(x))->value, 17, 'l');
         return;
     case DY_KIND_BYTE_STRING: {
         DyByteString *s = DY_PTR(x);

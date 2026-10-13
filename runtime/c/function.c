@@ -25,6 +25,7 @@ D dy_make_closure(DyEntry entry, size_t env_size) {
     DyFunction *f = dy_alloc(&dy_wrapper_method,
                              sizeof(DyFunction) + env_size * sizeof(D));
     f->entry = entry;
+    f->specializers = DY_FALSE;
     return DY_OBJ(f);
 }
 
@@ -40,13 +41,6 @@ D dy_list_of(const D *values, intptr_t start, intptr_t end) {
     D list = DY_EMPTY;
     for (intptr_t i = end - 1; i >= start; i--) list = dy_pair(values[i], list);
     return list;
-}
-
-void dy_check_type(D value, D type) {
-    if (!dy_kind_p(type, DY_KIND_CLASS))
-        dy_error("only classes are supported as types so far", type);
-    if (!dy_instance_p(value, ((DyClass *)DY_PTR(type))->instance_wrapper))
-        dy_error("type error: the value is not of the declared type", value);
 }
 
 _Noreturn void dy_not_a_function(D f) { dy_error("not a function", f); }

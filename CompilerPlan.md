@@ -257,6 +257,23 @@ non-escaping closures are lambda-lifted.
 
 ## Phase 5 — Object system
 
+**Status: done**, except as noted. `compiler/backend/objects.lisp`;
+`runtime/c/objects.c`. Superclasses and specializers must be known at
+compile time (classes, or singletons of constants or classes); a class or
+generic function is a constant, and a class cannot be redefined. Each
+generic's dispatch is a compiled decision tree whose leaves hold the sorted
+method lists, computed at compile time; among classes neither of which is a
+subclass of the other, the one earlier in the argument class's precedence
+list is more specific (as in CLOS — the manual leaves this open). Slot
+accessors, all five allocations, `make`/`initialize` with init-keyword
+checking, `next-method` (with or without arguments), generic keyword
+checking and the reflective functions of chapters 10 and 11 are in. Not
+yet: static resolution and inlining of calls (Phase 9, with type
+inference); methods on `make` or on other `dylan`-module functions except
+`initialize` (Phase 8); slot descriptors; `define-slot` on singletons and
+`add-method`/`remove-method` (not possible in a static program). Tests: the
+object-system programs in `tests/codegen/cases-objects.lisp`.
+
 **Classes.** The compiler builds the whole hierarchy: class precedence
 lists (algorithm from `src/class.lisp`), slot layouts, initialization
 plans. Each class is emitted as static C data. Since every subclass is

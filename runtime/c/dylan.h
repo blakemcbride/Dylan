@@ -91,7 +91,9 @@ enum {
     DY_KIND_SYMBOL,
     DY_KIND_KEYWORD,
     DY_KIND_CLASS,
-    DY_KIND_FUNCTION               /* DyFunction                        */
+    DY_KIND_FUNCTION,              /* DyFunction                        */
+    DY_KIND_GENERIC,               /* DyGeneric                         */
+    DY_KIND_SINGLETON              /* DySingleton                       */
 };
 
 /* Wrapper flags */
@@ -109,6 +111,9 @@ typedef struct DyWrapper {
     uint16_t flags;
     const uint8_t *ancestors;      /* bit i set: class i is an ancestor
                                       (or the class itself)              */
+    const int32_t *slot_offsets;   /* index of each of the program's
+                                      instance slots in DyInstance.slots,
+                                      or -1; NULL if it has none          */
 } DyWrapper;
 
 /* Every heap and static object begins with this. */
@@ -127,6 +132,9 @@ typedef struct DyClass {
     D name;                        /* a <symbol>                         */
     D direct_superclasses;         /* <simple-object-vector>             */
     D precedence_list;             /* <simple-object-vector>, self first */
+    D direct_subclasses;           /* <simple-object-vector>             */
+    D (*maker)(D self, D a0, D a1, D a2, D a3, intptr_t argc);
+                                   /* make for the class, or NULL        */
 } DyClass;
 
 /* ------------------------------------------------------------- Objects */
@@ -194,7 +202,8 @@ extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
     dy_wrapper_unicode_string, dy_wrapper_simple_object_vector,
     dy_wrapper_symbol, dy_wrapper_keyword, dy_wrapper_class,
     dy_wrapper_number, dy_wrapper_rational, dy_wrapper_float,
-    dy_wrapper_real, dy_wrapper_method;
+    dy_wrapper_real, dy_wrapper_method, dy_wrapper_generic_function,
+    dy_wrapper_singleton;
 
 /* The program's symbols and keywords, which the runtime interns when it
  * starts.  Defined by the compiler's output. */
@@ -365,11 +374,26 @@ D dy_intern_keyword(const char *name, size_t size);
 
 typedef D (*DyEntry)(D self, D a0, D a1, D a2, D a3, intptr_t argc);
 
-typedef struct DyFunction {
+typedef struct DyFunction {        /* <method>                          */
     DyWrapper *wrapper;
     DyEntry entry;
+    D specializers;                /* <simple-object-vector>, or #f when
+                                      every one is <object> or unknown   */
     D env[];                       /* a closure's free variables         */
 } DyFunction;
+
+typedef struct DyGeneric {         /* <generic-function>                */
+    DyWrapper *wrapper;
+    DyEntry entry;                 /* its dispatch function              */
+    D name;                        /* <symbol>                           */
+    D methods;                     /* <simple-object-vector>             */
+    intptr_t required;
+} DyGeneric;
+
+typedef struct DySingleton {       /* (singleton object)                */
+    DyWrapper *wrapper;
+    D object;
+} DySingleton;
 
 #define DY_MAX_ARGUMENTS 1024
 #define DY_MAX_VALUES    1024
@@ -378,7 +402,12 @@ typedef struct DyThread {
     intptr_t mv_count;
     D mv[DY_MAX_VALUES];
     D args[DY_MAX_ARGUMENTS - 4];  /* arguments 4 and up                 */
-    /* A pending tail call, in trampoline mode */
+    /* The next method of the method being entered: set by the caller,
+       read by the method before it calls anything. */
+    D next_method;
+    /* A pending tail call, in trampoline mode; TAIL_ENTRY, if not NULL,
+       is the entry to use instead of TAIL_FUNCTION's own. */
+    DyEntry tail_entry;
     D tail_function;
     D tail_a[4];
     intptr_t tail_argc;
@@ -411,8 +440,15 @@ static inline D dy_check_bound(D value, const char *name) {
 /* VALUES[START..END) as a list. */
 D dy_list_of(const D *values, intptr_t start, intptr_t end);
 
+static inline bool dy_function_p(D f) {
+    if (!DY_IS_POINTER(f)) return false;
+    unsigned k = ((DyHeader *)DY_PTR(f))->wrapper->kind;
+    return k == DY_KIND_FUNCTION || k == DY_KIND_GENERIC;
+}
+
+/* Both DyFunction and DyGeneric have the entry second. */
 static inline DyEntry dy_entry(D f) {
-    if (!dy_kind_p(f, DY_KIND_FUNCTION)) dy_not_a_function(f);
+    if (!dy_function_p(f)) dy_not_a_function(f);
     return ((DyFunction *)DY_PTR(f))->entry;
 }
 
@@ -447,8 +483,10 @@ static inline D dy_bounce(D r) {
     while (r == DY_TAIL_MARKER) {
         DyThread *t = dy_thread;
         D f = t->tail_function;
-        r = dy_entry(f)(f, t->tail_a[0], t->tail_a[1], t->tail_a[2],
-                        t->tail_a[3], t->tail_argc);
+        DyEntry entry = t->tail_entry ? t->tail_entry : dy_entry(f);
+        t->tail_entry = NULL;
+        r = entry(f, t->tail_a[0], t->tail_a[1], t->tail_a[2],
+                  t->tail_a[3], t->tail_argc);
     }
     return r;
 }
@@ -464,8 +502,15 @@ static inline D dy_bounce(D r) {
         t_->tail_argc = (n);                                            \
         return DY_TAIL_MARKER;                                          \
     } while (0)
-#define DY_TAIL_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
-    DY_TAIL_CALL(f, a0, a1, a2, a3, n)
+#define DY_TAIL_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) do {               \
+        DyThread *t_ = dy_thread;                                       \
+        t_->tail_entry = (fn);                                          \
+        t_->tail_function = (f);                                        \
+        t_->tail_a[0] = (a0); t_->tail_a[1] = (a1);                     \
+        t_->tail_a[2] = (a2); t_->tail_a[3] = (a3);                     \
+        t_->tail_argc = (n);                                            \
+        return DY_TAIL_MARKER;                                          \
+    } while (0)
 #else
 #define DY_CALL(f, a0, a1, a2, a3, n) \
     dy_entry(f)((f), (a0), (a1), (a2), (a3), (n))
@@ -476,6 +521,42 @@ static inline D dy_bounce(D r) {
 #define DY_TAIL_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
     __attribute__((musttail)) return fn((f), (a0), (a1), (a2), (a3), (n))
 #endif
+
+/* -------------------------------------------------------- Object system
+ * (CompilerPlan.md, Phase 5) */
+
+/* id? : identity, except that numbers of one class and value are id?. */
+bool dy_identical(D x, D y);
+
+/* Does X match the specializer SPEC, a class or a singleton? */
+bool dy_specializer_matches(D x, D spec);
+
+_Noreturn void dy_no_applicable_method(D generic);
+_Noreturn void dy_unbound_slot(const char *getter);
+_Noreturn void dy_not_a_slot(const char *getter, D instance);
+
+/* Check the arguments from index START: keyword/value pairs whose
+ * keywords are among the N in ACCEPTED (any, if ACCEPTED is NULL). */
+void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
+                       D a3, const D *accepted, size_t n);
+
+/* A next-method object that, called with no arguments, calls NEXT with
+ * the arguments the current method was given. */
+D dy_capture_next(D next, intptr_t argc, D a0, D a1, D a2, D a3);
+
+/* A new instance of the class whose instances have WRAPPER, every slot
+ * uninitialized (DY_UNBOUND). */
+D dy_make_instance(DyWrapper *wrapper);
+
+/* The value after KEYWORD in the list of keyword/value pairs PAIRS (the
+ * leftmost), or DY_UNSUPPLIED. */
+D dy_find_keyword(D pairs, D keyword);
+
+/* Call F with FIRST and the elements of LIST as its arguments. */
+D dy_call_list(D f, D first, D list);
+
+/* initialize's method on <object>: does nothing. */
+extern DyFunction dy_default_initialize;
 
 /* Runtime support for backquote */
 D dy_append2(D list, D tail);

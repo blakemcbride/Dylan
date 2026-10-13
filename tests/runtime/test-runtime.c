@@ -136,7 +136,7 @@ static void test_constants_print(void) {
     for (size_t i = 0; i < test_constant_count; i++)
         check_prints(test_constants[i], test_expected[i], __FILE__, (int)i);
     /* 'Foo and 'FOO are one symbol. */
-    CHECK(test_constants[17] == test_constants[18]);
+    CHECK(test_constants[19] == test_constants[20]);
 }
 
 /* ------------------------------------------------------------- Integers */
@@ -265,8 +265,8 @@ static void test_strings_and_symbols(void) {
     /* The program's own symbols are interned at startup. */
     CHECK(dy_intern_symbol("<INTEGER>", 9) ==
           ((DyClass *)DY_PTR(dy_wrapper_integer.class))->name);
-    CHECK(dy_intern_symbol("foo", 3) == test_constants[17]);
-    CHECK(dy_intern_keyword("FOO", 3) == test_constants[16]);
+    CHECK(dy_intern_symbol("foo", 3) == test_constants[19]);
+    CHECK(dy_intern_keyword("FOO", 3) == test_constants[18]);
     /* Many symbols: the table grows. */
     char name[32];
     D first = dy_intern_symbol("s0", 2);

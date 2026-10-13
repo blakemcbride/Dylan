@@ -37,6 +37,7 @@
     "backend/classes"
     "backend/cdata"
     "backend/primitives"
+    "backend/objects"
     "backend/codegen"
     "driver"))
 

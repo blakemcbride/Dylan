@@ -76,8 +76,9 @@ TAIL-P meaning in tail position with respect to E."
     (and (ivar-p f) (ivar-value-fn f))))
 
 (defun simple-fn-p (fn)
-  "Only required parameters?"
-  (and (null (ir-fn-next fn)) (null (ir-fn-rest fn)) (null (ir-fn-keys fn))))
+  "Only required parameters, none specialized?"
+  (and (null (ir-fn-next fn)) (null (ir-fn-rest fn)) (null (ir-fn-keys fn))
+       (every #'null (ir-fn-specializers fn))))
 
 (defun decide-contification (letrec)
   (let* ((arity-ok (lambda (fn)
@@ -138,8 +139,6 @@ TAIL-P meaning in tail position with respect to E."
 
 (defvar *cfuns* nil "IR-FN -> CFUN, for every fn that is a C function.")
 (defvar *cfun* nil "The CFUN being generated.")
-(defvar *cdata* nil)
-(defvar *classes* nil)
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
 (defvar *used-primitives* nil)
 (defvar *lines* nil "The lines of the function being generated, newest first.")
@@ -247,6 +246,9 @@ dropped unevaluated?"
        (let ((var (ir-global-set-var e)))
          (when (module-var-predefined-p var)
            (unsupported e "Assigning a variable of the dylan module"))
+         (when (gethash var *constant-globals*)
+           (compile-error "~a holds a class or generic function and cannot be assigned"
+                          (name-string (module-var-name var))))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))
          (deliver dest (atom-c (ir-global-set-value e)))))
       (ir-set
@@ -279,14 +281,27 @@ dropped unevaluated?"
          (deliver dest (c-constant *cdata* (name-symbol (module-var-name var))))))
       (ir-bind-exit (unsupported e "bind-exit (Phase 6)"))
       (ir-unwind (unsupported e "unwind-protect (Phase 6)"))
-      (ir-define-generic (unsupported e "define-generic-function (Phase 5)"))
-      (ir-define-method (unsupported e "define-method (Phase 5)"))
-      (ir-define-class (unsupported e "define-class (Phase 5)"))
-      (ir-define-slot (unsupported e "define-slot (Phase 5)")))))
+      ;; Generic functions and methods are static: nothing to do at run
+      ;; time.  A class's slot values are evaluated where it is defined.
+      (ir-define-generic (deliver dest (definition-value (ir-define-generic-var e))))
+      (ir-define-method (deliver dest (definition-value (ir-define-method-var e))))
+      (ir-define-class
+       (gen-class-definition e)
+       (deliver dest (definition-value (ir-define-class-var e))))
+      (ir-define-slot
+       (gen-class-definition e)
+       (deliver dest (c-constant *cdata* (name-symbol (module-var-name
+                                                       (slot-spec-getter (ir-define-slot-slot e))))))))))
+
+(defun definition-value (var)
+  "A defining form answers the name it defines."
+  (c-constant *cdata* (name-symbol (module-var-name var))))
 
 (defun global-ref-c (e)
   (let ((var (ir-global-ref-var e)))
-    (if (module-var-predefined-p var)
+    (cond
+      ((gethash var *constant-globals*))
+      ((module-var-predefined-p var)
         (let ((c (predefined-c-value var *classes*)))
           (unless c
             (unsupported e (format nil "~a (it has no definition in the runtime yet)"
@@ -295,9 +310,10 @@ dropped unevaluated?"
             (when primitive
               (pushnew (subseq c (+ primitive) (1- (length c))) *used-primitives*
                        :test #'string=)))
-          c)
-        (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
-                (c-string-literal (map 'list #'char-code (module-var-string var)))))))
+          c))
+      (t
+       (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
+               (c-string-literal (map 'list #'char-code (module-var-string var))))))))
 
 (defun gen-primitive (e dest)
   (let ((args (mapcar #'atom-c (ir-prim-arguments e))))
@@ -539,19 +555,34 @@ position?  (If so, a call may have changed the count of values.)"
           do (emit-bind var (if (< i 4)
                                 (format nil "a~d" i)
                                 (format nil "dy_thread->args[~d]" (- i 4)))))
+    (loop for var in (cfun-env cfun)
+          for i from 0
+          do (emit "~a = ((DyFunction *)DY_PTR(self))->env[~d];" (v-name var) i))
+    (unless (gethash fn *method-of-fn*)
+      ;; A method made by method checks its specializers when called
+      ;; (define-method's are checked by dispatch, or its direct entry).
+      (loop for spec in (ir-fn-specializers fn)
+            for var in required
+            when spec
+              do (emit "dy_check_type(~a, ~a);" (var-read var) (atom-c spec))))
+    (cond ((and (ir-fn-next fn) (gethash fn *method-of-fn*))
+           ;; Its caller left its next method in the thread.  A next method
+           ;; that may be called with no arguments must remember these.
+           (let ((temp (new-temp)))
+             (emit "~a = dy_thread->next_method;" temp)
+             (when (needs-captured-next-p (ir-fn-next fn) fn)
+               (emit "if (~a != DY_FALSE) ~a = dy_capture_next(~a, argc, a0, a1, a2, a3);"
+                     temp temp temp))
+             (emit-bind (ir-fn-next fn) temp)))
+          ((ir-fn-next fn)
+           ;; Called directly, a method has no next method.
+           (emit-bind (ir-fn-next fn) "DY_FALSE")))
     (when (or (ir-fn-rest fn) keys)
       (let ((rest (or (ir-fn-rest fn) (new-temp))))
         (if (ivar-p rest)
             (emit-bind rest (format nil "dy_collect_arguments(argc, ~d, a0, a1, a2, a3)" r))
             (emit "~a = dy_collect_arguments(argc, ~d, a0, a1, a2, a3);" rest r))
         (when keys (gen-keyword-parsing fn (if (ivar-p rest) (var-read rest) rest)))))
-    (when (ir-fn-next fn)
-      ;; Called directly, a method has no next method (Phase 5 adds the
-      ;; calls from generic functions).
-      (emit-bind (ir-fn-next fn) "DY_FALSE"))
-    (loop for var in (cfun-env cfun)
-          for i from 0
-          do (emit "~a = ((DyFunction *)DY_PTR(self))->env[~d];" (v-name var) i))
     (let ((top-index (length *lines*)))
       (gen (ir-fn-body fn) (make-dest :return))
       (when (cfun-self-tail-call cfun)
@@ -573,9 +604,37 @@ position?  (If so, a call may have changed the count of values.)"
         (format out "~a~%" line))
       (format out "}~%"))))
 
+(defun needs-captured-next-p (var fn)
+  "Might the next method VAR be called with no arguments, which means
+with the arguments FN was given?"
+  (or (> (ivar-ref-count var) (ivar-call-count var))  ; used as a value
+      (let ((found nil))
+        (labels ((walk-fn (f)
+                   (when (listp (ir-fn-keys f))
+                     (dolist (k (ir-fn-keys f)) (walk (ir-key-default k))))
+                   (walk (ir-fn-body f)))
+                 (walk (e)
+                   (typecase e
+                     (ir-call (when (and (eq (ir-call-function e) var)
+                                         (null (ir-call-arguments e)))
+                                (setf found t)))
+                     (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
+                     (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+                     (ir-seq (mapc #'walk (ir-seq-forms e)))
+                     (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+                     (ir-letrec (mapc #'walk-fn (ir-letrec-fns e)) (walk (ir-letrec-body e)))
+                     (ir-lambda (walk-fn (ir-lambda-fn e)))
+                     (ir-bind-exit (walk (ir-bind-exit-body e)))
+                     (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
+          (walk-fn fn))
+        found)))
+
 (defun gen-keyword-parsing (fn list)
+  ;; Chapter 6: a method accepts the keywords it names, or any if it has
+  ;; #rest; called through its generic function, it accepts what that
+  ;; has checked.
   (let* ((keys (ir-fn-keys fn))
-         (any (or (eq keys :any) (ir-fn-rest fn)))
+         (any (or (ir-fn-rest fn) (gethash fn *method-of-fn*)))
          (keys (if (listp keys) keys '()))
          (l (new-temp)))
     (dolist (k keys) (emit "~a = DY_UNSUPPLIED;" (v-name (ir-key-var k))))
@@ -619,10 +678,23 @@ position?  (If so, a call may have changed the count of values.)"
         (*classes* (prepare-classes (built-in-class-infos)))
         (*globals* (make-hash-table :test #'eq))
         (*closed-over* (make-hash-table :test #'eq))
+        (*dylan-modules* (program-modules (ir-program-source ir)))
+        (*let-values* (make-hash-table :test #'eq))
+        (*gclasses* (make-hash-table :test #'eq))
+        (*gfuns* (make-hash-table :test #'eq))
+        (*method-of-fn* (make-hash-table :test #'eq))
+        (*constant-globals* (make-hash-table :test #'eq))
+        (*sdef-of-node* (make-hash-table :test #'eq))
+        (*instance-slot-numbers* (make-hash-table :test #'eq))
+        (*object-text* '())
+        (*object-decls* '())
+        (*definition-order* 0)
+        (*sdef-counter* 0)
         (*used-primitives* '())
         (*label-counter* 0)
         (*temp-counter* 0)
         (fns (ir-fns ir)))
+    (prepare-object-system ir)
     (dolist (fn fns)
       (dolist (letrec (letrecs-in (ir-fn-body fn)))
         (decide-contification letrec)))
@@ -635,7 +707,15 @@ position?  (If so, a call may have changed the count of values.)"
                                                        (c-identifier (name-string (ir-fn-name fn)))
                                                        (string-downcase (ir-fn-kind fn)))))))
                    (setf (cfun-env cfun)
-                         (sort (copy-list (ir-fn-free-vars fn)) #'< :key #'ivar-id))
+                         (sort (remove-duplicates
+                                (append (ir-fn-free-vars fn)
+                                        ;; A method's specializers, which it
+                                        ;; checks when called.
+                                        (and (not (gethash fn *method-of-fn*))
+                                             (remove-if-not #'ivar-p (ir-fn-specializers fn)))))
+                               #'< :key #'ivar-id))
+                   (let ((m (gethash fn *method-of-fn*)))
+                     (when m (setf (gmethod-entry-c m) (cfun-c-name cfun))))
                    (setf (gethash fn *cfuns*) cfun)
                    (push cfun cfuns)))
       (setf cfuns (nreverse cfuns))
@@ -643,7 +723,8 @@ position?  (If so, a call may have changed the count of values.)"
         (dolist (var (cfun-env cfun))
           (setf (gethash var *closed-over*) t)))
       (let ((texts (mapcar #'gen-function cfuns)))
-        (emit-program-data *classes* *cdata* stream)
+        (finish-object-system)
+        (emit-program-data *classes* *cdata* stream :prelude (reverse *object-decls*))
         (format stream "~%/* Program */~%~%")
         (dolist (p *used-primitives*)
           (format stream "extern DyFunction ~a;~%" p))
@@ -652,7 +733,7 @@ position?  (If so, a call may have changed the count of values.)"
         (terpri stream)
         (dolist (cfun cfuns)
           (when (null (cfun-env cfun))
-            (format stream "static DyFunction ~a_closure = { &dy_wrapper_method, ~a };~%"
+            (format stream "static DyFunction ~a_closure = { &dy_wrapper_method, ~a, DY_FALSE };~%"
                     (cfun-c-name cfun) (cfun-c-name cfun))))
         (terpri stream)
         (loop for var being the hash-keys of *globals* using (hash-value name)
@@ -660,6 +741,7 @@ position?  (If so, a call may have changed the count of values.)"
                          name (module-var-string var)))
         (terpri stream)
         (dolist (text texts) (format stream "~a~%" text))
+        (dolist (text (reverse *object-text*)) (format stream "~a~%" text))
         (format stream "int main(void) {~%    dy_init();~%")
         (dolist (top (ir-program-toplevels ir))
           (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"

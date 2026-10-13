@@ -17,6 +17,8 @@
 
 (in-package #:dylan-compiler)
 
+(defvar *classes* nil "The class table of the program being compiled.")
+
 (defstruct (class-info (:constructor %make-class-info))
   name                                  ; string, as Dylan writes it
   supers                                ; CLASS-INFOs, in order
@@ -29,7 +31,11 @@
   id
   subtree-end
   range-ok-p
-  c-name)                               ; C identifier stem
+  c-name                                ; C identifier stem
+  (size 0)                              ; :INSTANCE: number of slots
+  (slot-offsets nil)                    ; vector over the program's instance
+                                        ; slots: index, or -1; NIL if none
+  (maker nil))                          ; C name of its make, or NIL
 
 (defmethod print-object ((c class-info) stream)
   (print-unreadable-object (c stream :type t)
@@ -93,11 +99,11 @@
     ("<abort>" ("<restart>") :none)
     ;; Functions, classes and the rest (chapters 6, 11, 15, 16)
     ("<function>" ("<object>") :none :abstract)
-    ("<generic-function>" ("<function>") :none)
+    ("<generic-function>" ("<function>") :generic)
     ("<method>" ("<function>") :function :abstract)
     ("<class>" ("<object>") :class :abstract)
     ("<slot-descriptor>" ("<object>") :none :abstract)
-    ("<singleton>" ("<object>") :none :abstract)
+    ("<singleton>" ("<object>") :singleton :abstract)
     ("<symbol>" ("<object>") :symbol)
     ("<keyword>" ("<object>") :keyword)
     ("<character>" ("<object>") :character)))

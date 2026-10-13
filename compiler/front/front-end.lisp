@@ -91,6 +91,7 @@ saying why the file could not be read."
 (defun front-end-units (specs &key diagnostics)
   "SPECS is a list of (source-file module-name-string forms)."
   (let ((*diagnostics* diagnostics)
+        (*compile-time-variables* :new)
         (*variable-counter* 0)
         (*dylan-modules* nil)
         (*location* nil))

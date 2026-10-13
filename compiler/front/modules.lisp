@@ -43,7 +43,8 @@
   (first-reference nil)                 ; location of the first reference
   (predefined-p nil)                    ; one of the DYLAN module's own?
   (assigned-p nil)                      ; the target of a set!?
-  (thread-local-p nil))                 ; defined by define-thread-variable?
+  (thread-local-p nil)                  ; defined by define-thread-variable?
+  (macro nil))                          ; define-macro: its expander
 
 (defmethod print-object ((v module-var) stream)
   (print-unreadable-object (v stream :type t)
@@ -96,6 +97,8 @@ module may not define a variable it imports -- unless the module it comes
 from names it in a create clause, which asks for exactly that (design note
 32)."
   (let ((var (lookup-module-var module name)))
+    (when (module-var-macro var)
+      (compile-error "~a of ~a: ~a is a macro" form-name (name-string name) (name-string name)))
     (let ((owner (module-var-module var)))
       (unless (or (eq owner module)
                   (member (name-symbol (module-var-name var))

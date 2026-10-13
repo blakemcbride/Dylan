@@ -48,6 +48,22 @@ module: app
 
 (print (count-to 5))
 EOF
+cat > macmods.dyl <<'EOF'
+(define-module macros (use dylan) (export repeat))
+(define-module user (use dylan) (use macros))
+EOF
+cat > macdef.dyl <<'EOF'
+module: macros
+
+(define-macro repeat (n #rest body)
+  (bind ((i (gensym)))
+    `(dotimes (,i ,n) ,@body)))
+EOF
+cat > macuse.dyl <<'EOF'
+module: user
+
+(repeat 3 (print 'hi))
+EOF
 printf '(print (car 5))\n' > fails.dyl
 printf '(foo\n' > bad.dyl
 expected=$(printf 'Hello, world!\n7.5')
@@ -78,6 +94,11 @@ check "CC runs" output_is "$expected" ./withcc
 check "modules" "$dylanc" -k -o mods module.dyl counting.dyl use.dyl app.dyl
 check "modules run" output_is 5 ./mods
 check "a file per module" test -f mods-counting.c -a -f mods-app.c
+check "a macro exported from its module" "$dylanc" -o macs macmods.dyl macdef.dyl macuse.dyl
+check "the macro runs" output_is "$(printf 'hi\nhi\nhi')" ./macs
+check "-E" sh -c "'$dylanc' -E macmods.dyl macdef.dyl macuse.dyl > expanded.txt"
+check "-E writes the expansion" grep -q '=> (dotimes' expanded.txt
+check "-E writes no C" test ! -e macmods.c
 check "a run-time error" "$dylanc" -o fails fails.dyl
 check "a run-time error's status" sh -c '! ./fails'
 check "-g reports it too" "$dylanc" -g -o failsg fails.dyl

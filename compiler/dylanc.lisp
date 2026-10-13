@@ -29,6 +29,8 @@ Options:
                    every inline operation checking its arguments when run
   -k, --keep-c     keep the C: FILE.c, FILE-MODULE.c for each module, FILE.h
   -C, --c-only     write the C only (FILE.c and the rest); do not compile it
+  -E, --expand     write each use of the program's macros and its expansion;
+                   no C
   --trampoline     tail calls by trampolines, for C compilers without musttail
   --cc CC          the C compiler (default: $CC, or cc)
   --no-lines       no #line directives pointing to the Dylan source
@@ -62,6 +64,7 @@ Options:
                        ((member a '("-g" "--debug") :test #'string=) (setf (getf options :debug) t))
                        ((member a '("-k" "--keep-c") :test #'string=) (setf (getf options :keep) t))
                        ((member a '("-C" "--c-only") :test #'string=) (setf (getf options :c-only) t))
+                       ((member a '("-E" "--expand") :test #'string=) (setf (getf options :expand) t))
                        ((string= a "--trampoline") (setf (getf options :trampoline) t))
                        ((string= a "--cc") (setf (getf options :cc) (value)))
                        ((string= a "--no-lines") (setf (getf options :no-lines) t))
@@ -84,12 +87,21 @@ Options:
   (let ((p (pathname file)))
     (namestring (make-pathname :type nil :defaults p))))
 
+(defun expand-only (files)
+  "Write each use of the program's macros in FILES and its expansion."
+  (let* ((program (let ((*expansion-trace* *standard-output*))
+                    (front-end files :library t))))
+    (report-diagnostics (program-diagnostics program))
+    (finish-output)
+    (sb-ext:exit :code (if (program-errors program) 1 0) :abort (program-errors program))))
+
 (defun main (arguments)
   (let* ((options (parse-command-line arguments))
          (files (getf options :files))
          (output (or (getf options :output) (default-output (first files))))
          (c-file (concatenate 'string output ".c"))
-         (variant (getf options :variant))
+         (variant (progn (when (getf options :expand) (expand-only files))
+                         (getf options :variant)))
          (c-files (let ((*debug* (or (getf options :debug) (member variant '(:address :thread))))
                         (*emit-lines* (not (getf options :no-lines))))
                     (compile-files files c-file))))

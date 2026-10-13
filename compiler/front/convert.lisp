@@ -14,8 +14,6 @@
 
 (in-package #:dylan-compiler)
 
-(defvar *module* nil "The DYLAN-MODULE forms are being converted in.")
-
 (defvar *special-forms* (make-hash-table :test #'eq)
   "Special form name -> function of (form env) answering a node.")
 
@@ -38,6 +36,8 @@ and the variable."
 
 (defun reference-module-var (name)
   (let ((var (lookup-module-var *module* name)))
+    (when (module-var-macro var)
+      (compile-error "~a is a macro: it cannot be used as a variable" (name-string name)))
     (unless (module-var-first-reference var)
       (setf (module-var-first-reference var) (or *location* t)))
     var))
@@ -66,6 +66,8 @@ and the variable."
            (funcall (gethash (car form) *special-forms*) form env))
           ((and (symbolp (car form)) (find-macro (car form)))
            (convert (expand-macro form) env))
+          ((user-macro (car form) env)
+           (with-expansion (form) (convert (expand-user-macro form) env)))
           ((proper-list-p form)
            (make-call (convert (car form) env)
                       (mapcar (lambda (f) (convert f env)) (cdr form))))
@@ -84,6 +86,12 @@ and the variable."
   (with-form (form)
     (cond ((and (consp form) (eq (car form) 'dylan::define-module))
            '())                         ; done before conversion began
+          ((and (consp form) (eq (car form) 'dylan::define-macro))
+           (define-user-macro form)
+           '())
+          ((and (consp form) (eq (car form) 'dylan::define-for-macros))
+           (eval-for-macros form)
+           '())
           ((and (consp form) (eq (car form) 'dylan::begin)
                 (proper-list-p form))
            (mapcan #'convert-top-level (cdr form)))
@@ -91,10 +99,18 @@ and the variable."
                 (not (gethash (car form) *special-forms*))
                 (find-macro (car form)))
            (convert-top-level (expand-macro form)))
+          ((and (consp form) (user-macro (car form) '()))
+           (with-expansion (form) (convert-top-level (expand-user-macro form))))
           (t (list (convert form '()))))))
 
 (define-special-form dylan::define-module (form env)
   (compile-error "define-module must be at top level"))
+
+(define-special-form dylan::define-macro (form env)
+  (compile-error "define-macro must be at top level"))
+
+(define-special-form dylan::define-for-macros (form env)
+  (compile-error "define-for-macros must be at top level"))
 
 ;;; Simple special forms
 

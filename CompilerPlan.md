@@ -28,8 +28,8 @@ not an oracle.
   runs in constant stack space.
 - **Threads.** Multiple real OS threads via pthreads, running Dylan code
   in parallel.
-- **Macros (future).** A Common Lisp–style macro system will be added
-  later; macros are expanded at compile time.
+- **Macros.** A Common Lisp–style macro system; macros are expanded at
+  compile time (done: see milestone M11).
 
 ## Not in the first version
 
@@ -110,7 +110,7 @@ tests/front-end/run.lisp`.
    record file and line for every form.
 2. **Modules.** Adapt `src/comp-module.lisp` (design notes 32/33):
    resolve every identifier to a unique module-variable object.
-3. **Macros (hook now, implement later).** Expansion runs in the compiler,
+3. **Macros** (done in M11, with the first option below). Expansion runs in the compiler,
    before conversion to core forms, and is repeated until no macro forms
    remain. The future macro system needs to *run Dylan code at compile
    time* (the macro bodies). Options, in order of preference:
@@ -586,7 +586,7 @@ not from the Common Lisp implementation.
 | M8 | threads, locks, condition variables, fluid variables | pthreads support |
 | M9 | type inference, inlining, unboxing, escape analysis | speed targets |
 | M10 | tree shaking, size builds | size targets |
-| M11 | compile-time macro system | macros |
+| M11 | compile-time macro system | macros — done: `define-macro`, `define-for-macros`, `gensym` (`compiler/front/macros.lisp`); bodies run in the Common Lisp implementation; `dylanc -E`; tests `tests/codegen/cases-macros.lisp` |
 
 Threads come after the single-threaded core works, but per-thread state
 (values buffer, argument area, dynamic chain) is `_Thread_local` from M0

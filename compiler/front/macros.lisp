@@ -16,6 +16,8 @@
 
 (in-package #:dylan-compiler)
 
+(defvar *module* nil "The DYLAN-MODULE forms are being converted in.")
+
 (defvar *macros* (make-hash-table :test #'eq)
   "Macro name -> function of the whole form answering its expansion.")
 
@@ -418,3 +420,138 @@ anything to evaluate (if not, the expansion is X quoted)."
          ,@(mapcar (lambda (b new) `(dylan::set! ,(first b) ,new)) bindings news)
          (unwind-protect (dylan::begin ,@(cddr form))
            ,@(mapcar (lambda (b old) `(dylan::set! ,(first b) ,old)) bindings olds))))))
+
+;;; A program's own macros (CompilerPlan.md, milestone M11: an extension;
+;;; the 1992 manual has none)
+;;;
+;;;   (define-macro name (parameter ...) body ...)
+;;;
+;;; at top level makes NAME, a variable of the current module, a macro: a
+;;; call (name argument ...) is replaced, while compiling, by the value of
+;;; the body run with the parameters bound to the argument forms, as a
+;;; Common Lisp macro is.  The parameter list is a method's (#rest and
+;;; #key too).  The expansion's names mean what they mean where the macro
+;;; is used; (gensym) answers a fresh name no program can write.  A macro
+;;; is exported and imported as a variable is, and a local variable of the
+;;; same name hides it.
+;;;
+;;;   (define-for-macros form ...)
+;;;
+;;; runs the forms only while compiling, so that macros' bodies may call
+;;; the functions they define.
+;;;
+;;; Bodies run in the Common Lisp implementation of Dylan (src/), loaded
+;;; with the compiler, in a compile-time environment of their own: its
+;;; dylan library, gensym, and what define-for-macros has defined.
+
+(defvar *compile-time-variables* nil
+  "The compile-time environment's module variables so far, or :NEW when
+it has yet to be set up.")
+
+(defvar *expansion-depth* 0)
+
+(defvar *expansion-trace* nil
+  "A stream to write each macro use and its expansion to, or NIL.")
+
+(defparameter +max-expansion-depth+ 500)
+
+(defvar *macro-gensym-counter* 0)
+
+(defun dylan::dylanc-gensym (&optional (prefix "g"))
+  "gensym, in the compile-time environment."
+  (make-symbol (format nil "~a~d" (if (stringp prefix) prefix "g") (incf *macro-gensym-counter*))))
+
+(defun condition-text (e)
+  "The message of the condition E, on one line."
+  (let* ((text (format nil "~a" e))
+         (text (if (and (> (length text) 7) (string= "Error: " text :end2 7))
+                   (subseq text 7)
+                   text)))
+    (with-output-to-string (out)
+      (let ((space nil))
+        (loop for c across (string-trim '(#\Space #\Newline #\Tab) text)
+              do (if (member c '(#\Space #\Newline #\Tab))
+                     (setf space t)
+                     (progn (when space (write-char #\Space out) (setf space nil))
+                            (write-char c out))))))))
+
+(defun compile-time-eval (form what)
+  "Evaluate the Dylan FORM in the compile-time environment; answer its
+value.  An error in it is a compile error, its message beginning with WHAT."
+  (when (eq *compile-time-variables* :new)
+    (setf *compile-time-variables* '())
+    (compile-time-eval (read-dylan-form "(define gensym (lisp-procedure 'dylanc-gensym))")
+                       "gensym"))
+  (handler-case
+      (let ((dylan::*current-module* 'dylan::dylan-user)
+            (*standard-output* *error-output*)
+            (result nil))
+        (dylan::compile-expression
+         form nil *compile-time-variables*
+         (lambda (new preamble output)
+           (setf *compile-time-variables* (append new *compile-time-variables*))
+           (setf result (dylan::implementation-specific/eval (append preamble (list output))))))
+        result)
+    (compile-error (e) (error e))
+    (error (e) (compile-error "~a: ~a" what (condition-text e)))))
+
+(defun read-dylan-form (text)
+  (with-input-from-string (in text) (dylan::dylan-read in)))
+
+(defun define-user-macro (form)
+  (require-list form 3 "define-macro")
+  (destructuring-bind (name parameters &rest body) (cdr form)
+    (unless (simple-variable-name-p name)
+      (compile-error "define-macro: ~a is not a name" name))
+    (unless (proper-list-p parameters)
+      (compile-error "define-macro ~a: bad parameter list ~a" name parameters))
+    (let ((var (defining-module-var *module* name "define-macro")))
+      (when (module-var-definitions var)
+        (compile-error "define-macro: ~a is defined as a variable too" name))
+      (setf (module-var-macro var)
+            (cons name (compile-time-eval `(dylan::method ,parameters ,@body)
+                                          (format nil "define-macro ~a" name)))))))
+
+(defun eval-for-macros (form)
+  (dolist (f (cdr form))
+    (with-form (f)
+      (compile-time-eval f "define-for-macros"))))
+
+(defun user-macro (name env)
+  "The macro the operator NAME names, if it is one: (name . expander)."
+  (and (simple-variable-name-p name)
+       (not (lookup-lexical name env))
+       *module*
+       (module-var-macro (lookup-module-var *module* name))))
+
+(defmacro with-expansion ((form) &body body)
+  "BODY, converting the expansion of FORM, a use of a macro, counted in
+*EXPANSION-DEPTH*, so that a macro that never stops expanding is found."
+  `(let ((*expansion-depth* (1+ *expansion-depth*)))
+     (when (> *expansion-depth* +max-expansion-depth+)
+       (compile-error "~a: macros expanded ~d deep -- one never stops?"
+                      (car ,form) +max-expansion-depth+))
+     ,@body))
+
+(defun expand-user-macro (form)
+  (let ((macro (user-macro (car form) '())))
+    (unless (proper-list-p form)
+      (compile-error "~a: a call of a macro must be a proper list" (car form)))
+    (let ((expansion
+            (handler-case (apply (cdr macro) nil dylan::next-method/not-generic (cdr form))
+              (compile-error (e) (error e))
+              (program-error ()
+                (compile-error "macro ~a: wrong number of arguments in ~a"
+                               (car macro) (dylan-form-string form)))
+              (error (e)
+                (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))
+      (when *expansion-trace*
+        (format *expansion-trace* "~@[~a: ~]~a~%  => ~a~%"
+                (and *location* (location-string *location*))
+                (dylan-form-string form) (dylan-form-string expansion)))
+      expansion)))
+
+(defun dylan-form-string (form)
+  (with-output-to-string (s)
+    (let ((*standard-output* s))
+      (dylan::dylan-write form))))

@@ -155,6 +155,11 @@ its value.")
 (defvar *label-counter* 0)
 (defvar *temp-counter* 0)
 
+(defparameter +line-reset+ "#line DY_RESET"
+  "Stands for a #line directive back to the C file itself.")
+
+(defconstant +abi-version+ 11 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
 point to the Dylan source?")
@@ -797,9 +802,6 @@ position?  (If so, a call may have changed the count of values.)"
         ;; Back to the C file (output.lisp writes the line number).
         (format out "~a~%" +line-reset+)))))
 
-(defparameter +line-reset+ "#line DY_RESET"
-  "Stands for a #line directive back to the C file itself.")
-
 (defun needs-captured-next-p (var fn)
   "Might the next method VAR be called with no arguments, which means
 with the arguments FN was given?"
@@ -1007,5 +1009,3 @@ each of its Dylan functions -> the name of the module it was written in."
             (setf (gethash (cfun-c-name cfun) modules)
                   (fn-module-name (cfun-fn cfun) units)))
           modules)))))
-
-(defconstant +abi-version+ 11 "As DY_ABI_VERSION in runtime/c/dylan.h.")

@@ -279,8 +279,8 @@ dropped unevaluated?"
        (let ((var (ir-define-variable-var e)))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-define-variable-value e)))
          (deliver dest (c-constant *cdata* (name-symbol (module-var-name var))))))
-      (ir-bind-exit (unsupported e "bind-exit (Phase 6)"))
-      (ir-unwind (unsupported e "unwind-protect (Phase 6)"))
+      (ir-bind-exit (gen-local-exit e dest))
+      (ir-unwind (error "Internal error: an unwind-protect was not lowered."))
       ;; Generic functions and methods are static: nothing to do at run
       ;; time.  A class's slot values are evaluated where it is defined.
       (ir-define-generic (deliver dest (definition-value (ir-define-generic-var e))))
@@ -301,7 +301,8 @@ dropped unevaluated?"
   (let ((var (ir-global-ref-var e)))
     (cond
       ((gethash var *constant-globals*))
-      ((module-var-predefined-p var)
+      ;; The library may define one of the dylan module's variables.
+      ((and (module-var-predefined-p var) (null (module-var-definitions var)))
         (let ((c (predefined-c-value var *classes*)))
           (unless c
             (unsupported e (format nil "~a (it has no definition in the runtime yet)"
@@ -315,16 +316,62 @@ dropped unevaluated?"
        (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
                (c-string-literal (map 'list #'char-code (module-var-string var))))))))
 
+(defun deliver-call (dest expr)
+  "Give DEST the values of EXPR, a C call of something that answers
+values as a Dylan function does."
+  (case (dest-kind dest)
+    (:return (emit "return ~a;" expr))
+    (:mv (emit "dy_thread->mv_count = 1;")
+         (emit "~a = ~a;" (dest-var dest) expr)
+         (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
+    (:effect (emit "(void)~a;" expr)
+             (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
+    (t (deliver dest expr))))
+
+(defun deliver-values (dest exprs)
+  "Give DEST the values EXPRS, C expressions."
+  (if (= (length exprs) 1)
+      (deliver dest (first exprs))
+      (let ((first (or (first exprs) "DY_FALSE")))
+        (case (dest-kind dest)
+          ((:return :mv)
+           (loop for x in exprs for i from 0
+                 do (emit "dy_thread->mv[~d] = ~a;" i x))
+           (emit "dy_thread->mv_count = ~d;" (length exprs))
+           (if (eq (dest-kind dest) :return)
+               (emit "return ~a;" first)
+               (progn (emit "~a = ~a;" (dest-var dest) first)
+                      (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))))
+          (t (deliver dest first))))))
+
+;;; Exits that stay in their function (control.lisp lowers the others).
+;;; A call of the exit gives its arguments to the bind-exit's destination
+;;; and jumps past the bind-exit.
+
+(defvar *local-exits* nil "exit IVAR -> the DEST its calls deliver to.")
+
+(defun gen-local-exit (e dest)
+  (let* ((end (and (not (eq (dest-kind dest) :return)) (null (dest-label dest))
+                   (new-label "exit")))
+         (exit-dest (if end (with-label dest end) dest)))
+    (setf (gethash (ir-bind-exit-var e) *local-exits*) exit-dest)
+    (gen (ir-bind-exit-body e) dest)
+    (when end (emit "~a:;" end))))
+
 (defun gen-primitive (e dest)
   (let ((args (mapcar #'atom-c (ir-prim-arguments e))))
     (case (ir-prim-name e)
+      (:call-with-exit (deliver-call dest (format nil "dy_call_with_exit(~a)" (first args))))
+      (:unwind-protect
+       (deliver-call dest (format nil "dy_unwind_protect(~a, ~a)" (first args) (second args))))
+      (:handler-bind
+       (deliver-call dest (format nil "dy_handler_bind(~{~a~^, ~})" args)))
       (:check-type
        (emit "dy_check_type(~a, ~a);" (first args) (second args))
        (deliver dest "DY_FALSE"))
       (:pair (deliver dest (format nil "dy_pair(~a, ~a)" (first args) (second args))))
       (:append2 (deliver dest (format nil "dy_append2(~a, ~a)" (first args) (second args))))
       (:list->vector (deliver dest (format nil "dy_list_to_vector(~a)" (first args))))
-      (:handler-bind (unsupported e "handler-bind and handler-case (Phase 6)"))
       (t (unsupported e (format nil "the primitive ~(~a~)" (ir-prim-name e)))))))
 
 (defun gen-mv-let (e dest)
@@ -363,6 +410,10 @@ C expressions for a0..a3 and the count."
          (group (and target (gethash target *groups*)))
          (tail (and (eq (dest-kind dest) :return) (ir-call-tail-p e))))
     (cond
+      ((eq (ir-call-kind e) :exit)
+       (deliver-values (or (gethash f *local-exits*)
+                           (error "Internal error: an exit with no bind-exit."))
+                       (mapcar #'atom-c (ir-call-arguments e))))
       (group (gen-contified-call e target group dest))
       ((and tail target (eq target (cfun-fn *cfun*)) (simple-fn-p target)
             (= (length (ir-call-arguments e)) (length (ir-fn-required target))))
@@ -517,7 +568,11 @@ position?  (If so, a call may have changed the count of values.)"
   (labels ((walk (e)
              (typecase e
                (ir-call (and (not (gethash (call-target e) *groups*))
-                             (not (ir-call-tail-p e))))
+                             (not (ir-call-tail-p e))
+                             (not (eq (ir-call-kind e) :exit))))
+               ;; These call Dylan functions.
+               (ir-prim (member (ir-prim-name e) '(:call-with-exit :unwind-protect :handler-bind)))
+               (ir-bind-exit (walk (ir-bind-exit-body e)))
                (ir-let (or (walk (ir-let-value e)) (walk (ir-let-body e))))
                (ir-mv-let (or (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e))))
                (ir-seq (some #'walk (ir-seq-forms e)))
@@ -678,6 +733,7 @@ with the arguments FN was given?"
         (*classes* (prepare-classes (built-in-class-infos)))
         (*globals* (make-hash-table :test #'eq))
         (*closed-over* (make-hash-table :test #'eq))
+        (*local-exits* (make-hash-table :test #'eq))
         (*dylan-modules* (program-modules (ir-program-source ir)))
         (*let-values* (make-hash-table :test #'eq))
         (*gclasses* (make-hash-table :test #'eq))

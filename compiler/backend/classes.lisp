@@ -41,8 +41,9 @@
   (print-unreadable-object (c stream :type t)
     (write-string (class-info-name c) stream)))
 
-;;; The built-in classes.  Provisional, like dylan-names.lisp: when the
-;;; library is written in Dylan (Phase 8) it defines them.  The hierarchy
+;;; The built-in classes: those whose instances the runtime represents
+;;; itself.  Provisional, like dylan-names.lisp: when the library is
+;;; written in Dylan (Phase 8) it defines them.  The hierarchy
 ;;; is the manual's (chapters 11 to 16 and their figures), as Thomas has
 ;;; it, less what version 1 leaves out: <complex> stays, abstract, as the
 ;;; superclass of <real>, but has no instances, and there is no
@@ -86,17 +87,8 @@
     ("<list>" ("<mutable-sequence>") :none :abstract :sealed)
     ("<pair>" ("<list>") :pair :sealed)
     ("<empty-list>" ("<list>") :empty-list :sealed)
-    ;; Conditions (chapter 13)
-    ("<condition>" ("<object>") :none :abstract)
-    ("<serious-condition>" ("<condition>") :none :abstract)
-    ("<warning>" ("<condition>") :none :abstract)
-    ("<restart>" ("<condition>") :none :abstract)
-    ("<error>" ("<serious-condition>") :none :abstract)
-    ("<simple-error>" ("<error>") :none)
-    ("<type-error>" ("<error>") :none)
-    ("<simple-warning>" ("<warning>") :none)
-    ("<simple-restart>" ("<restart>") :none)
-    ("<abort>" ("<restart>") :none)
+    ;; The conditions of chapter 13 are defined by the library
+    ;; (runtime/dylan/conditions.dyl).
     ;; Functions, classes and the rest (chapters 6, 11, 15, 16)
     ("<function>" ("<object>") :none :abstract)
     ("<generic-function>" ("<function>") :generic)

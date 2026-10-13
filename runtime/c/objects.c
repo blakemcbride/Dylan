@@ -25,18 +25,6 @@ bool dy_specializer_matches(D x, D spec) {
     dy_error("not a class or singleton", spec);
 }
 
-void dy_check_type(D value, D type) {
-    if (!dy_specializer_matches(value, type)) {
-        fflush(stdout);
-        fputs("Dylan error: ", stderr);
-        dy_debug_write(stderr, value);
-        fputs(" is not an instance of ", stderr);
-        dy_debug_write(stderr, type);
-        fputs(" (type error)\n", stderr);
-        exit(1);
-    }
-}
-
 static const char *generic_name(D generic) {
     DySymbol *name = DY_PTR(((DyGeneric *)DY_PTR(generic))->name);
     return ((DyByteString *)DY_PTR(name->name))->data;

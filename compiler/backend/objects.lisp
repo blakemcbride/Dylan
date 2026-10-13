@@ -486,7 +486,7 @@ slot SD in the object VAR."
          (let* ((fn (ir-define-method-fn d))
                 (var (ir-define-method-var d)))
            (when (and (module-var-predefined-p var)
-                      (not (eq var (dylan-var "initialize"))))
+                      (predefined-c-value var *classes*))
              (compile-error "methods cannot be added to ~a (it is not yet a generic function in the runtime)"
                             (name-string (module-var-name var))))
            (when (ir-fn-free-vars fn)

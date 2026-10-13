@@ -66,3 +66,8 @@
     "cdar" "cddar" "cdddr" "cddr" "cdr" "current-element" "direct-superclasses"
     "element" "first" "last" "second" "size" "slot-value" "third")
     "The names X for which the DYLAN module also owns (setter X).")
+
+(defparameter *dylan-module-internal-names*
+  '("%signal" "%set-error-hooks" "%format-message" "%die" "%warn" "%break")
+  "Variables the DYLAN module owns, with values in the runtime, but does not
+export: for the library's own use.")

@@ -312,6 +312,22 @@ program never queries is dropped.
 
 ## Phase 6 — Control and conditions
 
+**Status: done.** A `bind-exit` whose exit is only called directly in its
+own function compiles to jumps (with multiple values). Every other
+`bind-exit`, and every `unwind-protect`, is lowered (`compiler/ir/control.lisp`)
+into a closure run by a function of `runtime/c/control.c` that holds the
+frame, so generated code never calls `setjmp` and can always make tail
+calls. Handlers are frames in the same chain; `signal` and `next-handler`
+are in C. The condition classes and `signal`, `error`, `cerror`,
+`check-type`, `abort`, `break` and `default-handler` are written in Dylan
+in `runtime/dylan/conditions.dyl` — the first file of the library, which
+every program is now compiled with. The runtime's own errors (wrong
+arguments, type errors, overflow, no applicable method, …) are signalled as
+`<simple-error>` and `<type-error>` conditions. There is no interactive
+debugger: an unhandled serious condition prints its message and exits with
+status 1, `break` prints its message and returns `#f`, and `restart-query`
+and `return-query` do nothing. Tests: `tests/codegen/cases-control.lisp`.
+
 - **`bind-exit`** — if the exit procedure never leaves its function and is
   only called directly, it compiles to `goto`. Otherwise `_setjmp`/
   `_longjmp` on a frame linked into the thread's dynamic chain; calling an

@@ -36,25 +36,37 @@
   `(handler-case (progn ,@body)
      (compile-error (e) (note-error e) nil)))
 
-(defun front-end (pathnames)
-  "Read and convert the Dylan source files PATHNAMES, a whole program.
-Answer a PROGRAM; its diagnostics say whether it succeeded."
+(defun library-files ()
+  "The library's source files, which every program is compiled with
+(CompilerPlan.md, Phase 8)."
+  (sort (directory (merge-pathnames "../runtime/dylan/*.dyl" cl-user::*dylanc-directory*))
+        #'string< :key #'namestring))
+
+(defun front-end (pathnames &key library)
+  "Read and convert the Dylan source files PATHNAMES, a whole program --
+after the library's, if LIBRARY.  Answer a PROGRAM; its diagnostics say
+whether it succeeded."
   (front-end-sources
    (mapcar (lambda (p)
              (cons (namestring p)
                    (handler-case (read-file-text p)
                      (file-error (e)
                        (make-diagnostic :error nil (format nil "~a" e))))))
-           pathnames)))
+           (append (and library (library-files)) pathnames))))
 
 (defun front-end-forms (forms &key (module "dylan-user"))
   "Convert FORMS, Dylan forms as DYLAN::DYLAN-READ reads them, as a whole
 program in MODULE.  For tests."
   (front-end-units (list (list nil module (mapcar (lambda (f) (cons f nil)) forms)))))
 
-(defun front-end-string (text &key (name "<string>"))
-  "Convert the Dylan source TEXT as a whole program.  For tests."
-  (front-end-sources (list (cons name text))))
+(defun front-end-string (text &key (name "<string>") library)
+  "Convert the Dylan source TEXT as a whole program (after the library's
+sources, if LIBRARY).  For tests."
+  (front-end-sources
+   (append (and library
+                (mapcar (lambda (p) (cons (namestring p) (read-file-text p)))
+                        (library-files)))
+           (list (cons name text)))))
 
 (defun front-end-sources (sources)
   "SOURCES is a list of (name . text); a text may instead be a diagnostic

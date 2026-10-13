@@ -21,17 +21,6 @@ void dy_init(void) {
     dy_intern_static_symbols();
 }
 
-_Noreturn void dy_error(const char *message, D irritant) {
-    fflush(stdout);
-    fprintf(stderr, "Dylan error: %s", message);
-    if (irritant) {
-        fputs(": ", stderr);
-        dy_debug_write(stderr, irritant);
-    }
-    fputc('\n', stderr);
-    exit(1);
-}
-
 _Noreturn void dy_integer_overflow(void) {
     dy_error("integer overflow (integers are 63 bits)", 0);
 }

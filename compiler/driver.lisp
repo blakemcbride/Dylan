@@ -29,7 +29,7 @@ reporting why not."
   (let ((*diagnostics* '()))
     (handler-case
         (let ((text (with-output-to-string (out)
-                      (generate-c (to-ir program) out))))
+                      (generate-c (lower-control (to-ir program)) out))))
           (with-open-file (out c-file :direction :output :if-exists :supersede)
             (write-string text out))
           t)
@@ -39,7 +39,7 @@ reporting why not."
         nil))))
 
 (defun compile-files (files c-file)
-  (compile-program (front-end files) c-file))
+  (compile-program (front-end files :library t) c-file))
 
 (defun run (program arguments)
   "Run PROGRAM; answer its exit code.  Its output goes to ours."

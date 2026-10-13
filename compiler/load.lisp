@@ -34,6 +34,7 @@
     "ir/anf"
     "ir/analyze"
     "ir/check"
+    "ir/control"
     "backend/classes"
     "backend/cdata"
     "backend/primitives"

@@ -35,6 +35,7 @@
 #define GC_THREADS 1
 #include <gc.h>
 #include <pthread.h>
+#include <setjmp.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -411,7 +412,40 @@ typedef struct DyThread {
     D tail_function;
     D tail_a[4];
     intptr_t tail_argc;
+    /* The dynamic chain: exits, cleanups and handlers, innermost first */
+    struct DyFrame *frames;
+    uint64_t frame_serial;
+    int error_depth;               /* run-time errors being signalled    */
 } DyThread;
+
+/* ------------------------------------------------------------- Control
+ * (CompilerPlan.md, Phase 6)
+ *
+ * The frames of the dynamic chain live on the C stack of the runtime
+ * functions that establish them, so generated code never calls setjmp
+ * and can always make tail calls.  bind-exit, when its exit leaves the
+ * function, and unwind-protect are compiled as closures handed to these. */
+
+enum { DY_FRAME_EXIT, DY_FRAME_CLEANUP, DY_FRAME_HANDLER };
+
+typedef struct DyFrame {
+    struct DyFrame *prev;
+    int kind;
+    int error_depth;               /* the thread's, when established     */
+    uint64_t serial;               /* unique in the thread                */
+    jmp_buf jump;                  /* DY_FRAME_EXIT                       */
+    D a, b, c, d;                  /* CLEANUP: a the cleanup; HANDLER:
+                                      type, function, test, description  */
+} DyFrame;
+
+/* Call BODY, a function of one argument, with an exit procedure that
+ * returns its arguments as the values of this call (bind-exit). */
+D dy_call_with_exit(D body);
+/* Call PROTECTED with no arguments, then CLEANUP, even if PROTECTED is
+ * left by an exit; answer PROTECTED's values (unwind-protect). */
+D dy_unwind_protect(D protected, D cleanup);
+/* Call THUNK with a handler established (handler-bind). */
+D dy_handler_bind(D type, D function, D test, D description, D thunk);
 
 /* Each thread's state, allocated uncollectable so that the collector
  * scans it. */

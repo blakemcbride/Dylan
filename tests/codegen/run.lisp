@@ -41,7 +41,7 @@
            (diagnostics (make-string-output-stream)))
       (ensure-directories-exist stem)
       (let ((ok (let ((*error-output* diagnostics))
-                  (compile-program (front-end-string source) c-file)))
+                  (compile-program (front-end-string source :library t) c-file)))
             (text (get-output-stream-string diagnostics)))
         (cond (compile-error
                (return-from run-case

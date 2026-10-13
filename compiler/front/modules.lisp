@@ -293,6 +293,8 @@ DEFINE-ALL-MODULES."
       (let ((symbol (dylan-name name)))
         (push symbol (dylan-module-exports dylan))
         (setf (module-var-predefined-p (owned-variable dylan symbol)) t)))
+    (dolist (name *dylan-module-internal-names*)
+      (setf (module-var-predefined-p (owned-variable dylan (dylan-name name))) t))
     (dolist (name *dylan-module-setter-names*)
       (setf (module-var-predefined-p
              (owned-variable dylan (list 'dylan::setter (dylan-name name))))

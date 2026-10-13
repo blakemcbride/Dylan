@@ -18,7 +18,12 @@
     ("list" . "list") ("cons" . "cons") ("car" . "car") ("cdr" . "cdr")
     ("vector" . "vector")
     ("values" . "values") ("apply" . "apply")
-    ("print" . "print") ("error" . "error")
+    ("print" . "print")
+    ;; Conditions (chapter 13); the rest are in the library
+    ("do-handlers" . "do_handlers")
+    ("%signal" . "signal_condition") ("%set-error-hooks" . "set_error_hooks")
+    ("%format-message" . "format_message") ("%die" . "die") ("%warn" . "warn")
+    ("%break" . "break_message")
     ;; Classes and functions (chapters 10 and 11)
     ("make" . "make") ("object-class" . "object_class")
     ("instance?" . "instance_p") ("subclass?" . "subclass_p")

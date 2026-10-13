@@ -11,18 +11,18 @@ CFLAGS  ?= -O2 -g
 ALL_CFLAGS = $(CFLAGS) -std=gnu11 -Wall -Wextra -pthread -Ic
 LDLIBS  = -lgc -lm -lpthread
 
-SOURCES = c/object.c c/number.c c/string.c c/function.c c/objects.c c/primitives.c
+SOURCES = c/object.c c/number.c c/string.c c/function.c c/objects.c c/control.c c/primitives.c
 OBJECTS = $(SOURCES:c/%.c=build/%.o)
 TRAMPOLINE_OBJECTS = $(SOURCES:c/%.c=build/trampoline/%.o)
 TESTS   = ../tests/runtime
 
 all: build/libdylan.a build/libdylan-trampoline.a
 
-build/%.o: c/%.c c/dylan.h | build
+build/%.o: c/%.c c/dylan.h c/primitive.h | build
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 # The same, for programs built to use trampolines instead of musttail.
-build/trampoline/%.o: c/%.c c/dylan.h | build/trampoline
+build/trampoline/%.o: c/%.c c/dylan.h c/primitive.h | build/trampoline
 	$(CC) $(ALL_CFLAGS) -DDY_TRAMPOLINE -c $< -o $@
 
 build/libdylan.a: $(OBJECTS)

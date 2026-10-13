@@ -14,20 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ARG(i) ((i) == 0 ? a0 : (i) == 1 ? a1 : (i) == 2 ? a2 : (i) == 3 ? a3 \
-                : dy_thread->args[(i) - 4])
-
-#define U __attribute__((unused))
-#define PRIMITIVE(c_name)                                                   \
-    static D c_name##_entry(D, D, D, D, D, intptr_t);                       \
-    DyFunction dy_prim_##c_name = { &dy_wrapper_method, c_name##_entry,     \
-                                    DY_FALSE };                             \
-    static D c_name##_entry(U D self, U D a0, U D a1, U D a2, U D a3,      \
-                            U intptr_t argc)
-
-static void need(D self, intptr_t argc, intptr_t min, intptr_t max) {
-    if (argc < min || (max >= 0 && argc > max)) dy_wrong_argument_count(self, argc);
-}
+#include "primitive.h"
 
 /* ---------------------------------------------------------- Arithmetic */
 
@@ -188,25 +175,6 @@ PRIMITIVE(print) {
     dy_debug_print(a0);
     putchar('\n');
     return a0;
-}
-
-/* (error string arg ...): until conditions (Phase 6), report and stop. */
-PRIMITIVE(error) {
-    need(self, argc, 1, -1);
-    fflush(stdout);
-    fputs("Dylan error: ", stderr);
-    if (dy_kind_p(a0, DY_KIND_BYTE_STRING)) {
-        DyByteString *s = DY_PTR(a0);
-        fwrite(s->data, 1, DY_INT_VALUE(s->size), stderr);
-    } else {
-        dy_debug_write(stderr, a0);
-    }
-    for (intptr_t i = 1; i < argc; i++) {
-        fputc(' ', stderr);
-        dy_debug_write(stderr, ARG(i));
-    }
-    fputc('\n', stderr);
-    exit(1);
 }
 
 /* --------------------------------------------- Classes and functions */

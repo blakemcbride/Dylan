@@ -25,8 +25,12 @@
  * the collector does not scan them.  This file must be included before
  * <pthread.h> so that threads are created through the collector.
  *
- * Requires GCC or Clang (64-bit): the overflow builtins, __int128, and the
- * acceptance of pointers converted to D in static initializers.
+ * C11.  The extensions of GCC and Clang it uses are behind the macros of
+ * "Compilers" below, which fall back on standard C where they can; the
+ * runtime library itself (number.c) also needs __int128, and static data
+ * initialized with pointers converted to D, which both compilers accept.
+ * Define DY_DEBUG to check the representation of each value the
+ * compiler's inline code takes apart (CompilerPlan.md, Phase 10).
  */
 
 #ifndef DYLAN_H
@@ -46,6 +50,73 @@
 #endif
 
 typedef uintptr_t D;
+
+_Static_assert(sizeof(D) == 8 && sizeof(void *) == 8, "a D is a 64-bit word");
+_Static_assert(sizeof(double) == 8, "<double-float> is a 64-bit double");
+_Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic");
+
+/* The version of what the compiler's C and the runtime agree on; the
+ * compiler's C checks it. */
+#define DY_ABI_VERSION 10
+
+/* ------------------------------------------------------------ Compilers */
+
+#ifndef __has_attribute
+#define __has_attribute(x) 0
+#endif
+#ifndef __has_builtin
+#define __has_builtin(x) 0
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
+#define DY_LIKELY(c)   __builtin_expect(!!(c), 1)
+#define DY_UNLIKELY(c) __builtin_expect(!!(c), 0)
+#else
+#define DY_LIKELY(c)   (c)
+#define DY_UNLIKELY(c) (c)
+#endif
+
+/* Set *R to A op B, answering whether that overflowed. */
+#if __has_builtin(__builtin_add_overflow) || (defined(__GNUC__) && __GNUC__ >= 5)
+#define DY_ADD_OVERFLOW(a, b, r) __builtin_add_overflow((a), (b), (r))
+#define DY_SUB_OVERFLOW(a, b, r) __builtin_sub_overflow((a), (b), (r))
+#define DY_MUL_OVERFLOW(a, b, r) __builtin_mul_overflow((a), (b), (r))
+#else
+static inline bool dy_add_overflow(intptr_t a, intptr_t b, intptr_t *r) {
+    if ((b > 0 && a > INTPTR_MAX - b) || (b < 0 && a < INTPTR_MIN - b)) return true;
+    *r = a + b;
+    return false;
+}
+static inline bool dy_sub_overflow(intptr_t a, intptr_t b, intptr_t *r) {
+    if ((b < 0 && a > INTPTR_MAX + b) || (b > 0 && a < INTPTR_MIN + b)) return true;
+    *r = a - b;
+    return false;
+}
+static inline bool dy_mul_overflow(intptr_t a, intptr_t b, intptr_t *r) {
+    if (a != 0 && b != 0) {
+        if (a == -1 && b == INTPTR_MIN) return true;
+        if (b == -1 && a == INTPTR_MIN) return true;
+        if (a > 0 ? (b > 0 ? a > INTPTR_MAX / b : b < INTPTR_MIN / a)
+                  : (b > 0 ? a < INTPTR_MIN / b : a < INTPTR_MAX / b))
+            return true;
+    }
+    *r = a * b;
+    return false;
+}
+#define DY_ADD_OVERFLOW(a, b, r) dy_add_overflow((a), (b), (r))
+#define DY_SUB_OVERFLOW(a, b, r) dy_sub_overflow((a), (b), (r))
+#define DY_MUL_OVERFLOW(a, b, r) dy_mul_overflow((a), (b), (r))
+#endif
+
+/* A tail call that must be a jump.  Without it, build with
+ * -DDY_TRAMPOLINE. */
+#ifndef DY_TRAMPOLINE
+#if __has_attribute(musttail)
+#define DY_MUSTTAIL __attribute__((musttail))
+#else
+#error "This C compiler cannot guarantee tail calls (musttail): define DY_TRAMPOLINE."
+#endif
+#endif
 
 /* ---------------------------------------------------------------- Tags */
 
@@ -284,11 +355,34 @@ static inline bool dy_kind_p(D x, unsigned kind) {
 #define DY_STRING_DATA(s)  dy_string_data_of(s)
 /* (Functions, not casts in place, so that C compilers do not warn of
  * type punning when the object is a static constant.) */
-static inline double dy_double_value(D x) { return ((DyDoubleFloat *)DY_PTR(x))->value; }
-static inline intptr_t dy_vector_size_of(D v) { return DY_INT_VALUE(((DyVector *)DY_PTR(v))->size); }
-static inline D *dy_vector_data_of(D v) { return ((DyVector *)DY_PTR(v))->data; }
-static inline intptr_t dy_string_size_of(D s) { return DY_INT_VALUE(((DyByteString *)DY_PTR(s))->size); }
-static inline char *dy_string_data_of(D s) { return ((DyByteString *)DY_PTR(s))->data; }
+/* With DY_DEBUG, each checks that its argument is what it takes apart. */
+_Noreturn void dy_representation_error(const char *expected, D x);
+#ifdef DY_DEBUG
+#define DY_REPRESENTATION(c, expected, x) \
+    ((c) ? (void)0 : dy_representation_error((expected), (x)))
+#else
+#define DY_REPRESENTATION(c, expected, x) ((void)0)
+#endif
+static inline double dy_double_value(D x) {
+    DY_REPRESENTATION(dy_kind_p(x, DY_KIND_DOUBLE_FLOAT), "a <double-float>", x);
+    return ((DyDoubleFloat *)DY_PTR(x))->value;
+}
+static inline intptr_t dy_vector_size_of(D v) {
+    DY_REPRESENTATION(dy_kind_p(v, DY_KIND_SIMPLE_OBJECT_VECTOR), "a <simple-object-vector>", v);
+    return DY_INT_VALUE(((DyVector *)DY_PTR(v))->size);
+}
+static inline D *dy_vector_data_of(D v) {
+    DY_REPRESENTATION(dy_kind_p(v, DY_KIND_SIMPLE_OBJECT_VECTOR), "a <simple-object-vector>", v);
+    return ((DyVector *)DY_PTR(v))->data;
+}
+static inline intptr_t dy_string_size_of(D s) {
+    DY_REPRESENTATION(dy_kind_p(s, DY_KIND_BYTE_STRING), "a <byte-string>", s);
+    return DY_INT_VALUE(((DyByteString *)DY_PTR(s))->size);
+}
+static inline char *dy_string_data_of(D s) {
+    DY_REPRESENTATION(dy_kind_p(s, DY_KIND_BYTE_STRING), "a <byte-string>", s);
+    return ((DyByteString *)DY_PTR(s))->data;
+}
 
 /* The place of the program's instance slot number K in X, or NULL if X
  * has no such slot */
@@ -306,28 +400,28 @@ static inline D *dy_instance_slot(D x, int32_t k) {
 
 static inline D dy_int_add(D a, D b) {
     intptr_t r;
-    if (__builtin_add_overflow((intptr_t)a, (intptr_t)b - 1, &r))
+    if (DY_UNLIKELY(DY_ADD_OVERFLOW((intptr_t)a, (intptr_t)b - 1, &r)))
         dy_integer_overflow();
     return (D)r;
 }
 
 static inline D dy_int_sub(D a, D b) {
     intptr_t r;
-    if (__builtin_sub_overflow((intptr_t)a, (intptr_t)b - 1, &r))
+    if (DY_UNLIKELY(DY_SUB_OVERFLOW((intptr_t)a, (intptr_t)b - 1, &r)))
         dy_integer_overflow();
     return (D)r;
 }
 
 static inline D dy_int_mul(D a, D b) {
     intptr_t r;
-    if (__builtin_mul_overflow(DY_INT_VALUE(a), (intptr_t)b - 1, &r))
+    if (DY_UNLIKELY(DY_MUL_OVERFLOW(DY_INT_VALUE(a), (intptr_t)b - 1, &r)))
         dy_integer_overflow();
     return (D)r | 1;
 }
 
 static inline D dy_int_negate(D a) {
     intptr_t r;
-    if (__builtin_sub_overflow((intptr_t)2, (intptr_t)a, &r))
+    if (DY_UNLIKELY(DY_SUB_OVERFLOW((intptr_t)2, (intptr_t)a, &r)))
         dy_integer_overflow();
     return (D)r;
 }
@@ -532,7 +626,7 @@ _Noreturn void dy_too_many_arguments(void);
 
 /* A module variable's value, which it must have. */
 static inline D dy_check_bound(D value, const char *name) {
-    if (value == DY_UNBOUND) dy_unbound_variable(name);
+    if (DY_UNLIKELY(value == DY_UNBOUND)) dy_unbound_variable(name);
     return value;
 }
 
@@ -582,8 +676,14 @@ static inline D dy_argument(intptr_t i, D a0, D a1, D a2, D a3) {
     }
 }
 
-static inline D dy_head(D pair) { return ((DyPair *)DY_PTR(pair))->head; }
-static inline D dy_tail(D pair) { return ((DyPair *)DY_PTR(pair))->tail; }
+static inline D dy_head(D pair) {
+    DY_REPRESENTATION(dy_kind_p(pair, DY_KIND_PAIR), "a <pair>", pair);
+    return ((DyPair *)DY_PTR(pair))->head;
+}
+static inline D dy_tail(D pair) {
+    DY_REPRESENTATION(dy_kind_p(pair, DY_KIND_PAIR), "a <pair>", pair);
+    return ((DyPair *)DY_PTR(pair))->tail;
+}
 
 /* Type checks of bound values (bind's typed variables). */
 void dy_check_type(D value, D type);
@@ -633,9 +733,9 @@ static inline D dy_bounce(D r) {
 #define DY_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
     fn((f), (a0), (a1), (a2), (a3), (n))
 #define DY_TAIL_CALL(f, a0, a1, a2, a3, n) \
-    __attribute__((musttail)) return dy_entry(f)((f), (a0), (a1), (a2), (a3), (n))
+    DY_MUSTTAIL return dy_entry(f)((f), (a0), (a1), (a2), (a3), (n))
 #define DY_TAIL_CALL_DIRECT(fn, f, a0, a1, a2, a3, n) \
-    __attribute__((musttail)) return fn((f), (a0), (a1), (a2), (a3), (n))
+    DY_MUSTTAIL return fn((f), (a0), (a1), (a2), (a3), (n))
 #endif
 
 /* -------------------------------------------------------- Object system

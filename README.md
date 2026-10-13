@@ -149,6 +149,26 @@ $ sbcl --script bench/run.lisp table tak  # just these
 Each line gives the best of three runs for each, their ratio, and
 `MISMATCH` if the two answered differently.
 
+## Compiling to C
+
+`compiler/` is a second implementation, in progress: a compiler from Dylan
+to C, for whole, static programs (see `CompilerPlan.md`). It needs SBCL, a
+C compiler with `musttail` (GCC 15 or later, or Clang 13 or later — or any
+C11 compiler with `--trampoline`), and the Boehm-Demers-Weiser collector
+built for threads (`libgc`).
+
+```console
+$ bin/dylanc hello.dyl          # makes ./hello
+$ bin/dylanc -o app a.dyl b.dyl # several files, in order, one program
+$ bin/dylanc -h                 # the options: -O0..-O3, -Os, -g, -k, -C, ...
+```
+
+The generated C is `NAME.c` (data and `main`), `NAME-MODULE.c` for each
+module's functions, and `NAME.h`; `-k` keeps it, and its `#line`
+directives point to the Dylan source. The tests: `sbcl --script
+tests/codegen/run.lisp` and `sh tests/driver/run.sh`; the benchmarks:
+`sbcl --script bench/run-c.lisp`.
+
 ## Differences from the 1992 manual
 
 The standard is the manual itself (an annotated copy is in
@@ -193,6 +213,7 @@ false and the empty list, the reader and printer — is described in
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
 | `bench/` | benchmarks against plain Common Lisp |
 | `compiler/` | the Dylan-to-C compiler, in progress (see `CompilerPlan.md`) |
+| `bin/dylanc` | its command line |
 | `runtime/` | the compiler's runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
 | `tests/` | the compiler's tests |
 | `examples-from-book.text` | the raw extraction those were edited from |

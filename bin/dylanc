@@ -1,0 +1,6 @@
+#!/bin/sh
+# Copyright 2026 Blake McBride.  See ../LICENSE.
+#
+# The Dylan-to-C compiler: dylanc [options] file.dyl ...  (dylanc -h)
+here=$(dirname "$(readlink -f "$0")")
+exec sbcl --script "$here/../compiler/dylanc.lisp" "$@"

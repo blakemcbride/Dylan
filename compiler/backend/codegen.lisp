@@ -155,7 +155,27 @@ its value.")
 (defvar *label-counter* 0)
 (defvar *temp-counter* 0)
 
+(defvar *emit-lines* t
+  "Write #line directives, so that the C compiler's messages and debuggers
+point to the Dylan source?")
+(defvar *line-location* nil
+  "(file-name . line) of the last #line written in the function being
+generated.")
+
+(defun note-line ()
+  "Write a #line directive for *LOCATION* if it is not the last one."
+  (let ((location *location*))
+    (when (and *emit-lines* (location-p location)
+               (stringp (source-file-name (location-file location))))
+      (let ((file (source-file-name (location-file location)))
+            (line (location-line-and-column location)))
+        (unless (and *line-location* (string= (car *line-location*) file)
+                     (= (cdr *line-location*) line))
+          (setf *line-location* (cons file line))
+          (push (format nil "#line ~d ~a" line (c-name-string file)) *lines*))))))
+
 (defun emit (control &rest arguments)
+  (note-line)
   (push (concatenate 'string (make-string (* 4 *indent*) :initial-element #\Space)
                      (apply #'format nil control arguments))
         *lines*))
@@ -673,6 +693,7 @@ position?  (If so, a call may have changed the count of values.)"
   "The C text of CFUN's function."
   (let* ((fn (cfun-fn cfun))
          (*cfun* cfun)
+         (*line-location* nil)
          (*lines* '())
          (*indent* 1)
          (*location* (ir-fn-location fn))
@@ -682,9 +703,9 @@ position?  (If so, a call may have changed the count of values.)"
     (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn))
     ;; Arguments
     (cond ((and (null (ir-fn-rest fn)) (null keys))
-           (emit "if (argc != ~d) dy_wrong_argument_count(self, argc);" r))
+           (emit "if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
           ((> r 0)
-           (emit "if (argc < ~d) dy_wrong_argument_count(self, argc);" r)))
+           (emit "if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r)))
     (when (> r +max-arguments+) (compile-error "a method with more than ~d parameters"
                                                +max-arguments+))
     (loop for var in required
@@ -751,7 +772,13 @@ position?  (If so, a call may have changed the count of values.)"
         (format out "    ~a ~a;~%" (cdr local) (car local)))
       (dolist (line (reverse *lines*))
         (format out "~a~%" line))
-      (format out "}~%"))))
+      (format out "}~%")
+      (when *line-location*
+        ;; Back to the C file (output.lisp writes the line number).
+        (format out "~a~%" +line-reset+)))))
+
+(defparameter +line-reset+ "#line DY_RESET"
+  "Stands for a #line directive back to the C file itself.")
 
 (defun needs-captured-next-p (var fn)
   "Might the next method VAR be called with no arguments, which means
@@ -832,8 +859,24 @@ define-generic-function, whose work the compiler has done?"
                     ((or ir-define-method ir-define-generic) t))))
          (inert (ir-fn-body fn)))))
 
+(defvar *debug* nil
+  "Compile for debugging: trust no type found when compiling, so that every
+inline operation tests its arguments when run.")
+
+(defun fn-module-name (fn units)
+  "The name of the module FN's code was written in, a string."
+  (let* ((top (loop for f = fn then (ir-fn-parent f)
+                    while (ir-fn-parent f)
+                    finally (return f)))
+         (location (ir-fn-location top))
+         (unit (and location (find (location-file location) units :key #'unit-file))))
+    (if unit
+        (string-downcase (dylan::dylan-symbol->string (dylan-module-name (unit-module unit))))
+        "dylan-user")))
+
 (defun generate-c (ir stream)
-  "Write the C program for IR to STREAM."
+  "Write the C program for IR to STREAM.  Answer a table: the C name of
+each of its Dylan functions -> the name of the module it was written in."
   (let ((*groups* (make-hash-table :test #'eq))
         (*cfuns* (make-hash-table :test #'eq))
         (*cdata* (make-cdata))
@@ -896,8 +939,9 @@ define-generic-function, whose work the compiler has done?"
         (dolist (var (cfun-env cfun))
           (setf (gethash var *closed-over*) t)))
       (count-absorbed-uses fns)
-      (infer-types fns)
-      (choose-unboxed fns)
+      (unless *debug*
+        (infer-types fns)
+        (choose-unboxed fns))
       (find-stack-rests fns)
       (let ((texts (mapcar #'gen-function cfuns))
             (closure-lines
@@ -912,6 +956,8 @@ define-generic-function, whose work the compiler has done?"
         (emit-program-data *classes* *cdata* stream :prelude (reverse *object-decls*)
                            :thread-variable-count (hash-table-count *thread-variables*))
         (format stream "~%/* Program */~%~%")
+        (format stream "_Static_assert(DY_ABI_VERSION == ~d, \"dylan.h is not the runtime this compiler generates C for\");~%~%"
+                +abi-version+)
         (dolist (p *used-primitives*)
           (format stream "extern DyFunction ~a;~%" p))
         (dolist (p *used-primitive-entries*)
@@ -932,4 +978,12 @@ define-generic-function, whose work the compiler has done?"
           (unless (inert-toplevel-p top)
             (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
                     (cfun-c-name (gethash top *cfuns*)))))
-        (format stream "    return 0;~%}~%")))))
+        (format stream "    return 0;~%}~%")
+        (let ((modules (make-hash-table :test #'equal))
+              (units (program-units (ir-program-source ir))))
+          (dolist (cfun cfuns)
+            (setf (gethash (cfun-c-name cfun) modules)
+                  (fn-module-name (cfun-fn cfun) units)))
+          modules)))))
+
+(defconstant +abi-version+ 10 "As DY_ABI_VERSION in runtime/c/dylan.h.")

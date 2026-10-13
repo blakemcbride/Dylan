@@ -43,6 +43,7 @@
     "backend/codegen"
     "backend/calls"
     "backend/types"
+    "backend/output"
     "driver"))
 
 (defparameter *dylanc-fasl-directory*

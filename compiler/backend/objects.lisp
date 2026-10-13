@@ -445,9 +445,9 @@ slot SD in the object VAR."
     (declare-object "static D ~a(D, D, D, D, D, intptr_t);" getter)
     (emit-object "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" getter)
     (emit-object "    (void)a1; (void)a2; (void)a3;")
-    (emit-object "    if (argc != 1) dy_wrong_argument_count(self, argc);")
+    (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
     (emit-storage-ref sd "a0")
-    (emit-object "    if (*place == DY_UNBOUND) dy_unbound_slot(~a);" (slot-name-c sd))
+    (emit-object "    if (DY_UNLIKELY(*place == DY_UNBOUND)) dy_unbound_slot(~a);" (slot-name-c sd))
     (emit-object "    return *place;~%}")
     (push (make-gmethod :specs (list (make-spec :class (sdef-class sd)))
                         :kind :getter :sdef sd :entry-c getter
@@ -457,7 +457,7 @@ slot SD in the object VAR."
       (declare-object "static D ~a(D, D, D, D, D, intptr_t);" setter)
       (emit-object "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" setter)
       (emit-object "    (void)a2; (void)a3;")
-      (emit-object "    if (argc != 2) dy_wrong_argument_count(self, argc);")
+      (emit-object "    if (DY_UNLIKELY(argc != 2)) dy_wrong_argument_count(self, argc);")
       (emit-storage-ref sd "a0")
       (when (slot-spec-type (sdef-spec sd))
         (emit-object "    if (~a != DY_UNBOUND) dy_check_type(a1, ~a);"
@@ -622,8 +622,8 @@ no next method."
     (declare-object "static D ~a(D, D, D, D, D, intptr_t);" name)
     (emit-object "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" name)
     (if (or (ir-fn-rest fn) (ir-fn-keys fn))
-        (emit-object "    if (argc < ~d) dy_wrong_argument_count(self, argc);" r)
-        (emit-object "    if (argc != ~d) dy_wrong_argument_count(self, argc);" r))
+        (emit-object "    if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r)
+        (emit-object "    if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
     (loop for spec in (gmethod-specs m)
           for i from 0
           unless (object-spec-p spec)
@@ -762,9 +762,10 @@ it does not apply."
                                               cases)))
                  (emit-object "~a~{~a~^ ~}" pad2
                               (mapcar (lambda (r)
-                                        (if (= (car r) (cdr r))
-                                            (format nil "case ~d:" (car r))
-                                            (format nil "case ~d ... ~d:" (car r) (cdr r))))
+                                        ;; Standard C has no case ranges
+                                        (format nil "~{case ~d:~^ ~}"
+                                                (loop for id from (car r) to (cdr r)
+                                                      collect id)))
                                       (id-ranges (cdr c))))
                  (dolist (line (car c)) (emit-object "~a" line)))
                (emit-object "~adefault: goto no_method;" pad2)
@@ -804,7 +805,7 @@ methods are METHODS, or NIL."
     (declare-object "static D ~a(D, D, D, D, D, intptr_t);" name)
     (emit-object "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" name)
     (emit-object "    (void)a0; (void)a1; (void)a2; (void)a3;")
-    (emit-object "    if (argc ~:[!=~;<~] ~d) dy_wrong_argument_count(self, argc);"
+    (emit-object "    if (DY_UNLIKELY(argc ~:[!=~;<~] ~d)) dy_wrong_argument_count(self, argc);"
                  (gfun-variable-p g) r)
     (dotimes (i r)
       (emit-object "    D x~d = ~a; (void)x~d;" i (arg-c i) i))
@@ -958,7 +959,7 @@ objects, makers."
 (defun emit-slot-initialized-p ()
   (emit-object "static D dy_slot_initialized_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
   (emit-object "    (void)a2; (void)a3;")
-  (emit-object "    if (argc != 2) dy_wrong_argument_count(self, argc);")
+  (emit-object "    if (DY_UNLIKELY(argc != 2)) dy_wrong_argument_count(self, argc);")
   (emit-object "    DyWrapper *w = dy_wrapper_of(a0); (void)w;")
   (loop for g being the hash-values of *gclasses*
         do (dolist (sd (gclass-sdefs g))
@@ -1009,7 +1010,7 @@ objects, makers."
     ;; (slot-descriptor instance getter): the most specific definition first
     (emit-object "static D dy_slot_descriptor_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
     (emit-object "    (void)a2; (void)a3;")
-    (emit-object "    if (argc != 2) dy_wrong_argument_count(self, argc);")
+    (emit-object "    if (DY_UNLIKELY(argc != 2)) dy_wrong_argument_count(self, argc);")
     (emit-object "    DyWrapper *w = dy_wrapper_of(a0); (void)w;")
     (dolist (sd (stable-sort (copy-list sdefs) #'>
                              :key (lambda (sd) (length (class-info-cpl (sdef-class sd))))))
@@ -1023,7 +1024,7 @@ objects, makers."
     ;; specific definition
     (emit-object "static D dy_slot_descriptors_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
     (emit-object "    (void)a1; (void)a2; (void)a3;")
-    (emit-object "    if (argc != 1) dy_wrong_argument_count(self, argc);")
+    (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
     (loop for g being the hash-values of *gclasses*
           do (let ((effective '()))
                (dolist (c (reverse (class-info-cpl (gclass-info g))))

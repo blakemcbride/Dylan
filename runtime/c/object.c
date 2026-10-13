@@ -34,6 +34,12 @@ _Noreturn void dy_division_by_zero(void) {
     dy_error("division by zero", 0);
 }
 
+_Noreturn void dy_representation_error(const char *expected, D x) {
+    char message[120];
+    snprintf(message, sizeof message, "internal error: the compiled code expected %s", expected);
+    dy_error(message, x);
+}
+
 D dy_pair(D head, D tail) {
     DyPair *p = dy_alloc(&dy_wrapper_pair, sizeof(DyPair));
     p->head = head;

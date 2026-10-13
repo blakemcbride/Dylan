@@ -40,10 +40,12 @@
   (destructuring-bind (name source expected &key error compile-error) case
     (let* ((stem (merge-pathnames (string-downcase (symbol-name name)) *build-directory*))
            (c-file (format nil "~a.c" (namestring stem)))
-           (diagnostics (make-string-output-stream)))
+           (diagnostics (make-string-output-stream))
+           (c-files nil))
       (ensure-directories-exist stem)
       (let ((ok (let ((*error-output* diagnostics))
-                  (compile-program (front-end-string source :library t) c-file)))
+                  (setf c-files
+                        (compile-program (front-end-string source :library t) c-file))))
             (text (get-output-stream-string diagnostics)))
         (cond (compile-error
                (return-from run-case
@@ -57,7 +59,7 @@
             for exe = (format nil "~a-~a~:[~;-trampoline~]" (namestring stem) cc trampoline)
             for config = (format nil "~(~a~) [~a~:[~;, trampoline~]]" name cc trampoline)
             append (let ((*standard-output* (make-broadcast-stream)))
-                     (if (not (build-c c-file exe :trampoline trampoline :cc cc :optimize optimize))
+                     (if (not (build-c c-files exe :trampoline trampoline :cc cc :optimize optimize))
                          (list (format nil "~a: the C compiler failed on ~a" config c-file))
                          (multiple-value-bind (status out err)
                              (run-captured (format nil "ulimit -s 256; exec ~a" exe))

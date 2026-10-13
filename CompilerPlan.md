@@ -492,6 +492,20 @@ file of what callers may assume).
 
 ## Phase 10 — C output and build
 
+**Status: done.** `bin/dylanc` (`compiler/dylanc.lisp`) is the command
+line; `compiler/backend/output.lisp` writes `NAME.c` (data, the object
+system's functions, `main`), `NAME-MODULE.c` per module and `NAME.h`,
+with `#line` directives (`--no-lines` to omit). The C is compiled
+`-std=c11`; `dylan.h` asserts what it assumes (`_Static_assert`, and the
+runtime version the compiler wrote for) and puts `musttail`, the overflow
+builtins and `__builtin_expect` behind macros, with standard fallbacks for
+the last two and an error telling to use `--trampoline` without the first.
+Dispatch uses no case ranges. `-g` builds for debugging: no types trusted,
+so every inline operation tests its arguments, and `-DDY_DEBUG` makes the
+runtime's accessors check what they take apart. The runtime library
+itself still needs GCC or Clang (`__int128`). Tests: `sh
+tests/driver/run.sh`.
+
 - Emit C11 (`_Thread_local`, `_Static_assert`), one `.c` per module plus a
   shared header; readable output with `#line` directives pointing to the
   `.dyl` source.

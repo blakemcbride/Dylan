@@ -29,7 +29,11 @@
     "front/syntax"
     "front/macros"
     "front/convert"
-    "front/front-end"))
+    "front/front-end"
+    "ir/ir"
+    "ir/anf"
+    "ir/analyze"
+    "ir/check"))
 
 (defparameter *dylanc-fasl-directory*
   (merge-pathnames

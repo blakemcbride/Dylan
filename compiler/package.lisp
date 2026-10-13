@@ -22,7 +22,10 @@
            #:program-errors
            #:program-warnings
            #:unparse                    ; core form -> readable s-expression
-           #:compile-error))
+           #:compile-error
+           #:to-ir                      ; program -> IR (Phase 2)
+           #:ir-program-toplevels
+           #:print-ir-program))
 
 (in-package #:dylan-compiler)
 

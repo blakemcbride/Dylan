@@ -140,6 +140,11 @@ tests/front-end/run.lisp`.
 
 ## Phase 2 — IR
 
+**Status: done.** `compiler/ir/`; `(dylanc:to-ir program)` answers the
+analyzed IR, and `check-ir` verifies its invariants. The inferred-type slot
+on each variable is left empty for Phase 9. Tests: `sbcl --script
+tests/ir/run.lisp`.
+
 - Alpha-converted, A-normal form: every intermediate value is named, every
   call's arguments are trivial.
 - Every call is marked tail or non-tail.

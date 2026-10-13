@@ -67,7 +67,20 @@
     "element" "first" "last" "second" "size" "slot-value" "third")
     "The names X for which the DYLAN module also owns (setter X).")
 
+(defparameter *dylan-module-extension-names*
+  '(;; Threads (CompilerPlan.md, Phase 7)
+    "<thread>" "<lock>" "<recursive-lock>" "<condition-variable>"
+    "<atomic-integer>" "<thread-error>"
+    "make-thread" "join-thread" "current-thread" "thread-yield"
+    "thread-error-thread" "thread-error-condition"
+    "acquire-lock" "release-lock"
+    "wait-condition-variable" "notify-condition-variable"
+    "notify-all-condition-variable"
+    "atomic-value" "atomic-add!" "atomic-compare-and-swap!")
+  "Variables the DYLAN module exports that the manual does not define.")
+
 (defparameter *dylan-module-internal-names*
-  '("%signal" "%set-error-hooks" "%format-message" "%die" "%warn" "%break")
+  '("%signal" "%set-error-hooks" "%format-message" "%die" "%warn" "%break"
+    "%make-thread" "%join-thread" "%thread-condition" "%unhandled")
   "Variables the DYLAN module owns, with values in the runtime, but does not
 export: for the library's own use.")

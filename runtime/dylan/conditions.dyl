@@ -64,8 +64,10 @@ module: dylan
 
 (define-method default-handler ((c <condition>)) #f)
 
+;;; In the main thread, report and stop; in another, end the thread
+;;; (runtime/dylan/threads.dyl).
 (define-method default-handler ((c <serious-condition>))
-  (%die (%condition-message c)))
+  (%unhandled c (%condition-message c)))
 
 (define-method default-handler ((c <warning>))
   (%warn (%condition-message c))
@@ -91,8 +93,8 @@ module: dylan
     (bind ((c (%make-condition <simple-error> condition arguments)))
       (%signal c)
       ;; A handler returned, which error does not allow.
-      (%die (%format-message "a handler returned from error: ~a"
-                             (list (%condition-message c)))))))
+      (%unhandled c (%format-message "a handler returned from error: ~a"
+                                     (list (%condition-message c)))))))
 
 (define cerror
   (method (restart-description condition #rest arguments)

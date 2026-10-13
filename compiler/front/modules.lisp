@@ -42,7 +42,8 @@
   (definitions '())                     ; definition nodes, in order
   (first-reference nil)                 ; location of the first reference
   (predefined-p nil)                    ; one of the DYLAN module's own?
-  (assigned-p nil))                     ; the target of a set!?
+  (assigned-p nil)                      ; the target of a set!?
+  (thread-local-p nil))                 ; defined by define-thread-variable?
 
 (defmethod print-object ((v module-var) stream)
   (print-unreadable-object (v stream :type t)
@@ -289,7 +290,7 @@ DEFINE-ALL-MODULES."
   (setf *dylan-modules* (make-hash-table :test #'eq))
   (let ((dylan (make-dylan-module 'dylan::dylan)))
     (setf (gethash 'dylan::dylan *dylan-modules*) dylan)
-    (dolist (name *dylan-module-names*)
+    (dolist (name (append *dylan-module-names* *dylan-module-extension-names*))
       (let ((symbol (dylan-name name)))
         (push symbol (dylan-module-exports dylan))
         (setf (module-var-predefined-p (owned-variable dylan symbol)) t)))

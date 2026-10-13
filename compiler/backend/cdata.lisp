@@ -145,7 +145,7 @@ expressions."
               (logior (aref bytes (floor id 8)) (ash 1 (mod id 8))))))
     (coerce bytes 'list)))
 
-(defun emit-program-data (classes data stream &key prelude)
+(defun emit-program-data (classes data stream &key prelude (thread-variable-count 0))
   "Write to STREAM the C file defining CLASSES (prepared by
 PREPARE-CLASSES) and every constant DATA holds.  PRELUDE is a list of C
 declarations to put before the data, which may refer to what they
@@ -206,4 +206,9 @@ declare."
       (format stream "const size_t dy_static_symbol_count = ~d;~%~%" (length symbols)))
     (format stream "DyClass *const dy_all_classes[] = {~%~{  &~a,~%~}};~%"
             (mapcar #'class-c-name classes))
-    (format stream "const size_t dy_class_count = ~d;~%" count)))
+    (format stream "const size_t dy_class_count = ~d;~%~%" count)
+    ;; The program's thread variables (Phase 7)
+    (format stream "D dy_thread_variable_defaults[~d] = { ~{~a~^, ~} };~%"
+            (max 1 thread-variable-count)
+            (make-list (max 1 thread-variable-count) :initial-element "DY_UNBOUND"))
+    (format stream "const size_t dy_thread_variable_count = ~d;~%" thread-variable-count)))

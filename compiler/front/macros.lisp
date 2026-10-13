@@ -386,3 +386,35 @@ anything to evaluate (if not, the expansion is X quoted)."
 (define-dylan-macro dylan::quasiquote (form)
   (require-list form 2 "quasiquote" nil)
   (values (quasi (second form) 1)))
+;;; Threads (CompilerPlan.md, Phase 7: an extension)
+;;;
+;;; (with-lock (lock) body ...) holds the lock while the body runs, and
+;;; releases it however the body is left.
+
+(define-dylan-macro dylan::with-lock (form)
+  (require-list form 2 "with-lock")
+  (unless (list-of-length-p (second form) 1)
+    (compile-error "with-lock: needs (lock)"))
+  (let ((lock (temp "lock")))
+    `(dylan::bind ((,lock ,(first (second form))))
+       (,(g "acquire-lock") ,lock)
+       (unwind-protect (dylan::begin ,@(cddr form))
+         (,(g "release-lock") ,lock)))))
+
+;;; (dynamic-bind ((variable value) ...) body ...) gives each thread
+;;; variable a new value in this thread while the body runs.
+
+(define-dylan-macro dylan::dynamic-bind (form)
+  (require-list form 2 "dynamic-bind")
+  (let ((bindings (second form)))
+    (unless (and (proper-list-p bindings)
+                 (every (lambda (b) (and (list-of-length-p b 2) (variable-name-p (car b))))
+                        bindings))
+      (compile-error "dynamic-bind: bad bindings ~a" bindings))
+    (let ((news (mapcar (lambda (b) (declare (ignore b)) (temp "new")) bindings))
+          (olds (mapcar (lambda (b) (declare (ignore b)) (temp "old")) bindings)))
+      `(dylan::bind (,@(mapcar (lambda (new b) (list new (second b))) news bindings)
+                     ,@(mapcar (lambda (old b) (list old (first b))) olds bindings))
+         ,@(mapcar (lambda (b new) `(dylan::set! ,(first b) ,new)) bindings news)
+         (unwind-protect (dylan::begin ,@(cddr form))
+           ,@(mapcar (lambda (b old) `(dylan::set! ,(first b) ,old)) bindings olds))))))

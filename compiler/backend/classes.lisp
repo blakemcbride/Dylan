@@ -50,7 +50,8 @@
 ;;; <rectangular-complex>.  <boolean>, the class of #t and #f, is the
 ;;; runtime's own: the manual names no class for them.
 ;;;
-;;; (name (superclass ...) kind &rest flags)
+;;; (name (superclass ...) kind &rest flags), a flag (:maker "c_name")
+;;; naming a make for the class written in C.
 
 (defparameter *built-in-classes*
   '(("<object>" () :none :abstract)
@@ -96,6 +97,14 @@
     ("<class>" ("<object>") :class :abstract)
     ("<slot-descriptor>" ("<object>") :none :abstract)
     ("<singleton>" ("<object>") :singleton :abstract)
+    ;; Threads (Phase 7: an extension)
+    ("<thread>" ("<object>") :thread :sealed)
+    ("<lock>" ("<object>") :lock (:maker "dy_make_lock"))
+    ("<recursive-lock>" ("<lock>") :lock :sealed (:maker "dy_make_recursive_lock"))
+    ("<condition-variable>" ("<object>") :condition-variable :sealed
+     (:maker "dy_make_condition_variable"))
+    ("<atomic-integer>" ("<object>") :atomic-integer :sealed
+     (:maker "dy_make_atomic_integer"))
     ("<symbol>" ("<object>") :symbol)
     ("<keyword>" ("<object>") :keyword)
     ("<character>" ("<object>") :character)))
@@ -116,7 +125,10 @@
                       :kind kind
                       :abstract-p (and (member :abstract flags) t)
                       :sealed-p (and (member :sealed flags) t)
-                      :exported-p (not (member :internal flags)))))
+                      :exported-p (not (member :internal flags))
+                      ;; A make written in C
+                      :maker (second (find-if (lambda (f) (and (consp f) (eq (car f) :maker)))
+                                              flags)))))
           (setf (gethash name table) class)
           (push class classes))))
     (nreverse classes)))

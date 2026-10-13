@@ -194,9 +194,18 @@ by a real closure, not just by a contified fn.")
     (const (c-constant *cdata* (const-value a)))
     (ivar (var-read a))))
 
+(defvar *thread-variables* nil "MODULE-VAR -> index, for thread variables.")
+
 (defun global-c-name (var)
-  (or (gethash var *globals*)
-      (setf (gethash var *globals*) (format nil "dyg~d" (hash-table-count *globals*)))))
+  "The C lvalue holding the module variable VAR: a static variable, or,
+for a thread variable, the thread's slot for it."
+  (if (module-var-thread-local-p var)
+      (format nil "dy_thread->thread_variables[~d]"
+              (or (gethash var *thread-variables*)
+                  (setf (gethash var *thread-variables*)
+                        (hash-table-count *thread-variables*))))
+      (or (gethash var *globals*)
+          (setf (gethash var *globals*) (format nil "dyg~d" (hash-table-count *globals*))))))
 
 (defun unsupported (node what)
   (let ((*location* (or (and (ir-node-p node) (ir-node-location node)) *location*)))
@@ -278,6 +287,10 @@ dropped unevaluated?"
       (ir-define-variable
        (let ((var (ir-define-variable-var e)))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-define-variable-value e)))
+         (when (module-var-thread-local-p var)
+           ;; The value threads made from now on start with.
+           (emit "dy_thread_variable_defaults[~d] = ~a;"
+                 (gethash var *thread-variables*) (atom-c (ir-define-variable-value e))))
          (deliver dest (c-constant *cdata* (name-symbol (module-var-name var))))))
       (ir-bind-exit (gen-local-exit e dest))
       (ir-unwind (error "Internal error: an unwind-protect was not lowered."))
@@ -734,6 +747,7 @@ with the arguments FN was given?"
         (*globals* (make-hash-table :test #'eq))
         (*closed-over* (make-hash-table :test #'eq))
         (*local-exits* (make-hash-table :test #'eq))
+        (*thread-variables* (make-hash-table :test #'eq))
         (*dylan-modules* (program-modules (ir-program-source ir)))
         (*let-values* (make-hash-table :test #'eq))
         (*gclasses* (make-hash-table :test #'eq))
@@ -780,7 +794,8 @@ with the arguments FN was given?"
           (setf (gethash var *closed-over*) t)))
       (let ((texts (mapcar #'gen-function cfuns)))
         (finish-object-system)
-        (emit-program-data *classes* *cdata* stream :prelude (reverse *object-decls*))
+        (emit-program-data *classes* *cdata* stream :prelude (reverse *object-decls*)
+                           :thread-variable-count (hash-table-count *thread-variables*))
         (format stream "~%/* Program */~%~%")
         (dolist (p *used-primitives*)
           (format stream "extern DyFunction ~a;~%" p))

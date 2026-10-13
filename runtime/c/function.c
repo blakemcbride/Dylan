@@ -19,6 +19,17 @@ void dy_init_thread(void) {
     if (!dy_thread) dy_error("out of memory", 0);
     memset(dy_thread, 0, sizeof(DyThread));
     dy_thread->mv_count = 1;
+    size_t n = dy_thread_variable_count;
+    dy_thread->thread_variables = GC_MALLOC_UNCOLLECTABLE((n ? n : 1) * sizeof(D));
+    if (!dy_thread->thread_variables) dy_error("out of memory", 0);
+    for (size_t i = 0; i < n; i++)
+        dy_thread->thread_variables[i] = dy_thread_variable_defaults[i];
+}
+
+void dy_end_thread(void) {
+    GC_FREE(dy_thread->thread_variables);
+    GC_FREE(dy_thread);
+    dy_thread = NULL;
 }
 
 D dy_make_closure(DyEntry entry, size_t env_size) {

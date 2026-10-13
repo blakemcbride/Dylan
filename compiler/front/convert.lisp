@@ -372,6 +372,20 @@ does."
     (setf (define-variable-node-value node) (convert (third form) env))
     node))
 
+;;; (define-thread-variable name value): an extension (CompilerPlan.md,
+;;; Phase 7).  Each thread has its own value of the variable; a thread
+;;; made after the definition has run starts with VALUE.
+
+(define-special-form dylan::define-thread-variable (form env)
+  (unless (list-of-length-p form 3)
+    (compile-error "define-thread-variable: needs a variable name and a value"))
+  (require-variable-name (second form) "define-thread-variable")
+  (let* ((var (defining-module-var *module* (second form) "define-thread-variable"))
+         (node (note-definition var (make-define-variable-node var nil))))
+    (setf (module-var-thread-local-p var) t)
+    (setf (define-variable-node-value node) (convert (third form) env))
+    node))
+
 (define-special-form dylan::define-method (form env)
   (require-list form 3 "define-method")
   (require-variable-name (second form) "define-method")

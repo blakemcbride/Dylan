@@ -343,6 +343,21 @@ and `return-query` do nothing. Tests: `tests/codegen/cases-control.lisp`.
 
 ## Phase 7 — Threads
 
+**Status: done.** `runtime/c/thread.c`, `runtime/dylan/threads.dyl`. The API
+as settled: `make-thread` (a function of no arguments), `join-thread`
+(answers its values), `current-thread`, `thread-yield`; `<lock>` (error
+checking) and `<recursive-lock>` with `acquire-lock`, `release-lock` and the
+`with-lock` macro; `<condition-variable>` with `wait-condition-variable`,
+`notify-condition-variable` and `notify-all-condition-variable`;
+`<atomic-integer>` with `atomic-value`, `atomic-add!` and
+`atomic-compare-and-swap!`; `define-thread-variable` and the `dynamic-bind`
+macro. A thread made after a thread variable's definition has run starts
+with its value. A serious condition a thread does not handle ends that
+thread and `join-thread` signals a `<thread-error>` holding it. The program
+ends when its top-level forms are done; it does not wait for other threads.
+Tests: `tests/codegen/cases-threads.lisp`. (ThreadSanitizer has not been
+tried yet.)
+
 The 1992 manual has no threads, so this is an extension, documented as
 such.
 

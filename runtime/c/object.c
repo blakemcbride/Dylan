@@ -7,17 +7,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 DyHeader dy_true_object = { &dy_wrapper_boolean };
 DyHeader dy_false_object = { &dy_wrapper_boolean };
 DyHeader dy_empty_list_object = { &dy_wrapper_empty_list };
 
 void dy_intern_static_symbols(void);    /* string.c */
+void dy_init_main_thread(void);         /* thread.c */
 
 void dy_init(void) {
     GC_INIT();
     GC_allow_register_threads();
     dy_init_thread();
+    dy_init_main_thread();
     dy_intern_static_symbols();
 }
 
@@ -150,6 +153,13 @@ void dy_debug_write(FILE *out, D x) {
         return;
     case DY_KIND_FUNCTION:
         fputs("{method}", out);
+        return;
+    case DY_KIND_THREAD: fputs("{thread}", out); return;
+    case DY_KIND_LOCK: fputs("{lock}", out); return;
+    case DY_KIND_CONDITION_VARIABLE: fputs("{condition-variable}", out); return;
+    case DY_KIND_ATOMIC_INTEGER:
+        fprintf(out, "{atomic-integer %ld}",
+                (long)atomic_load(&((DyAtomicInteger *)DY_PTR(x))->value));
         return;
     case DY_KIND_CLASS:
         fputs("{class ", out);

@@ -64,7 +64,7 @@ static D restore_values(Saved s) {
 
 /* Leave every frame above TARGET, running cleanups, then jump to it.  The
  * values to return are in the thread. */
-static _Noreturn void unwind_to(DyFrame *target) {
+_Noreturn void dy_unwind_to(DyFrame *target) {
     DyThread *t = dy_thread;
     Saved s = save_values(t->mv_count > 0 ? t->mv[0] : DY_FALSE);
     while (t->frames != target) {
@@ -90,7 +90,7 @@ static D exit_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     for (intptr_t i = 0; i < argc; i++)
         t->mv[i] = i < 4 ? in_registers[i] : t->args[i - 4];
     t->mv_count = argc;
-    unwind_to(target);
+    dy_unwind_to(target);
 }
 
 D dy_call_with_exit(D body) {

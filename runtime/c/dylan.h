@@ -94,7 +94,11 @@ enum {
     DY_KIND_CLASS,
     DY_KIND_FUNCTION,              /* DyFunction                        */
     DY_KIND_GENERIC,               /* DyGeneric                         */
-    DY_KIND_SINGLETON              /* DySingleton                       */
+    DY_KIND_SINGLETON,             /* DySingleton                       */
+    DY_KIND_THREAD,                /* DyThreadObject                    */
+    DY_KIND_LOCK,                  /* DyLock: <lock>, <recursive-lock>  */
+    DY_KIND_CONDITION_VARIABLE,    /* DyConditionVariable               */
+    DY_KIND_ATOMIC_INTEGER         /* DyAtomicInteger                   */
 };
 
 /* Wrapper flags */
@@ -204,7 +208,9 @@ extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
     dy_wrapper_symbol, dy_wrapper_keyword, dy_wrapper_class,
     dy_wrapper_number, dy_wrapper_rational, dy_wrapper_float,
     dy_wrapper_real, dy_wrapper_method, dy_wrapper_generic_function,
-    dy_wrapper_singleton;
+    dy_wrapper_singleton, dy_wrapper_thread, dy_wrapper_lock,
+    dy_wrapper_recursive_lock, dy_wrapper_condition_variable,
+    dy_wrapper_atomic_integer;
 
 /* The program's symbols and keywords, which the runtime interns when it
  * starts.  Defined by the compiler's output. */
@@ -416,6 +422,12 @@ typedef struct DyThread {
     struct DyFrame *frames;
     uint64_t frame_serial;
     int error_depth;               /* run-time errors being signalled    */
+    /* Threads (Phase 7) */
+    struct DyThreadObject *self;   /* this thread's <thread>             */
+    struct DyFrame *top_frame;     /* where an unhandled condition ends
+                                      a thread other than the main one   */
+    D *thread_variables;           /* its values of the program's thread
+                                      variables                          */
 } DyThread;
 
 /* ------------------------------------------------------------- Control
@@ -438,6 +450,10 @@ typedef struct DyFrame {
                                       type, function, test, description  */
 } DyFrame;
 
+/* Leave every frame above TARGET, running cleanups, and jump to it, with
+ * the values the thread holds. */
+_Noreturn void dy_unwind_to(DyFrame *target);
+
 /* Call BODY, a function of one argument, with an exit procedure that
  * returns its arguments as the values of this call (bind-exit). */
 D dy_call_with_exit(D body);
@@ -451,6 +467,7 @@ D dy_handler_bind(D type, D function, D test, D description, D thunk);
  * scans it. */
 extern _Thread_local DyThread *dy_thread;
 void dy_init_thread(void);
+void dy_end_thread(void);
 
 /* Markers no Dylan program can see */
 extern DyHeader dy_unbound_object, dy_unsupplied_object, dy_tail_call_object;
@@ -591,6 +608,39 @@ D dy_call_list(D f, D first, D list);
 
 /* initialize's method on <object>: does nothing. */
 extern DyFunction dy_default_initialize;
+
+/* ------------------------------------------------------------- Threads
+ * (CompilerPlan.md, Phase 7: an extension; the manual has no threads) */
+
+typedef struct DyThreadObject {    /* <thread>                          */
+    DyWrapper *wrapper;
+    pthread_t thread;
+    D function;
+    D results;                     /* the function's values, as a list    */
+    D condition;                   /* the condition that ended it, or #f  */
+    int done;
+    int main;
+} DyThreadObject;
+
+typedef struct DyLock {            /* <lock> and <recursive-lock>       */
+    DyWrapper *wrapper;
+    pthread_mutex_t mutex;
+} DyLock;
+
+typedef struct DyConditionVariable {
+    DyWrapper *wrapper;
+    pthread_cond_t condition;
+} DyConditionVariable;
+
+typedef struct DyAtomicInteger {
+    DyWrapper *wrapper;
+    _Atomic intptr_t value;        /* untagged                           */
+} DyAtomicInteger;
+
+/* The program's thread variables: their number and the values new threads
+ * start with.  Defined by the compiler's output. */
+extern const size_t dy_thread_variable_count;
+extern D dy_thread_variable_defaults[];
 
 /* Runtime support for backquote */
 D dy_append2(D list, D tail);

@@ -169,15 +169,24 @@
 ;;;
 ;;; FUNCTIONS FOR COLLECTIONS (page 99)
 ;;;
+(define-direct-slot range-start set-range-start! <range>
+  dylan/get-range-start dylan/set-range-start!)
+(define-direct-slot range-step set-range-step! <range>
+  dylan/get-range-step dylan/set-range-step!)
+(define-direct-slot range-end set-range-end! <range>
+  dylan/get-range-end dylan/set-range-end!)
+(define-direct-slot range-count set-range-count! <range>
+  dylan/get-range-count dylan/set-range-count!)
+
 (defun range-size (range)
   "The size of RANGE, or NIL if it is unbounded."
-  (let ((start (dylan-call dylan/get-range-start range))
-        (end (dylan-call dylan/get-range-end range))
-        (step (dylan-call dylan/get-range-step range)))
+  (let ((start (range-start range))
+        (end (range-end range))
+        (step (range-step range)))
     ;; END is on the range's grid (see RANGE), so (END - START)/STEP is an
     ;; integer -- up to float rounding, which ROUND undoes.
     (cond
-      ((zerop step) (dylan-call dylan/get-range-count range))
+      ((zerop step) (range-count range))
       (end
        (if (funcall (if (plusp step) #'< #'>) end start)
            0

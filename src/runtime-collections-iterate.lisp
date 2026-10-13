@@ -104,7 +104,7 @@
 ;;; index for a simple vector, and the index for a range.  A range is read
 ;;; afresh each time, as the methods do, since ADD! and REVERSE! change it.
 
-(declaim (ftype function range-size))
+(declaim (ftype function range-size range-start range-step))
 
 (defun initial-state (collection)
   (cond ((and (listp collection) *fast-iterate-list*)
@@ -147,12 +147,11 @@
          (svref collection (svref state 0)))
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
-         (let ((step (dylan-call dylan/get-range-step collection)))
+         (let ((step (range-step collection)))
            ;; The first element is FROM itself, exact or not.
            (if (or (zerop step) (zerop state))
-               (dylan-call dylan/get-range-start collection)
-               (+ (dylan-call dylan/get-range-start collection)
-                  (* state step)))))
+               (range-start collection)
+               (+ (range-start collection) (* state step)))))
         (t (dylan-call dylan/current-element collection
                        (dylan-state state)))))
 (defun current-key (collection state)

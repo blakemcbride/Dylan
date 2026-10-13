@@ -306,7 +306,7 @@ checked them; a direct call (next-method #f) is checked here."
 
 (defmacro cached-dispatch (data &rest arguments)
   "When the cache knows the methods for ARGUMENTS (one for each required
-argument) and just one applies, the cache's entry for them (see
+argument) and some apply, the cache's entry for them (see
 CACHED-APPLICABLE-METHODS); else NIL."
   (let ((table (gensym "TABLE")) (singletons (gensym "SINGLETONS")))
     `(let* ((,table (dispatch-cache ,data))
@@ -320,7 +320,6 @@ CACHED-APPLICABLE-METHODS); else NIL."
                                             ,table))
                     when more collect `(hash-table-p ,table))
             (car ,table)
-            (null (cdar ,table))
             ,table))))
 
 (defun keyword-error (&rest args)
@@ -346,9 +345,9 @@ cache's entry for the call."
          (extra-arguments? (or (generic-function-data.keys data)
                                (generic-function-data.rest? data)))
          (generic-function nil))
-    ;; With one to three required arguments, a call whose one applicable
-    ;; method the cache knows goes straight to it, without the argument
-    ;; list GENERIC-DISPATCH works on when there are no others.
+    ;; With one to three required arguments, a call whose applicable
+    ;; methods the cache knows goes straight to them, and to the only one
+    ;; without the argument list GENERIC-DISPATCH works on.
     (macrolet ((fast-dispatcher (&rest required)
                  (let ((last (car (cl:last required))))
                    `(lambda (multiple-values next-method
@@ -367,6 +366,11 @@ cache's entry for the call."
                                               collect v)
                                         more)
                                 generic-function data))
+                              ((cdar cached)  ; Several methods apply
+                               (when more
+                                 (check-extra-arguments data more cached))
+                               (call-methods (car cached) multiple-values
+                                             (list* ,@required more)))
                               ((null more)
                                (funcall (caar cached) multiple-values
                                         next-method/last-applicable
@@ -418,22 +422,21 @@ cache's entry for the call."
               (dylan-call dylan/error
                           "generic-dispatch -- too many arguments supplied"
                           generic-function nreq original-args))))
-      (labels ((next-method-loop (remaining-methods multiple-values current-args)
-                 (if (null (cdr remaining-methods))
-                     (apply (car remaining-methods)
-                            multiple-values next-method/last-applicable
-                            current-args)
-                     (apply (car remaining-methods)
-                            multiple-values
-                            (lambda (multiple-values next-method &rest these-args)
-                              (declare (ignore next-method))
-                              (next-method-loop (cdr remaining-methods)
-                                                multiple-values
-                                                (if (null these-args)
-                                                    current-args
-                                                    these-args)))
-                            current-args))))
-        (next-method-loop entries multiple-values original-args)))))
+      (call-methods entries multiple-values original-args))))
+
+(defun call-methods (entries multiple-values arguments)
+  "Call the first of ENTRIES on ARGUMENTS, with a next method that calls
+the rest (on the same arguments, unless it is given others)."
+  (if (null (cdr entries))
+      (apply (car entries) multiple-values next-method/last-applicable
+             arguments)
+      (apply (car entries)
+             multiple-values
+             (lambda (multiple-values next-method &rest these-args)
+               (declare (ignore next-method))
+               (call-methods (cdr entries) multiple-values
+                             (if (null these-args) arguments these-args)))
+             arguments)))
 
 (defun handled-keywords (methods)
   "What CHECK-HANDLED-KEYWORDS allows for a call to which METHODS apply:

@@ -165,7 +165,7 @@
 (add-method
  dylan/size
  (one-arg 'sov <vector>
-          (lambda (vect) (length (dylan-call dylan/get-array-value vect)))))
+          (lambda (vect) (length (vector-value vect)))))
 
 ;;;
 ;;; Functions for sequences
@@ -214,16 +214,16 @@
   ;; vector is made adjustable, with a fill pointer, the first time, and
   ;; then grows by doubling; LENGTH and the rest see only the elements.
   (lambda (s-vector new-element)
-    (let ((vector (dylan-call dylan/get-array-value s-vector))
-          (size (car (dylan-call dylan/get-array-dimensions s-vector))))
+    (let ((vector (stretchy-value s-vector))
+          (size (car (stretchy-dimensions s-vector))))
       (unless (and (adjustable-array-p vector)
                    (array-has-fill-pointer-p vector)
                    (= (fill-pointer vector) size))
         (setf vector (make-array size :adjustable t :fill-pointer size
                                       :initial-contents (subseq vector 0 size)))
-        (dylan-call dylan/set-array-value! s-vector vector))
+        (set-stretchy-value! s-vector vector))
       (vector-push-extend new-element vector (max 8 size))
-      (dylan-call dylan/set-array-dimensions! s-vector (list (+ size 1)))
+      (set-stretchy-dimensions! s-vector (list (+ size 1)))
       s-vector))))
 
 (add-method
@@ -379,7 +379,7 @@
   (lambda (multiple-values next-method vector index &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (let* ((vector-value (dylan-call dylan/get-array-value vector))
+    (let* ((vector-value (vector-value vector))
            (size (length vector-value)))
       (if (and (>= index 0) (< index size))
           (aref vector-value index)
@@ -427,7 +427,7 @@
   ;; Chapter 12: it is an error to set an element whose key is not
   ;; already in the vector.
   (lambda (vector-instance index new-value)
-    (let ((vector (dylan-call dylan/get-array-value vector-instance)))
+    (let ((vector (vector-value vector-instance)))
       (unless (and (integerp index) (< -1 index (length vector)))
         (dylan-call dylan/error
                     "((setter element) <vector>) -- invalid index"

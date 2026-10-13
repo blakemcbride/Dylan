@@ -78,6 +78,38 @@
 (defun but-last (list)
   (butlast list))
 
+;;; The runtime's private slots (a range's bounds, an array's elements) are
+;;; read and written through generic functions.  DEFINE-DIRECT-SLOT defines
+;;; a READER and WRITER that, for a direct instance of CLASS, go straight to
+;;; the slot in its data, at the offset CLASS gives GETTER's slot -- worked
+;;; out again when *CLASS-STRUCTURE-EPOCH* changes -- and otherwise call
+;;; GETTER and SETTER.  The setters' type checks are skipped: only the
+;;; runtime writes these slots.
+
+(defun direct-slot-offset (cache class getter)
+  "CACHE is (EPOCH . OFFSET)."
+  (if (eql (car cache) *class-structure-epoch*)
+      (cdr cache)
+      (let ((offset (storage-location class getter)))
+        (setf (car cache) *class-structure-epoch*
+              (cdr cache) offset)
+        offset)))
+
+(defmacro define-direct-slot (reader writer class getter setter)
+  `(let ((cache (cons nil nil)))
+     (defun ,reader (object)
+       (if (and (instance? object) (eq (instance.class object) ,class))
+           (object-ref (instance.data object)
+                       (direct-slot-offset cache ,class ,getter)
+                       object ',reader)
+           (dylan-call ,getter object)))
+     (defun ,writer (object value)
+       (if (and (instance? object) (eq (instance.class object) ,class))
+           (setf (aref (instance.data object)
+                       (direct-slot-offset cache ,class ,getter))
+                 value)
+           (dylan-call ,setter object value)))))
+
 (defun create-private-slot (owner type-restriction name continue)
   "Add a new slot to an existing class, and return the getter and setter
 generic functions to be used for the slot."

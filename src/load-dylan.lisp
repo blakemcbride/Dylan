@@ -108,26 +108,32 @@ since their fasls differ.")
 
 (defun dylan-load (names)
   "Load the named files, compiling each to a fasl first when the fasl is
-missing or older than its source.  Once one file is compiled, so are all
+missing or not newer than its source.  Once one file is compiled, so are all
 after it, since they may use its macros and inline functions.  Nearly every
 file refers to things that later files define, so the style warnings that
 produces are muffled."
   (let ((stale nil))
-    (handler-bind ((style-warning #'muffle-warning))
-      (dolist (name names)
-        (let ((source (merge-pathnames (concatenate 'string name ".lisp")
-                                       *dylan-directory*))
-              (fasl (merge-pathnames (make-pathname :name name
-                                                    :type "fasl")
-                                     *dylan-fasl-directory*)))
-          (when (or stale
-                    (not (probe-file fasl))
-                    (> (file-write-date source) (file-write-date fasl)))
-            (setf stale t)
-            (ensure-directories-exist fasl)
-            (let ((*compile-verbose* nil) (*compile-print* nil))
-              (compile-file source :output-file fasl)))
-          (load fasl))))))
+    ;; One compilation unit, so that a function a later file defines is
+    ;; not reported as undefined; and no optimization notes.
+    (with-compilation-unit ()
+      (handler-bind ((style-warning #'muffle-warning)
+                     #+sbcl (sb-ext:compiler-note #'muffle-warning))
+        (dolist (name names)
+          (let ((source (merge-pathnames (concatenate 'string name ".lisp")
+                                         *dylan-directory*))
+                (fasl (merge-pathnames (make-pathname :name name
+                                                      :type "fasl")
+                                       *dylan-fasl-directory*)))
+            ;; File dates are to the second, so a source written in the
+            ;; same second as its fasl may be newer than it.
+            (when (or stale
+                      (not (probe-file fasl))
+                      (>= (file-write-date source) (file-write-date fasl)))
+              (setf stale t)
+              (ensure-directories-exist fasl)
+              (let ((*compile-verbose* nil) (*compile-print* nil))
+                (compile-file source :output-file fasl)))
+            (load fasl)))))))
 
 (dylan-load (append *dylan-common-files*
                     *dylan-compiler-files*

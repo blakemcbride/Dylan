@@ -106,6 +106,16 @@
                        (setf dylan/set-array-dimensions! set)
                        (setf dylan/get-array-dimensions get)))
 
+(define-direct-slot stretchy-value set-stretchy-value! <stretchy-vector>
+  dylan/get-array-value dylan/set-array-value!)
+(define-direct-slot stretchy-dimensions set-stretchy-dimensions!
+  <stretchy-vector> dylan/get-array-dimensions dylan/set-array-dimensions!)
+
+(defun vector-value (vector)
+  "What GET-ARRAY-VALUE answers for VECTOR, a <vector>: itself for a
+simple object vector."
+  (if (simple-vector-p vector) vector (stretchy-value vector)))
+
 ;; These four generic operations must be specialized for the special cases
 ;; of <byte-string> and <simple-object-vector>
 

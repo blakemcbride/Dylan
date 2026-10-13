@@ -1,13 +1,10 @@
 /* Copyright 2026 Blake McBride.  See ../../LICENSE.
  *
- * Provisional built-in functions.
- *
- * Until the library is written (CompilerPlan.md, Phase 8), these few
- * functions of the DYLAN module are written here in C, so that programs
- * can run and the code generator be tested.  The compiler knows them by
- * the table in compiler/backend/primitives.lisp.  Each is a DyFunction
- * with the uniform entry.  Arithmetic and comparison go through number.c;
- * = and id? on objects other than numbers compare identity.
+ * Built-in functions written in C: those the manual calls methods, which
+ * programs cannot extend (id?, list, values, apply, ...), and the
+ * reflective functions of chapters 10 and 11.  The rest of the library is
+ * in Dylan (runtime/dylan).  The compiler knows these by the table in
+ * compiler/backend/primitives.lisp.
  */
 
 #include "dylan.h"
@@ -16,97 +13,13 @@
 
 #include "primitive.h"
 
-/* ---------------------------------------------------------- Arithmetic */
-
-PRIMITIVE(add) {
-    D sum = DY_INT(0);
-    for (intptr_t i = 0; i < argc; i++) sum = dy_add(sum, ARG(i));
-    return sum;
-}
-
-PRIMITIVE(subtract) {
+/* id? (chapter 9): identity, except that numbers of one class and value
+ * are id?. */
+PRIMITIVE(id) {
     need(self, argc, 1, -1);
-    if (argc == 1) return dy_negate(a0);
-    D r = a0;
-    for (intptr_t i = 1; i < argc; i++) r = dy_sub(r, ARG(i));
-    return r;
-}
-
-PRIMITIVE(multiply) {
-    D product = DY_INT(1);
-    for (intptr_t i = 0; i < argc; i++) product = dy_mul(product, ARG(i));
-    return product;
-}
-
-PRIMITIVE(divide) {
-    need(self, argc, 1, -1);
-    if (argc == 1) return dy_div(DY_INT(1), a0);
-    D r = a0;
-    for (intptr_t i = 1; i < argc; i++) r = dy_div(r, ARG(i));
-    return r;
-}
-
-/* = : numbers by value, anything else by identity (for now) */
-static bool equal(D x, D y) {
-    if (dy_number_p(x) && dy_number_p(y)) return dy_number_equal(x, y);
-    return x == y;
-}
-
-#define CHAINED(c_name, test)                                           \
-    PRIMITIVE(c_name) {                                                 \
-        need(self, argc, 1, -1);                                        \
-        for (intptr_t i = 0; i + 1 < argc; i++) {                       \
-            D x = ARG(i), y = ARG(i + 1);                               \
-            if (!(test)) return DY_FALSE;                               \
-        }                                                               \
-        return DY_TRUE;                                                 \
-    }
-
-CHAINED(less, dy_number_less(x, y))
-CHAINED(greater, dy_number_less(y, x))
-CHAINED(less_equal, (dy_compare(x, y) == -1 || dy_compare(x, y) == 0))
-CHAINED(greater_equal, (dy_compare(x, y) == 1 || dy_compare(x, y) == 0))
-CHAINED(equal, equal(x, y))
-CHAINED(id, dy_identical(x, y))
-
-PRIMITIVE(not_equal) {
-    need(self, argc, 2, 2);
-    return DY_BOOL(!equal(a0, a1));
-}
-
-PRIMITIVE(zero_p) { need(self, argc, 1, 1); return DY_BOOL(dy_number_equal(a0, DY_INT(0))); }
-PRIMITIVE(positive_p) { need(self, argc, 1, 1); return DY_BOOL(dy_number_less(DY_INT(0), a0)); }
-PRIMITIVE(negative_p) { need(self, argc, 1, 1); return DY_BOOL(dy_number_less(a0, DY_INT(0))); }
-
-PRIMITIVE(even_p) {
-    need(self, argc, 1, 1);
-    if (!DY_IS_INT(a0)) dy_error("not an integer", a0);
-    return DY_BOOL((DY_INT_VALUE(a0) & 1) == 0);
-}
-
-PRIMITIVE(odd_p) {
-    need(self, argc, 1, 1);
-    if (!DY_IS_INT(a0)) dy_error("not an integer", a0);
-    return DY_BOOL((DY_INT_VALUE(a0) & 1) != 0);
-}
-
-PRIMITIVE(abs) {
-    need(self, argc, 1, 1);
-    return dy_number_less(a0, DY_INT(0)) ? dy_negate(a0) : a0;
-}
-
-PRIMITIVE(max) {
-    need(self, argc, 1, -1);
-    D r = a0;
-    for (intptr_t i = 1; i < argc; i++) if (dy_number_less(r, ARG(i))) r = ARG(i);
-    return r;
-}
-
-PRIMITIVE(min) {
-    need(self, argc, 1, -1);
-    D r = a0;
-    for (intptr_t i = 1; i < argc; i++) if (dy_number_less(ARG(i), r)) r = ARG(i);
-    return r;
+    for (intptr_t i = 0; i + 1 < argc; i++)
+        if (!dy_identical(ARG(i), ARG(i + 1))) return DY_FALSE;
+    return DY_TRUE;
 }
 
 /* ------------------------------------------------------------- Objects */
@@ -166,15 +79,6 @@ PRIMITIVE(apply) {
     D b0 = n > 0 ? args[0] : 0, b1 = n > 1 ? args[1] : 0,
       b2 = n > 2 ? args[2] : 0, b3 = n > 3 ? args[3] : 0;
     DY_TAIL_CALL(f, b0, b1, b2, b3, n);
-}
-
-/* ------------------------------------------------------------- Output */
-
-PRIMITIVE(print) {
-    need(self, argc, 1, 1);
-    dy_debug_print(a0);
-    putchar('\n');
-    return a0;
 }
 
 /* --------------------------------------------- Classes and functions */

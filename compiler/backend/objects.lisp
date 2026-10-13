@@ -39,6 +39,10 @@
 (defvar *instance-slot-numbers* nil "getter MODULE-VAR -> number.")
 (defvar *definition-order* 0)
 
+(defvar *reflective-methods* t
+  "Might the program get hold of a method of a generic function, by
+reflection, and call it?  If not, methods need no direct entries.")
+
 (defstruct gclass var info sdefs location ready-c)
 
 (defstruct sdef
@@ -127,7 +131,11 @@
           ((module-var-predefined-p var)
            (let ((c (find (dylan::dylan-symbol->string (name-symbol (module-var-name var)))
                           *classes* :key #'class-info-name :test #'string-equal)))
-             (and c (class-info-exported-p c) (not (consp (module-var-name var))) c))))))
+             (and c (not (consp (module-var-name var)))
+                  ;; The library may name the runtime's internal classes.
+                  (or (class-info-exported-p c)
+                      (eq (module-var-module var) (dylan-module)))
+                  c))))))
 
 (defun resolve-class (atom what)
   (let ((v (static-value atom)))
@@ -386,7 +394,16 @@ in layout order."
              (when (subclass-info-p c (sdef-class sd))
                (emit "~a[~d] = ~a;" (sdef-c sd "cells") (class-info-id c) v)))))))
     (when (slot-spec-init-function spec)
-      (emit "~a = ~a;" (sdef-c sd "initfn") (atom-c (slot-spec-init-function spec))))))
+      (emit "~a = ~a;" (sdef-c sd "initfn") (atom-c (slot-spec-init-function spec))))
+    ;; The slot descriptor's copies
+    (when (slot-spec-type spec)
+      (emit "~a.type = ~a;" (sdef-descriptor-c sd) (sdef-c sd "type")))
+    (when (slot-spec-init-value spec)
+      (emit "~a.init_value = ~a;" (sdef-descriptor-c sd) (sdef-c sd "init")))
+    (when (slot-spec-init-function spec)
+      (emit "~a.init_function = ~a;" (sdef-descriptor-c sd) (sdef-c sd "initfn")))))
+
+(defun sdef-descriptor-c (sd) (format nil "dy_sd~d" (sdef-id sd)))
 
 (defun gen-class-definition (node)
   "Code for a define-class or define-slot form, run where it appears."
@@ -569,12 +586,22 @@ slot SD in the object VAR."
   (loop for g being the hash-values of *gfuns*
         do (dolist (m (gfun-methods g))
              (unless (eq (gmethod-kind m) :default)
-               (emit-object "DyFunction ~a = { &dy_wrapper_method, ~a, ~a };"
+               (emit-object "DyFunction ~a = { &dy_wrapper_method, ~a, ~a, ~a };"
                             (gmethod-object-c m)
-                            (if (eq (gmethod-kind m) :ir)
+                            (if (and (eq (gmethod-kind m) :ir) *reflective-methods*)
                                 (format nil "~a_direct" (gmethod-entry-c m))
                                 (gmethod-entry-c m))
-                            (spec-vector-c (gmethod-specs m)))))))
+                            (spec-vector-c (gmethod-specs m))
+                            (method-info-c m))))))
+
+(defparameter *method-reflection-functions*
+  '("generic-function-methods" "find-method" "sorted-applicable-methods"))
+
+(defun uses-method-reflection-p (ir)
+  (let ((functions (mapcar #'dylan-var *method-reflection-functions*)))
+    (some (lambda (top)
+            (some (lambda (v) (member v functions)) (referenced-variables top)))
+          (ir-program-toplevels ir))))
 
 (defun arg-c (i) (if (< i 4) (format nil "a~d" i) (format nil "dy_thread->args[~d]" (- i 4))))
 
@@ -629,7 +656,7 @@ no next method."
                         (after (next-object (rest methods))))
                    (declare-object "static D ~a_entry(D, D, D, D, D, intptr_t);" name)
                    (declare-object "static DyFunction ~a;" name)
-                   (emit-object "static DyFunction ~a = { &dy_wrapper_method, ~a_entry, DY_FALSE };"
+                   (emit-object "static DyFunction ~a = { &dy_wrapper_method, ~a_entry, DY_FALSE, DY_FALSE };"
                                 name name)
                    (emit-object "static D ~a_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {"
                                 name)
@@ -791,14 +818,38 @@ methods are METHODS, or NIL."
                           (address (gmethod-object-c (first methods)))))
     (emit-object "no_method:~%    dy_no_applicable_method(self);~%}")))
 
+(defun function-info-c (required rest keys)
+  "The C constant for function-arguments: #(required rest? keys), KEYS
+NIL (no #key), :ANY (#key alone) or a list of keywords."
+  (c-constant *cdata* (vector required (bool rest)
+                              (cond ((null keys) +false+) ((eq keys :any) '()) (t keys)))))
+
+(defun method-info-c (m)
+  (ecase (gmethod-kind m)
+    (:ir (let ((fn (gmethod-fn m)))
+           (function-info-c (length (ir-fn-required fn)) (ir-fn-rest fn)
+                            (let ((k (ir-fn-keys fn))) (if (listp k) (mapcar #'ir-key-keyword k) k)))))
+    (:getter (function-info-c 1 nil nil))
+    (:setter (function-info-c 2 nil nil))))
+
 (defun emit-generic-object (g)
   (declare-object "DyGeneric ~a;" (gfun-c-name g))
-  (emit-object "DyGeneric ~a = { &dy_wrapper_generic_function, ~a_dispatch, ~a, ~a, ~d };"
+  (emit-object "DyGeneric ~a = { &dy_wrapper_generic_function, ~a_dispatch, ~a, ~a, ~d, ~a };"
                (gfun-c-name g) (gfun-c-name g)
-               (c-constant *cdata* (name-symbol (module-var-name (gfun-var g))))
+               ;; Its name: a symbol, spelled (setter x) for a setter
+               (let ((name (module-var-name (gfun-var g))))
+                 (if (consp name)
+                     (address (c-symbol *cdata* (name-string name) :symbol))
+                     (c-constant *cdata* name)))
                (address (c-vector *cdata* (mapcar (lambda (m) (address (gmethod-object-c m)))
                                                   (gfun-methods g))))
-               (gfun-required g)))
+               (gfun-required g)
+               (let ((declared (gfun-declared-keys g)))
+                 (function-info-c (gfun-required g)
+                                  (and (gfun-variable-p g)
+                                       (or (not declared) (eq declared :none)
+                                           (some #'gmethod-rest-p (gfun-methods g))))
+                                  (if (and declared (not (eq declared :none))) declared nil)))))
 
 ;;; make
 
@@ -891,8 +942,102 @@ objects, makers."
   (let ((*nexts* (make-hash-table :test #'equal)))
     (loop for g being the hash-values of *gfuns*
           do (dolist (m (gfun-methods g))
-               (when (eq (gmethod-kind m) :ir) (emit-direct-entry m)))
+               (when (and (eq (gmethod-kind m) :ir) *reflective-methods*)
+                 (emit-direct-entry m)))
              (emit-dispatch g))
     (emit-method-objects)
     (loop for g being the hash-values of *gfuns* do (emit-generic-object g))
+    (emit-slot-initialized-p)
+    (emit-slot-descriptors)
     (loop for g being the hash-values of *gclasses* do (emit-maker g))))
+
+;;; slot-initialized? (chapter 6): whether the slot that GETTER reads in
+;;; INSTANCE has a value.  Written into each program, from its slots; true
+;;; for a virtual slot, as the manual says the default is.
+
+(defun emit-slot-initialized-p ()
+  (emit-object "static D dy_slot_initialized_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
+  (emit-object "    (void)a2; (void)a3;")
+  (emit-object "    if (argc != 2) dy_wrong_argument_count(self, argc);")
+  (emit-object "    DyWrapper *w = dy_wrapper_of(a0); (void)w;")
+  (loop for g being the hash-values of *gclasses*
+        do (dolist (sd (gclass-sdefs g))
+             (let ((getter (gethash (sdef-getter sd) *gfuns*)))
+               (when getter
+                 (emit-object "    if (a1 == ~a && dy_wrapper_subtype(w, &~a)) {"
+                              (address (gfun-c-name getter)) (wrapper-c-name (sdef-class sd)))
+                 (ecase (sdef-allocation sd)
+                   (:instance
+                    (emit-object "        int32_t i = w->slot_offsets ? w->slot_offsets[~d] : -1;"
+                                 (gethash (sdef-getter sd) *instance-slot-numbers*))
+                    (emit-object "        if (i >= 0) return DY_BOOL(((DyInstance *)DY_PTR(a0))->slots[i] != DY_UNBOUND);"))
+                   ((:class :constant)
+                    (emit-object "        return DY_BOOL(~a != DY_UNBOUND);" (sdef-c sd "cell")))
+                   (:each-subclass
+                    (emit-object "        return DY_BOOL(~a[w->id] != DY_UNBOUND);" (sdef-c sd "cells")))
+                   (:virtual (emit-object "        return DY_TRUE;")))
+                 (emit-object "    }")))))
+  (emit-object "    dy_error(\"slot-initialized?: the getter does not read a slot of the object\", a0);~%}")
+  (declare-object "DyFunction dy_prim_slot_initialized_p;")
+  (emit-object "DyFunction dy_prim_slot_initialized_p = { &dy_wrapper_method, dy_slot_initialized_entry, DY_FALSE, DY_FALSE };"))
+
+;;; Slot descriptors (chapter 11): one static DySlotDescriptor for each slot
+;;; definition, and the functions slot-descriptor and slot-descriptors,
+;;; written into each program from its slots.
+
+(defun emit-slot-descriptors ()
+  (let ((sdefs (loop for g being the hash-values of *gclasses* append (gclass-sdefs g))))
+    (dolist (sd sdefs)
+      (let ((spec (sdef-spec sd))
+            (setter (and (sdef-setter sd) (gethash (sdef-setter sd) *gfuns*))))
+        (declare-object "DySlotDescriptor ~a;" (sdef-descriptor-c sd))
+        (emit-object "DySlotDescriptor ~a = { &dy_wrapper_slot_descriptor, ~a, ~a, DY_UNBOUND, ~a, DY_UNBOUND, DY_UNBOUND, ~a, ~a, ~d, ~d, ~a };"
+                     (sdef-descriptor-c sd)
+                     (address (gfun-c-name (gethash (sdef-getter sd) *gfuns*)))
+                     (if setter (address (gfun-c-name setter)) "DY_FALSE")
+                     (c-constant *cdata* (dylan-name (string-downcase (sdef-allocation sd))))
+                     (c-constant *cdata* (or (slot-spec-init-keyword spec)
+                                             (slot-spec-required-init-keyword spec)
+                                             +false+))
+                     (address (class-c-name (sdef-class sd)))
+                     (position (sdef-allocation sd) '(:instance :class :each-subclass :constant :virtual))
+                     (or (gethash (sdef-getter sd) *instance-slot-numbers*) 0)
+                     (case (sdef-allocation sd)
+                       ((:class :constant) (format nil "&~a" (sdef-c sd "cell")))
+                       (:each-subclass (sdef-c sd "cells"))
+                       (t "NULL")))))
+    ;; (slot-descriptor instance getter): the most specific definition first
+    (emit-object "static D dy_slot_descriptor_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
+    (emit-object "    (void)a2; (void)a3;")
+    (emit-object "    if (argc != 2) dy_wrong_argument_count(self, argc);")
+    (emit-object "    DyWrapper *w = dy_wrapper_of(a0); (void)w;")
+    (dolist (sd (stable-sort (copy-list sdefs) #'>
+                             :key (lambda (sd) (length (class-info-cpl (sdef-class sd))))))
+      (emit-object "    if (a1 == ~a && dy_wrapper_subtype(w, &~a)) return ~a;"
+                   (address (gfun-c-name (gethash (sdef-getter sd) *gfuns*)))
+                   (wrapper-c-name (sdef-class sd)) (address (sdef-descriptor-c sd))))
+    (emit-object "    return DY_FALSE;~%}")
+    (declare-object "DyFunction dy_prim_slot_descriptor;")
+    (emit-object "DyFunction dy_prim_slot_descriptor = { &dy_wrapper_method, dy_slot_descriptor_entry, DY_FALSE, DY_FALSE };")
+    ;; (slot-descriptors class): of each slot of its instances, the most
+    ;; specific definition
+    (emit-object "static D dy_slot_descriptors_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
+    (emit-object "    (void)a1; (void)a2; (void)a3;")
+    (emit-object "    if (argc != 1) dy_wrong_argument_count(self, argc);")
+    (loop for g being the hash-values of *gclasses*
+          do (let ((effective '()))
+               (dolist (c (reverse (class-info-cpl (gclass-info g))))
+                 (let ((cg (class-gclass c)))
+                   (when cg
+                     (dolist (sd (gclass-sdefs cg))
+                       (let ((old (find (sdef-getter sd) effective :key #'sdef-getter)))
+                         (if old
+                             (setf effective (substitute sd old effective))
+                             (setf effective (append effective (list sd)))))))))
+               (emit-object "    if (a0 == ~a) return ~a;"
+                            (address (class-c-name (gclass-info g)))
+                            (address (c-vector *cdata* (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
+                                                               effective))))))
+    (emit-object "    return ~a;~%}" (address (c-vector *cdata* '())))
+    (declare-object "DyFunction dy_prim_slot_descriptors;")
+    (emit-object "DyFunction dy_prim_slot_descriptors = { &dy_wrapper_method, dy_slot_descriptors_entry, DY_FALSE, DY_FALSE };")))

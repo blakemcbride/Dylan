@@ -6,8 +6,8 @@
 ;;;;
 ;;;; Each program in the cases*.lisp files is compiled to C once, then built and run
 ;;;; in four configurations -- gcc and clang, each with musttail and with
-;;;; trampolines -- or, given quick, in the first only.  Every run has a
-;;;; 256 KB stack.
+;;;; trampolines (only the first optimized) -- or, given quick, in the first
+;;;; only.  Every run has a 256 KB stack.
 
 (let ((here (directory-namestring (or *load-truename* *default-pathname-defaults*))))
   (let ((*standard-output* (make-broadcast-stream)))
@@ -20,7 +20,9 @@
   (merge-pathnames "../../runtime/build/tests/" cl-user::*codegen-test-directory*))
 
 (defparameter *configurations*
-  (let ((all '(("gcc" nil) ("gcc" t) ("clang" nil) ("clang" t))))
+  ;; (cc trampoline optimize): the first optimized, the others not, which
+  ;; builds faster and shows tail calls do not depend on the optimizer.
+  (let ((all '(("gcc" nil "-O2") ("gcc" t "-O0") ("clang" nil "-O0") ("clang" t "-O0"))))
     (if (member "quick" sb-ext:*posix-argv* :test #'string=) (list (first all)) all)))
 
 (defun run-captured (command)
@@ -51,11 +53,11 @@
               ((not ok)
                (return-from run-case
                  (list (format nil "~(~a~): does not compile:~%~a" name text))))))
-      (loop for (cc trampoline) in *configurations*
+      (loop for (cc trampoline optimize) in *configurations*
             for exe = (format nil "~a-~a~:[~;-trampoline~]" (namestring stem) cc trampoline)
             for config = (format nil "~(~a~) [~a~:[~;, trampoline~]]" name cc trampoline)
             append (let ((*standard-output* (make-broadcast-stream)))
-                     (if (not (build-c c-file exe :trampoline trampoline :cc cc))
+                     (if (not (build-c c-file exe :trampoline trampoline :cc cc :optimize optimize))
                          (list (format nil "~a: the C compiler failed on ~a" config c-file))
                          (multiple-value-bind (status out err)
                              (run-captured (format nil "ulimit -s 256; exec ~a" exe))

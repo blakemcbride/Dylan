@@ -98,7 +98,8 @@ enum {
     DY_KIND_THREAD,                /* DyThreadObject                    */
     DY_KIND_LOCK,                  /* DyLock: <lock>, <recursive-lock>  */
     DY_KIND_CONDITION_VARIABLE,    /* DyConditionVariable               */
-    DY_KIND_ATOMIC_INTEGER         /* DyAtomicInteger                   */
+    DY_KIND_ATOMIC_INTEGER,        /* DyAtomicInteger                   */
+    DY_KIND_SLOT_DESCRIPTOR        /* DySlotDescriptor                  */
 };
 
 /* Wrapper flags */
@@ -210,7 +211,7 @@ extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
     dy_wrapper_real, dy_wrapper_method, dy_wrapper_generic_function,
     dy_wrapper_singleton, dy_wrapper_thread, dy_wrapper_lock,
     dy_wrapper_recursive_lock, dy_wrapper_condition_variable,
-    dy_wrapper_atomic_integer;
+    dy_wrapper_atomic_integer, dy_wrapper_slot_descriptor;
 
 /* The program's symbols and keywords, which the runtime interns when it
  * starts.  Defined by the compiler's output. */
@@ -386,6 +387,9 @@ typedef struct DyFunction {        /* <method>                          */
     DyEntry entry;
     D specializers;                /* <simple-object-vector>, or #f when
                                       every one is <object> or unknown   */
+    D info;                        /* #(required rest? keys) for
+                                      function-arguments, keys #f for no
+                                      #key; 0 or #f if unknown           */
     D env[];                       /* a closure's free variables         */
 } DyFunction;
 
@@ -395,7 +399,27 @@ typedef struct DyGeneric {         /* <generic-function>                */
     D name;                        /* <symbol>                           */
     D methods;                     /* <simple-object-vector>             */
     intptr_t required;
+    D info;                        /* as DyFunction's                    */
 } DyGeneric;
+
+/* A slot descriptor (chapter 11), one for each slot definition, made by
+ * the compiler.  Its type, init_value and init_function are stored when
+ * its define-class runs. */
+typedef struct DySlotDescriptor {
+    DyWrapper *wrapper;
+    D getter, setter;              /* generic functions; setter or #f     */
+    D type;                        /* DY_UNBOUND for <object>             */
+    D allocation;                  /* a symbol                            */
+    D init_value;                  /* DY_UNBOUND if none                  */
+    D init_function;               /* DY_UNBOUND if none                  */
+    D init_keyword;                /* keyword or #f                       */
+    D owner;                       /* the class                           */
+    intptr_t kind;                 /* 0 instance, 1 class, 2 each-subclass,
+                                      3 constant, 4 virtual               */
+    intptr_t number;               /* instance: the program's slot number */
+    D *cell;                       /* class, constant: the storage;
+                                      each-subclass: one per class id     */
+} DySlotDescriptor;
 
 typedef struct DySingleton {       /* (singleton object)                */
     DyWrapper *wrapper;
@@ -651,6 +675,8 @@ D dy_list_to_vector(D list);
 /* Write X to stdout roughly as Dylan would, for tests and debugging (the
  * library's printer comes in Phase 8). */
 void dy_debug_print(D x);
+/* A number as the library prints it (runtime/c/library.c) */
+D dy_number_string(D x);
 void dy_debug_write(FILE *out, D x);
 
 #endif

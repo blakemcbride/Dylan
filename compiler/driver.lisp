@@ -29,7 +29,7 @@ reporting why not."
   (let ((*diagnostics* '()))
     (handler-case
         (let ((text (with-output-to-string (out)
-                      (generate-c (lower-control (to-ir program)) out))))
+                      (generate-c (shake-library (lower-control (to-ir program))) out))))
           (with-open-file (out c-file :direction :output :if-exists :supersede)
             (write-string text out))
           t)

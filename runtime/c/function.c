@@ -37,6 +37,7 @@ D dy_make_closure(DyEntry entry, size_t env_size) {
                              sizeof(DyFunction) + env_size * sizeof(D));
     f->entry = entry;
     f->specializers = DY_FALSE;
+    f->info = DY_FALSE;
     return DY_OBJ(f);
 }
 

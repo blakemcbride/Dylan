@@ -23,7 +23,9 @@
 (defstruct (program (:constructor make-program (units modules diagnostics)))
   units
   modules                               ; name -> DYLAN-MODULE
-  diagnostics)                          ; in the order found
+  diagnostics                           ; in the order found
+  (spellings nil))                      ; symbol -> its first spelling in
+                                        ; this program (chapter 15)
 
 (defun program-errors (program)
   (remove :warning (program-diagnostics program) :key #'diagnostic-kind))
@@ -72,7 +74,9 @@ sources, if LIBRARY).  For tests."
   "SOURCES is a list of (name . text); a text may instead be a diagnostic
 saying why the file could not be read."
   (let ((*diagnostics* '())
-        (specs '()))
+        (specs '())
+        ;; The case a symbol is first written in is the program's own.
+        (dylan::*symbol-spellings* (make-hash-table :test #'eq)))
     (dolist (source sources)
       (if (diagnostic-p (cdr source))
           (push (cdr source) *diagnostics*)
@@ -80,7 +84,9 @@ saying why the file could not be read."
             (multiple-value-bind (file module forms)
                 (read-source (car source) (cdr source))
               (push (list file (or module "dylan-user") forms) specs)))))
-    (front-end-units (nreverse specs) :diagnostics *diagnostics*)))
+    (let ((program (front-end-units (nreverse specs) :diagnostics *diagnostics*)))
+      (setf (program-spellings program) dylan::*symbol-spellings*)
+      program)))
 
 (defun front-end-units (specs &key diagnostics)
   "SPECS is a list of (source-file module-name-string forms)."

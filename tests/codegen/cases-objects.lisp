@@ -21,7 +21,7 @@
 10
 pint
 \"doubling a floating-point number\"
-21.0d0
+21.0
 1
 ")
 
@@ -64,7 +64,7 @@ from-a
    (print (list (which (make <pq>)) (which (make <qp>))))
    (print (all-superclasses <pq>))"
   "(p q)
-({class <pq>} {class <p>} {class <q>} {class <object>})
+({the class <pq>} {the class <p>} {the class <q>} {the class <object>})
 ")
 
  ;; Multimethods: specializers compared left to right.  Singletons of
@@ -220,7 +220,7 @@ replaced
    (print (area 1.5 anything: 1))
    (area 3 color: 'red)"
   "(3 cm)
-(1.5d0 (anything: 1))
+(1.5 (anything: 1))
 "
   :error "keyword argument not accepted")
 
@@ -266,16 +266,16 @@ replaced
    (print (object-class (make <dog>)))
    (print (all-superclasses <dog>))
    (print (list (speak (make <dog>)) (speak (make <cat>))))"
-  "({class <dog>} {class <cat>})
-({class <animal>})
+  "({the class <dog>} {the class <cat>})
+({the class <animal>})
 (#t #f)
 (#t #t #f)
-({class <dog>})
+({the class <dog>})
 #f
-({class <dog>})
+({the class <dog>})
 #f
-{class <dog>}
-({class <dog>} {class <animal>} {class <object>})
+{the class <dog>}
+({the class <dog>} {the class <animal>} {the class <object>})
 (woof noise)
 ")
 

@@ -11,7 +11,7 @@ CFLAGS  ?= -O2 -g
 ALL_CFLAGS = $(CFLAGS) -std=gnu11 -Wall -Wextra -pthread -Ic
 LDLIBS  = -lgc -lm -lpthread
 
-SOURCES = c/object.c c/number.c c/string.c c/function.c c/objects.c c/control.c c/thread.c c/primitives.c
+SOURCES = c/object.c c/number.c c/string.c c/function.c c/objects.c c/control.c c/thread.c c/library.c c/primitives.c
 OBJECTS = $(SOURCES:c/%.c=build/%.o)
 TRAMPOLINE_OBJECTS = $(SOURCES:c/%.c=build/trampoline/%.o)
 TESTS   = ../tests/runtime

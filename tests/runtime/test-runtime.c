@@ -126,8 +126,8 @@ static void test_classes(void) {
     CHECK(!dy_instance_p(DY_INT(3), &dy_wrapper_float));
     CHECK(dy_instance_p(dy_make_double_float(1.0), &dy_wrapper_real));
     CHECK(dy_instance_p(dy_pair(DY_INT(1), DY_EMPTY), &dy_wrapper_pair));
-    CHECK_PRINTS(dy_object_class(DY_INT(1)), "{class <integer>}");
-    CHECK_PRINTS(dy_object_class(DY_TRUE), "{class <boolean>}");
+    CHECK_PRINTS(dy_object_class(DY_INT(1)), "{the class <integer>}");
+    CHECK_PRINTS(dy_object_class(DY_TRUE), "{the class <boolean>}");
 }
 
 /* ------------------------------------------------------------ Constants */
@@ -214,12 +214,12 @@ static void test_numbers(void) {
       e = dy_make_extended_float(2.0);
     CHECK_PRINTS(dy_add(s, DY_INT(1)), "2.5s0");
     CHECK_PRINTS(dy_add(DY_INT(1), s), "2.5s0");
-    CHECK_PRINTS(dy_add(s, d), "1.75d0");
+    CHECK_PRINTS(dy_add(s, d), "1.75");
     CHECK_PRINTS(dy_mul(d, e), "0.5l0");
     CHECK_PRINTS(dy_add(s, e), "3.5l0");
-    CHECK_PRINTS(dy_add(ratio(1, 4), d), "0.5d0");
+    CHECK_PRINTS(dy_add(ratio(1, 4), d), "0.5");
     CHECK_PRINTS(dy_div(DY_INT(1), dy_make_single_float(4.0f)), "0.25s0");
-    CHECK_PRINTS(dy_negate(d), "-0.25d0");
+    CHECK_PRINTS(dy_negate(d), "-0.25");
 
     /* Comparison: rationals exactly, floats with rationals exactly. */
     CHECK(dy_compare(ratio(1, 3), ratio(1, 2)) == -1);

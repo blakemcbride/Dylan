@@ -39,6 +39,7 @@
     "backend/cdata"
     "backend/primitives"
     "backend/objects"
+    "backend/shake"
     "backend/codegen"
     "driver"))
 

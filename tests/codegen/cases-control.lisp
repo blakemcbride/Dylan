@@ -85,7 +85,7 @@ a
   "(\"bad ~a\" (1))
 3
 (3 4)
-(a {class <integer>})
+(a {the class <integer>})
 (5)
 overflow
 caught

@@ -17,7 +17,7 @@
 #define PRIMITIVE(c_name)                                                   \
     static D c_name##_entry(D, D, D, D, D, intptr_t);                       \
     DyFunction dy_prim_##c_name = { &dy_wrapper_method, c_name##_entry,     \
-                                    DY_FALSE };                             \
+                                    DY_FALSE, DY_FALSE };                   \
     static D c_name##_entry(U D self, U D a0, U D a1, U D a2, U D a3,      \
                             U intptr_t argc)
 

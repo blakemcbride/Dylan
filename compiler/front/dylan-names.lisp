@@ -76,11 +76,26 @@
     "acquire-lock" "release-lock"
     "wait-condition-variable" "notify-condition-variable"
     "notify-all-condition-variable"
-    "atomic-value" "atomic-add!" "atomic-compare-and-swap!")
+    "atomic-value" "atomic-add!" "atomic-compare-and-swap!"
+    ;; Printing and streams (Phase 8)
+    "write" "print-object" "format" "<stream>" "<string-stream>"
+    "*standard-output*" "*standard-error*" "stream-contents")
   "Variables the DYLAN module exports that the manual does not define.")
 
 (defparameter *dylan-module-internal-names*
-  '("%signal" "%set-error-hooks" "%format-message" "%die" "%warn" "%break"
-    "%make-thread" "%join-thread" "%thread-condition" "%unhandled")
+  '("<boolean>"
+    "%shallow-copy" "%write-fd" "%slot-value-setter" "%make" "%signal" "%set-error-hooks" "%format-message" "%die" "%warn"
+    "%break" "%make-thread" "%join-thread" "%thread-condition" "%unhandled"
+    "%number-add" "%number-sub" "%number-mul" "%number-div" "%number-negate"
+    "%number=" "%number<" "%number?" "%divide" "%math" "%float?" "%float"
+    "%numerator" "%denominator" "%rationalize" "%logand" "%logior" "%logxor"
+    "%lognot" "%logbit?" "%ash" "%gcd" "%character->integer"
+    "%integer->character" "%character?" "%char-upcase" "%char-downcase"
+    "%vector-size" "%vector-element" "%vector-element-setter" "%make-vector"
+    "%make-byte-string" "%make-unicode-string" "%replace-vector!" "%set-car!"
+    "%set-cdr!" "%pair?" "%intern-symbol" "%intern-keyword" "%symbol-name"
+    "%object-hash" "%number-hash" "%string-hash" "%write-string"
+    "%write-char" "%number->string" "%class-name" "%generic-name"
+    "%singleton-object" "%function?")
   "Variables the DYLAN module owns, with values in the runtime, but does not
 export: for the library's own use.")

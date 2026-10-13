@@ -76,12 +76,10 @@
      ("<explicit-key-collection>" "<mutable-collection>") :none :abstract)
     ("<mutable-sequence>" ("<mutable-collection>" "<sequence>") :none :abstract)
     ("<array>" ("<mutable-explicit-key-collection>") :none)
-    ("<table>" ("<mutable-explicit-key-collection>") :none)
     ("<vector>" ("<array>" "<mutable-sequence>") :none)
     ("<string>" ("<mutable-sequence>") :none)
-    ("<deque>" ("<mutable-sequence>") :none)
-    ("<range>" ("<sequence>") :none)
-    ("<stretchy-vector>" ("<vector>") :none)
+;; <stretchy-vector>, <deque>, <range> and <table> are the library's
+    ;; (runtime/dylan).
     ("<simple-object-vector>" ("<vector>") :simple-object-vector :sealed)
     ("<unicode-string>" ("<vector>" "<string>") :unicode-string :sealed)
     ("<byte-string>" ("<vector>" "<string>") :byte-string :sealed)
@@ -95,7 +93,7 @@
     ("<generic-function>" ("<function>") :generic)
     ("<method>" ("<function>") :function :abstract)
     ("<class>" ("<object>") :class :abstract)
-    ("<slot-descriptor>" ("<object>") :none :abstract)
+    ("<slot-descriptor>" ("<object>") :slot-descriptor :abstract)
     ("<singleton>" ("<object>") :singleton :abstract)
     ;; Threads (Phase 7: an extension)
     ("<thread>" ("<object>") :thread :sealed)

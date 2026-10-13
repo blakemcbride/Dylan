@@ -318,8 +318,12 @@ dropped unevaluated?"
       ((and (module-var-predefined-p var) (null (module-var-definitions var)))
         (let ((c (predefined-c-value var *classes*)))
           (unless c
-            (unsupported e (format nil "~a (it has no definition in the runtime yet)"
-                                   (module-var-string var))))
+            (if (member (dylan::dylan-symbol->string (name-symbol (module-var-name var)))
+                        *static-program-exclusions* :test #'string-equal)
+                (compile-error "~a cannot be used: a program's classes and generic functions are fixed when it is compiled"
+                               (name-string (module-var-name var)))
+                (unsupported e (format nil "~a (it has no definition in the runtime yet)"
+                                       (module-var-string var)))))
           (let ((primitive (search "dy_prim_" c)))
             (when primitive
               (pushnew (subseq c (+ primitive) (1- (length c))) *used-primitives*
@@ -417,6 +421,27 @@ C expressions for a0..a3 and the count."
     (values (loop for i below 4 collect (or (nth i cs) "0"))
             (length cs))))
 
+(defparameter *variadic-rewrites*
+  '(("+" 2 "binary+") ("*" 2 "binary*") ("-" 2 "binary-") ("-" 1 "unary-")
+    ("/" 2 "binary/") ("/" 1 "unary/") ("<" 2 "binary<") ("=" 2 "binary=")
+    (">" 2 "binary<" :swap))
+  "A call of one of the library's variadic functions with this many
+arguments is a call of the binary (or unary) generic function it would
+call, without making a list of the arguments.")
+
+(defun rewrite-variadic-call (e)
+  "The C expression of the generic function to call instead of E's, and
+whether to swap the arguments; or NIL."
+  (let ((v (static-value (ir-call-function e)))
+        (n (length (ir-call-arguments e))))
+    (when (eq (car v) :global)
+      (let ((var (second v)))
+        (when (eq (module-var-module var) (dylan-module))
+          (loop for (name count target swap) in *variadic-rewrites*
+                when (and (= n count) (eq var (dylan-var name)))
+                  do (let ((c (gethash (dylan-var target) *constant-globals*)))
+                       (when c (return (values c swap))))))))))
+
 (defun gen-call (e dest)
   (let* ((f (ir-call-function e))
          (target (call-target e))
@@ -435,9 +460,12 @@ C expressions for a0..a3 and the count."
        (setf (cfun-self-tail-call *cfun*) t)
        (emit "goto top;"))
       (t
-       (multiple-value-bind (as n) (call-arguments-c (ir-call-arguments e))
+       (multiple-value-bind (replacement swap) (rewrite-variadic-call e)
+       (multiple-value-bind (as n) (call-arguments-c (if swap
+                                                          (reverse (ir-call-arguments e))
+                                                          (ir-call-arguments e)))
          (let* ((direct (and target (gethash target *cfuns*)))
-                (fexpr (atom-c f))
+                (fexpr (or replacement (atom-c f)))
                 (call (if direct
                           (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
                                   (cfun-c-name direct) fexpr as n)
@@ -456,7 +484,7 @@ C expressions for a0..a3 and the count."
                  ((eq (dest-kind dest) :effect)
                   (emit "(void)~a;" call)
                   (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
-                 (t (deliver dest call)))))))))
+                 (t (deliver dest call))))))))))
 
 (defun gen-jump (params args)
   "Bind PARAMS to ARGS afresh, all at once."
@@ -487,6 +515,10 @@ C expressions for a0..a3 and the count."
 
 ;;; Letrec and closures
 
+(defun fn-info-c (fn)
+  (function-info-c (length (ir-fn-required fn)) (ir-fn-rest fn)
+                   (let ((k (ir-fn-keys fn))) (if (listp k) (mapcar #'ir-key-keyword k) k))))
+
 (defun closure-c (fn)
   "A C expression for a closure of FN made now."
   (let ((cfun (gethash fn *cfuns*)))
@@ -495,6 +527,7 @@ C expressions for a0..a3 and the count."
         (let ((temp (new-temp)))
           (emit "~a = dy_make_closure(~a, ~d);" temp (cfun-c-name cfun)
                 (length (cfun-env cfun)))
+          (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" temp (fn-info-c fn))
           (fill-env temp cfun)
           temp))))
 
@@ -520,6 +553,7 @@ C expressions for a0..a3 and the count."
                        (progn
                          (emit-bind var (format nil "dy_make_closure(~a, ~d)"
                                                 (cfun-c-name cfun) (length (cfun-env cfun))))
+                         (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" (var-read var) (fn-info-c fn))
                          (push (cons var cfun) pending)))))
       (loop for (var . cfun) in (reverse pending)
             do (fill-env (var-read var) cfun)))
@@ -738,6 +772,17 @@ with the arguments FN was given?"
 
 ;;; Programs
 
+(defun inert-toplevel-p (fn)
+  "Is FN a top-level form that does nothing when run: a define-method or
+define-generic-function, whose work the compiler has done?"
+  (and (eq (ir-fn-kind fn) :toplevel)
+       (labels ((inert (e)
+                  (typecase e
+                    (ir-let (and (typep (ir-let-value e) '(or const ivar ir-global-ref))
+                                 (inert (ir-let-body e))))
+                    ((or ir-define-method ir-define-generic) t))))
+         (inert (ir-fn-body fn)))))
+
 (defun generate-c (ir stream)
   "Write the C program for IR to STREAM."
   (let ((*groups* (make-hash-table :test #'eq))
@@ -749,6 +794,8 @@ with the arguments FN was given?"
         (*local-exits* (make-hash-table :test #'eq))
         (*thread-variables* (make-hash-table :test #'eq))
         (*dylan-modules* (program-modules (ir-program-source ir)))
+        (dylan::*symbol-spellings* (or (program-spellings (ir-program-source ir))
+                                       dylan::*symbol-spellings*))
         (*let-values* (make-hash-table :test #'eq))
         (*gclasses* (make-hash-table :test #'eq))
         (*gfuns* (make-hash-table :test #'eq))
@@ -759,11 +806,13 @@ with the arguments FN was given?"
         (*object-text* '())
         (*object-decls* '())
         (*definition-order* 0)
+        (*reflective-methods* t)
         (*sdef-counter* 0)
         (*used-primitives* '())
         (*label-counter* 0)
         (*temp-counter* 0)
         (fns (ir-fns ir)))
+    (setf *reflective-methods* (uses-method-reflection-p ir))
     (prepare-object-system ir)
     (dolist (fn fns)
       (dolist (letrec (letrecs-in (ir-fn-body fn)))
@@ -771,7 +820,7 @@ with the arguments FN was given?"
     (let ((cfuns '()))
       (loop for fn in fns
             for i from 0
-            unless (gethash fn *groups*)
+            unless (or (gethash fn *groups*) (inert-toplevel-p fn))
               do (let ((cfun (make-cfun fn (format nil "fn~d_~a" i
                                                    (if (ir-fn-name fn)
                                                        (c-identifier (name-string (ir-fn-name fn)))
@@ -792,7 +841,15 @@ with the arguments FN was given?"
       (dolist (cfun cfuns)
         (dolist (var (cfun-env cfun))
           (setf (gethash var *closed-over*) t)))
-      (let ((texts (mapcar #'gen-function cfuns)))
+      (let ((texts (mapcar #'gen-function cfuns))
+            (closure-lines
+              (loop for cfun in cfuns
+                    when (null (cfun-env cfun))
+                      collect (format nil "static DyFunction ~a_closure = { &dy_wrapper_method, ~a, DY_FALSE, ~a };"
+                                      (cfun-c-name cfun) (cfun-c-name cfun)
+                                      (if (eq (ir-fn-kind (cfun-fn cfun)) :toplevel)
+                                          "DY_FALSE"
+                                          (fn-info-c (cfun-fn cfun)))))))
         (finish-object-system)
         (emit-program-data *classes* *cdata* stream :prelude (reverse *object-decls*)
                            :thread-variable-count (hash-table-count *thread-variables*))
@@ -802,10 +859,7 @@ with the arguments FN was given?"
         (dolist (cfun cfuns)
           (format stream "static D ~a(D, D, D, D, D, intptr_t);~%" (cfun-c-name cfun)))
         (terpri stream)
-        (dolist (cfun cfuns)
-          (when (null (cfun-env cfun))
-            (format stream "static DyFunction ~a_closure = { &dy_wrapper_method, ~a, DY_FALSE };~%"
-                    (cfun-c-name cfun) (cfun-c-name cfun))))
+        (dolist (line closure-lines) (format stream "~a~%" line))
         (terpri stream)
         (loop for var being the hash-keys of *globals* using (hash-value name)
               do (format stream "static D ~a = DY_UNBOUND;   /* ~a */~%"
@@ -815,6 +869,7 @@ with the arguments FN was given?"
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))
         (format stream "int main(void) {~%    dy_init();~%")
         (dolist (top (ir-program-toplevels ir))
-          (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
-                  (cfun-c-name (gethash top *cfuns*))))
+          (unless (inert-toplevel-p top)
+            (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
+                    (cfun-c-name (gethash top *cfuns*)))))
         (format stream "    return 0;~%}~%")))))

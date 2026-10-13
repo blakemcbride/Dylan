@@ -5,6 +5,7 @@
 
 #include "dylan.h"
 #include <stdio.h>
+#include <locale.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
@@ -17,6 +18,7 @@ void dy_intern_static_symbols(void);    /* string.c */
 void dy_init_main_thread(void);         /* thread.c */
 
 void dy_init(void) {
+    setlocale(LC_CTYPE, "C.UTF-8");        /* for the case of characters */
     GC_INIT();
     GC_allow_register_threads();
     dy_init_thread();
@@ -55,18 +57,9 @@ static void print_symbol_name(FILE *out, D name) {
     fwrite(s->data, 1, DY_INT_VALUE(s->size), out);
 }
 
-/* A float, with a decimal point, and its format's exponent marker. */
-static void write_float(FILE *out, double value, int digits, char marker) {
-    char buffer[64];
-    snprintf(buffer, sizeof buffer, "%.*g", digits, value);
-    char *e = strchr(buffer, 'e');
-    if (!strpbrk(buffer, ".ein")) strcat(buffer, ".0");
-    if (e) {
-        *e = '\0';
-        fprintf(out, "%s%s%c%s", buffer, strchr(buffer, '.') ? "" : ".0", marker, e + 1);
-    } else {
-        fprintf(out, "%s%c0", buffer, marker);
-    }
+static void write_number(FILE *out, D x) {
+    DyByteString *s = DY_PTR(dy_number_string(x));
+    fwrite(s->data, 1, DY_INT_VALUE(s->size), out);
 }
 
 void dy_debug_write(FILE *out, D x) {
@@ -101,20 +94,11 @@ void dy_debug_write(FILE *out, D x) {
         fputc(')', out);
         return;
     }
-    case DY_KIND_RATIO: {
-        DyRatio *r = DY_PTR(x);
-        fprintf(out, "%ld/%ld", (long)DY_INT_VALUE(r->numerator),
-               (long)DY_INT_VALUE(r->denominator));
-        return;
-    }
+    case DY_KIND_RATIO:
     case DY_KIND_SINGLE_FLOAT:
-        write_float(out, ((DySingleFloat *)DY_PTR(x))->value, 9, 's');
-        return;
     case DY_KIND_DOUBLE_FLOAT:
-        write_float(out, ((DyDoubleFloat *)DY_PTR(x))->value, 17, 'd');
-        return;
     case DY_KIND_EXTENDED_FLOAT:
-        write_float(out, ((DyDoubleFloat *)DY_PTR(x))->value, 17, 'l');
+        write_number(out, x);
         return;
     case DY_KIND_BYTE_STRING: {
         DyByteString *s = DY_PTR(x);
@@ -155,14 +139,20 @@ void dy_debug_write(FILE *out, D x) {
         fputs("{method}", out);
         return;
     case DY_KIND_THREAD: fputs("{thread}", out); return;
+    case DY_KIND_SLOT_DESCRIPTOR: fputs("{slot}", out); return;
     case DY_KIND_LOCK: fputs("{lock}", out); return;
     case DY_KIND_CONDITION_VARIABLE: fputs("{condition-variable}", out); return;
     case DY_KIND_ATOMIC_INTEGER:
         fprintf(out, "{atomic-integer %ld}",
                 (long)atomic_load(&((DyAtomicInteger *)DY_PTR(x))->value));
         return;
+    case DY_KIND_GENERIC:
+        fputs("{the generic function ", out);
+        print_symbol_name(out, ((DySymbol *)DY_PTR(((DyGeneric *)DY_PTR(x))->name))->name);
+        fputc('}', out);
+        return;
     case DY_KIND_CLASS:
-        fputs("{class ", out);
+        fputs("{the class ", out);
         print_symbol_name(out, ((DySymbol *)DY_PTR(((DyClass *)DY_PTR(x))->name))->name);
         fputc('}', out);
         return;

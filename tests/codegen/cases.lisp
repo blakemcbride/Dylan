@@ -206,7 +206,7 @@ w
    (bind (((y <integer>) 1.5)) (print y))"
   "3
 "
-  :error "1.5d0 is not an instance of")
+  :error "1.5 is not an instance of")
 
  ;; Run-time errors
  (wrong-argument-count

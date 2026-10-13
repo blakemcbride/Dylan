@@ -127,4 +127,4 @@ static D default_initialize_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc)
 }
 
 DyFunction dy_default_initialize = { &dy_wrapper_method, default_initialize_entry,
-                                     DY_FALSE };
+                                     DY_FALSE, DY_FALSE };

@@ -395,6 +395,30 @@ such.
 
 ## Phase 8 — The library
 
+**Status: done.** The library is Dylan, in module `dylan`
+(`runtime/dylan/`, read in file-name order and compiled with every
+program), on the `%` primitives of `runtime/c/library.c`: chapter 9's
+comparisons, chapter 14's numbers, characters and symbols, all of chapter
+12 (the iteration protocol, the collection and sequence functions, lists,
+vectors, strings, stretchy vectors, deques, ranges, tables, arrays),
+chapter 17's functional operations, and printing (`print`, `write`,
+`display`, `write-line`, `pp`, extended through `print-object`). `make` and
+`as` are generic functions with methods on singletons of the built-in
+classes. A call of `+`, `-`, `*`, `/`, `<`, `>` or `=` with two arguments
+(or `-` or `/` with one) calls the binary generic function directly, and
+unreachable library definitions are dropped (the tree shaking of Phase 9,
+done early, since every program now carries the library). Floats print as
+the shortest decimal that reads back (`21.0`; `1.5s0` for a single-float).
+Slot descriptors (chapter 11) and `function-arguments` (chapter 10) are
+in; two unbounded ranges intersect exactly (Chinese remainder theorem).
+Streams, which the manual uses but does not define, are an extension:
+`<stream>`, `*standard-output*`, `*standard-error*`, `<string-stream>` with
+`stream-contents`, and `format`; every printing function takes `stream:`.
+`add-method`, `remove-method`, `add-slot`, `remove-slot` and
+`freeze-methods` are compile errors (the static program). Specializing
+library code at each use is Phase 9. Tests:
+`tests/codegen/cases-library.lisp`.
+
 A thin C core, and most of the library written in Dylan:
 
 - **C core**: object model, allocation, tags, integer/float primitives,

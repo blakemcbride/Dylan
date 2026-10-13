@@ -64,21 +64,51 @@ PRIMITIVE(values) {
 
 /* (apply f arg ... list) calls f with the args and the list's elements,
  * as a tail call. */
-PRIMITIVE(apply) {
-    need(self, argc, 2, -1);
-    D f = a0;
+/* The arguments of apply spread: the first four, the rest left in the
+ * argument area.  (A function of its own, so that no local array of
+ * apply's is live at its tail call.) */
+typedef struct { D a[4]; intptr_t n; } Spread;
+
+/* The library's function answering the elements of any sequence as a
+ * list (%set-sequence-hook), for apply's last argument. */
+static D sequence_hook;
+
+PRIMITIVE(set_sequence_hook) {
+    need(self, argc, 1, 1);
+    sequence_hook = a0;
+    return DY_FALSE;
+}
+
+static Spread spread_arguments(intptr_t argc, D a0, D a1, D a2, D a3) {
     D args[DY_MAX_ARGUMENTS];
     intptr_t n = 0;
     for (intptr_t i = 1; i + 1 < argc; i++) args[n++] = ARG(i);
-    for (D l = ARG(argc - 1); l != DY_EMPTY; l = dy_tail(l)) {
+    D last = ARG(argc - 1);
+    if (dy_kind_p(last, DY_KIND_SIMPLE_OBJECT_VECTOR)) {
+        DyVector *v = DY_PTR(last);
+        if (n + DY_INT_VALUE(v->size) > DY_MAX_ARGUMENTS) dy_too_many_arguments();
+        for (intptr_t i = 0; i < DY_INT_VALUE(v->size); i++) args[n++] = v->data[i];
+        last = DY_EMPTY;
+    } else if (last != DY_EMPTY && !dy_kind_p(last, DY_KIND_PAIR) && sequence_hook) {
+        /* "The last arg must be a sequence" (chapter 8) */
+        last = DY_CALL(sequence_hook, last, 0, 0, 0, 1);
+    }
+    for (D l = last; l != DY_EMPTY; l = dy_tail(l)) {
         if (!dy_kind_p(l, DY_KIND_PAIR)) dy_error("apply: not a list", ARG(argc - 1));
         if (n == DY_MAX_ARGUMENTS) dy_too_many_arguments();
         args[n++] = dy_head(l);
     }
     for (intptr_t i = 4; i < n; i++) dy_thread->args[i - 4] = args[i];
-    D b0 = n > 0 ? args[0] : 0, b1 = n > 1 ? args[1] : 0,
-      b2 = n > 2 ? args[2] : 0, b3 = n > 3 ? args[3] : 0;
-    DY_TAIL_CALL(f, b0, b1, b2, b3, n);
+    Spread s = { { n > 0 ? args[0] : 0, n > 1 ? args[1] : 0,
+                   n > 2 ? args[2] : 0, n > 3 ? args[3] : 0 }, n };
+    return s;
+}
+
+PRIMITIVE(apply) {
+    need(self, argc, 2, -1);
+    D f = a0;
+    Spread s = spread_arguments(argc, a0, a1, a2, a3);
+    DY_TAIL_CALL(f, s.a[0], s.a[1], s.a[2], s.a[3], s.n);
 }
 
 /* --------------------------------------------- Classes and functions */
@@ -118,14 +148,18 @@ PRIMITIVE(singleton) {
     return DY_OBJ(s);
 }
 
+/* Chapter 11: on a class seal has sealed, these answer an empty
+ * sequence. */
 PRIMITIVE(all_superclasses) {
     need(self, argc, 1, 1);
-    return list_of_vector(as_class(a0)->precedence_list);
+    DyClass *c = as_class(a0);
+    return c->sealed ? DY_EMPTY : list_of_vector(c->precedence_list);
 }
 
 PRIMITIVE(direct_superclasses) {
     need(self, argc, 1, 1);
-    return list_of_vector(as_class(a0)->direct_superclasses);
+    DyClass *c = as_class(a0);
+    return c->sealed ? DY_EMPTY : list_of_vector(c->direct_superclasses);
 }
 
 PRIMITIVE(direct_subclasses) {
@@ -142,7 +176,37 @@ PRIMITIVE(make) {
     DY_TAIL_CALL_DIRECT(c->maker, a0, a0, a1, a2, a3, argc);
 }
 
-PRIMITIVE(seal) { need(self, argc, 1, 1); as_class(a0); return a0; }
+/* (%make-generic-function required name): a generic function made at run
+ * time, which has no methods. */
+static D no_methods_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    (void)a0; (void)a1; (void)a2; (void)a3;
+    if (argc != ((DyGeneric *)DY_PTR(self))->required) dy_wrong_argument_count(self, argc);
+    dy_no_applicable_method(self);
+}
+
+PRIMITIVE(make_generic_function) {
+    need(self, argc, 2, 2);
+    if (!DY_IS_INT(a0) || DY_INT_VALUE(a0) < 0) dy_error("make: bad required:", a0);
+    if (!dy_kind_p(a1, DY_KIND_SYMBOL)) dy_error("make: debug-name: must be a symbol", a1);
+    DyGeneric *g = dy_alloc(&dy_wrapper_generic_function, sizeof(DyGeneric));
+    g->entry = no_methods_entry;
+    g->name = a1;
+    g->methods = dy_make_vector(0, DY_FALSE);
+    g->required = DY_INT_VALUE(a0);
+    D info = dy_make_vector(3, DY_FALSE);
+    ((DyVector *)DY_PTR(info))->data[0] = a0;
+    g->info = info;
+    return DY_OBJ(g);
+}
+
+/* (seal class), and (make-read-only generic-function), which in a
+ * static program has nothing left to forbid. */
+PRIMITIVE(seal) {
+    need(self, argc, 1, 1);
+    if (dy_kind_p(a0, DY_KIND_GENERIC)) return a0;
+    as_class(a0)->sealed = 1;
+    return a0;
+}
 
 PRIMITIVE(generic_function_methods) {
     need(self, argc, 1, 1);
@@ -156,8 +220,16 @@ PRIMITIVE(method_specializers) {
     return specs == DY_FALSE ? DY_EMPTY : list_of_vector(specs);
 }
 
-/* Does METHOD apply to the N arguments ARGS? */
+/* Does METHOD -- or, of a generic function, one of its methods -- apply
+ * to the N arguments ARGS? */
 static bool applicable(D method, const D *args, intptr_t n) {
+    if (dy_kind_p(method, DY_KIND_GENERIC)) {
+        DyVector *methods = DY_PTR(((DyGeneric *)DY_PTR(method))->methods);
+        for (intptr_t i = 0; i < DY_INT_VALUE(methods->size); i++)
+            if (applicable(methods->data[i], args, n)) return true;
+        return false;
+    }
+    if (!dy_kind_p(method, DY_KIND_FUNCTION)) dy_error("not a function", method);
     D specs = ((DyFunction *)DY_PTR(method))->specializers;
     if (specs == DY_FALSE) return true;
     DyVector *v = DY_PTR(specs);

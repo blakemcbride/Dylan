@@ -38,6 +38,19 @@
 
 #define GC_THREADS 1
 #include <gc.h>
+
+/* With DY_GC_STRESS, a collection every DYLAN_GC_STRESS (an environment
+ * variable, default 100) allocations, to find what the collector does not
+ * see (CompilerPlan.md, Phase 11). */
+void dy_gc_stress(void);
+#ifdef DY_GC_STRESS
+#undef GC_MALLOC
+#undef GC_MALLOC_ATOMIC
+#undef GC_MALLOC_UNCOLLECTABLE
+#define GC_MALLOC(n) (dy_gc_stress(), GC_malloc(n))
+#define GC_MALLOC_ATOMIC(n) (dy_gc_stress(), GC_malloc_atomic(n))
+#define GC_MALLOC_UNCOLLECTABLE(n) (dy_gc_stress(), GC_malloc_uncollectable(n))
+#endif
 #include <pthread.h>
 #include <setjmp.h>
 #include <stddef.h>
@@ -57,7 +70,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 10
+#define DY_ABI_VERSION 11
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -212,6 +225,7 @@ typedef struct DyClass {
     D direct_subclasses;           /* <simple-object-vector>             */
     D (*maker)(D self, D a0, D a1, D a2, D a3, intptr_t argc);
                                    /* make for the class, or NULL        */
+    int sealed;                    /* has seal sealed it?                */
 } DyClass;
 
 /* ------------------------------------------------------------- Objects */
@@ -785,11 +799,15 @@ typedef struct DyThreadObject {    /* <thread>                          */
     D condition;                   /* the condition that ended it, or #f  */
     int done;
     int main;
+    pthread_mutex_t lock;          /* with ENDED, for join-thread: the    */
+    pthread_cond_t ended;          /* thread is detached                  */
 } DyThreadObject;
 
 typedef struct DyLock {            /* <lock> and <recursive-lock>       */
     DyWrapper *wrapper;
     pthread_mutex_t mutex;
+    pthread_t owner;               /* the thread holding it, while DEPTH */
+    long depth;                    /* how many times it holds it         */
 } DyLock;
 
 typedef struct DyConditionVariable {

@@ -311,6 +311,10 @@ dropped unevaluated?"
          (when (gethash var *constant-globals*)
            (compile-error "~a holds a class or generic function and cannot be assigned"
                           (name-string (module-var-name var))))
+         ;; Chapter 7: an error if the variable is not defined when the
+         ;; set! is done.
+         (emit "(void)dy_check_bound(~a, ~a);" (global-c-name var)
+               (c-string-literal (map 'list #'char-code (module-var-string var))))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))
          (deliver dest (atom-c (ir-global-set-value e)))))
       (ir-set
@@ -584,7 +588,22 @@ C expressions for a0..a3 and the count."
                 (length (cfun-env cfun)))
           (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" temp (fn-info-c fn))
           (fill-env temp cfun)
+          (record-specializers temp fn)
           temp))))
+
+(defun record-specializers (closure fn)
+  "Give the closure CLOSURE of FN, a method made by method, the
+specializers it checks, for reflection (method-specializers,
+applicable-method?)."
+  (when (and (some #'identity (ir-fn-specializers fn)) (not (gethash fn *method-of-fn*)))
+    (let ((vector (new-temp)))
+      (emit "~a = dy_make_vector(~d, DY_OBJ(&dy_class_object));" vector
+            (length (ir-fn-specializers fn)))
+      (loop for spec in (ir-fn-specializers fn)
+            for i from 0
+            when spec
+              do (emit "((DyVector *)DY_PTR(~a))->data[~d] = ~a;" vector i (atom-c spec)))
+      (emit "((DyFunction *)DY_PTR(~a))->specializers = ~a;" closure vector))))
 
 (defun fill-env (closure cfun)
   (loop for var in (cfun-env cfun)
@@ -611,7 +630,8 @@ C expressions for a0..a3 and the count."
                          (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" (var-read var) (fn-info-c fn))
                          (push (cons var cfun) pending)))))
       (loop for (var . cfun) in (reverse pending)
-            do (fill-env (var-read var) cfun)))
+            do (fill-env (var-read var) cfun)
+               (record-specializers (var-read var) (cfun-fn cfun))))
     (if (null group)
         (gen (ir-letrec-body e) dest)
         (let ((end (and (not (eq (dest-kind dest) :return)) (new-label "end"))))
@@ -894,6 +914,8 @@ each of its Dylan functions -> the name of the module it was written in."
         (dylan::*symbol-spellings* (or (program-spellings (ir-program-source ir))
                                        dylan::*symbol-spellings*))
         (*let-values* (make-hash-table :test #'eq))
+        (*global-definitions* (make-hash-table :test #'eq))
+        (*assigned-globals* (make-hash-table :test #'eq))
         (*gclasses* (make-hash-table :test #'eq))
         (*gfuns* (make-hash-table :test #'eq))
         (*method-of-fn* (make-hash-table :test #'eq))
@@ -986,4 +1008,4 @@ each of its Dylan functions -> the name of the module it was written in."
                   (fn-module-name (cfun-fn cfun) units)))
           modules)))))
 
-(defconstant +abi-version+ 10 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 11 "As DY_ABI_VERSION in runtime/c/dylan.h.")

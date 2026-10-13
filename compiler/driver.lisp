@@ -49,28 +49,69 @@ PROGRAM.  Answer the list of C files, or NIL after reporting why not."
                                          :output *standard-output*
                                          :error *error-output*)))
 
-(defun runtime-library (trampoline)
+(defparameter *variants*
+  '((:gc-stress "-O2 -g -DDY_GC_STRESS")
+    (:address "-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -DDY_DEBUG")
+    (:thread "-O1 -g -fsanitize=thread -DDY_DEBUG"))
+  "Builds for testing (CompilerPlan.md, Phase 11), each with the C flags
+of both the runtime library and the program: a collection every few
+allocations; AddressSanitizer and UndefinedBehaviorSanitizer; and
+ThreadSanitizer.")
+
+(defun variant-flags (variant)
+  (if variant
+      (let ((entry (assoc variant *variants*)))
+        (unless entry (error "No build variant ~s." variant))
+        (split-words (second entry)))
+      '()))
+
+(defun split-words (string)
+  (loop with start = 0
+        for space = (position #\Space string :start start)
+        collect (subseq string start space)
+        while space
+        do (setf start (1+ space))))
+
+(defun runtime-library (trampoline &key variant (cc "cc"))
   "The runtime library's pathname, made if it does not exist or is out of
-date."
-  (let ((target (if trampoline "build/libdylan-trampoline.a" "build/libdylan.a")))
-    (unless (zerop (run "make" (list "-s" "-C" (namestring *runtime-directory*) target)))
+date.  A VARIANT is made with the C compiler CC, which the program must be
+compiled with too."
+  (let* ((directory (and variant
+                         (format nil "build/~(~a~)-~a~:[~;-trampoline~]"
+                                 variant (file-namestring cc) trampoline)))
+         (target (cond (directory (format nil "~a/libdylan.a" directory))
+                       (trampoline "build/libdylan-trampoline.a")
+                       (t "build/libdylan.a")))
+         (arguments (append (list "-s" "-C" (namestring *runtime-directory*))
+                            (and directory
+                                 (list (format nil "VDIR=~a" directory)
+                                       (format nil "VFLAGS=~{~a~^ ~}~:[~; -DDY_TRAMPOLINE~]"
+                                               (variant-flags variant) trampoline)
+                                       (format nil "CC=~a" cc)))
+                            (list target))))
+    (unless (zerop (run "make" arguments))
       (error "Could not make the runtime library."))
     (merge-pathnames target *runtime-directory*)))
 
-(defun build (files executable &key trampoline (cc "cc") (optimize "-O2") size debug c-file)
+(defun build (files executable &key trampoline (cc "cc") (optimize "-O2") size debug variant
+                                   c-file)
   "Compile FILES to the EXECUTABLE.  The C goes in C-FILE, or
 EXECUTABLE.c, and the files that go with it.  With :SIZE T the executable
 is made small: -Os, and the functions and data nothing uses dropped when
 linking.  With :DEBUG T it is made for debugging: no optimization, debugging
-information, and every inline operation checking its arguments."
+information, and every inline operation checking its arguments.  VARIANT
+is one of *VARIANTS*, for testing."
   (let* ((c-file (or c-file (concatenate 'string (namestring executable) ".c")))
-         (c-files (let ((*debug* debug)) (compile-files files c-file))))
+         (c-files (let ((*debug* (or debug (member variant '(:address :thread)))))
+                    (compile-files files c-file))))
     (and c-files
          (build-c c-files executable :trampoline trampoline :cc cc :optimize optimize
-                                     :size size :debug debug))))
+                                     :size size :debug (or debug (member variant '(:address :thread)))
+                                     :variant variant))))
 
-(defun c-compiler-options (&key trampoline (optimize "-O2") size debug)
-  (append (cond (debug (list "-O0" "-g" "-DDY_DEBUG"))
+(defun c-compiler-options (&key trampoline (optimize "-O2") size debug variant)
+  (append (cond (variant (variant-flags variant))
+                (debug (list "-O0" "-g" "-DDY_DEBUG"))
                 (size (list "-Os" "-ffunction-sections" "-fdata-sections"
                             "-Wl,--gc-sections" "-s"))
                 (t (list optimize "-g")))
@@ -80,13 +121,14 @@ information, and every inline operation checking its arguments."
                 (format nil "-I~a" (namestring (merge-pathnames "c/" *runtime-directory*))))
           (and trampoline (list "-DDY_TRAMPOLINE"))))
 
-(defun build-c (c-files executable &key trampoline (cc "cc") (optimize "-O2") size debug)
+(defun build-c (c-files executable &key trampoline (cc "cc") (optimize "-O2") size debug
+                                        variant)
   "Compile and link the C-FILES (a list, or one file) of a program into
 EXECUTABLE."
-  (let ((library (runtime-library trampoline))
+  (let ((library (runtime-library trampoline :variant variant :cc cc))
         (c-files (if (listp c-files) c-files (list c-files))))
     (zerop (run cc (append (c-compiler-options :trampoline trampoline :optimize optimize
-                                               :size size :debug debug)
+                                               :size size :debug debug :variant variant)
                            (mapcar #'namestring c-files)
                            (list (namestring library)
                                  "-lgc" "-lm" "-lpthread" "-o" (namestring executable)))))))

@@ -32,6 +32,11 @@ Options:
   --trampoline     tail calls by trampolines, for C compilers without musttail
   --cc CC          the C compiler (default: $CC, or cc)
   --no-lines       no #line directives pointing to the Dylan source
+  --sanitize KIND  for testing: a debug build with the sanitizers, KIND
+                   address (AddressSanitizer and UndefinedBehaviorSanitizer)
+                   or thread (ThreadSanitizer)
+  --gc-stress      for testing: a collection every DYLAN_GC_STRESS (default
+                   100) allocations
   -h, --help       this
 ")
 
@@ -60,6 +65,13 @@ Options:
                        ((string= a "--trampoline") (setf (getf options :trampoline) t))
                        ((string= a "--cc") (setf (getf options :cc) (value)))
                        ((string= a "--no-lines") (setf (getf options :no-lines) t))
+                       ((string= a "--gc-stress") (setf (getf options :variant) :gc-stress))
+                       ((string= a "--sanitize")
+                        (let ((kind (value)))
+                          (setf (getf options :variant)
+                                (cond ((string= kind "address") :address)
+                                      ((string= kind "thread") :thread)
+                                      (t (usage-error "--sanitize takes address or thread."))))))
                        ((and (plusp (length a)) (char= (char a 0) #\-))
                         (usage-error "unknown option ~a." a))
                        (t (push a files))))))
@@ -77,7 +89,8 @@ Options:
          (files (getf options :files))
          (output (or (getf options :output) (default-output (first files))))
          (c-file (concatenate 'string output ".c"))
-         (c-files (let ((*debug* (getf options :debug))
+         (variant (getf options :variant))
+         (c-files (let ((*debug* (or (getf options :debug) (member variant '(:address :thread))))
                         (*emit-lines* (not (getf options :no-lines))))
                     (compile-files files c-file))))
     (unless c-files (sb-ext:exit :code 1 :abort t))
@@ -87,7 +100,8 @@ Options:
                          :cc (getf options :cc)
                          :optimize (getf options :optimize)
                          :size (getf options :size)
-                         :debug (getf options :debug))))
+                         :debug (getf options :debug)
+                         :variant variant)))
         (unless (getf options :keep)
           (dolist (f (cons (make-pathname :type "h" :defaults (pathname c-file)) c-files))
             (when (probe-file f) (delete-file f))))

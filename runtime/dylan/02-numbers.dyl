@@ -237,9 +237,21 @@ module: dylan
 
 (define-generic-function numerator (number))
 (define-method numerator ((x <rational>)) (%numerator x))
+(define-method numerator ((x <float>)) (bind ((n d (%float-fraction x))) n))
 
 (define-generic-function denominator (number))
 (define-method denominator ((x <rational>)) (%denominator x))
+(define-method denominator ((x <float>)) (bind ((n d (%float-fraction x))) d))
+
+;;; A float's numerator and denominator are those of the fraction it holds
+;;; exactly, as floats of its class: (denominator 1.5) is 2.0.
+(define %float-fraction
+  (method (x)
+    (when (or (not (= x x)) (and (not (zero? x)) (= x (* x 2))))
+      (error "numerator, denominator: ~s is not a finite number" x))
+    (for ((n x (* n 2))
+          (d (+ (- x x) 1) (* d 2)))
+         ((integral? n) (values n d)))))
 
 (define-generic-function rationalize (number))
 (define-method rationalize ((x <real>)) (%rationalize x))

@@ -38,6 +38,8 @@
     ;; What the library is written on (runtime/c/library.c and others)
     ("%make" . "make")
     ("%signal" . "signal_condition") ("%set-error-hooks" . "set_error_hooks")
+    ("%set-sequence-hook" . "set_sequence_hook")
+    ("%make-generic-function" . "make_generic_function")
     ("%format-message" . "format_message") ("%die" . "die") ("%warn" . "warn")
     ("%break" . "break_message")
     ("%make-thread" . "make_thread") ("%join-thread" . "join_thread")

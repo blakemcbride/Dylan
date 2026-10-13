@@ -76,7 +76,9 @@ _Noreturn void dy_unwind_to(DyFrame *target) {
         }
     }
     if (s.count == 1) t->mv[0] = s.primary;
-    _longjmp(target->jump, 1);
+    /* longjmp, not _longjmp, which ThreadSanitizer does not see (the
+     * jump buffer, made by _setjmp, holds no signal mask to restore). */
+    longjmp(target->jump, 1);
 }
 
 /* env[0]: the frame; env[1]: its serial number */

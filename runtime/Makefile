@@ -34,6 +34,20 @@ build/libdylan-trampoline.a: $(TRAMPOLINE_OBJECTS)
 build build/trampoline:
 	mkdir -p $@
 
+# A variant of the library, for testing (CompilerPlan.md, Phase 11): made
+# with   make VDIR=build/NAME VFLAGS="flags" build/NAME/libdylan.a
+# by the compiler's driver, which knows the variants (compiler/driver.lisp).
+ifdef VDIR
+$(VDIR)/%.o: c/%.c c/dylan.h c/primitive.h | $(VDIR)
+	$(CC) $(ALL_CFLAGS) $(VFLAGS) -c $< -o $@
+
+$(VDIR)/libdylan.a: $(SOURCES:c/%.c=$(VDIR)/%.o)
+	ar rcs $@ $^
+
+$(VDIR):
+	mkdir -p $@
+endif
+
 # The tests link with static data the compiler generates.
 build/test-data.c: $(TESTS)/generate.lisp $(wildcard ../compiler/*.lisp ../compiler/*/*.lisp) | build
 	sbcl --script $(TESTS)/generate.lisp $@

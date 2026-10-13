@@ -104,25 +104,18 @@ module: dylan
         (%put stream #\"))
       (%put stream x)))
 
-(define %quote-prefixes
-  (list (cons 'quote "'") (cons 'quasiquote "`") (cons 'unquote ",")
-        (cons 'unquote-splicing ",@")))
-
+;;; A list prints in full: ''+ is (quote +) (chapter 8).
 (define-method print-object ((x <pair>) stream escape?)
-  (bind ((prefix (find-pair (car x) %quote-prefixes)))
-    (if (and prefix (%pair? (cdr x)) (id? (cdr (cdr x)) '()))
-        (begin (%put stream (cdr prefix)) (print-object (car (cdr x)) stream escape?))
-        (begin
-          (%put stream #\()
-          (bind-methods ((loop (l first?)
-                           (cond ((%pair? l)
-                                  (unless first? (%put stream #\space))
-                                  (print-object (car l) stream escape?)
-                                  (loop (cdr l) #f))
-                                 ((id? l '()) #f)
-                                 (else: (%put stream " . ") (print-object l stream escape?)))))
-            (loop x #t))
-          (%put stream #\))))))
+  (%put stream #\()
+  (bind-methods ((loop (l first?)
+                   (cond ((%pair? l)
+                          (unless first? (%put stream #\space))
+                          (print-object (car l) stream escape?)
+                          (loop (cdr l) #f))
+                         ((id? l '()) #f)
+                         (else: (%put stream " . ") (print-object l stream escape?)))))
+    (loop x #t))
+  (%put stream #\)))
 
 (define-method print-object ((x <simple-object-vector>) stream escape?)
   (%put stream "#(")

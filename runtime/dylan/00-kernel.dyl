@@ -122,6 +122,23 @@ module: dylan
 (define-method make ((class <class>) #rest init-arguments)
   (apply %make class init-arguments))
 
+;;; <singleton> is instantiable (chapter 11): (make <singleton> object: x)
+;;; is (singleton x).
+
+(define-method make ((class (singleton <singleton>)) #key (object %no-default))
+  (when (id? object %no-default)
+    (error "make: a <singleton> needs object:"))
+  (singleton object))
+
+;;; So is <generic-function> (chapter 10), though in a static program one
+;;; made at run time has no methods, and none can be added.
+
+(define-method make ((class (singleton <generic-function>)) #key (required %no-default)
+                     debug-name)
+  (unless (and (instance? required <integer>) (not (negative? required)))
+    (error "make: a <generic-function> needs required:, an integer not below 0"))
+  (%make-generic-function required (or debug-name 'anonymous)))
+
 ;;; initialize (chapter 6).  Its method on <object>, which does nothing,
 ;;; is the compiler's own.
 

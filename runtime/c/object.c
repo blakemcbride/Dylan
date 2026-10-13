@@ -17,9 +17,21 @@ DyHeader dy_empty_list_object = { &dy_wrapper_empty_list };
 void dy_intern_static_symbols(void);    /* string.c */
 void dy_init_main_thread(void);         /* thread.c */
 
+static long gc_stress_interval = 100;
+static long gc_stress_count;
+
+void dy_gc_stress(void) {
+    if (__atomic_add_fetch(&gc_stress_count, 1, __ATOMIC_RELAXED) % gc_stress_interval == 0)
+        GC_gcollect();
+}
+
 void dy_init(void) {
     setlocale(LC_CTYPE, "C.UTF-8");        /* for the case of characters */
     GC_INIT();
+#ifdef DY_GC_STRESS
+    const char *interval = getenv("DYLAN_GC_STRESS");
+    if (interval && atol(interval) > 0) gc_stress_interval = atol(interval);
+#endif
     GC_allow_register_threads();
     dy_init_thread();
     dy_init_main_thread();

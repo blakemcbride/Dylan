@@ -1,13 +1,16 @@
 ;;;; Run the benchmarks compiled to C by the Dylan-to-C compiler, against
-;;;; the plain Common Lisp of reference.lisp.
+;;;; the hand-written C of reference.c and the plain Common Lisp of
+;;;; reference.lisp.
 ;;;;
 ;;;;     $ sbcl --script bench/run-c.lisp [name ...]
 ;;;;
 ;;;; benchmarks.dyl is compiled with a driver that runs each benchmark three
-;;;; times and prints its value and best time; the reference functions are
-;;;; timed the same way here.  Each line gives both times, their ratio, and
-;;;; MISMATCH if the two answered differently.  The build goes in
-;;;; bench/build/.
+;;;; times and prints its value and best time; reference.c, built with
+;;;; cc -O2, does the same, and the reference functions are timed the same
+;;;; way here.  Each line gives the three times, the ratios of the Dylan->C
+;;;; time to the C and Lisp times ("-" when the other time is under a
+;;;; millisecond), and MISMATCH if the three answered differently.  The
+;;;; builds go in bench/build/.
 
 (defparameter *bench-directory*
   (make-pathname :name nil :type nil :defaults *load-truename*))
@@ -47,6 +50,13 @@
   (format t "The benchmarks did not build.~%")
   (sb-ext:exit :code 1))
 
+(unless (zerop (sb-ext:process-exit-code
+                (sb-ext:run-program "cc" (list "-O2" "-o" (namestring (bench-file "build/reference-c"))
+                                               (namestring (bench-file "reference.c")))
+                                    :search t :output *standard-output* :error *standard-output*)))
+  (format t "reference.c did not build.~%")
+  (sb-ext:exit :code 1))
+
 (load (compile-file (bench-file "reference.lisp")
                     :output-file (bench-file "build/reference.fasl")))
 
@@ -60,22 +70,32 @@
           (setf best (if best (min best ms) ms)))))
     (values value best)))
 
-(let ((lines (with-input-from-string
-                 (in (with-output-to-string (out)
-                       (sb-ext:run-program (namestring (bench-file "build/benchmarks")) '()
-                                           :output out)))
-               (loop for line = (read-line in nil) while line collect line))))
-  (format t "~&~12a ~12a ~12a ~8a~%" "benchmark" "Dylan->C ms" "Lisp ms" "ratio")
+;;; The lines a benchmark program prints, each read as (NAME VALUE MS).
+(defun program-results (program arguments)
+  (with-input-from-string
+      (in (with-output-to-string (out)
+            (sb-ext:run-program (namestring (bench-file program))
+                                arguments :output out)))
+    (loop for line = (read-line in nil) while line
+          collect (with-input-from-string (l line) (list (read l) (read l) (read l))))))
+
+;;; The ratio of DYLAN-MS to OTHER-MS, or "-" when OTHER-MS is too small.
+(defun time-ratio (dylan-ms other-ms)
+  (if (< other-ms 0.5) "-" (format nil "~,2f" (/ dylan-ms other-ms))))
+
+(let ((dylan (program-results "build/benchmarks" '()))
+      (c (program-results "build/reference-c" (mapcar #'first *selected*))))
+  (format t "~&~12a ~12@a ~8@a ~8@a ~10@a ~8@a~%"
+          "benchmark" "Dylan->C ms" "C ms" "D/C" "Lisp ms" "D/Lisp")
   (loop for (name size) in *selected*
-        for line in lines
-        do (destructuring-bind (dname value ms)
-               (with-input-from-string (in line) (list (read in) (read in) (read in)))
-             (declare (ignore dname))
-             (multiple-value-bind (lisp-value lisp-ms)
-                 (best-time (symbol-function
-                             (find-symbol (format nil "BENCH-~:@(~a~)" name)
-                                          "DYLAN-BENCH-REFERENCE"))
-                            size)
-               (format t "~12a ~12d ~12,1f ~8,2f~:[  MISMATCH ~s vs ~s~;~]~%"
-                       name ms lisp-ms (/ ms (max lisp-ms 0.1))
-                       (equal value lisp-value) value lisp-value)))))
+        for (nil value ms) in dylan
+        for (nil c-value c-ms) in c
+        do (multiple-value-bind (lisp-value lisp-ms)
+               (best-time (symbol-function
+                           (find-symbol (format nil "BENCH-~:@(~a~)" name)
+                                        "DYLAN-BENCH-REFERENCE"))
+                          size)
+             (format t "~12a ~12d ~8d ~8@a ~10,1f ~8@a~:[  MISMATCH ~s / ~s / ~s~;~]~%"
+                     name ms c-ms (time-ratio ms c-ms) lisp-ms (time-ratio ms lisp-ms)
+                     (and (equal value c-value) (equal value lisp-value))
+                     value c-value lisp-value))))

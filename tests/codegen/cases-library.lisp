@@ -353,7 +353,7 @@ display: no quotes
    (print (singleton 3))
    (print (list 1.0e20 -0.1 100.0 1.5s0))
    (write-line \"line\")"
-  "(1 sym key: \"str\" #\\c 1.5 1/3 #t #f () #(1 2) (a . b) 'quoted)
+  "(1 sym key: \"str\" #\\c 1.5 1/3 #t #f () #(1 2) (a . b) (quote quoted))
 {the class <integer>}
 {the generic function print}
 {table}

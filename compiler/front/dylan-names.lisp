@@ -86,7 +86,7 @@
 
 (defparameter *dylan-module-internal-names*
   '("<boolean>"
-    "%shallow-copy" "%write-fd" "%slot-value-setter" "%make" "%signal" "%set-error-hooks" "%format-message" "%die" "%warn"
+    "%shallow-copy" "%write-fd" "%slot-value-setter" "%make" "%signal" "%set-error-hooks" "%set-sequence-hook" "%make-generic-function" "%format-message" "%die" "%warn"
     "%break" "%make-thread" "%join-thread" "%thread-condition" "%unhandled"
     "%number-add" "%number-sub" "%number-mul" "%number-div" "%number-negate"
     "%number=" "%number<" "%number?" "%divide" "%math" "%float?" "%float"

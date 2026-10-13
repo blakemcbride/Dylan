@@ -247,3 +247,11 @@ module: dylan
 
 ;;; A shallow copy of a sequence is a copy of it.
 (define-method shallow-copy ((s <sequence>)) (copy-sequence s))
+
+;;; apply's last argument may be any sequence (chapter 8); the runtime
+;;; takes lists and simple vectors itself, and asks for the others' elements.
+(%set-sequence-hook
+  (method (s)
+    (if (instance? s <sequence>)
+        (as <list> s)
+        (error "apply: the last argument is not a sequence: ~s" s))))

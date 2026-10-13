@@ -519,6 +519,34 @@ tests/driver/run.sh`.
 
 ## Phase 11 — Testing
 
+**Status: done.** Each suite's `run.lisp` takes a mode
+(`tests/codegen/runner.lisp`): `all` (gcc and clang, `musttail` and
+trampolines), `quick`, `gc-stress` (a collection every 1000 allocations,
+`-DDY_GC_STRESS`), `address` (AddressSanitizer and
+UndefinedBehaviorSanitizer, debug builds) and `thread` (ThreadSanitizer,
+debug builds); the variants of the runtime library are built on demand
+(`compiler/driver.lisp`, `*variants*`; `dylanc --gc-stress`, `--sanitize`).
+
+- `tests/conformance/ch*.lisp`: the manual's examples and specifications,
+  chapter by chapter (236 programs), each citing its section. What a static
+  program cannot do is listed in README.md.
+- `tests/codegen/cases*.lisp`: the features, phase by phase, and
+  `cases-optimize.lisp`.
+- `tests/stress/`: 10^8 tail calls through unknown functions, generic
+  functions, closures and `next-method`; many threads allocating,
+  contending, interning, signalling and binding.
+- `tests/driver/run.sh`: the command line.
+- `bench/run-c.lisp`: against `bench/reference.c` and plain SBCL.
+
+All pass in every mode. They found, among others: `_longjmp`, which
+ThreadSanitizer cannot follow; threads never joined; `release-lock`
+unlocking an unheld mutex; `apply` on sequences other than lists; `seal`,
+`make <singleton>`, `make <generic-function>`, `applicable-method?` on
+generic functions, numerator and denominator of floats, quote forms
+printed abbreviated, sealed classes subclassed, `set!` of an undefined
+variable, slots added by `define-slot` to existing instances, and
+specializers given by constant variables.
+
 The standard is the 1992 manual. Expected results come from the manual,
 not from the Common Lisp implementation.
 

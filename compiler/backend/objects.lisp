@@ -29,6 +29,9 @@
 (in-package #:dylan-compiler)
 
 (defvar *let-values* nil "IVAR -> the expression a let binds it to.")
+(defvar *global-definitions* nil
+  "MODULE-VAR -> the atoms define gives it, for the variables define defines.")
+(defvar *assigned-globals* nil "MODULE-VAR -> T, for those set! assigns.")
 (defvar *gclasses* nil "MODULE-VAR -> GCLASS, for the program's classes.")
 (defvar *gfuns* nil "MODULE-VAR -> GFUN.")
 (defvar *method-of-fn* nil "IR-FN -> GMETHOD, for define-method fns.")
@@ -97,6 +100,9 @@ reflection, and call it?  If not, methods need no direct entries.")
                  (ir-let (setf (gethash (ir-let-var e) *let-values*) (ir-let-value e))
                          (walk (ir-let-value e)) (walk (ir-let-body e)))
                  (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+                 (ir-define-variable (push (ir-define-variable-value e)
+                                           (gethash (ir-define-variable-var e) *global-definitions*)))
+                 (ir-global-set (setf (gethash (ir-global-set-var e) *assigned-globals*) t))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
                  (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
                  (ir-letrec (walk (ir-letrec-body e)))
@@ -113,16 +119,46 @@ reflection, and call it?  If not, methods need no direct entries.")
         ((and (ivar-p atom) (not (ivar-assigned-p atom)))
          (let ((value (gethash atom *let-values*)))
            (typecase value
-             (ir-global-ref (list :global (ir-global-ref-var value)))
+             (ir-global-ref (let ((var (ir-global-ref-var value)))
+                              (or (global-alias-value var) (list :global var))))
              ((or const ivar) (static-value value))
              (ir-call
               (let ((f (static-value (ir-call-function value)))
                     (args (ir-call-arguments value)))
                 (and (eq (car f) :global)
-                     (eq (second f) (dylan-var "singleton"))
-                     (= (length args) 1)
-                     (let ((arg (static-value (first args))))
-                       (and arg (list :singleton arg)))))))))))
+                     (let ((object
+                             (cond ((and (eq (second f) (dylan-var "singleton"))
+                                         (= (length args) 1))
+                                    (first args))
+                                   ;; (make <singleton> object: x), the same
+                                   ;; (chapter 11)
+                                   ((and (eq (second f) (dylan-var "make"))
+                                         (= (length args) 3)
+                                         (equal (static-value (first args))
+                                                (list :global (dylan-var "<singleton>")))
+                                         (const-p (second args))
+                                         (keywordp (const-value (second args)))
+                                         (string-equal (dylan::dylan-symbol->string
+                                                        (const-value (second args)))
+                                                       "object"))
+                                    (third args)))))
+                       (let ((arg (and object (static-value object))))
+                         (and arg (list :singleton arg))))))))))))
+
+(defvar *chasing* '() "The module variables global-alias-value is in.")
+
+(defun global-alias-value (var)
+  "If the module variable VAR is defined once by define, never assigned,
+to something known at compile time (a class, a generic function, a
+singleton, a constant), that; else NIL.  (A specializer may be any
+expression that evaluates to a class or singleton, chapter 6.)"
+  (let ((definitions (and *global-definitions* (gethash var *global-definitions*))))
+    (and (= (length definitions) 1)
+         (not (gethash var *assigned-globals*))
+         (not (module-var-thread-local-p var))
+         (not (member var *chasing*))
+         (let ((*chasing* (cons var *chasing*)))
+           (static-value (first definitions))))))
 
 (defun global-class (var)
   "The CLASS-INFO of the class the module variable VAR holds, or NIL."
@@ -254,6 +290,9 @@ reflection, and call it?  If not, methods need no direct entries.")
                        when (member s more)
                          do (compile-error "define-class: ~a is given twice" (class-info-name s)))
                  (dolist (s supers)
+                   ;; A sealed class "cannot be subclassed" (chapter 2).
+                   (when (class-info-sealed-p s)
+                     (compile-error "~a is sealed: it cannot be subclassed" (class-info-name s)))
                    (unless (member (class-info-kind s) '(:none :instance))
                      (compile-error "~a cannot be a superclass of a class defined in the program"
                                     (class-info-name s))))
@@ -447,6 +486,17 @@ slot SD in the object VAR."
     (emit-object "    (void)a1; (void)a2; (void)a3;")
     (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
     (emit-storage-ref sd "a0")
+    (let ((spec (sdef-spec sd)))
+      (when (and (eq (sdef-allocation sd) :instance)
+                 (or (slot-spec-init-value spec) (slot-spec-init-function spec)))
+        ;; An instance made before define-slot added the slot takes its
+        ;; initial value now (chapter 6).
+        (emit-object "    if (*place == DY_UNBOUND && ~a != DY_UNBOUND)"
+                     (sdef-c sd (if (slot-spec-init-value spec) "init" "initfn")))
+        (emit-object "        *place = ~a;"
+                     (if (slot-spec-init-value spec)
+                         (sdef-c sd "init")
+                         (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))))
     (emit-object "    if (DY_UNLIKELY(*place == DY_UNBOUND)) dy_unbound_slot(~a);" (slot-name-c sd))
     (emit-object "    return *place;~%}")
     (push (make-gmethod :specs (list (make-spec :class (sdef-class sd)))
@@ -856,7 +906,7 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
 
 (defun emit-maker (g)
   (let* ((info (gclass-info g))
-         (name (format nil "dy_make_~a" (class-info-c-name info)))
+         (name (format nil "dy_maker_~a" (class-info-c-name info)))
          (slots (effective-slots info))
          (init (gethash (dylan-var "initialize") *gfuns*))
          (init-methods (and init
@@ -905,8 +955,9 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
           (cond ((slot-spec-init-value spec)
                  (emit-object "    if (v == DY_UNSUPPLIED) v = ~a;" (sdef-c sd "init")))
                 ((slot-spec-init-function spec)
-                 (emit-object "    if (v == DY_UNSUPPLIED) v = DY_CALL(~a, 0, 0, 0, 0, 0);"
-                              (sdef-c sd "initfn"))))
+                 ;; (Not yet if its define-slot has not been done.)
+                 (emit-object "    if (v == DY_UNSUPPLIED && ~a != DY_UNBOUND) v = DY_CALL(~a, 0, 0, 0, 0, 0);"
+                              (sdef-c sd "initfn") (sdef-c sd "initfn"))))
           (emit-object "    if (v != DY_UNSUPPLIED) {")
           (when (slot-spec-type spec)
             (emit-object "        if (~a != DY_UNBOUND) dy_check_type(v, ~a);"
@@ -1025,6 +1076,8 @@ objects, makers."
     (emit-object "static D dy_slot_descriptors_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
     (emit-object "    (void)a1; (void)a2; (void)a3;")
     (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
+    (emit-object "    if (dy_kind_p(a0, DY_KIND_CLASS) && ((DyClass *)DY_PTR(a0))->sealed) return ~a;"
+                 (address (c-vector *cdata* '())))
     (loop for g being the hash-values of *gclasses*
           do (let ((effective '()))
                (dolist (c (reverse (class-info-cpl (gclass-info g))))

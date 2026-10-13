@@ -165,9 +165,34 @@ $ bin/dylanc -h                 # the options: -O0..-O3, -Os, -g, -k, -C, ...
 
 The generated C is `NAME.c` (data and `main`), `NAME-MODULE.c` for each
 module's functions, and `NAME.h`; `-k` keeps it, and its `#line`
-directives point to the Dylan source. The tests: `sbcl --script
-tests/codegen/run.lisp` and `sh tests/driver/run.sh`; the benchmarks:
-`sbcl --script bench/run-c.lisp`.
+directives point to the Dylan source. The benchmarks: `sbcl --script
+bench/run-c.lisp`, which times them against the hand-written C of
+`bench/reference.c` and the Lisp of `reference.lisp`.
+
+The tests (each `run.lisp` takes a mode: `quick`, the default `all` — gcc
+and clang, with `musttail` and with trampolines — `gc-stress`, `address`
+for AddressSanitizer and UndefinedBehaviorSanitizer, or `thread` for
+ThreadSanitizer):
+
+```console
+$ sbcl --script tests/conformance/run.lisp  # the manual's examples, chapter by chapter
+$ sbcl --script tests/codegen/run.lisp      # the compiler's own
+$ sbcl --script tests/stress/run.lisp       # 10^8 tail calls; many threads
+$ sh tests/driver/run.sh                    # bin/dylanc
+```
+
+What a static program cannot do, which the 1992 manual allows:
+
+- **Change its classes or generic functions while running:** `add-method`,
+  `remove-method`, `add-slot`, `remove-slot` and `freeze-methods` are
+  reported when compiling. A `<generic-function>` made by `make` has no
+  methods.
+- **Specializers and `define-slot` owners known only when running:** each
+  must be a class or singleton the compiler can find — a literal, a
+  constant variable, `(singleton x)` or `(make <singleton> object: x)` of a
+  constant. So `define-slot` on a singleton is not supported.
+- **Bignums and complex numbers:** integers are 63 bits (overflow is an
+  error), and `<complex>` has no instances.
 
 ## Differences from the 1992 manual
 

@@ -24,6 +24,8 @@ static DyThreadObject *new_thread_object(D function) {
     t->condition = DY_FALSE;
     t->done = 0;
     t->main = 0;
+    pthread_mutex_init(&t->lock, NULL);
+    pthread_cond_init(&t->ended, NULL);
     return t;
 }
 
@@ -54,7 +56,10 @@ static void *thread_main(void *arg) {
     }
     /* Otherwise an unhandled condition ended it; %unhandled kept it. */
     dy_thread->frames = NULL;
-    __atomic_store_n(&t->done, 1, __ATOMIC_RELEASE);
+    pthread_mutex_lock(&t->lock);
+    t->done = 1;
+    pthread_cond_broadcast(&t->ended);
+    pthread_mutex_unlock(&t->lock);
     dy_end_thread();
     return NULL;
 }
@@ -66,6 +71,8 @@ PRIMITIVE(make_thread) {
     DyThreadObject *t = new_thread_object(a0);
     int status = pthread_create(&t->thread, NULL, thread_main, t);
     if (status != 0) dy_error("make-thread: the thread could not be created", 0);
+    /* join-thread waits on ENDED, so no thread need be joined. */
+    pthread_detach(t->thread);
     return DY_OBJ(t);
 }
 
@@ -81,12 +88,9 @@ PRIMITIVE(join_thread) {
     DyThreadObject *t = as_thread(a0);
     if (t == dy_thread->self) dy_error("join-thread: a thread cannot join itself", a0);
     if (t->main) dy_error("join-thread: the main thread cannot be joined", a0);
-    if (!__atomic_load_n(&t->done, __ATOMIC_ACQUIRE)) {
-        int status = pthread_join(t->thread, NULL);
-        /* A thread joined already (ESRCH, EINVAL) has ended: fine. */
-        if (status != 0 && status != ESRCH && status != EINVAL)
-            dy_error("join-thread: the thread could not be joined", a0);
-    }
+    pthread_mutex_lock(&t->lock);
+    while (!t->done) pthread_cond_wait(&t->ended, &t->lock);
+    pthread_mutex_unlock(&t->lock);
     return t->results;
 }
 
@@ -140,6 +144,7 @@ static D make_lock(D self, intptr_t argc, DyWrapper *wrapper, int type) {
     pthread_mutexattr_settype(&attributes, type);
     pthread_mutex_init(&l->mutex, &attributes);
     pthread_mutexattr_destroy(&attributes);
+    l->depth = 0;
     return DY_OBJ(l);
 }
 
@@ -158,18 +163,36 @@ static DyLock *as_lock(D x) {
     return DY_PTR(x);
 }
 
+/* Does this thread hold L?  (Its owner and depth change only while it
+ * is held, so only the holder can find itself.) */
+static bool held(DyLock *l) {
+    return __atomic_load_n(&l->depth, __ATOMIC_RELAXED) > 0
+        && pthread_equal(__atomic_load_n(&l->owner, __ATOMIC_RELAXED), pthread_self());
+}
+
+static void note_acquired(DyLock *l) {
+    __atomic_store_n(&l->owner, pthread_self(), __ATOMIC_RELAXED);
+    __atomic_store_n(&l->depth, l->depth + 1, __ATOMIC_RELAXED);
+}
+
 PRIMITIVE(acquire_lock) {
     need(self, argc, 1, 1);
-    int status = pthread_mutex_lock(&as_lock(a0)->mutex);
-    if (status == EDEADLK) dy_error("acquire-lock: the thread holds the lock already", a0);
-    if (status != 0) dy_error("acquire-lock: the lock could not be acquired", a0);
+    DyLock *l = as_lock(a0);
+    if (dy_wrapper_of(a0) == &dy_wrapper_lock && held(l))
+        dy_error("acquire-lock: the thread holds the lock already", a0);
+    if (pthread_mutex_lock(&l->mutex) != 0)
+        dy_error("acquire-lock: the lock could not be acquired", a0);
+    note_acquired(l);
     return a0;
 }
 
 PRIMITIVE(release_lock) {
     need(self, argc, 1, 1);
-    int status = pthread_mutex_unlock(&as_lock(a0)->mutex);
-    if (status != 0) dy_error("release-lock: the thread does not hold the lock", a0);
+    DyLock *l = as_lock(a0);
+    /* Checked here, not by unlocking an unlocked mutex */
+    if (!held(l)) dy_error("release-lock: the thread does not hold the lock", a0);
+    __atomic_store_n(&l->depth, l->depth - 1, __ATOMIC_RELAXED);
+    pthread_mutex_unlock(&l->mutex);
     return a0;
 }
 
@@ -197,8 +220,11 @@ PRIMITIVE(wait_condition_variable) {
     DyConditionVariable *c = as_condition_variable(a0);
     if (!dy_kind_p(a1, DY_KIND_LOCK) || dy_wrapper_of(a1) != &dy_wrapper_lock)
         dy_error("wait-condition-variable: not a <lock>", a1);
-    int status = pthread_cond_wait(&c->condition, &as_lock(a1)->mutex);
-    if (status != 0) dy_error("wait-condition-variable: the thread does not hold the lock", a1);
+    DyLock *l = as_lock(a1);
+    if (!held(l)) dy_error("wait-condition-variable: the thread does not hold the lock", a1);
+    __atomic_store_n(&l->depth, 0, __ATOMIC_RELAXED);
+    pthread_cond_wait(&c->condition, &l->mutex);
+    note_acquired(l);
     return DY_FALSE;
 }
 

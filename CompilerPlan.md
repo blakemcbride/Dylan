@@ -437,6 +437,39 @@ loop with no state objects allocated.
 
 ## Phase 9 — Optimization
 
+**Status: done.** Benchmarks: `sbcl --script bench/run-c.lisp` (Dylan→C
+against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
+
+- `compiler/backend/types.lisp`: type inference over the whole program, a
+  fixpoint from constants, the inline methods' result classes,
+  define-method specializers, and — for local functions, global functions
+  and sole methods whose every call is known — the arguments of the calls
+  and the functions' results. Flow-insensitive: a variable has one type.
+- `compiler/backend/calls.lisp`: calls of known generic functions go to
+  their dispatch function, or their only method; primitives through their
+  C entry; global functions directly, a tail call of itself a loop.
+  Done inline: `id?`, `not`, `car`, `cdr`, `instance?` of a known class,
+  untyped instance slot getters and setters, and the library's methods for
+  integer and float arithmetic and comparison, `size`, `element` and the
+  iteration protocol on lists, vectors and byte strings — when the static
+  program shows no other method could apply. A test of the arguments
+  guards each case unless their types are known.
+- Unboxing: a `<double-float>` variable that no closure holds and every use
+  of which wants a double is a C `double`. Integers need none: they are
+  immediate.
+- Escape analysis: a `#rest` list only walked, through variables no closure
+  holds, is on the stack (up to 8 pairs); keyword arguments are parsed
+  where they were passed, with no list. Closures are not stack-allocated:
+  contification already makes local loops none.
+- Constants propagate through `let`s; integer arithmetic on constants is
+  done when compiling; `if` on a constant, or on a value of a class `#f`
+  is not an instance of, keeps one branch; unused pure `let`s are dropped.
+- Tree shaking as before (shake.lisp); `(build … :size t)` builds with
+  `-Os`, function and data sections and `--gc-sections` (the runtime
+  library is always compiled in sections). No LTO.
+- The library concatenates vectors and strings directly and sorts its
+  fresh list in place.
+
 In order of expected payoff:
 
 1. **Type inference** — flow-sensitive, over the IR, using the complete

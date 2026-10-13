@@ -10,6 +10,7 @@
 
 #include "primitive.h"
 #include <math.h>
+#include <time.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wctype.h>
@@ -364,13 +365,13 @@ PRIMITIVE(replace_vector) {
     (void)in_registers;
     if (ts <= ss) {
         for (intptr_t i = 0; i < n; i++) {
-            D x = vector_element_entry(self, a2, DY_INT(ss + i), 0, 0, 2);
-            vector_element_setter_entry(self, a0, DY_INT(ts + i), x, 0, 3);
+            D x = dy_prim_vector_element_entry(self, a2, DY_INT(ss + i), 0, 0, 2);
+            dy_prim_vector_element_setter_entry(self, a0, DY_INT(ts + i), x, 0, 3);
         }
     } else {
         for (intptr_t i = n - 1; i >= 0; i--) {
-            D x = vector_element_entry(self, a2, DY_INT(ss + i), 0, 0, 2);
-            vector_element_setter_entry(self, a0, DY_INT(ts + i), x, 0, 3);
+            D x = dy_prim_vector_element_entry(self, a2, DY_INT(ss + i), 0, 0, 2);
+            dy_prim_vector_element_setter_entry(self, a0, DY_INT(ts + i), x, 0, 3);
         }
     }
     return a0;
@@ -452,7 +453,7 @@ PRIMITIVE(string_hash) {
     intptr_t n = vector_size(a0);
     uint64_t h = 14695981039346656037u;
     for (intptr_t i = 0; i < n; i++) {
-        D c = vector_element_entry(self, a0, DY_INT(i), 0, 0, 2);
+        D c = dy_prim_vector_element_entry(self, a0, DY_INT(i), 0, 0, 2);
         h = (h ^ DY_CHAR_CODE(c)) * 1099511628211u;
     }
     return DY_INT((intptr_t)(h >> 2) & DY_INT_MAX);
@@ -735,4 +736,13 @@ PRIMITIVE(write_fd) {
         dy_error("not a string or character", a1);
     }
     return a1;
+}
+
+/* (current-milliseconds): a monotonic clock, in milliseconds (an
+ * extension, for timing). */
+PRIMITIVE(current_milliseconds) {
+    need(self, argc, 0, 0);
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return DY_INT((intptr_t)t.tv_sec * 1000 + t.tv_nsec / 1000000);
 }

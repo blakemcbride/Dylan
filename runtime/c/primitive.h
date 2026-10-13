@@ -14,12 +14,15 @@
                 : dy_thread->args[(i) - 4])
 
 #define U __attribute__((unused))
+/* The entry is external, dy_prim_NAME_entry, so that compiled code can
+ * call it directly. */
 #define PRIMITIVE(c_name)                                                   \
-    static D c_name##_entry(D, D, D, D, D, intptr_t);                       \
-    DyFunction dy_prim_##c_name = { &dy_wrapper_method, c_name##_entry,     \
+    D dy_prim_##c_name##_entry(D, D, D, D, D, intptr_t);                    \
+    DyFunction dy_prim_##c_name = { &dy_wrapper_method,                     \
+                                    dy_prim_##c_name##_entry,               \
                                     DY_FALSE, DY_FALSE };                   \
-    static D c_name##_entry(U D self, U D a0, U D a1, U D a2, U D a3,      \
-                            U intptr_t argc)
+    D dy_prim_##c_name##_entry(U D self, U D a0, U D a1, U D a2, U D a3,   \
+                               U intptr_t argc)
 
 static inline void need(D self, intptr_t argc, intptr_t min, intptr_t max) {
     if (argc < min || (max >= 0 && argc > max)) dy_wrong_argument_count(self, argc);

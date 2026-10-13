@@ -1,0 +1,203 @@
+;;;; Copyright 2026 Blake McBride.  See ../../LICENSE.
+;;;;
+;;;; Test programs for the optimizations (Phase 9), in the form of
+;;;; cases.lisp: what is done inline, on types found or not, gives what the
+;;;; generic functions give, errors included.
+
+(
+ (float-arithmetic
+  "(define-method poly (x) (+ (* 2.0 x x) (* 3 x) 1))
+   (define-method half-sum (n)
+     (bind ((s 0.0))
+       (for ((i 0 (+ i 1))) ((= i n) s)
+         (set! s (+ s 0.5)))))
+   (print (half-sum 10))
+   (print (list (poly 2.0) (poly 2)))
+   (print (list (+ 1 2.5) (- 1.5 1) (* 2 0.25) (/ 1 4.0) (/ 3.0 2) (- 2.5)))
+   (print (bind ((x 1.0) (y 3.0)) (/ x y)))
+   (print (list (< 1.0 2.0) (= 2.0 2.0) (> 1.5 0.5) (= 1 1.0) (< 1 1.5) (< 2.0 1)))
+   (define make-adder (method (d) (bind ((x (* d 2.0))) (method (y) (+ x y)))))
+   (print ((make-adder 1.5) 1.0))
+   (bind ((x 0))
+     (for ((i 0 (+ i 1))) ((= i 3)) (set! x (+ x 0.5)))
+     (print x))
+   (print (handler-case (/ 1.0 0.0) ((<error>) 'caught)))
+   (print (handler-case (/ 1.0 0) ((<error>) 'caught)))
+   (print (handler-case (+ 1.0 'a) ((<error>) 'caught)))"
+  "5.0
+(15.0 15.0)
+(3.5 0.5 0.5 0.25 1.5 -2.5)
+0.3333333333333333
+(#t #t #t #t #t #f)
+4.0
+1.5
+caught
+caught
+caught
+")
+
+ (mandelbrot
+  "(define-method inside? (cr ci)
+     (bind ((zr 0.0) (zi 0.0))
+       (for ((i 0 (+ i 1)))
+            ((or (= i 50) (> (+ (* zr zr) (* zi zi)) 4.0))
+             (= i 50))
+         (bind ((new-zr (+ (- (* zr zr) (* zi zi)) cr)))
+           (set! zi (+ (* 2.0 zr zi) ci))
+           (set! zr new-zr)))))
+   (bind ((count 0))
+     (for ((y 0 (+ y 1))) ((= y 5))
+       (for ((x 0 (+ x 1))) ((= x 5))
+         (when (inside? (- (* x 0.5) 1.5) (- (* y 0.5) 1.0))
+           (set! count (+ count 1)))))
+     (print count))"
+  "10
+")
+
+ (integer-arithmetic
+  "(define big 4611686018427387903)
+   (print (list (+ 2 3) (- 2 3) (* -4 5) (< -1 0) (= 7 7) (- 0 5) (- 5)))
+   (print (handler-case (+ big 1) ((<error>) 'overflow)))
+   (print (handler-case (* 4611686018427387903 2) ((<error>) 'overflow)))
+   (print (handler-case (- (- big) 2) ((<error>) 'overflow)))
+   (print (handler-case (+ 1 'a) ((<error>) 'caught)))
+   (print (if 0 'true 'false))
+   (print (if (< 2 1) 'true 'false))
+   (print (+ 1/2 1))"
+  "(5 -1 -20 #t #t -5 -5)
+overflow
+overflow
+overflow
+caught
+true
+false
+3/2
+")
+
+ (sequence-inlines
+  "(define v (vector 1 2 3))
+   (define s \"abc\")
+   (print (list (size v) (size s) (element v 2) (element s 1) (size '(1 2)) (size (range from: 0 size: 4))))
+   (print (handler-case (element v 3) ((<error>) 'out-of-range)))
+   (print (handler-case (element v -1) ((<error>) 'out-of-range)))
+   (print (handler-case (element s 3) ((<error>) 'out-of-range)))
+   (print (element v 5 default: 'none))
+   (bind ((sum 0))
+     (for-each ((x v) (y '(10 20 30 40))) () (set! sum (+ sum (* x y))))
+     (print sum))
+   (bind ((l '()))
+     (for-each ((c s)) () (set! l (cons c l)))
+     (print l))
+   (print (map + '(1 2) #(10 20)))"
+  "(3 3 3 #\\b 2 4)
+out-of-range
+out-of-range
+out-of-range
+none
+140
+(#\\c #\\b #\\a)
+(11 22)
+")
+
+ (slot-inlines
+  "(define-class <point> (<object>) (x init-keyword: x: init-value: 0) (y init-keyword: y:))
+   (define-class <point3> (<point>) (z init-value: 9))
+   (define-class <box> (<object>) (w type: <integer> init-value: 0))
+   (define p (make <point> x: 1 y: 2))
+   (define q (make <point3> y: 5))
+   (set! (x p) 10)
+   (set! (x q) (+ (x q) 1))
+   (print (list (x p) (y p) (x q) (y q) (z q)))
+   (print (handler-case (y (make <point>)) ((<error>) 'unbound)))
+   (print (handler-case (z p) ((<error>) 'no-slot)))
+   (print (handler-case (x 5) ((<error>) 'not-a-point)))
+   (print (handler-case (set! (w (make <box>)) \"no\") ((<error>) 'type-error)))"
+  "(10 2 1 5 9)
+unbound
+no-slot
+not-a-point
+type-error
+")
+
+ ;; A getter with a method of the program's: no longer done inline
+ (slot-getter-method
+  "(define-class <point> (<object>) (x init-keyword: x: init-value: 0))
+   (define-method x ((s <symbol>)) 'symbol-x)
+   (define p (make <point> x: 1))
+   (print (list (x p) (x 'a)))"
+  "(1 symbol-x)
+")
+
+ (argument-lists
+  "(define sum-all
+     (method (#rest xs)
+       (bind ((total 0))
+         (for-each ((x xs)) () (set! total (+ total x)))
+         total)))
+   (define count-args
+     (method (#rest xs)
+       (for ((l xs (cdr l)) (n 0 (+ n 1))) ((id? l '()) n))))
+   (define keep (method (#rest xs) xs))
+   (define stash #f)
+   (define save (method (#rest xs) (set! stash xs) (size xs)))
+   (define mk (method (#rest xs) (method () xs)))
+   (print (list (sum-all) (sum-all 1) (sum-all 1 2 3 4 5 6 7 8 9 10 11 12)))
+   (print (count-args 1 2 3 4 5 6 7 8 9))
+   (define kept (keep 1 2 3))
+   (keep 4 5 6)
+   (save 7 8)
+   (print (list kept stash ((mk 1 2))))
+   (define keyed (method (a #key (b 10) c) (list a b c)))
+   (print (list (keyed 1) (keyed 1 c: 3) (keyed 1 c: 3 b: 4 b: 5)))
+   (print (handler-case (keyed 1 b:) ((<error>) 'odd)))
+   (print (handler-case (keyed 1 d: 2) ((<error>) 'unknown)))
+   (define k6 (method (a b c d e #key f g) (list a b c d e f g)))
+   (print (k6 1 2 3 4 5 g: 7 f: 6))
+   (define rk (method (#rest r #key a) (list r a)))
+   (print (rk a: 1))"
+  "(0 1 78)
+9
+((1 2 3) (7 8) (1 2))
+((1 10 #f) (1 10 3) (1 4 3))
+odd
+unknown
+(1 2 3 4 5 6 7)
+((a: 1) 1)
+")
+
+ (known-functions
+  "(define count-down (method (n acc) (if (= n 0) acc (count-down (- n 1) (+ acc 1)))))
+   (print (count-down 1000000 0))
+   (define even2? (method (n) (if (= n 0) #t (odd2? (- n 1)))))
+   (define odd2? (method (n) (if (= n 0) #f (even2? (- n 1)))))
+   (print (even2? 100001))
+   (define g (method () 1))
+   (set! g (method () 2))
+   (print (g))
+   (print (handler-case (later 1) ((<error>) 'unbound)))
+   (define later (method (x) x))
+   (print (later 2))"
+  "1000000
+#f
+2
+unbound
+2
+")
+
+ (tak-integers
+  "(define-method tak (x y z)
+     (if (< y x)
+         (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y))
+         z))
+   (print (tak 18 12 6))"
+  "7
+")
+
+ (tak-mixed
+  "(define-method tak (x y z)
+     (if (< y x)
+         (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y))
+         z))
+   (print (list (tak 18 12 6) (tak 3.0 2 1)))"
+  "(7 2)
+"))

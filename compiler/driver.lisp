@@ -9,7 +9,8 @@
 ;;;; *ERROR-OUTPUT*.  BUILD runs the C compiler (CC, default "cc") on the
 ;;;; C file with the runtime library, which it makes first if need be.
 ;;;; With :TRAMPOLINE T the program and runtime use trampolines instead of
-;;;; musttail for tail calls (CompilerPlan.md, Phase 4).
+;;;; musttail for tail calls (CompilerPlan.md, Phase 4); with :SIZE T the
+;;;; executable is built small (Phase 9).
 
 (in-package #:dylan-compiler)
 
@@ -56,16 +57,22 @@ date."
       (error "Could not make the runtime library."))
     (merge-pathnames target *runtime-directory*)))
 
-(defun build (files executable &key trampoline (cc "cc") (optimize "-O2") c-file)
+(defun build (files executable &key trampoline (cc "cc") (optimize "-O2") size c-file)
   "Compile FILES to the EXECUTABLE.  The C file is C-FILE, or
-EXECUTABLE.c."
+EXECUTABLE.c.  With :SIZE T the executable is made small: -Os, and the
+functions and data nothing uses dropped when linking."
   (let ((c-file (or c-file (concatenate 'string (namestring executable) ".c"))))
     (and (compile-files files c-file)
-         (build-c c-file executable :trampoline trampoline :cc cc :optimize optimize))))
+         (build-c c-file executable :trampoline trampoline :cc cc :optimize optimize
+                                    :size size))))
 
-(defun build-c (c-file executable &key trampoline (cc "cc") (optimize "-O2"))
+(defun build-c (c-file executable &key trampoline (cc "cc") (optimize "-O2") size)
   (let ((library (runtime-library trampoline)))
-    (zerop (run cc (append (list optimize "-g" "-std=gnu11" "-pthread"
+    (zerop (run cc (append (if size
+                               (list "-Os" "-ffunction-sections" "-fdata-sections"
+                                     "-Wl,--gc-sections" "-s")
+                               (list optimize "-g"))
+                           (list "-std=gnu11" "-pthread"
                                  "-Wall" "-Wno-unused-variable" "-Wno-unused-but-set-variable"
                                  "-Wno-unused-label"
                                  (format nil "-I~a" (namestring (merge-pathnames "c/" *runtime-directory*))))

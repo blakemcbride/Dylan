@@ -141,6 +141,15 @@ TAIL-P meaning in tail position with respect to E."
 (defvar *cfun* nil "The CFUN being generated.")
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
 (defvar *used-primitives* nil)
+(defvar *used-primitive-entries* nil "C names of primitive entries called directly.")
+(defvar *absorbed-uses* nil
+  "IVAR -> how many of its uses are as the function of a call made without
+its value.")
+(defvar *global-functions* nil
+  "Module variable -> the IR-FN of the closure it always holds (types.lisp).")
+(defvar *stack-rests* nil
+  "#rest IVAR -> T, for the lists that never escape (types.lisp).")
+(defvar *unboxed* nil "IVAR -> T, for the variables that are C doubles (types.lisp).")
 (defvar *lines* nil "The lines of the function being generated, newest first.")
 (defvar *indent* 1)
 (defvar *label-counter* 0)
@@ -179,20 +188,39 @@ by a real closure, not just by a contified fn.")
 (defun v-name (var) (format nil "v~d" (ivar-id var)))
 
 (defun var-read (var)
-  (if (cell-var-p var) (format nil "DY_CELL(~a)" (v-name var)) (v-name var)))
+  (cond ((cell-var-p var) (format nil "DY_CELL(~a)" (v-name var)))
+        ((unboxed-p var) (box-double (v-name var)))
+        (t (v-name var))))
 
 (defun emit-bind (var value)
-  (if (cell-var-p var)
-      (emit "~a = dy_make_cell(~a);" (v-name var) value)
-      (emit "~a = ~a;" (v-name var) value)))
+  (cond ((cell-var-p var) (emit "~a = dy_make_cell(~a);" (v-name var) value))
+        ((unboxed-p var) (emit "~a = DY_DOUBLE(~a);" (v-name var) value))
+        (t (emit "~a = ~a;" (v-name var) value))))
 
 (defun emit-set (var value)
-  (emit "~a = ~a;" (var-read var) value))
+  (if (unboxed-p var)
+      (emit "~a = DY_DOUBLE(~a);" (v-name var) value)
+      (emit "~a = ~a;" (var-read var) value)))
+
+;;; A C expression standing as an operand where the IR has an atom (calls.lisp)
+(defstruct (c-atom (:constructor make-c-atom (expr &optional type double-p)))
+  expr
+  type                                  ; CLASS-INFO of its value, or NIL
+  double-p)                             ; is EXPR a C double?
+
+(defun constant-atom (a)
+  "The CONST that the atom A always holds, if any: constant propagation."
+  (cond ((const-p a) a)
+        ((and (ivar-p a) (not (ivar-assigned-p a)) *let-values*)
+         (let ((v (gethash a *let-values*)))
+           (and (atom-p v) (constant-atom v))))))
 
 (defun atom-c (a)
   (etypecase a
     (const (c-constant *cdata* (const-value a)))
-    (ivar (var-read a))))
+    (ivar (let ((c (constant-atom a)))
+            (if c (c-constant *cdata* (const-value c)) (var-read a))))
+    (c-atom (c-atom-expr a))))
 
 (defvar *thread-variables* nil "MODULE-VAR -> index, for thread variables.")
 
@@ -215,6 +243,7 @@ for a thread variable, the thread's slot for it."
 
 (defstruct (dest (:constructor make-dest (kind &optional var label)))
   kind                                  ; :return :bind :set :effect :mv :c
+                                        ; :raw (a C double variable)
   var                                   ; :bind/:set: IVAR; :mv/:c: C name
   label)                                ; go here afterwards, if non-NIL
 
@@ -232,7 +261,8 @@ for a thread variable, the thread's slot for it."
     (:effect (unless (pure-c-p expr) (emit "(void)(~a);" expr)))
     (:mv (emit "~a = ~a;" (dest-var dest) expr)
          (emit "dy_thread->mv_count = 1;"))
-    (:c (emit "~a = ~a;" (dest-var dest) expr)))
+    (:c (emit "~a = ~a;" (dest-var dest) expr))
+    (:raw (emit "~a = DY_DOUBLE(~a);" (dest-var dest) expr)))
   (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
 
 ;;; Expressions
@@ -244,12 +274,15 @@ dropped unevaluated?"
       (some (lambda (prefix)
               (and (> (length expr) (length prefix))
                    (string= prefix expr :end2 (length prefix))))
-            '("DY_INT(" "DY_CHAR(" "DY_OBJ(&" "DY_CELL("))))
+            '("DY_INT(" "DY_CHAR(" "DY_OBJ(&" "DY_CELL(" "dy_make_double_float("))))
 
 (defun gen (e dest)
   (let ((*location* (or (and (ir-node-p e) (ir-node-location e)) *location*)))
     (etypecase e
-      ((or const ivar) (deliver dest (atom-c e)))
+      ((or const ivar)
+       (if (and (member (dest-kind dest) '(:bind :set)) (unboxed-p (dest-var dest)))
+           (deliver-double dest (atom-double-c e))
+           (deliver dest (atom-c e))))
       (ir-global-ref (deliver dest (global-ref-c e)))
       (ir-global-set
        (let ((var (ir-global-set-var e)))
@@ -261,24 +294,35 @@ dropped unevaluated?"
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))
          (deliver dest (atom-c (ir-global-set-value e)))))
       (ir-set
-       (emit-set (ir-set-var e) (atom-c (ir-set-value e)))
-       (deliver dest (atom-c (ir-set-value e))))
+       (let ((var (ir-set-var e)) (value (ir-set-value e)))
+         (if (unboxed-p var)
+             (emit "~a = ~a;" (v-name var) (atom-double-c value))
+             (emit-set var (atom-c value)))
+         (unless (and (eq (dest-kind dest) :effect) (null (dest-label dest)))
+           (deliver dest (atom-c value)))))
       (ir-prim (gen-primitive e dest))
       (ir-if
-       (let ((test (ir-if-test e)))
-         (if (const-p test)
-             (gen (if (false-p (const-value test)) (ir-if-else e) (ir-if-then e)) dest)
+       (let ((test (or (constant-atom (ir-if-test e)) (ir-if-test e))))
+         (cond
+           ((const-p test)
+             (gen (if (false-p (const-value test)) (ir-if-else e) (ir-if-then e)) dest))
+           ((never-false-p test)
+            ;; Known to be of a class #f is not an instance of
+            (gen (ir-if-then e) dest))
+           (t
              (progn
                (emit "if (~a != DY_FALSE) {" (atom-c test))
                (indented (gen (ir-if-then e) dest))
                (emit "} else {")
                (indented (gen (ir-if-else e) dest))
-               (emit "}")))))
+               (emit "}"))))))
       (ir-seq
        (loop for (f . more) on (ir-seq-forms e)
              do (gen f (if more (make-dest :effect) dest))))
       (ir-let
-       (gen (ir-let-value e) (make-dest :bind (ir-let-var e)))
+       (unless (or (dead-binding-p (ir-let-var e) (ir-let-value e))
+                   (useless-binding-p (ir-let-var e) (ir-let-value e)))
+         (gen (ir-let-value e) (make-dest :bind (ir-let-var e))))
        (gen (ir-let-body e) dest))
       (ir-mv-let (gen-mv-let e dest))
       (ir-call (gen-call e dest))
@@ -305,6 +349,21 @@ dropped unevaluated?"
        (gen-class-definition e)
        (deliver dest (c-constant *cdata* (name-symbol (module-var-name
                                                        (slot-spec-getter (ir-define-slot-slot e))))))))))
+
+(defun never-false-p (atom)
+  (let ((type (atom-type atom)))
+    (and type (not (subclass-info-p (find-class-info "<boolean>" *classes*) type)))))
+
+(defun useless-binding-p (var value)
+  "Dead code: is the let of VAR to VALUE needless, its value a constant
+every use of VAR has instead, or something without effect no one uses?"
+  (and (not (ivar-assigned-p var))
+       (not (gethash var *closed-over*))
+       (or (const-p value)
+           (and (zerop (ivar-ref-count var))
+                (or (atom-p value) (ir-lambda-p value)
+                    (and (ir-global-ref-p value)
+                         (gethash (ir-global-ref-var value) *constant-globals*)))))))
 
 (defun definition-value (var)
   "A defining form answers the name it defines."
@@ -421,30 +480,9 @@ C expressions for a0..a3 and the count."
     (values (loop for i below 4 collect (or (nth i cs) "0"))
             (length cs))))
 
-(defparameter *variadic-rewrites*
-  '(("+" 2 "binary+") ("*" 2 "binary*") ("-" 2 "binary-") ("-" 1 "unary-")
-    ("/" 2 "binary/") ("/" 1 "unary/") ("<" 2 "binary<") ("=" 2 "binary=")
-    (">" 2 "binary<" :swap))
-  "A call of one of the library's variadic functions with this many
-arguments is a call of the binary (or unary) generic function it would
-call, without making a list of the arguments.")
-
-(defun rewrite-variadic-call (e)
-  "The C expression of the generic function to call instead of E's, and
-whether to swap the arguments; or NIL."
-  (let ((v (static-value (ir-call-function e)))
-        (n (length (ir-call-arguments e))))
-    (when (eq (car v) :global)
-      (let ((var (second v)))
-        (when (eq (module-var-module var) (dylan-module))
-          (loop for (name count target swap) in *variadic-rewrites*
-                when (and (= n count) (eq var (dylan-var name)))
-                  do (let ((c (gethash (dylan-var target) *constant-globals*)))
-                       (when c (return (values c swap))))))))))
-
 (defun gen-call (e dest)
   (let* ((f (ir-call-function e))
-         (target (call-target e))
+         (target (or (call-target e) (global-callee e)))
          (group (and target (gethash target *groups*)))
          (tail (and (eq (dest-kind dest) :return) (ir-call-tail-p e))))
     (cond
@@ -459,13 +497,11 @@ whether to swap the arguments; or NIL."
        (gen-jump (ir-fn-required target) (ir-call-arguments e))
        (setf (cfun-self-tail-call *cfun*) t)
        (emit "goto top;"))
+      ((gen-known-call e dest tail))
       (t
-       (multiple-value-bind (replacement swap) (rewrite-variadic-call e)
-       (multiple-value-bind (as n) (call-arguments-c (if swap
-                                                          (reverse (ir-call-arguments e))
-                                                          (ir-call-arguments e)))
+       (multiple-value-bind (as n) (call-arguments-c (ir-call-arguments e))
          (let* ((direct (and target (gethash target *cfuns*)))
-                (fexpr (or replacement (atom-c f)))
+                (fexpr (atom-c f))
                 (call (if direct
                           (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
                                   (cfun-c-name direct) fexpr as n)
@@ -484,18 +520,17 @@ whether to swap the arguments; or NIL."
                  ((eq (dest-kind dest) :effect)
                   (emit "(void)~a;" call)
                   (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
-                 (t (deliver dest call))))))))))
+                 (t (deliver dest call)))))))))
 
 (defun gen-jump (params args)
   "Bind PARAMS to ARGS afresh, all at once."
-  (let ((temps (mapcar (lambda (a)
-                         (declare (ignore a))
-                         (new-temp))
-                       args)))
-    (loop for temp in temps for a in args
-          do (emit "~a = ~a;" temp (atom-c a)))
+  (let ((temps (mapcar (lambda (p) (new-temp (if (unboxed-p p) "double" "D"))) params)))
+    (loop for temp in temps for a in args for p in params
+          do (emit "~a = ~a;" temp (if (unboxed-p p) (atom-double-c a) (atom-c a))))
     (loop for p in params for temp in temps
-          do (emit-bind p temp))))
+          do (if (unboxed-p p)
+                 (emit "~a = ~a;" (v-name p) temp)
+                 (emit-bind p temp)))))
 
 (defun gen-contified-call (e target group dest)
   (cond ((eq dest (group-dest group)))
@@ -667,7 +702,8 @@ position?  (If so, a call may have changed the count of values.)"
             for var in required
             when spec
               do (emit "dy_check_type(~a, ~a);" (var-read var) (atom-c spec))))
-    (cond ((and (ir-fn-next fn) (gethash fn *method-of-fn*))
+    (cond ((and (ir-fn-next fn) (zerop (ivar-ref-count (ir-fn-next fn)))))
+          ((and (ir-fn-next fn) (gethash fn *method-of-fn*))
            ;; Its caller left its next method in the thread.  A next method
            ;; that may be called with no arguments must remember these.
            (let ((temp (new-temp)))
@@ -679,12 +715,19 @@ position?  (If so, a call may have changed the count of values.)"
           ((ir-fn-next fn)
            ;; Called directly, a method has no next method.
            (emit-bind (ir-fn-next fn) "DY_FALSE")))
-    (when (or (ir-fn-rest fn) keys)
-      (let ((rest (or (ir-fn-rest fn) (new-temp))))
-        (if (ivar-p rest)
-            (emit-bind rest (format nil "dy_collect_arguments(argc, ~d, a0, a1, a2, a3)" r))
-            (emit "~a = dy_collect_arguments(argc, ~d, a0, a1, a2, a3);" rest r))
-        (when keys (gen-keyword-parsing fn (if (ivar-p rest) (var-read rest) rest)))))
+    (let ((rest (ir-fn-rest fn)))
+      (when rest
+        (emit-bind rest (if (stack-rest-p rest)
+                            (progn
+                              (push (cons (format nil "~a_pairs[DY_STACK_PAIRS]" (v-name rest))
+                                          "DyPair")
+                                    (cfun-extra-locals *cfun*))
+                              (format nil "argc - ~d <= DY_STACK_PAIRS ? dy_collect_arguments_into(~a_pairs, argc, ~d, a0, a1, a2, a3) : dy_collect_arguments(argc, ~d, a0, a1, a2, a3)"
+                                      r (v-name rest) r r))
+                            (format nil "dy_collect_arguments(argc, ~d, a0, a1, a2, a3)" r))))
+      (when keys
+        ;; The keyword arguments, read where they were passed
+        (gen-keyword-parsing fn r)))
     (let ((top-index (length *lines*)))
       (gen (ir-fn-body fn) (make-dest :return))
       (when (cfun-self-tail-call cfun)
@@ -698,8 +741,12 @@ position?  (If so, a call may have changed the count of values.)"
       (format out "    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;~%")
       (let ((vars (sort (copy-list (append (owned-vars fn) (cfun-env cfun))) #'<
                         :key #'ivar-id)))
-        (when vars
-          (format out "    D ~{~a~^, ~};~%" (mapcar #'v-name vars))))
+        (let ((boxed (remove-if #'unboxed-p vars))
+              (doubles (remove-if-not #'unboxed-p vars)))
+          (when boxed
+            (format out "    D ~{~a~^, ~};~%" (mapcar #'v-name boxed)))
+          (when doubles
+            (format out "    double ~{~a~^, ~};~%" (mapcar #'v-name doubles)))))
       (dolist (local (reverse (cfun-extra-locals cfun)))
         (format out "    ~a ~a;~%" (cdr local) (car local)))
       (dolist (line (reverse *lines*))
@@ -731,33 +778,35 @@ with the arguments FN was given?"
           (walk-fn fn))
         found)))
 
-(defun gen-keyword-parsing (fn list)
+(defun gen-keyword-parsing (fn start)
   ;; Chapter 6: a method accepts the keywords it names, or any if it has
   ;; #rest; called through its generic function, it accepts what that
-  ;; has checked.
+  ;; has checked.  The arguments from START on are keyword/value pairs.
   (let* ((keys (ir-fn-keys fn))
          (any (or (ir-fn-rest fn) (gethash fn *method-of-fn*)))
          (keys (if (listp keys) keys '()))
-         (l (new-temp)))
+         (i (new-temp "intptr_t"))
+         (key (new-temp)))
     (dolist (k keys) (emit "~a = DY_UNSUPPLIED;" (v-name (ir-key-var k))))
-    (emit "for (~a = ~a; ~a != DY_EMPTY; ~a = dy_tail(dy_tail(~a))) {" l list l l l)
+    (emit "for (~a = ~d; ~a < argc; ~a += 2) {" i start i i)
     (indented
-      (emit "if (dy_tail(~a) == DY_EMPTY) dy_odd_keyword_arguments(self);" l)
+      (emit "if (~a + 1 >= argc) dy_odd_keyword_arguments(self);" i)
+      (emit "~a = dy_argument(~a, a0, a1, a2, a3);" key i)
       (if (and (null keys) any)
           nil
           (progn
             (loop for k in keys
                   for first = t then nil
-                  do (emit "~:[} else ~;~]if (dy_head(~a) == ~a) {" first l
+                  do (emit "~:[} else ~;~]if (~a == ~a) {" first key
                            (c-constant *cdata* (ir-key-keyword k)))
                      (indented
-                       (emit "if (~a == DY_UNSUPPLIED) ~a = dy_head(dy_tail(~a));"
-                             (v-name (ir-key-var k)) (v-name (ir-key-var k)) l)))
+                       (emit "if (~a == DY_UNSUPPLIED) ~a = dy_argument(~a + 1, a0, a1, a2, a3);"
+                             (v-name (ir-key-var k)) (v-name (ir-key-var k)) i)))
             (cond ((null keys)
-                   (emit "dy_unknown_keyword(self, dy_head(~a));" l))
+                   (emit "dy_unknown_keyword(self, ~a);" key))
                   (any (emit "}"))
                   (t (emit "} else {")
-                     (indented (emit "dy_unknown_keyword(self, dy_head(~a));" l))
+                     (indented (emit "dy_unknown_keyword(self, ~a);" key))
                      (emit "}"))))))
     (emit "}")
     ;; Defaults, in order: each sees the parameters before it.
@@ -793,6 +842,11 @@ define-generic-function, whose work the compiler has done?"
         (*closed-over* (make-hash-table :test #'eq))
         (*local-exits* (make-hash-table :test #'eq))
         (*thread-variables* (make-hash-table :test #'eq))
+        (*used-primitive-entries* '())
+        (*absorbed-uses* nil)
+        (*unboxed* nil)
+        (*stack-rests* nil)
+        (*global-functions* (make-hash-table :test #'eq))
         (*dylan-modules* (program-modules (ir-program-source ir)))
         (dylan::*symbol-spellings* (or (program-spellings (ir-program-source ir))
                                        dylan::*symbol-spellings*))
@@ -841,6 +895,10 @@ define-generic-function, whose work the compiler has done?"
       (dolist (cfun cfuns)
         (dolist (var (cfun-env cfun))
           (setf (gethash var *closed-over*) t)))
+      (count-absorbed-uses fns)
+      (infer-types fns)
+      (choose-unboxed fns)
+      (find-stack-rests fns)
       (let ((texts (mapcar #'gen-function cfuns))
             (closure-lines
               (loop for cfun in cfuns
@@ -856,6 +914,8 @@ define-generic-function, whose work the compiler has done?"
         (format stream "~%/* Program */~%~%")
         (dolist (p *used-primitives*)
           (format stream "extern DyFunction ~a;~%" p))
+        (dolist (p *used-primitive-entries*)
+          (format stream "D ~a(D, D, D, D, D, intptr_t);~%" p))
         (dolist (cfun cfuns)
           (format stream "static D ~a(D, D, D, D, D, intptr_t);~%" (cfun-c-name cfun)))
         (terpri stream)

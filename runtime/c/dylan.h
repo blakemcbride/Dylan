@@ -275,6 +275,30 @@ static inline bool dy_kind_p(D x, unsigned kind) {
     return DY_IS_POINTER(x) && ((DyHeader *)DY_PTR(x))->wrapper->kind == kind;
 }
 
+/* Accessors for the compiler's inline fast paths */
+#define DY_IS_DOUBLE(x)    dy_kind_p((x), DY_KIND_DOUBLE_FLOAT)
+#define DY_DOUBLE(x)       dy_double_value(x)
+#define DY_VECTOR_SIZE(v)  dy_vector_size_of(v)
+#define DY_VECTOR_DATA(v)  dy_vector_data_of(v)
+#define DY_STRING_SIZE(s)  dy_string_size_of(s)
+#define DY_STRING_DATA(s)  dy_string_data_of(s)
+/* (Functions, not casts in place, so that C compilers do not warn of
+ * type punning when the object is a static constant.) */
+static inline double dy_double_value(D x) { return ((DyDoubleFloat *)DY_PTR(x))->value; }
+static inline intptr_t dy_vector_size_of(D v) { return DY_INT_VALUE(((DyVector *)DY_PTR(v))->size); }
+static inline D *dy_vector_data_of(D v) { return ((DyVector *)DY_PTR(v))->data; }
+static inline intptr_t dy_string_size_of(D s) { return DY_INT_VALUE(((DyByteString *)DY_PTR(s))->size); }
+static inline char *dy_string_data_of(D s) { return ((DyByteString *)DY_PTR(s))->data; }
+
+/* The place of the program's instance slot number K in X, or NULL if X
+ * has no such slot */
+static inline D *dy_instance_slot(D x, int32_t k) {
+    if (!DY_IS_POINTER(x)) return NULL;
+    const int32_t *o = ((DyHeader *)DY_PTR(x))->wrapper->slot_offsets;
+    if (!o || o[k] < 0) return NULL;
+    return &((DyInstance *)DY_PTR(x))->slots[o[k]];
+}
+
 /* ------------------------------------------------------------ Integers
  *
  * On the tagged words directly: a = 2x+1 and b = 2y+1.  Any result that
@@ -540,6 +564,23 @@ static inline D dy_make_cell(D value) {
 
 /* The arguments from index START on, as a list. */
 D dy_collect_arguments(intptr_t argc, intptr_t start, D a0, D a1, D a2, D a3);
+
+/* The same in PAIRS, an array of at least ARGC - START pairs on the
+ * caller's stack, for a list the compiler has found never escapes. */
+#define DY_STACK_PAIRS 8
+D dy_collect_arguments_into(DyPair *pairs, intptr_t argc, intptr_t start,
+                            D a0, D a1, D a2, D a3);
+
+/* Argument I of a function's arguments A0..A3 and the argument area */
+static inline D dy_argument(intptr_t i, D a0, D a1, D a2, D a3) {
+    switch (i) {
+    case 0: return a0;
+    case 1: return a1;
+    case 2: return a2;
+    case 3: return a3;
+    default: return dy_thread->args[i - 4];
+    }
+}
 
 static inline D dy_head(D pair) { return ((DyPair *)DY_PTR(pair))->head; }
 static inline D dy_tail(D pair) { return ((DyPair *)DY_PTR(pair))->tail; }

@@ -41,6 +41,8 @@
     "backend/objects"
     "backend/shake"
     "backend/codegen"
+    "backend/calls"
+    "backend/types"
     "driver"))
 
 (defparameter *dylanc-fasl-directory*

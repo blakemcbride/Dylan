@@ -49,6 +49,20 @@ D dy_collect_arguments(intptr_t argc, intptr_t start, D a0, D a1, D a2, D a3) {
     return list;
 }
 
+D dy_collect_arguments_into(DyPair *pairs, intptr_t argc, intptr_t start,
+                            D a0, D a1, D a2, D a3) {
+    D in_registers[4] = { a0, a1, a2, a3 };
+    D list = DY_EMPTY;
+    for (intptr_t i = argc - 1; i >= start; i--) {
+        DyPair *p = &pairs[i - start];
+        p->wrapper = &dy_wrapper_pair;
+        p->head = i < 4 ? in_registers[i] : dy_thread->args[i - 4];
+        p->tail = list;
+        list = DY_OBJ(p);
+    }
+    return list;
+}
+
 D dy_list_of(const D *values, intptr_t start, intptr_t end) {
     D list = DY_EMPTY;
     for (intptr_t i = end - 1; i >= start; i--) list = dy_pair(values[i], list);

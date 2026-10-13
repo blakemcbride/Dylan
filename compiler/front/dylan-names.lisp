@@ -79,7 +79,9 @@
     "atomic-value" "atomic-add!" "atomic-compare-and-swap!"
     ;; Printing and streams (Phase 8)
     "write" "print-object" "format" "<stream>" "<string-stream>"
-    "*standard-output*" "*standard-error*" "stream-contents")
+    "*standard-output*" "*standard-error*" "stream-contents"
+    ;; Timing (Phase 9)
+    "current-milliseconds")
   "Variables the DYLAN module exports that the manual does not define.")
 
 (defparameter *dylan-module-internal-names*

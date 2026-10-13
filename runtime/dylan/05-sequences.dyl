@@ -104,12 +104,41 @@ module: dylan
 
 (define-generic-function concatenate-as (class sequence1 #rest more-sequences))
 (define-method concatenate-as ((class <class>) (s <sequence>) #rest more)
-  (bind-methods ((gather (sequences r)
-                   (if (id? sequences '())
-                       (%list-reverse r)
-                       (gather (cdr sequences)
-                               (reduce (method (r e) (cons e r)) r (car sequences))))))
-    (%from-list class (gather (cons s more) '()))))
+  (bind ((sequences (cons s more)))
+    (bind-methods ((gather (sequences r)
+                     (if (id? sequences '())
+                         (%list-reverse r)
+                         (gather (cdr sequences)
+                                 (reduce (method (r e) (cons e r)) r (car sequences))))))
+      (if (%vectors-for? class sequences)
+          (%concatenate-vectors class sequences)
+          (%from-list class (gather sequences '()))))))
+
+;;; Byte strings into a byte string, or vectors and strings into a simple
+;;; object vector, are copied directly.
+(define %vectors-for?
+  (method (class sequences)
+    (cond ((id? class <byte-string>)
+           (every? (method (s) (instance? s <byte-string>)) sequences))
+          ((id? class <simple-object-vector>)
+           (every? (method (s) (or (instance? s <simple-object-vector>)
+                                   (instance? s <byte-string>)
+                                   (instance? s <unicode-string>)))
+                   sequences))
+          (else: #f))))
+
+(define %concatenate-vectors
+  (method (class sequences)
+    (bind ((n (for ((l sequences (cdr l))
+                    (n 0 (binary+ n (%vector-size (car l)))))
+                   ((id? l '()) n)))
+           (result (if (id? class <byte-string>)
+                       (%make-byte-string n #\space)
+                       (%make-vector n #f))))
+      (for ((l sequences (cdr l))
+            (i 0 (binary+ i (%vector-size (car l)))))
+           ((id? l '()) result)
+        (%replace-vector! result i (car l) 0 (%vector-size (car l)))))))
 
 (define-generic-function concatenate (sequence1 #rest sequences))
 (define-method concatenate ((s <sequence>) #rest more)
@@ -137,31 +166,33 @@ module: dylan
 (define-generic-function reverse! (sequence))
 (define-method reverse! ((s <sequence>)) (reverse s))
 
-;;; A stable merge sort of a list: each half sorted, then merged, an
-;;; element of the first half going first when neither is less.
+;;; A stable merge sort of a fresh list L, done in place: each half
+;;; sorted, then merged, an element of the first half going first when
+;;; neither is less.
 (define %merge-sort
   (method (l test)
-    (bind-methods ((merge (a b r)
-                     (cond ((id? a '()) (append (%list-reverse r) b))
-                           ((id? b '()) (append (%list-reverse r) a))
-                           ((test (car b) (car a)) (merge a (cdr b) (cons (car b) r)))
-                           (else: (merge (cdr a) b (cons (car a) r)))))
-                   (take (l n r)
-                     (if (zero? n) (%list-reverse r) (take (cdr l) (binary- n 1) (cons (car l) r))))
-                   (drop (l n)
-                     (if (zero? n) l (drop (cdr l) (binary- n 1))))
+    (bind-methods ((merge (a b)
+                     (bind ((head (cons #f '())) (tail head))
+                       (for () ((or (id? a '()) (id? b '())))
+                         (if (test (car b) (car a))
+                             (begin (%set-cdr! tail b) (set! tail b) (set! b (cdr b)))
+                             (begin (%set-cdr! tail a) (set! tail a) (set! a (cdr a)))))
+                       (%set-cdr! tail (if (id? a '()) b a))
+                       (cdr head)))
                    (sort (l n)
                      (if (binary< n 2)
                          l
-                         (bind ((h (%ash n -1)))
-                           (merge (sort (take l h '()) h)
-                                  (sort (drop l h) (binary- n h))
-                                  '())))))
+                         (bind ((h (%ash n -1))
+                                (last (for ((p l (cdr p)) (i 1 (binary+ i 1)))
+                                           ((id? i h) p)))
+                                (rest (cdr last)))
+                           (%set-cdr! last '())
+                           (merge (sort l h) (sort rest (binary- n h)))))))
       (sort l (%list-length l)))))
 
 (define-generic-function sort (sequence #key test stable))
 (define-method sort ((s <sequence>) #key (test <) stable)
-  (%copy-like s (%merge-sort (%elements s) test)))
+  (%copy-like s (%merge-sort (%elements s) (if (id? test <) binary< test))))
 
 (define-generic-function sort! (sequence #key test stable))
 (define-method sort! ((s <sequence>) #key (test <) stable)

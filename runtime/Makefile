@@ -8,7 +8,7 @@
 
 CC      ?= gcc
 CFLAGS  ?= -O2 -g
-ALL_CFLAGS = $(CFLAGS) -std=gnu11 -Wall -Wextra -pthread -Ic
+ALL_CFLAGS = $(CFLAGS) -std=gnu11 -Wall -Wextra -pthread -ffunction-sections -fdata-sections -Ic
 LDLIBS  = -lgc -lm -lpthread
 
 SOURCES = c/object.c c/number.c c/string.c c/function.c c/objects.c c/control.c c/thread.c c/library.c c/primitives.c

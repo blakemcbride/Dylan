@@ -71,6 +71,7 @@
     ("%class-name" . "class_name") ("%generic-name" . "generic_name")
     ("%singleton-object" . "singleton_object") ("%function?" . "function_p")
     ("%shallow-copy" . "shallow_copy") ("%write-fd" . "write_fd")
+    ("current-milliseconds" . "current_milliseconds")
     ;; Reflection (chapters 10 and 11)
     ("function-arguments" . "function_arguments")
     ("slot-getter" . "slot_getter") ("slot-setter" . "slot_setter")

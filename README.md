@@ -192,6 +192,8 @@ false and the empty list, the reader and printer — is described in
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the regression baseline |
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
 | `bench/` | benchmarks against plain Common Lisp |
+| `compiler/` | the Dylan-to-C compiler, in progress (see `CompilerPlan.md`) |
+| `tests/` | the compiler's tests |
 | `examples-from-book.text` | the raw extraction those were edited from |
 | `README.thomas` | the original 1992 Thomas README |
 | `RELEASE` | the 1992 release notes |

@@ -155,6 +155,13 @@ tests/ir/run.lisp`.
 
 ## Phase 3 — Data representation (runtime/c)
 
+**Status: done.** `runtime/c/` (`dylan.h` is the representation);
+`compiler/backend/classes.lisp` and `cdata.lisp` number the classes and emit
+them, the program's symbols and its constants as static C. `#t` and `#f`
+are instances of an internal `<boolean>` class (the manual names none);
+`<complex>` remains, abstract, as `<real>`'s superclass. `<extended-float>`
+is a C `double`. Tests: `make -C runtime test`.
+
 All Dylan values are one machine word, `typedef uintptr_t D;`.
 
 | Value | Representation |
@@ -175,9 +182,8 @@ check; multiple inheritance uses a per-class bit vector.
 with `__builtin_add_overflow` and friends; overflow signals an error
 rather than giving a wrong answer. `<ratio>` holds two integers, with the
 same overflow rule. Floats follow IEEE; `<single-float>` is C `float`,
-`<double-float>` and `<extended-float>` are C `double` (or `long double`
-for extended, decided later). Contagion and canonicalization follow
-chapter 14. No `<complex>`.
+`<double-float>` and `<extended-float>` are C `double`. Contagion and
+canonicalization follow chapter 14. No `<complex>`.
 
 **Strings** are byte strings with a length; symbols and keywords are
 interned through a static table built at compile time, with a locked

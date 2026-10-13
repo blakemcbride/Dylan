@@ -33,7 +33,9 @@
     "ir/ir"
     "ir/anf"
     "ir/analyze"
-    "ir/check"))
+    "ir/check"
+    "backend/classes"
+    "backend/cdata"))
 
 (defparameter *dylanc-fasl-directory*
   (merge-pathnames

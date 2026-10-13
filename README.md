@@ -193,6 +193,7 @@ false and the empty list, the reader and printer — is described in
 | `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
 | `bench/` | benchmarks against plain Common Lisp |
 | `compiler/` | the Dylan-to-C compiler, in progress (see `CompilerPlan.md`) |
+| `runtime/` | the compiler's C runtime library |
 | `tests/` | the compiler's tests |
 | `examples-from-book.text` | the raw extraction those were edited from |
 | `README.thomas` | the original 1992 Thomas README |

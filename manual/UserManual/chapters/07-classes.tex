@@ -1,0 +1,678 @@
+\chapter{Classes and Objects}\label{ch:classes}
+
+Every Dylan object is a \emph{direct instance} of exactly one class, its
+class, and an \emph{indirect instance} of all that class's superclasses; a
+\term{general instance} of a class is a direct or an indirect instance.
+Classes describe the structure of their instances, the \term{slots} that
+hold an object's state, and together with generic functions they determine
+the instances' behavior. Classes are themselves objects, instances of
+\code{<class>}, and can be passed around and examined like any other.
+
+This chapter describes defining classes and their slots, making and
+initializing instances, the functions that examine classes, singletons and
+sealing, and the classes built into the language. The standard is
+\dylanbook{chapters 2, 6 and 11}. Dispatch on classes is described in
+Chapter~\ref{ch:functions}.
+
+\section{Defining classes: define-class}\label{sec:classes-define-class}
+
+\index{define-class@\code{define-class}}
+\begin{quote}
+\code{(define-class \meta{name} (\meta{superclass} \ldots) \meta{slot-spec} \ldots)}
+\end{quote}
+
+\noindent \code{define-class} creates a class and stores it in the module
+variable \meta{name}, which is made read-only. The superclass expressions
+are evaluated and must give at least one class, with no class twice; the
+new class inherits from all of them. Each \meta{slot-spec} adds a slot
+(Section~\ref{sec:classes-slots}). At the interactive prompt
+\code{define-class} returns the name.
+
+\begin{dylan}
+(define-class <point> (<object>)
+  (x init-value: 0 init-keyword: x:)
+  (y init-value: 0 init-keyword: y:))
+(define p (make <point> x: 3))
+(x p)                          ; => 3
+(y p)                          ; => 0
+(set! (y p) 4)                 ; => 4
+(instance? p <point>)          ; => #t
+\end{dylan}
+
+\noindent By convention class names begin and end with angle brackets. A
+class that needs no other superclass names \code{<object>}, the root of
+the class hierarchy.
+
+In the Common Lisp implementation, defining a class whose name already
+holds a class modifies that class in place, as the 1992 manual says, so
+that everything referring to it sees the new definition. In the compiler to
+C a class may be defined only once.
+
+\subsection{Multiple inheritance}\label{sec:classes-multiple-inheritance}
+
+A class may have several direct superclasses. It inherits the slots of all
+of them, and methods specialized on any of them apply to its instances.
+The order of the superclasses matters: it determines the class's
+\term{class precedence list}, which orders the class and all its
+superclasses from most to least specific, and so decides which method runs
+when methods on two unrelated superclasses both apply
+(Section~\ref{sec:functions-cpl}).
+
+\begin{dylan}
+(define-class <named> (<object>)
+  (name init-keyword: name: init-value: "anonymous"))
+(define-class <located> (<object>)
+  (place init-keyword: place: init-value: 'nowhere))
+(define-class <landmark> (<named> <located>))
+(define l (make <landmark> name: "Big Ben" place: 'london))
+(list (name l) (place l))      ; => ("Big Ben" london)
+(all-superclasses <landmark>)
+  ; => ({the class <landmark>} {the class <named>}
+  ;     {the class <located>} {the class <object>})
+\end{dylan}
+
+\noindent A class cannot be its own superclass, directly or indirectly. If
+the superclasses' orderings cannot all be satisfied at once, no class
+precedence list exists and defining the class is an error.
+
+\section{Slots}\label{sec:classes-slots}
+
+A slot is a place in an object that holds a value. A slot is not read by
+name; it is read and written by \term{getter} and \term{setter} generic
+functions, to which \code{define-class} adds methods. A slot named
+\code{x} gets a getter method on the generic function \code{x} and a setter
+method on \code{(setter x)}, and \code{(set! (x p) 10)} calls the setter.
+Since accessors are generic functions, a slot looks to the rest of the
+program exactly like a computed property, and a subclass can replace a
+stored slot with a computed one without changing any caller.
+
+\subsection{Slot specifications}
+
+A slot specification takes one of three forms:
+
+\begin{quote}
+\meta{slot-name}\\
+\code{(\meta{slot-name} \meta{keyword} \meta{value} \ldots)}\\
+\code{(\meta{keyword} \meta{value} \ldots)}
+\end{quote}
+
+\noindent The slot name is a symbol and is not evaluated. It supplies the
+default getter name, \meta{slot-name}, and the default setter name,
+\code{(setter \meta{slot-name})}. In the third form there is no slot name,
+and \code{getter:} must be given. Each option may be given at most once.
+
+\begin{description}
+\item[\code{getter:} \meta{name}] The variable to which the getter method
+  is added. Not evaluated.
+\item[\code{setter:} \meta{name}] The variable to which the setter method
+  is added. Not evaluated. \code{setter: \#f} gives the slot no setter.
+\item[\code{type:} \meta{type}] A class or singleton that the slot's values
+  must be instances of; storing anything else is an error. Evaluated once.
+  The default is \code{<object>}.
+\item[\code{init-value:} \meta{value}] The slot's initial value, used for
+  every new instance. Evaluated once, when the class is defined.
+\item[\code{init-function:} \meta{function}] A function of no arguments,
+  called to compute the initial value for each new instance. Evaluated once,
+  to give the function. Cannot be combined with \code{init-value:}.
+\item[\code{init-keyword:} \meta{keyword}] A keyword with which
+  \code{make} may be given the initial value. Not evaluated.
+\item[\code{required-init-keyword:} \meta{keyword}] Like
+  \code{init-keyword:}, but \code{make} must be given it. Cannot be
+  combined with \code{init-keyword:}, \code{init-value:} or
+  \code{init-function:}.
+\item[\code{allocation:} \meta{kind}] Where the slot's value is kept:
+  \code{instance}, \code{class}, \code{each-subclass}, \code{constant} or
+  \code{virtual} (Section~\ref{sec:classes-allocation}). Not evaluated. The
+  default is \code{instance}.
+\end{description}
+
+\begin{dylan}
+(define-class <rectangle> (<object>)
+  (top type: <integer> init-value: 0 init-keyword: top:)
+  (left type: <integer> init-value: 0 init-keyword: left:)
+  (bottom type: <integer> init-value: 100 init-keyword: bottom:)
+  (right type: <integer> init-value: 100 init-keyword: right:))
+(define r (make <rectangle> top: 50 left: 50))
+(top r)                        ; => 50
+(bottom r)                     ; => 100
+(set! (bottom r) 55)           ; => 55
+(set! (bottom r) 'foo)         ; => error: foo is not an instance of <integer>
+\end{dylan}
+
+\noindent The getter and setter options let a slot have accessor names that
+differ from its slot name, or no setter at all:
+
+\begin{dylan}
+(define-class <account> (<object>)
+  (number required-init-keyword: number: setter: #f)
+  (balance init-value: 0
+           getter: current-balance setter: (setter current-balance))
+  (getter: owner-name init-keyword: owner:))
+(define a (make <account> number: 1001 owner: "Ann"))
+(number a)                     ; => 1001
+(current-balance a)            ; => 0
+(owner-name a)                 ; => "Ann"
+(make <account>)               ; => error: number: is required
+\end{dylan}
+
+\subsection{Initial values}\label{sec:classes-slot-init}
+
+When \code{make} creates an instance, each slot is initialized from the
+first of these that applies: the init-keyword's argument to \code{make}, if
+given; the init-value; the result of calling the init-function. The
+init-function is not called when the keyword is given. A slot with none of
+these is left \term{uninitialized}, and reading it is an error until it has
+been set. The initial value is stored directly into the slot; the setter
+generic function is not called.
+
+An init-value is evaluated once, when the class is defined, and the same
+object becomes the initial value of every instance. To give each instance
+its own fresh object, such as an empty collection, use an init-function:
+
+\begin{dylan}
+(define-class <bag> (<object>)
+  (shared init-value: (make <stretchy-vector>))
+  (own init-function: (method () (make <stretchy-vector>))))
+(define b1 (make <bag>))
+(define b2 (make <bag>))
+(id? (shared b1) (shared b2))  ; => #t
+(id? (own b1) (own b2))        ; => #f
+\end{dylan}
+
+\index{slot-initialized?@\code{slot-initialized?}}
+\code{(slot-initialized? \meta{instance} \meta{getter})} tells whether the
+slot that \meta{getter} reads in \meta{instance} has a value. It is an error
+if \meta{getter} reads no slot of the instance. There is no way to make a
+slot uninitialized again.
+
+\begin{dylan}
+(define-class <memo> (<object>) (note))
+(define m (make <memo>))
+(slot-initialized? m note)     ; => #f
+(note m)                       ; => error: the slot note is not initialized
+(set! (note m) "remember")     ; => "remember"
+(slot-initialized? m note)     ; => #t
+\end{dylan}
+
+\subsection{Allocation}\label{sec:classes-allocation}
+
+\begin{description}
+\item[\code{instance}] Each instance has its own value. This is the
+  default.
+\item[\code{class}] There is one value, shared by all the general instances
+  of the class, its subclasses' instances included. Setting it through one
+  instance changes it for all.
+\item[\code{each-subclass}] The class has one value, shared by its direct
+  instances, and each subclass has a value of its own, shared by the
+  subclass's direct instances.
+\item[\code{constant}] The value is the init-value, which must be given,
+  and it cannot be changed: the slot has no setter.
+\item[\code{virtual}] No storage is allocated. The program defines methods
+  on the getter, and on the setter if it wants one, that compute the value;
+  \code{define-class} only makes sure the generic functions exist.
+\end{description}
+
+\noindent A \code{class} or \code{each-subclass} slot can be initialized
+only with \code{init-value:}; without one it starts uninitialized, like
+any other slot, until it is set; a \code{virtual} slot takes no initialization
+options at all, and \code{slot-initialized?} is always true of it.
+
+\begin{dylan}
+(define-class <vehicle> (<object>)
+  (count allocation: class init-value: 0)
+  (kind allocation: each-subclass init-value: 'vehicle)
+  (wheels allocation: constant init-value: 4)
+  (description allocation: virtual))
+(define-class <truck> (<vehicle>))
+(define-method description ((v <vehicle>))
+  (list (kind v) (wheels v)))
+(define bike (make <vehicle>))
+(define truck (make <truck>))
+(set! (count bike) 2)          ; => 2
+(count truck)                  ; => 2
+(set! (kind truck) 'truck)     ; => truck
+(kind bike)                    ; => vehicle
+(kind (make <truck>))          ; => truck
+(description truck)            ; => (truck 4)
+(slot-initialized? bike description)   ; => #t
+\end{dylan}
+
+\noindent A virtual slot can also give an inherited stored slot a new
+behavior in a subclass, a \term{filtered slot}: the subclass declares the
+slot virtual for documentation and defines getter and setter methods that
+call \code{next-method} to reach the stored value.
+
+\begin{dylan}
+(define-class <view> (<object>)
+  (position init-value: 0 init-keyword: position:))
+(define-class <displaced-view> (<view>)
+  (offset init-value: 10))
+(define-method position ((v <displaced-view>))
+  (+ (next-method) (offset v)))
+(define-method (setter position) ((v <displaced-view>) new)
+  (next-method v (- new (offset v))))
+(define dv (make <displaced-view> position: 5))
+(position dv)                  ; => 15
+(set! (position dv) 100)       ; => 100
+(position dv)                  ; => 100
+\end{dylan}
+
+\subsection{Inherited slots}\label{sec:classes-inherited-slots}
+
+Two slots are the same slot if they have the same getter. A subclass may
+respecify a slot it inherits, to give it, for example, a different initial
+value. The 1992 manual asks that the new specification repeat every feature
+the inherited one specified (its type, an initial value, its init-keyword,
+a non-instance allocation and a setter), with a type no wider than the
+inherited one. A class that inherits the same slot from two superclasses
+with different specifications must respecify it.
+
+\begin{dylan}
+(define-class <base> (<object>)
+  (color init-value: 'red init-keyword: color:))
+(define-class <derived> (<base>)
+  (color init-value: 'blue init-keyword: color:))
+(color (make <base>))                 ; => red
+(color (make <derived>))              ; => blue
+(color (make <derived> color: 'green)) ; => green
+\end{dylan}
+
+\section{Making instances: make and initialize}\label{sec:classes-make}
+
+\index{make@\code{make}}\index{initialize@\code{initialize}}
+\begin{quote}
+\code{(make \meta{class} \meta{keyword} \meta{value} \ldots)}
+\end{quote}
+
+\noindent \code{make} returns a general instance of \meta{class}. For a
+class the program defines, it allocates a new instance, initializes its
+slots (Section~\ref{sec:classes-slot-init}), then calls the generic function
+\code{initialize} with the instance and all the keyword arguments, and
+returns the instance; what \code{initialize} returns is ignored. Making an
+instance of an abstract class, such as \code{<number>} or
+\code{<collection>}, is an error. Built-in instantiable classes have
+\code{make} methods of their own, described with them
+(Chapter~\ref{ch:collections}).
+
+The keywords \code{make} accepts are the init-keywords of the class's slots,
+inherited slots included, and the keywords accepted by the applicable
+\code{initialize} methods. An \code{initialize} method with \code{\#rest}
+accepts any keyword. Any other keyword is an error, as the manual
+specifies: the compiler to C reports \code{keyword argument not accepted:
+y:}, the Common Lisp implementation \code{make -{}- illegal keyword
+argument y:}.
+
+Programs customize instance creation by adding methods to
+\code{initialize}, not to \code{make}. An \code{initialize} method normally
+calls \code{next-method} so that the superclasses' methods run too; the
+method on \code{<object>} does nothing. When \code{initialize} runs, the
+slots already have their initial values.
+
+\begin{dylan}
+(define-class <shape> (<object>)
+  (name init-keyword: name: init-value: "shape")
+  (area))
+(define-class <square> (<shape>)
+  (side init-keyword: side: init-value: 1))
+(define-method initialize ((s <shape>) #rest options)
+  (next-method)
+  (print (list 'initializing (name s))))
+(define-method initialize ((s <square>) #rest options)
+  (next-method)
+  (set! (area s) (* (side s) (side s))))
+(define sq (make <square> side: 3 name: "sq"))
+                               ; prints: (initializing "sq")
+(area sq)                      ; => 9
+\end{dylan}
+
+\noindent The \code{<square>} method above takes \code{\#rest} rather than
+\code{\#key side}: a parameter named \code{side} would shadow the getter
+\code{side} within the method. To receive a keyword under another name,
+write \code{\#key (side: the-side)} (Section~\ref{sec:functions-keywords}).
+
+\section{Adding slots: define-slot}\label{sec:classes-define-slot}
+
+\index{define-slot@\code{define-slot}}
+\begin{quote}
+\code{(define-slot \meta{owner} [\meta{slot-name}] \meta{keyword} \meta{value} \ldots)}
+\end{quote}
+
+\noindent \code{define-slot} adds a slot to an existing class or to a
+single object. \meta{owner} is evaluated and must be a class or a
+singleton; the slot name and options are those of a slot specification in
+\code{define-class}. If the owner is a class, all its instances get the
+slot. If it is a singleton, only that one object does, and its allocation
+must be \code{instance}, \code{constant} or \code{virtual}, without
+\code{init-keyword:} or \code{required-init-keyword:}.
+
+\begin{dylan}
+(define-class <pt> (<object>) (px init-value: 0))
+(define p (make <pt>))
+(define-slot (singleton p) note init-value: "only me")
+(note p)                       ; => "only me"
+(note (make <pt>))             ; => error: no applicable method
+(define x (list 1 2))
+(define-slot (singleton x) tag init-value: 'special)
+(set! (tag x) 'changed)        ; => changed
+(tag x)                        ; => changed
+(define-slot (singleton 'cup) volume allocation: constant init-value: 8)
+(volume 'cup)                  ; => 8
+(define-slot <pt> weight init-value: 10)
+(weight p)                     ; => 10
+\end{dylan}
+
+\noindent As the examples show, the object may be of any class, built-in or
+not, and the slot's accessors are generic functions with a method
+specialized on the singleton.
+
+In the Common Lisp implementation \code{define-slot} takes effect when it is
+evaluated, and instances that already exist gain the slot. In the compiler
+to C the slot is part of the program from the start: a slot defined on a
+class is in every instance ever made, and is listed by
+\code{slot-descriptors} even before the \code{define-slot} form is reached.
+The compiler to C also requires a class owner to be a class the program
+itself defines, known when compiling, rather than a built-in class or a
+value computed at run time; a singleton owner may be any object.
+
+\section{Examining classes and objects}\label{sec:classes-reflection}
+
+\begin{description}
+\item[\code{(object-class \meta{object})}]
+  \index{object-class@\code{object-class}}
+  returns the class of which \meta{object} is a direct instance.
+\item[\code{(instance? \meta{object} \meta{type})}]
+  \index{instance?@\code{instance?}}
+  returns true if \meta{object} is a general instance of the class
+  \meta{type}, or is the object of the singleton \meta{type}.
+\item[\code{(subclass? \meta{class1} \meta{class2})}]
+  \index{subclass?@\code{subclass?}}
+  returns true if \meta{class1} is \meta{class2} or a direct or indirect
+  subclass of it.
+\item[\code{(all-superclasses \meta{class})}]
+  \index{all-superclasses@\code{all-superclasses}}
+  returns the class precedence list: \meta{class} first, \code{<object>}
+  last.
+\item[\code{(direct-superclasses \meta{class})}]
+  returns the superclasses named in the class's definition, in order.
+\item[\code{(direct-subclasses \meta{class})}]
+  returns the classes that name \meta{class} as a direct superclass.
+\end{description}
+
+\begin{dylan}
+(define-class <animal> (<object>))
+(define-class <dog> (<animal>))
+(define rex (make <dog>))
+(object-class rex)             ; => {the class <dog>}
+(instance? rex <animal>)       ; => #t
+(instance? 3 <real>)           ; => #t
+(instance? 3 (singleton 3))    ; => #t
+(subclass? <dog> <animal>)     ; => #t
+(subclass? <dog> <dog>)        ; => #t
+(direct-superclasses <dog>)    ; => ({the class <animal>})
+(direct-subclasses <animal>)   ; => ({the class <dog>})
+(all-superclasses <dog>)
+  ; => ({the class <dog>} {the class <animal>} {the class <object>})
+\end{dylan}
+
+\noindent None of the sequences these functions return should be modified.
+The two implementations give different answers for some built-in objects.
+In the compiler to C, \code{\#t} and \code{\#f} are instances of an
+internal class that prints as \code{\{the class <boolean>\}} but is not the
+value of any variable a program can name, while in the Common Lisp
+implementation their class is \code{<object>}; and the Common Lisp implementation seals the
+built-in classes that cannot be subclassed, such as \code{<integer>} and
+\code{<pair>}, so \code{all-superclasses} and \code{direct-superclasses} of
+them return empty sequences (Section~\ref{sec:classes-sealing}).
+
+\subsection{Slot descriptors}\label{sec:classes-slot-descriptors}
+
+A \term{slot descriptor}, of class \code{<slot-descriptor>}, describes one
+slot. Programs seldom need them, but debuggers and inspectors do. Both
+implementations provide the slot-descriptor functions of
+\dylanbook{chapter 11}. (Design note 9 later removed them from the
+language.)
+
+\begin{description}
+\item[\code{(slot-descriptors \meta{class})}] all the slots of the class,
+  inherited ones included.
+\item[\code{(slot-descriptor \meta{instance} \meta{getter})}] the slot that
+  \meta{getter} reads in \meta{instance}, or \code{\#f}.
+\item[\code{(slot-getter \meta{sd})}, \code{(slot-setter \meta{sd})}] the
+  getter and setter generic functions; \code{slot-setter} returns
+  \code{\#f} for a slot without a setter.
+\item[\code{(slot-type \meta{sd})}] the type, \code{<object>} if none was
+  given.
+\item[\code{(slot-allocation \meta{sd})}] the allocation, a symbol.
+\item[\code{(init-value \meta{sd})}] two values: the init-value and
+  \code{\#t}, or \code{\#f} and \code{\#f} if there is none.
+\item[\code{(init-function \meta{sd})}, \code{(init-keyword \meta{sd})}]
+  the init-function or init-keyword, or \code{\#f}.
+\item[\code{(slot-value \meta{instance} \meta{sd})}] the value of the slot
+  in the instance. Its setter, used as
+  \code{(set! (slot-value \meta{instance} \meta{sd}) \meta{value})},
+  sets it, checking the slot's type. Neither works on a virtual slot.
+\end{description}
+
+\begin{dylan}
+(define-class <cell> (<object>)
+  (contents type: <integer> init-value: 1 init-keyword: contents:))
+(define c (make <cell> contents: 3))
+(size (slot-descriptors <cell>))       ; => 1
+(define sd (slot-descriptor c contents))
+(id? (slot-getter sd) contents)        ; => #t
+(id? (slot-setter sd) (setter contents)) ; => #t
+(slot-type sd)                         ; => {the class <integer>}
+(slot-allocation sd)                   ; => instance
+(init-value sd)                        ; => 1, #t
+(init-keyword sd)                      ; => contents:
+(init-function sd)                     ; => #f
+(slot-value c sd)                      ; => 3
+(set! (slot-value c sd) 4)             ; => 4
+(contents c)                           ; => 4
+(slot-descriptor c object-class)       ; => #f
+\end{dylan}
+
+\subsection{Copying and converting}
+
+\code{(shallow-copy \meta{object})} returns a new object with the same
+contents, made with \code{make} on \code{(class-for-copy \meta{object})},
+which by default is the object's class. The library has methods for
+collections. For other objects the 1992 manual leaves the method to the
+programmer, and that is so in the Common Lisp implementation; the compiler
+to C has a default method that copies any instance's slots.
+
+\code{(as \meta{class} \meta{object})} converts \meta{object} to
+\meta{class}, returning it unchanged if it is already an instance. Its
+methods for numbers, characters, symbols and collections are described in
+Chapters~\ref{ch:numbers} and~\ref{ch:collections}.
+
+\section{Singletons}\label{sec:classes-singletons}
+
+A singleton is a specializer for one object (Section~\ref{sec:functions-singletons}).
+\code{(singleton \meta{object})} and \code{(make <singleton> object:
+\meta{object})} both make one. With methods on singletons a program can give
+an individual object behavior of its own, and with \code{define-slot}
+(Section~\ref{sec:classes-define-slot}) state of its own, without defining a
+class for it. A method on a singleton is more specific than any method on
+the object's classes.
+
+%! lisp-only
+\begin{dylan}
+(define-class <window> (<object>))
+(define main-window (make <window>))
+(define-method title ((w <window>)) "untitled")
+(define-method title ((w (singleton main-window))) "Main")
+(title (make <window>))        ; => "untitled"
+(title main-window)            ; => "Main"
+\end{dylan}
+
+\noindent The compiler to C does not accept that program: there, a
+singleton used as a method's specializer must be of a literal, a class, or
+a variable whose definition gives it a literal value, because the
+specializer must be known when compiling
+(Section~\ref{sec:functions-singletons}). A singleton of an instance made at
+run time can still own slots, through \code{define-slot}, and singletons of
+symbols, keywords, numbers and characters work everywhere:
+
+\begin{dylan}
+(define-method plural ((word <symbol>))
+  (as <symbol> (concatenate (as <string> word) "s")))
+(define-method plural ((word (singleton 'mouse))) 'mice)
+(plural 'cat)                  ; => cats
+(plural 'mouse)                ; => mice
+(make <singleton> object: 4)   ; => {singleton 4}
+\end{dylan}
+
+\section{Sealing}\label{sec:classes-sealing}
+
+\index{seal@\code{seal}}\index{make-read-only@\code{make-read-only}}
+\code{(seal \meta{class})} seals a class: no subclass of it can be created
+any more, and \code{all-superclasses}, \code{direct-superclasses} and
+\code{slot-descriptors} return empty sequences for it. Sealing changes
+nothing about existing instances or methods. \code{(make-read-only
+\meta{class})} forbids changing the class's slots and superclasses without
+forbidding subclasses. Both return the class.
+
+\begin{dylan}
+(define-class <a> (<object>) (a-slot init-value: 1))
+(define-class <b> (<a>))
+(seal <b>)                     ; => {the class <b>}
+(all-superclasses <b>)         ; => ()
+(direct-superclasses <b>)      ; => ()
+(a-slot (make <b>))            ; => 1
+(instance? (make <b>) <a>)     ; => #t
+\end{dylan}
+
+\noindent In the Common Lisp implementation, defining a subclass of a sealed
+class is then an error. In the compiler to C all of a program's classes are
+created when it is compiled, before \code{seal} runs, so \code{seal} affects
+only what the reflective functions return afterwards; and there
+\code{make-read-only} on a class does exactly what \code{seal} does. A
+built-in class that cannot be subclassed, such as \code{<integer>} or
+\code{<list>}, is reported when compiling, if a program tries.
+
+\section{Changing classes at run time}\label{sec:classes-dynamic}
+
+The 1992 manual lets a running program change its classes: \code{add-slot}
+and \code{remove-slot} add and remove slots, returning slot descriptors;
+\code{(set! (direct-superclasses \meta{class}) \meta{list})} gives a class
+new superclasses; and \code{(make <class> superclasses: \meta{classes}
+debug-name: \meta{name})} creates a new class. Existing instances are
+updated to the new definition before they are next used.
+
+All of this works in the Common Lisp implementation. A program for the
+compiler to C is static: its classes and their slots are fixed when it is
+compiled. There \code{add-slot} and \code{remove-slot} are errors when
+compiling, \code{make} of \code{<class>} is an error when run, and
+\code{define-slot} on a class, which the compiler handles as part of the
+class's definition, is the way to add a slot (Section~\ref{sec:classes-define-slot}).
+
+%! lisp-only
+\begin{dylan}
+(define-class <pt> (<object>) (px init-value: 0))
+(define p (make <pt>))
+(define-generic-function weight (x))
+(define-generic-function (setter weight) (x v))
+(define sd (add-slot <pt> getter: weight setter: (setter weight)
+                          init-value: 3))
+(weight p)                     ; => 3
+(remove-slot <pt> sd)
+(weight p)                     ; => error: no applicable method
+(define c (make <class> superclasses: (list <object>) debug-name: '<dyn>))
+(instance? (make c) c)         ; => #t
+\end{dylan}
+
+\section{The built-in classes}\label{sec:classes-built-in}
+
+The classes below are those of the 1992 manual, as the compiler to C
+arranges them. Each class is shown under its first direct superclass; a
+class with more than one is marked with the others. Where the Common Lisp
+implementation differs, a note says so.
+
+%! skip
+\begin{dylan}
+<object>
+  <boolean>                          (compiler to C only; internal)
+  <number>
+    <complex>
+      <real>
+        <rational>
+          <integer>
+          <ratio>
+        <float>
+          <single-float>
+          <double-float>
+          <extended-float>
+      <rectangular-complex>          (Common Lisp only)
+  <collection>
+    <explicit-key-collection>
+      <mutable-explicit-key-collection>   (also <mutable-collection>)
+        <array>
+          <vector>                   (also <mutable-sequence>)
+            <simple-object-vector>
+            <stretchy-vector>
+            <byte-string>            (also <string>)
+            <unicode-string>         (also <string>)
+        <table>
+    <mutable-collection>
+      <mutable-sequence>             (also <sequence>)
+        <string>
+        <list>
+          <pair>
+          <empty-list>
+        <deque>
+    <sequence>
+      <range>
+  <function>
+    <generic-function>
+    <method>
+  <class>
+  <singleton>
+  <slot-descriptor>
+  <symbol>
+  <keyword>
+  <character>
+  <condition>
+    <serious-condition>
+      <error>
+        <simple-error>
+        <type-error>
+        <thread-error>               (compiler to C only)
+    <warning>
+      <simple-warning>
+    <restart>
+      <simple-restart>
+      <abort>
+\end{dylan}
+
+\noindent The compiler to C has further classes for its extensions
+(Chapter~\ref{ch:extensions}), all direct subclasses of \code{<object>}:
+the stream class \code{<stream>}, which has the subclass
+\code{<string-stream>}, and the thread classes \code{<thread>},
+\code{<lock>}, \code{<condition-variable>} and \code{<atomic-integer>}.
+\code{<lock>} has the subclass \code{<recursive-lock>}.
+
+Numbers are described in Chapter~\ref{ch:numbers}, collections in
+Chapter~\ref{ch:collections} and conditions in Chapter~\ref{ch:conditions}.
+
+\subsection{Which classes can be subclassed}
+
+A program may define subclasses of \code{<object>} and of the abstract
+classes meant to be extended: \code{<number>}, the collection classes
+\code{<collection>}, \code{<sequence>}, \code{<mutable-sequence>},
+\code{<explicit-key-collection>} and the others above them, the
+instantiable collection classes \code{<array>}, \code{<vector>},
+\code{<string>}, \code{<table>}, \code{<deque>}, \code{<stretchy-vector>}
+and \code{<range>}, and \code{<function>}, \code{<condition>},
+\code{<error>} and the other condition classes. These classes are
+\emph{sealed}, and subclassing them is an error in both implementations:
+the number classes below \code{<number>}, from \code{<complex>} down;
+the list classes \code{<list>}, \code{<pair>} and \code{<empty-list>}; and
+the concrete vector and string classes \code{<simple-object-vector>},
+\code{<byte-string>} and \code{<unicode-string>}.
+
+The compiler to C also refuses, when compiling, to use as a superclass the
+classes whose instances its runtime makes itself: \code{<method>},
+\code{<generic-function>}, \code{<class>}, \code{<singleton>},
+\code{<symbol>}, \code{<keyword>} and \code{<character>}. The Common Lisp
+implementation accepts these.

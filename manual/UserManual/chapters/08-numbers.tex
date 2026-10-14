@@ -1,0 +1,868 @@
+\chapter{Numbers, Characters and Symbols}\label{ch:numbers}
+
+This chapter describes Dylan's simplest objects: numbers, characters,
+symbols and keywords. It follows chapters 14, 15 and 16 of the 1992
+manual (\dylanbook{chapters 14--16}) and, for comparison, chapter~9
+(\dylanbook{chapter 9}). The two implementations agree on almost
+everything here, but numbers are where they differ most: the Common Lisp
+implementation has the unbounded integers and the complex numbers the
+manual describes, and the compiler to C has neither. Each difference is
+pointed out where it arises; appendix~\ref{app:differences} collects them.
+
+The examples show their results as comments, \code{; => value}. Where the
+two implementations print a result differently, both are shown.
+
+\section{The number classes}\label{sec:numbers-classes}
+
+\index{number classes}
+Numbers are arranged in a hierarchy of classes that follows the
+mathematical kinds of number. The abstract classes have no direct
+instances; they exist so that methods can specialize on them.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Class & Direct superclass & Kind \\
+\midrule
+\code{<number>}\index{<number>} & \code{<object>} & abstract \\
+\code{<complex>}\index{<complex>} & \code{<number>} & abstract \\
+\code{<real>}\index{<real>} & \code{<complex>} & abstract \\
+\code{<rational>}\index{<rational>} & \code{<real>} & abstract \\
+\code{<integer>}\index{<integer>} & \code{<rational>} & concrete \\
+\code{<ratio>}\index{<ratio>} & \code{<rational>} & concrete \\
+\code{<float>}\index{<float>} & \code{<real>} & abstract \\
+\code{<single-float>}\index{<single-float>} & \code{<float>} & concrete \\
+\code{<double-float>}\index{<double-float>} & \code{<float>} & concrete \\
+\code{<extended-float>}\index{<extended-float>} & \code{<float>} & concrete \\
+\code{<rectangular-complex>}\index{<rectangular-complex>} & \code{<complex>} & concrete; Common Lisp only \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent All of these classes but \code{<number>} are sealed: a program
+may not define new subclasses of them, though it may define methods on
+them. Every number
+belongs to exactly one of the concrete classes, which
+\code{object-class} reports:
+
+\begin{dylan}
+(object-class 3)        ; => <integer>
+(object-class 1/2)      ; => <ratio>
+(object-class (/ 4 2))  ; => <integer>
+(object-class 1.5)      ; => <double-float>
+(object-class 1.5s0)    ; => <single-float>
+\end{dylan}
+
+\noindent (The compiler to C prints a class as \code{\{the class
+<integer>\}} and the Common Lisp implementation as
+\code{\#[dylan-class <integer>]}; this chapter writes just the name.)
+
+\subsection{Integers}
+
+\index{integer!range}\index{overflow}
+An \code{<integer>} is a whole number. The two implementations differ in
+how large one may be:
+
+\begin{itemize}
+\item In the \textbf{Common Lisp implementation}, integers are unbounded,
+  as the manual requires: \code{(expt 2 100)} is
+  \code{1267650600228229401496703205376}, and an integer of any size is
+  still an \code{<integer>}.
+\item In the \textbf{compiler to C}, an integer is 63 bits, from
+  $-2^{62}$ to $2^{62}-1$, that is, from \code{-4611686018427387904} to
+  \code{4611686018427387903}. Every integer operation checks for
+  overflow, and a result outside that range signals an error rather than
+  giving a wrong answer:
+\end{itemize}
+
+\begin{dylan}
+(+ 4611686018427387903 1)
+; C:    Dylan error: integer overflow (integers are 63 bits)
+; Lisp: => 4611686018427387904
+\end{dylan}
+
+\noindent The error is an ordinary \code{<simple-error>} (chapter~\ref{ch:conditions}),
+so a program can handle it:
+
+\begin{dylan}
+(handler-case (* 4611686018427387903 2)
+  ((<error>) 'overflow))
+; C:    => overflow
+; Lisp: => 9223372036854775806
+\end{dylan}
+
+\noindent The check applies to every operation that makes an integer:
+\code{+}, \code{-}, \code{*}, \code{expt}, \code{ash}, \code{lcm}, and
+the numerators and denominators of ratios.
+
+\subsection{Ratios}
+
+\index{ratio}
+A \code{<ratio>} is an exact fraction, kept in lowest terms with a
+positive denominator. Dividing integers that do not divide evenly makes
+one, and a ratio whose denominator would be 1 is made an integer instead
+(\term{rational canonicalization}):
+
+\begin{dylan}
+(/ 1 3)         ; => 1/3
+(/ 6 3)         ; => 2
+(/ -6 4)        ; => -3/2
+(+ 1/3 1/6)     ; => 1/2
+(+ 1/2 1/2)     ; => 1
+(* 1/2 4)       ; => 2
+\end{dylan}
+
+\noindent In the compiler to C the numerator and the denominator are
+each limited to 63 bits, with the same overflow error as integers;
+intermediate results are computed exactly in 128 bits, so only a final
+result that does not fit is an error. In the Common Lisp implementation
+ratios are unbounded.
+
+\subsection{Floats}
+
+\index{float}
+The three float classes are the IEEE formats the manual names. Their
+representations are:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Class & Compiler to C & Common Lisp implementation \\
+\midrule
+\code{<single-float>} & C \code{float} (32 bits) & SBCL \code{single-float} \\
+\code{<double-float>} & C \code{double} (64 bits) & SBCL \code{double-float} \\
+\code{<extended-float>} & C \code{double}, a class of its own & no instances \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent \code{<double-float>} is the default: a float literal without
+an exponent marker, or with \code{e} or \code{d}, is a double. In the
+compiler to C an \code{<extended-float>} is a separate class with a
+double's precision; the only way to make one is \code{as} (see
+section~\ref{sec:numbers-conversion}). In the Common Lisp implementation,
+SBCL's long float is its double float, so \code{<extended-float>} has no
+instances at all, and \code{(as <extended-float> 1)} answers the
+\code{<double-float>} \code{1.0}.
+
+\subsection{Complex numbers}
+
+\index{complex numbers}
+The manual's \code{<complex>} numbers exist only in the Common Lisp
+implementation, where they are Common Lisp's complex numbers and belong
+to the class \code{<rectangular-complex>}:
+
+\begin{dylan}
+(make-rectangular 1 2)                   ; Lisp: => #c(1 2)
+(make <complex> real: 1 imag: 2)         ; Lisp: => #c(1 2)
+(* (make-rectangular 0 1)
+   (make-rectangular 0 1))               ; Lisp: => -1
+(abs (make-rectangular 3 4))             ; Lisp: => 5.0
+(sqrt -4)                                ; Lisp: => #c(0.0 2.0)
+\end{dylan}
+
+\noindent The init-keywords of \code{<complex>} are \code{real:},
+\code{imag:}, \code{magnitude:} and \code{angle:}, as in
+\dylanbook{chapter 14}; \code{make-rectangular} and \code{make-polar}
+make complex numbers from parts, and \code{real-part},
+\code{imag-part} and \code{angle} take them apart. As the manual
+requires, a complex number whose imaginary part is an exact zero is
+canonicalized to a real: \code{(make-rectangular 3 0)} is \code{3}.
+
+In the compiler to C, \code{<complex>} is kept, abstract, as the
+superclass of \code{<real>}, but it has no instances of its own.
+\code{make-rectangular} and \code{make-polar} accept only an exact zero
+for the imaginary part or the angle, and answer the real; anything else
+is an error, as is \code{make} of \code{<complex>} and the square root
+of a negative number:
+
+\begin{dylan}
+(make-rectangular 3 0)   ; => 3
+(make-rectangular 1 2)   ; C: error: complex numbers are not supported: 1 2
+(sqrt -4)                ; C: error: sqrt: the result would be complex: -4
+\end{dylan}
+
+\section{Writing numbers}\label{sec:numbers-literals}
+
+\index{number literals}
+Numbers are written as in Common Lisp:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Written & Value & Class \\
+\midrule
+\code{42}, \code{-7} & 42, $-7$ & \code{<integer>} \\
+\code{1.} & 1 & \code{<integer>} (a trailing point means decimal) \\
+\code{\#xFF}, \code{\#b101}, \code{\#o17} & 255, 5, 15 & \code{<integer>} \\
+\code{6/4} & \code{3/2} & \code{<ratio>} \\
+\code{1.5}, \code{.5}, \code{-0.0} & & \code{<double-float>} \\
+\code{1e3}, \code{2d0} & \code{1000.0}, \code{2.0} & \code{<double-float>} \\
+\code{1.5s2}, \code{1.5f2} & \code{150.0s0} & \code{<single-float>} \\
+\code{1.5l0} & \code{1.5} & \code{<double-float>} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The exponent markers \code{e} and \code{d} make a double,
+\code{s} and \code{f} a single. The marker \code{l} also makes a double,
+in both implementations; there is no way to write an
+\code{<extended-float>} literal. A ratio is written with no spaces,
+\code{numerator/denominator}, and is reduced as it is read.
+
+\section{Arithmetic}\label{sec:numbers-arithmetic}
+
+\index{arithmetic}\index{+}\index{-}\index{*}\index{/}
+The four arithmetic functions take any number of arguments, as in
+\dylanbook{chapter 14}:
+
+\begin{dylan}
+(+)             ; => 0
+(*)             ; => 1
+(+ 1 2 3)       ; => 6
+(- 5)           ; => -5         the additive inverse
+(- 10 1 2 3)    ; => 4          10 - 1 - 2 - 3
+(/ 2)           ; => 1/2        the multiplicative inverse
+(/ 0.5)         ; => 2.0
+(/ 60 2 3)      ; => 10         60 / 2 / 3
+(/ 7 2)         ; => 7/2
+(/ 7.0 2)       ; => 3.5
+\end{dylan}
+
+\noindent \code{-} and \code{/} need at least one argument. With several
+arguments, each function combines them from left to right by calling
+\term{binary+}, \code{binary-}\index{binary-}, \code{binary*}\index{binary*}
+or \code{binary/}\index{binary/}; with one, \code{-} calls
+\code{unary-}\index{unary-} and \code{/} calls \code{unary/}\index{unary/}.
+The variadic functions themselves are methods and cannot be extended,
+but the binary and unary ones are generic functions: to make
+\code{+} work on a class of your own, add a method to \code{binary+}.
+
+\begin{dylan}
+(define-class <money> (<object>)
+  (cents init-keyword: cents:))
+
+(define-method binary+ ((a <money>) (b <money>))
+  (make <money> cents: (+ (cents a) (cents b))))
+
+(cents (+ (make <money> cents: 150)
+          (make <money> cents: 275)
+          (make <money> cents: 5)))      ; => 430
+\end{dylan}
+
+\index{division by zero}
+Dividing by an exact or a floating zero is an error in both
+implementations, as design note~24 requires; so is \code{floor/},
+\code{modulo} or any of the division family with a zero divisor:
+
+\begin{dylan}
+(handler-case (/ 1 0)   ((<error>) 'caught))   ; => caught
+(handler-case (/ 1.0 0) ((<error>) 'caught))   ; => caught
+\end{dylan}
+
+\subsection{Contagion}
+
+\index{contagion}
+When the arguments of an arithmetic function are of different classes,
+the rules are Common Lisp's (\dylanbook{chapter 14}): an operation
+between a rational and a float answers a float of the float's format,
+and an operation between two floats answers the wider format (single is
+narrower than double, double than extended). Rational results are
+canonicalized. Because a call with several arguments is a chain of
+binary calls, the conversions happen from left to right.
+
+\begin{dylan}
+(+ 1 2.0)          ; => 3.0
+(+ 1/2 0.5)        ; => 1.0
+(* 2 0.5s0)        ; => 1.0s0 (C)   1.0f0 (Lisp)
+(+ 1.0s0 1.0d0)    ; => 2.0         a <double-float>
+(* 1.5s0 1.5d0)    ; => 2.25        a <double-float>
+\end{dylan}
+
+\begin{notebox}
+The compiler to C converts a rational to the float's format by way of a
+C \code{double}, so a single-float result can differ from the Common Lisp
+implementation's in the last place: \code{(+ 1/3 0.5s0)} is
+\code{0.8333333s0} in compiled code and \code{0.8333334f0} in the Common
+Lisp implementation.
+\end{notebox}
+
+\section{Comparing numbers}\label{sec:numbers-comparison}
+
+\index{comparison}\index{=}\index{<}
+The comparison functions of \dylanbook{chapter 9} take two or more
+arguments and compare them pairwise from left to right:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Function & True when \\
+\midrule
+\code{(= a b c ...)} & every argument is \code{=} to the next \\
+\code{(/= a b)} & the two arguments are not \code{=} (exactly two) \\
+\code{(< a b c ...)} & each argument is less than the next \\
+\code{(> a b c ...)} & each argument is greater than the next \\
+\code{(<= a b c ...)} & each argument is less than or equal to the next \\
+\code{(>= a b c ...)} & each argument is greater than or equal to the next \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{dylan}
+(< 1 2 3)       ; => #t
+(< 1 3 2)       ; => #f
+(<= 1 1 2)      ; => #t
+(>= 3 3 1)      ; => #t
+(= 3 3 3)       ; => #t
+(/= 1 2)        ; => #t
+\end{dylan}
+
+\noindent Numbers are compared by mathematical value, whatever their
+classes. A float is compared with a rational exactly (\term{rational
+contagion for comparisons}): the float's exact value is used, not a
+rounded one. Since the double nearest $0.1$ is not exactly $1/10$, they
+are not \code{=}:
+
+\begin{dylan}
+(= 1 1.0)                     ; => #t
+(= 1/2 0.5)                   ; => #t
+(= 0.1 1/10)                  ; => #f
+(< 1/3 0.3333333333333333)    ; => #f
+\end{dylan}
+
+\index{id?}
+\code{=} is not \code{id?}. Two numbers of the same class and value are
+\code{id?}; numbers of different classes never are, even when they are
+\code{=}:
+
+\begin{dylan}
+(id? 1 1)       ; => #t
+(id? 1 1.0)     ; => #f
+\end{dylan}
+
+\noindent The comparison functions are methods; to extend them to a
+class of your own, add methods to the generic functions
+\code{binary=}\index{binary=} and \code{binary<}\index{binary<}, on which
+all six are built (section~\ref{sec:collections-equality} shows an
+example).
+
+\section{Predicates}\label{sec:numbers-predicates}
+
+\index{predicates!numeric}
+These generic functions test a number and answer \code{\#t} or
+\code{\#f}:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Function & Argument & True when \\
+\midrule
+\code{zero?}\index{zero?} & a number & it is zero (\code{0}, \code{0.0}, \code{-0.0}) \\
+\code{positive?}\index{positive?} & a real & it is greater than zero \\
+\code{negative?}\index{negative?} & a real & it is less than zero \\
+\code{odd?}\index{odd?} & an integer & it is odd \\
+\code{even?}\index{even?} & an integer & it is even \\
+\code{integral?}\index{integral?} & a number & it has an integer value \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{dylan}
+(zero? 0.0)         ; => #t
+(positive? -1)      ; => #f
+(negative? -1/2)    ; => #t
+(odd? 3)            ; => #t
+(even? 3)           ; => #f
+(integral? 3)       ; => #t
+(integral? 2.0)     ; => #t
+(integral? 2.5)     ; => #f
+(integral? 1/2)     ; => #f
+\end{dylan}
+
+\noindent To ask which kind of number an object is, use \code{instance?}
+with the classes of section~\ref{sec:numbers-classes}:
+
+\begin{dylan}
+(instance? 3 <rational>)     ; => #t
+(instance? 1/2 <rational>)   ; => #t
+(instance? 1.5 <real>)       ; => #t
+(instance? 1.5 <integer>)    ; => #f
+\end{dylan}
+
+\section{The division family}\label{sec:numbers-division}
+
+\index{division}
+Dylan has the rounding and division functions of Common Lisp.
+Each of the one-argument functions rounds a real to an integer and
+answers two values: the integer and the remainder, which is the
+difference between the argument and the integer. They differ in which
+way they round:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Function & Rounds toward \\
+\midrule
+\code{floor}\index{floor} & negative infinity \\
+\code{ceiling}\index{ceiling} & positive infinity \\
+\code{truncate}\index{truncate} & zero \\
+\code{round}\index{round} & the nearest integer; a tie goes to the even one \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{dylan}
+(floor 7/2)      ; => 3 and 1/2
+(floor -7/2)     ; => -4 and 1/2
+(ceiling 2.5)    ; => 3 and -0.5
+(truncate -2.7)  ; => -2 and -0.7000000000000002
+(round 2.5)      ; => 2 and 0.5       the tie goes to 2, which is even
+(round 3.5)      ; => 4 and -0.5
+(round -2.5)     ; => -2 and -0.5
+\end{dylan}
+
+\noindent Use \code{bind} to receive both values (chapter~\ref{ch:control});
+where one value is wanted, the first is used:
+
+\begin{dylan}
+(bind ((q r (floor 7/2)))
+  (list q r))                ; => (3 1/2)
+(+ (round 7/2) 1)            ; => 5
+\end{dylan}
+
+\index{floor/}\index{ceiling/}\index{round/}\index{truncate/}
+The two-argument functions \code{floor/}, \code{ceiling/},
+\code{round/} and \code{truncate/} divide their first argument by their
+second, round the quotient as the one-argument function of the same name
+does, and answer the rounded quotient and the remainder:
+
+\begin{dylan}
+(floor/ 7 2)        ; => 3 and 1
+(floor/ -7 2)       ; => -4 and 1
+(ceiling/ 7 2)      ; => 4 and -1
+(truncate/ -7 2)    ; => -3 and -1
+(round/ 7 2)        ; => 4 and -1
+(round/ 5 2)        ; => 2 and 1
+(floor/ 7.5 2)      ; => 3 and 1.5
+\end{dylan}
+
+\index{modulo}\index{remainder}
+\code{modulo} answers the remainder of \code{floor/}, which has the sign
+of the divisor; \code{remainder} answers the remainder of
+\code{truncate/}, which has the sign of the dividend:
+
+\begin{dylan}
+(modulo 7 2)        ; => 1
+(modulo -7 2)       ; => 1
+(modulo 7 -2)       ; => -1
+(remainder 7 2)     ; => 1
+(remainder -7 2)    ; => -1
+(remainder 7 -2)    ; => 1
+\end{dylan}
+
+\section{gcd, lcm, abs, min and max}\label{sec:numbers-misc}
+
+\index{gcd}\index{lcm}
+\code{gcd} answers the greatest common divisor of its integer arguments
+and \code{lcm} their least common multiple. With no arguments they
+answer \code{0} and \code{1}; with one, the argument. They are built on
+the generic functions \code{binary-gcd}\index{binary-gcd} and
+\code{binary-lcm}\index{binary-lcm}, which programs can extend.
+
+\begin{dylan}
+(gcd)            ; => 0
+(gcd 12 18)      ; => 6
+(gcd 12 18 8)    ; => 2
+(gcd -12 18)     ; => 6
+(lcm)            ; => 1
+(lcm 4 6)        ; => 12
+(lcm 4 6 10)     ; => 60
+(lcm 0 5)        ; => 0
+\end{dylan}
+
+\index{abs}
+\code{abs} answers the absolute value of a number (for a complex number,
+in the Common Lisp implementation, its magnitude); \code{magnitude}\index{magnitude}
+is the same for a real.
+
+\begin{dylan}
+(abs -5)       ; => 5
+(abs -5/3)     ; => 5/3
+(abs -2.5)     ; => 2.5
+(magnitude -3) ; => 3
+\end{dylan}
+
+\index{min}\index{max}
+\code{min} and \code{max} take one or more reals and answer the least or
+the greatest of them, comparing with \code{binary<}. The answer is one
+of the arguments, not converted:
+
+\begin{dylan}
+(min 3 1 2)       ; => 1
+(max 3 1 2)       ; => 3
+(max 1/2 0.4)     ; => 1/2
+(max 1 2.0)       ; => 2.0
+(min 3 1.5s0)     ; => 1.5s0 (C)   1.5f0 (Lisp)
+(min 2)           ; => 2
+\end{dylan}
+
+\noindent When several arguments are equal the two implementations may
+choose different ones: \code{(min 1 1.0)} is \code{1} in the compiler to
+C, which keeps the first of equal arguments, and \code{1.0} in the
+Common Lisp implementation, which uses Common Lisp's \code{min}.
+Because \code{min} and \code{max} use \code{binary<}, they work on any
+objects \code{<} can compare, characters among them:
+\code{(max \#\textbackslash{}a \#\textbackslash{}z)} is \code{\#\textbackslash{}z}.
+
+\section{Exponentials and trigonometry}\label{sec:numbers-transcendental}
+
+\index{sqrt}\index{exp}\index{log}\index{expt}
+\index{trigonometric functions}
+The irrational functions of \dylanbook{chapter 14} are defined as in
+Common Lisp:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Function & Answers \\
+\midrule
+\code{(sqrt x)} & the square root of $x$ \\
+\code{(exp x)} & $e^x$ \\
+\code{(log x)} & the natural logarithm of $x$ \\
+\code{(expt x y)} & $x^y$ \\
+\code{(sin x)}, \code{(cos x)}, \code{(tan x)} & the trigonometric functions, $x$ in radians \\
+\code{(asin x)}, \code{(acos x)}, \code{(atan x)} & their inverses \\
+\code{(atan2 y x)} & the angle of the point $(x, y)$, from $-\pi$ to $\pi$ \\
+\code{(sinh x)}, \code{(cosh x)}, \code{(tanh x)} & the hyperbolic functions \\
+\code{(asinh x)}, \code{(acosh x)}, \code{(atanh x)} & their inverses \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent For a rational argument they answer a \code{<double-float>}; for
+a float argument, a float of the same format. So \code{(sqrt 25)} is
+\code{5.0}, not \code{5}: the manual's examples show these functions
+answering floats, and so do both implementations.
+
+\begin{dylan}
+(sqrt 25)        ; => 5.0
+(sqrt 2)         ; => 1.4142135623730951
+(sqrt 2.0s0)     ; => 1.4142135s0 (C)   1.4142135f0 (Lisp)
+(exp 1)          ; => 2.718281828459045
+(log 1)          ; => 0.0
+(log 100)        ; => 4.605170185988092
+(sin 0)          ; => 0.0
+(cos 0)          ; => 1.0
+(atan 1)         ; => 0.7853981633974483
+(atan2 1 1)      ; => 0.7853981633974483
+(atan2 -1 -1)    ; => -2.356194490192345
+(asin 1)         ; => 1.5707963267948966
+(acosh 1)        ; => 0.0
+\end{dylan}
+
+\noindent \code{expt} is exact when its base is rational and its power
+is an integer, and answers a float otherwise:
+
+\begin{dylan}
+(expt 2 10)      ; => 1024
+(expt 2 -2)      ; => 1/4
+(expt 2/3 3)     ; => 8/27
+(expt 10 0)      ; => 1
+(expt 2.0 3)     ; => 8.0
+(expt 4 1/2)     ; => 2.0
+(expt 2.0 0.5)   ; => 1.4142135623730951
+\end{dylan}
+
+\noindent Where the true result is not a real number, or not finite, the
+implementations behave differently:
+
+\begin{center}
+\begin{tabular}{lp{0.25\textwidth}p{0.43\textwidth}}
+\toprule
+Expression & Compiler to C & Common Lisp implementation \\
+\midrule
+\code{(sqrt -4)} & error: the result would be complex & \code{\#c(0.0 2.0)} \\
+\code{(log 0)} & error: the argument must be positive & error (Lisp's division by zero) \\
+\code{(exp 1000)} & \code{+infinity} & error (Lisp's floating-point overflow) \\
+\code{(expt 2 100)} & error: integer overflow & \code{1267650600228229401496703205376} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent An error from Common Lisp's arithmetic reaches a Dylan
+handler as a \code{<simple-error>} whose message begins
+\code{Lisp condition:} (chapter~\ref{ch:conditions}).
+
+\section{Integers as bits}\label{sec:numbers-logical}
+
+\index{logical operations}
+These functions treat an integer as an infinite two's-complement string
+of bits, as Common Lisp does. \code{logior}, \code{logxor},
+\code{logand} and \code{logeqv} take any number of integers; with none,
+they answer their identities, \code{0}, \code{0}, \code{-1} and
+\code{-1}. The rest take exactly the arguments shown.
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Function & Answers \\
+\midrule
+\code{(logior i ...)}\index{logior} & inclusive or \\
+\code{(logxor i ...)}\index{logxor} & exclusive or \\
+\code{(logand i ...)}\index{logand} & and \\
+\code{(logeqv i ...)}\index{logeqv} & equivalence (exclusive nor) \\
+\code{(lognot i)}\index{lognot} & the complement \\
+\code{(lognand i j)}\index{lognand} & \code{(lognot (logand i j))} \\
+\code{(lognor i j)}\index{lognor} & \code{(lognot (logior i j))} \\
+\code{(logandc1 i j)}\index{logandc1} & \code{(logand (lognot i) j)} \\
+\code{(logandc2 i j)}\index{logandc2} & \code{(logand i (lognot j))} \\
+\code{(logorc1 i j)}\index{logorc1} & \code{(logior (lognot i) j)} \\
+\code{(logorc2 i j)}\index{logorc2} & \code{(logior i (lognot j))} \\
+\code{(logbit? index i)}\index{logbit?} & whether bit \meta{index} of \meta{i} is 1 \\
+\code{(ash i count)}\index{ash} & \meta{i} shifted left \meta{count} bits (right if negative) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{dylan}
+(logior 1 2 4)      ; => 7
+(logand 12 10)      ; => 8
+(logxor 12 10)      ; => 6
+(logeqv 12 10)      ; => -7
+(lognot 5)          ; => -6
+(lognand 12 10)     ; => -9
+(lognor 12 10)      ; => -15
+(logandc1 12 10)    ; => 2
+(logandc2 12 10)    ; => 4
+(logorc1 12 10)     ; => -5
+(logorc2 12 10)     ; => -3
+(logbit? 0 5)       ; => #t
+(logbit? 1 5)       ; => #f
+(ash 1 10)          ; => 1024
+(ash 1024 -3)       ; => 128
+(ash -8 -1)         ; => -4
+\end{dylan}
+
+\noindent In the compiler to C a shift whose result does not fit in 63
+bits is an overflow error: \code{(ash 1 70)} is an error there and
+\code{1180591620717411303424} in the Common Lisp implementation.
+
+\section{Parts of numbers}\label{sec:numbers-parts}
+
+\index{numerator}\index{denominator}\index{rationalize}
+\code{numerator} and \code{denominator} answer the parts of a rational
+in lowest terms; an integer's denominator is 1. For a float, both
+implementations answer the parts of the fraction the float holds exactly,
+as floats:
+
+\begin{dylan}
+(numerator 6/4)       ; => 3
+(denominator 6/4)     ; => 2
+(denominator 5)       ; => 1
+(numerator 1.5)       ; => 3.0
+(denominator 1.5)     ; => 2.0
+(denominator 0.1)     ; => 3.602879701896397e16
+\end{dylan}
+
+\noindent The last line shows that the double nearest $0.1$ is a fraction
+with a large power of two below it. \code{rationalize} answers the
+simplest rational that is within the float's precision of it, which is
+usually the fraction you meant:
+
+\begin{dylan}
+(rationalize 0.5)     ; => 1/2
+(rationalize 0.1)     ; => 1/10
+(rationalize 0.333)   ; => 333/1000
+(rationalize 1/3)     ; => 1/3
+\end{dylan}
+
+\index{real-part}\index{imag-part}\index{angle}
+\code{real-part}, \code{imag-part} and \code{angle} work on reals in
+both implementations (and on complex numbers in the Common Lisp
+implementation): a real is its own real part, its imaginary part is
+\code{0}, and its angle is zero for a non-negative number and $\pi$ for a
+negative one.
+
+\begin{dylan}
+(real-part 5)    ; => 5
+(imag-part 5)    ; => 0
+(angle 5)        ; => 0 (C)   0.0 (Lisp)
+(angle -5)       ; => 3.141592653589793
+\end{dylan}
+
+\section{Converting numbers}\label{sec:numbers-conversion}
+
+\index{as!numbers}
+\code{as} converts a real to a float of a given format:
+
+\begin{dylan}
+(as <float> 1/2)           ; => 0.5        a <double-float>
+(as <double-float> 1)      ; => 1.0
+(as <single-float> 1/3)    ; => 0.33333334s0 (C)   0.33333334f0 (Lisp)
+(as <extended-float> 1)    ; => 1.0l0 (C)   1.0, a <double-float> (Lisp)
+\end{dylan}
+
+\noindent To go from a float to an integer, round it with \code{floor},
+\code{ceiling}, \code{round} or \code{truncate}; to go to a rational,
+use \code{rationalize}, or \code{numerator} and \code{denominator}. The
+compiler to C accepts \code{as} only for these float conversions (and
+for a number already of the class asked for): \code{(as <integer> 3.0)}
+and \code{(as <rational> 0.5)} are errors there. The Common Lisp
+implementation also converts a float with an integer value to an
+integer, \code{(as <integer> 3.0)} answering \code{3}, and any float to
+its exact rational, \code{(as <rational> 0.5)} answering \code{1/2}; it
+signals an error for \code{(as <integer> 2.5)}.
+
+\section{How floats print}\label{sec:numbers-printing}
+
+\index{float!printing}
+Both implementations print a float with the fewest digits that read back
+as the same float, so a float printed and read again is the same float.
+They differ in when they switch to exponential notation and in how they
+mark a single-float:
+
+\begin{itemize}
+\item The \textbf{compiler to C} prints a float in fixed notation when
+  its magnitude is at least $10^{-5}$ and less than $10^{16}$, and
+  otherwise with an exponent. A single-float ends in \code{s0} (or
+  \code{s}\meta{n} with an exponent), an extended-float in \code{l0}. A
+  double's exponent is written with \code{e}. An infinity prints as
+  \code{+infinity} or \code{-infinity} and a NaN as \code{+nan}; neither
+  can be read back.
+\item The \textbf{Common Lisp implementation} prints as Common Lisp does
+  with double-float the default format: fixed notation from $10^{-3}$ up
+  to $10^{7}$, an exponent otherwise; a single-float ends in \code{f0}.
+\end{itemize}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Value & Compiler to C & Common Lisp implementation \\
+\midrule
+\code{0.1} & \code{0.1} & \code{0.1} \\
+\code{(/ 1.0 3)} & \code{0.3333333333333333} & \code{0.3333333333333333} \\
+\code{100.0} & \code{100.0} & \code{100.0} \\
+\code{1234567.0} & \code{1234567.0} & \code{1234567.0} \\
+\code{123456789.0} & \code{123456789.0} & \code{1.23456789e8} \\
+\code{1e10} & \code{10000000000.0} & \code{1.0e10} \\
+\code{1e15} & \code{1000000000000000.0} & \code{1.0e15} \\
+\code{1e16} & \code{1.0e16} & \code{1.0e16} \\
+\code{0.001} & \code{0.001} & \code{0.001} \\
+\code{1e-4} & \code{0.0001} & \code{1.0e-4} \\
+\code{1e-7} & \code{1.0e-7} & \code{1.0e-7} \\
+\code{(/ 2.0s0 3)} & \code{0.6666667s0} & \code{0.6666667f0} \\
+\code{(* 1.5s0 2)} & \code{3.0s0} & \code{3.0f0} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Integers print in decimal and ratios as
+\code{numerator/denominator}, the same in both. Printing in general is
+the subject of chapter~\ref{ch:printing}.
+
+\section{Characters}\label{sec:characters}
+
+\index{<character>}\index{character}
+A \code{<character>} is written \code{\#\textbackslash{}} followed by the
+character, or by one of the names \code{space}, \code{newline},
+\code{tab}, \code{page}, \code{rubout} and \code{backspace}:
+
+\begin{dylan}
+(list #\a #\A #\( #\space #\newline #\tab)
+; => (#\a #\A #\( #\space #\newline #\tab)
+\end{dylan}
+
+\index{as!characters}
+A character's integer is its Unicode code point, in both
+implementations. \code{as} converts in either direction
+(\dylanbook{chapter 16}):
+
+\begin{dylan}
+(as <integer> #\A)        ; => 65
+(as <integer> #\newline)  ; => 10
+(as <character> 97)       ; => #\a
+\end{dylan}
+
+\index{as-uppercase}\index{as-lowercase}
+\code{as-uppercase} and \code{as-lowercase} answer the other case of a
+character, or the character itself if it has no other case. Both
+implementations follow Unicode, not only ASCII: the uppercase of Greek
+small lambda, code point 955, is capital lambda, 923.
+
+\begin{dylan}
+(as-uppercase #\a)    ; => #\A
+(as-lowercase #\Z)    ; => #\z
+(as-uppercase #\1)    ; => #\1
+(as <integer> (as-uppercase (as <character> 955)))   ; => 923
+\end{dylan}
+
+\index{character!comparison}
+Characters compare by code point, so case is significant and every
+capital ASCII letter is less than every small one:
+
+\begin{dylan}
+(< #\a #\b)       ; => #t
+(< #\A #\a)       ; => #t
+(> #\a #\B)       ; => #t
+(= #\a #\A)       ; => #f
+(id? #\a #\a)     ; => #t
+\end{dylan}
+
+\noindent \code{as-uppercase} and \code{as-lowercase} also work on whole
+strings (section~\ref{sec:collections-strings}), which is how to compare
+strings without regard to case. A string of characters that do not all
+fit in eight bits is a \code{<unicode-string>} in the compiler to C; in
+the Common Lisp implementation every string is a \code{<byte-string>},
+which holds any character.
+
+\section{Symbols and keywords}\label{sec:symbols}
+
+\index{<symbol>}\index{<keyword>}\index{symbol}\index{keyword}
+Symbols and keywords are objects identified by their names
+(\dylanbook{chapter 15}). A symbol is written as a name, quoted when it
+is to be a value rather than a variable: \code{'apple}. A keyword is a
+name followed by a colon, \code{apple:}, and evaluates to itself; the
+colon is not part of its name. Symbols name variables; keywords name
+keyword arguments and slot options.
+
+\begin{dylan}
+(object-class 'apple)     ; => <symbol>
+(object-class apple:)     ; => <keyword>
+\end{dylan}
+
+\index{symbol!case}
+Names are not case sensitive: \code{Foo}, \code{foo} and \code{FOO} are
+one symbol, and two symbols with the same name are always \code{id?}.
+A symbol does remember a spelling, the one it was first written with,
+and prints that way. Converting between symbols, keywords and strings is
+done with \code{as}:
+
+\begin{dylan}
+(list 'Hello 'hello 'HELLO)           ; => (Hello Hello Hello)
+(id? 'Hello 'HELLO)                   ; => #t
+(as <symbol> "hello")                 ; => Hello
+(as <string> 'hello)                  ; => "Hello"
+(as <keyword> "colour")               ; => colour:
+(as <string> 'colour:)                ; => "colour"
+(as <symbol> "two words")             ; => two words
+\end{dylan}
+
+\noindent The spelling remembered is the first anywhere, and the
+implementation's own names come first. In the compiler to C that
+includes every name the library uses, so \code{'Size} prints as
+\code{size} and \code{Test:} as \code{test:} there, while the Common
+Lisp implementation, which predefines fewer names, prints them
+\code{Size} and \code{Test:}. Either way \code{(id? 'size 'Size)} is
+\code{\#t}; only the printing differs.
+
+\index{symbol!comparison}
+Symbols are compared only by identity: \code{(= 'abc 'ABC)} and
+\code{(id? 'abc 'ABC)} are both \code{\#t}, and there is no ordering, so
+\code{(< 'a 'b)} is an error (no applicable method for
+\code{binary<}). To sort symbols, sort their names:
+
+\begin{dylan}
+(sort '(pear apple fig)
+      test: (method (a b) (< (as <string> a) (as <string> b))))
+; => (apple fig pear)
+\end{dylan}

@@ -1,0 +1,308 @@
+\chapter{Introduction}\label{ch:intro}
+
+This book is a user manual for Dylan, the object-oriented dynamic language
+that Apple Computer described in 1992, and for the two implementations of
+it that this project provides: an interactive implementation written in
+Common Lisp and a compiler that translates Dylan programs into C. It
+teaches the language from the beginning, explains how to use each
+implementation, and documents where the implementations depart from the
+1992 definition.
+
+This chapter describes the language in broad terms, introduces the two
+implementations and when to choose each, gives a short history of the
+project, and explains how the rest of the book is organized and what its
+typographic conventions mean.
+
+\section{What Dylan is}\label{sec:intro-what}
+
+\index{Dylan!1992 definition}
+Dylan was designed at Apple Computer's Eastern Research and Technology
+laboratory and published in April 1992 as \emph{Dylan: an object-oriented
+dynamic language}. That book, which this manual calls the \term{DIRM}, is
+the standard both implementations follow. The language it defines is the
+original Dylan, written in a fully parenthesized \term{prefix syntax} like
+that of Scheme and Common Lisp. Later versions of Dylan moved to an infix
+syntax that looks more like Pascal or C; that later language is not the
+subject of this book. Everything here is the 1992 prefix language.
+
+A short piece of Dylan shows its flavor:
+
+\begin{dylan}
+(define-class <point> (<object>)
+  (x init-value: 0 init-keyword: x:)
+  (y init-value: 0 init-keyword: y:))
+
+(define-method norm ((p <point>))
+  (sqrt (+ (* (x p) (x p)) (* (y p) (y p)))))
+
+(norm (make <point> x: 3 y: 4))   ; => 5.0
+\end{dylan}
+
+The language's main ideas are few, and they fit together closely.
+
+\paragraph{Objects all the way down.} Every value in Dylan is an object,
+and every object is an instance of a class. Integers, characters,
+strings, lists, functions and classes themselves are all objects, with
+classes such as \code{<integer>}, \code{<string>} and \code{<class>}.
+There are no ``primitive'' values that stand outside the object system,
+so any value can be passed to any function, stored in any collection, and
+used to select a method.
+
+\paragraph{Generic functions and multiple dispatch.}\index{generic function}
+In most object-oriented languages a method belongs to a class and is
+chosen by the class of a single receiver object. In Dylan, methods belong
+to \term{generic functions}. A generic function is an ordinary function
+that holds a set of methods; when it is called, it looks at the classes of
+\emph{all} of its required arguments and runs the most specific method that
+applies. This is called \term{multiple dispatch}. A method may also be
+specialized on one particular object (a \term{singleton}) rather than on a
+class.
+
+\paragraph{Classes with multiple inheritance.} A class names one or more
+superclasses and describes \term{slots}, the named fields each instance
+holds. Dylan defines the getter and setter functions for each slot
+automatically, and those functions are themselves generic functions, so
+slot access and method calls look exactly alike. A class may inherit from
+several superclasses at once.
+
+\paragraph{First-class functions.} Functions are objects. They can be
+created anonymously with \code{method}, passed as arguments, returned as
+results, and stored in data structures. A function created inside another
+function remembers the variables around it (it is a \term{closure}). The
+library includes a set of functional operations, such as \code{curry},
+\code{compose} and \code{complement}, that build new functions from old
+ones.
+
+\paragraph{Conditions.} Errors and other exceptional situations are
+represented by \term{condition} objects, which are instances of classes
+such as \code{<error>} and \code{<warning>}. A program signals a condition
+and a dynamically established handler decides what to do with it: return
+a value, take a non-local exit, or decline and let an outer handler try.
+Because conditions are objects, handlers select them by class, just as
+methods do.
+
+\paragraph{Collections.} Dylan has a rich, uniform library of collections:
+lists, vectors, strings, stretchy vectors, deques, ranges, arrays and
+tables. All of them share one iteration protocol, so the same operations
+(\code{map}, \code{reduce}, \code{do}, \code{choose}, \code{member?},
+\code{for-each} and the rest) work on every kind of collection, and new
+collection classes can join in by implementing the protocol.
+
+\paragraph{A dynamic language that can be compiled well.} Dylan programs
+need no type declarations, and in the 1992 definition classes and methods
+can be added and changed while a program runs. The language also offers
+ways to say that parts of a program will not change, such as sealing a
+class, so that a compiler can produce fast code. The two implementations
+described here sit at the two ends of this range.
+
+\section{The two implementations}\label{sec:intro-implementations}
+
+\index{implementations!choosing}
+This project provides two separate implementations of the same language.
+They share the reader (the code that turns program text into data), and
+they are tested against the same examples from the DIRM, but otherwise
+they are independent programs.
+
+\paragraph{The interactive implementation.}\index{interactive implementation}
+The first is written in Common Lisp and runs inside SBCL. Its source is in
+\file{src/}, and this book calls it \emph{the interactive
+implementation} or \emph{the Common Lisp implementation}. It is not an
+interpreter: it compiles each Dylan form into Common Lisp as the form is
+entered and lets the Lisp compiler run it. You use it in three ways: at an
+interactive read-eval-print loop started with \code{(dylan:rep)}; by
+compiling a file of Dylan into a file of Common Lisp with
+\code{dylan:compile-file}; and by loading such compiled files into a Lisp
+that runs them. It implements the whole language of the DIRM, including
+the parts that let a program change its own classes and generic functions
+as it runs (\code{add-method}, \code{remove-method}, \code{add-slot} and
+their relatives), and it has arbitrarily large integers, because Common
+Lisp does.
+
+\paragraph{The compiler to C.}\index{dylanc}
+The second is a compiler, \cmd{bin/dylanc}, that translates a complete
+Dylan program into C and then runs a C compiler to produce a native
+executable. Its source is in \file{compiler/}, and its run-time support is
+in \file{runtime/}: a small runtime written in C and the Dylan library,
+itself written in Dylan. The compiled programs have proper tail calls,
+generic dispatch compiled to decision trees, type inference, inlining,
+unboxed floating-point arithmetic, the Boehm-Demers-Weiser garbage
+collector, and real operating-system threads. The compiler also adds
+three things the 1992 language does not have: macros, threads, and
+streams with \code{format}.
+
+The price of this speed is that the compiler treats a program as
+\emph{static}. Everything the program defines must be visible when it is
+compiled, and the program cannot change its classes or generic functions
+while it runs, cannot evaluate or load new code, and has no bignums or
+complex numbers: its integers are 63 bits wide, and overflow is an error.
+Chapter~\ref{ch:dylanc} and Appendix~\ref{app:differences} describe these
+restrictions in full.
+
+\paragraph{Which to use.} The two are meant to be used together.
+
+\begin{itemize}
+\item Use the \textbf{interactive implementation} to learn the language, to
+  try out ideas, to explore the library, and to develop code a piece at a
+  time. You type a form and see its value at once. It is also the right
+  choice for programs that really do need to redefine classes or add
+  methods while they run, or that need integers larger than 63 bits.
+\item Use the \textbf{compiler} when you want a standalone program: a fast
+  executable that starts instantly, needs no Lisp to run, and can use
+  threads. A program developed interactively can normally be compiled
+  unchanged, provided it stays within the static-program restrictions.
+\end{itemize}
+
+Throughout this book, examples work in both implementations unless the
+text says otherwise. Where the two differ, for instance in how they print
+an object that has no readable printed form, the text points it out.
+
+\section{A short history}\label{sec:intro-history}
+
+\index{Thomas}
+In 1992, shortly after the DIRM appeared, Matt Birkholz, Jim Miller and
+Ron Weiss of Digital Equipment Corporation's Cambridge Research Laboratory
+wrote \term{Thomas}, an implementation of the language in Scheme. They
+wrote it in four weeks, and their stated goals were to learn the language
+by implementing it from the book, to help others learn from readable
+source, and to run small programs; performance was explicitly not a goal.
+They named it Thomas rather than Dylan because they had not received
+permission to use the trademark.
+
+This project began as a direct translation of Thomas from Scheme into
+Common Lisp. Since then it has moved a long way from that starting point.
+The Common Lisp implementation was checked against the DIRM chapter by
+chapter and corrected wherever Thomas and the book disagreed (for example,
+\code{\#f} and the empty list are now distinct objects, as the book
+requires), and it gained modules, keyword checking, sealing and slot
+options that Thomas lacked. It was then rebuilt for speed: generic
+dispatch goes through caches, known calls are made directly, and common
+arithmetic, element access, iteration and slot access are compiled in line.
+
+The compiler to C is new. It was written for this project and shares only
+the reader with the Common Lisp implementation (which also runs its macros
+while compiling). Thomas's own sources are no longer part of the tree;
+each file in \file{src/} still records which Thomas file it grew from, and
+Thomas's original 1992 README and release notes are kept as
+\file{README.thomas} and \file{RELEASE}.
+
+\section{How this book is organized}\label{sec:intro-organization}
+
+The book has three parts and three appendices.
+
+\paragraph{Part I, Getting Started,} is for reading in order.
+This chapter is the first. Chapter~\ref{ch:start} explains what you need
+to install, how to start the interactive implementation, and how to
+compile and run a first program with \cmd{dylanc}.
+Chapter~\ref{ch:tutorial} is a hands-on tour of the language, from
+arithmetic to classes, generic functions and conditions, ending with a
+small complete program built step by step and then compiled.
+
+\paragraph{Part II, The Language,} is a reference to the language, in the
+order a reader usually needs it: syntax (Chapter~\ref{ch:syntax}), control
+flow (Chapter~\ref{ch:control}), functions (Chapter~\ref{ch:functions}),
+classes (Chapter~\ref{ch:classes}), numbers (Chapter~\ref{ch:numbers}),
+collections (Chapter~\ref{ch:collections}), functional operations
+(Chapter~\ref{ch:functional}), conditions (Chapter~\ref{ch:conditions}),
+modules (Chapter~\ref{ch:modules}), and printing and output
+(Chapter~\ref{ch:printing}). These chapters follow the DIRM and note,
+section by section, where either implementation differs from it.
+
+\paragraph{Part III, The Implementations,} describes each implementation
+as a tool: the Common Lisp implementation (Chapter~\ref{ch:lisp}), the
+\cmd{dylanc} compiler and its options (Chapter~\ref{ch:dylanc}), the
+compiler's extensions---macros, threads and streams
+(Chapter~\ref{ch:extensions}), how the compiler works inside
+(Chapter~\ref{ch:internals}), and how to write fast programs and measure
+them (Chapter~\ref{ch:performance}).
+
+\paragraph{The appendices} collect the differences between this system and
+the 1992 manual (Appendix~\ref{app:differences}), a summary of the library
+(Appendix~\ref{app:library}), and how to run the test suites and
+benchmarks (Appendix~\ref{app:testing}).
+
+\section{Conventions}\label{sec:intro-conventions}
+
+\paragraph{Code.} Dylan code, file names, commands and other text you type
+or the computer prints are set in a typewriter face, as in
+\code{(+ 1 2)} or \file{src/load-dylan.lisp}. In a syntax description,
+italic words such as \meta{name} or \meta{body} stand for something you
+supply.
+
+\paragraph{Examples and their results.} Most examples are written as
+Dylan source. When an example shows what an expression evaluates to, the
+value follows the expression in a Dylan comment that begins with
+\code{; =>}:
+
+\begin{dylan}
+(+ 1 2)          ; => 3
+(list 1 'a "b")  ; => (1 a "b")
+\end{dylan}
+
+The comment is not part of the value; you can type the whole line,
+comment and all, and Dylan will ignore everything from the semicolon to
+the end of the line. When an expression returns more than one value, the
+values are separated by commas:
+
+\begin{dylan}
+(truncate/ 17 5)  ; => 3, 2
+\end{dylan}
+
+When an example writes output, the text it writes is shown in a comment
+beginning \code{; prints}:
+
+\begin{dylan}
+(display "Hello")  ; prints: Hello
+\end{dylan}
+
+\paragraph{Terminal sessions.} A session at the shell shows a \code{\$}
+prompt before each command you type, followed by the command's output:
+
+\begin{shell}
+$ bin/dylanc hello.dyl
+$ ./hello
+Hello, world!
+\end{shell}
+
+\paragraph{Interactive sessions.} A session at the interactive
+implementation's read-eval-print loop shows its \code{?} prompt before each
+form you type, and the \code{;Value:} line it prints in reply:
+
+\begin{repl}
+? (* 6 7)
+
+;Value: 42
+\end{repl}
+
+\paragraph{References to the 1992 manual.} A citation such as
+\dylanbook{chapter 12} refers to a chapter of the 1992 Dylan manual. An
+annotated copy of it, in HTML, is in the repository under
+\file{manual/Dylan-1992/}; open \file{START-HERE.html} there. When this
+book and the DIRM seem to disagree about the language, the DIRM is the
+standard, and any deliberate difference is listed in
+Appendix~\ref{app:differences}.
+
+\paragraph{Notes, tips and warnings.} Three kinds of aside appear in the
+text. A \textbf{Note} adds a detail or a cross-reference that you can skip
+on a first reading. A \textbf{Tip} suggests an easier or better way to do
+something. An \textbf{Important} box warns about a mistake that is easy to
+make or a difference between the implementations that can surprise you.
+
+\section{License}\label{sec:intro-license}
+
+\index{license}
+This software is \emph{source-available}, not open source. The original
+Thomas system is Copyright 1992 Digital Equipment Corporation, and the
+Common Lisp implementation, which began as a translation of it, is a
+derivative work governed by Digital's 1992 notice. That notice allows you
+to use, copy, modify and redistribute the software at no charge to
+recipients who accept the same terms, but it forbids selling it or
+transferring it for compensation. Because of that restriction, the terms
+meet neither the Open Source Definition nor the Free Software Definition
+and are not compatible with the GPL, MIT, BSD or Apache licenses.
+
+The notice must appear in all copies, derivative works and modified
+versions. It is reproduced in full in the file \file{LICENSE} at the top of
+the repository, together with an explanation of what it permits; read that
+file before redistributing any part of this system.
+
+The home of the project is \url{https://github.com/blakemcbride/Dylan}.

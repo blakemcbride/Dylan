@@ -1,0 +1,1534 @@
+\chapter{A Tutorial}\label{ch:tutorial}
+
+This chapter is a hands-on tour of Dylan. It starts with arithmetic and
+works up, a step at a time, through variables, functions, control flow,
+collections, classes, generic functions and conditions, and it ends by
+building a small complete program and compiling it into an executable.
+Each section introduces a few ideas with short examples that you can type
+and run, and each points to the chapter in Part~II that covers the same
+ground in full.
+
+The tutorial assumes you know some other programming language, but not
+Lisp or Scheme. If you do know a Lisp, you will find much that is
+familiar, and you can move quickly through the first sections.
+
+\section{How to follow along}\label{sec:tut-follow}
+
+The easiest way to follow the tutorial is at the interactive
+implementation's read-eval-print loop. Start SBCL in the top directory of
+the clone and start the loop, as Chapter~\ref{ch:start} explains:
+
+\begin{repl}
+$ sbcl
+* (load "src/load-dylan.lisp")
+* (dylan:rep)
+
+Entering Dylan read-eval-print-loop.
+Exit by typing "dylan:done"
+
+?
+\end{repl}
+
+Then type the examples as you come to them. The examples are written as
+Dylan source, with the value of each expression shown in a comment
+beginning \code{; =>}. At the loop, the same value appears after
+\code{;Value:}:
+
+\begin{dylan}
+(+ 1 2)   ; => 3
+\end{dylan}
+
+When an example prints something, the text it prints is shown in a
+comment beginning \code{; prints}. Every example in this chapter has been
+run in both implementations: at the loop, and compiled with \cmd{dylanc}.
+You can also put the examples of a section into a file and compile it, as
+Section~\ref{sec:tut-compile} shows; in a compiled program, nothing is
+printed unless the program prints it, so wrap an expression in
+\code{print} to see its value.
+
+\begin{notebox}
+The examples build on one another. A function defined in one section is
+often used in the next, so type them in order, in one session.
+\end{notebox}
+
+\section{Expressions and prefix syntax}\label{sec:tut-syntax}
+
+\index{prefix syntax}
+A Dylan program is made of \term{expressions}, also called
+\term{forms}. The simplest are literal constants, which evaluate to
+themselves:
+
+\begin{dylan}
+42          ; => 42
+-7          ; => -7
+3.5         ; => 3.5
+"a string"  ; => "a string"
+#\a         ; => #\a
+#t          ; => #t
+#f          ; => #f
+\end{dylan}
+
+\code{\#t} and \code{\#f} are the true and false values, and
+\code{\#\textbackslash{}a} is the character \code{a}. Everything else is
+written as a parenthesized list. A list whose first element names a
+function is a \term{call}: the function comes first, and its arguments
+follow, separated by white space.
+
+\begin{dylan}
+(+ 1 2)                ; => 3
+(max 3 9 4)            ; => 9
+(* (+ 1 2) (- 10 4))   ; => 18
+\end{dylan}
+
+This is \term{prefix syntax}: the operator comes before its operands, and
+the parentheses mark exactly where each expression begins and ends. There
+is no operator precedence to remember, because nesting says everything.
+The last example multiplies the value of \code{(+ 1 2)} by the value of
+\code{(- 10 4)}. Operators such as \code{+} and \code{max} accept any
+number of arguments:
+
+\begin{dylan}
+(+ 1 2 3 4)   ; => 10
+(< 1 2 3)     ; => #t
+\end{dylan}
+
+Arithmetic operators are ordinary functions, not special syntax, which is
+why they are written the same way as every other call. A few lists are
+not calls but \term{special forms} with rules of their own, such as
+\code{if}, \code{define} and \code{method}; you will meet them in the
+sections that follow.
+
+\paragraph{Names.} Names in Dylan may contain letters, digits and many
+punctuation characters, so \code{even?}, \code{set!}, \code{<point>},
+\code{*count*} and \code{remove-key!} are all single names. Dylan uses
+punctuation by convention to suggest what a name is for:
+
+\begin{itemize}
+\item a name in angle brackets, such as \code{<integer>}, names a class;
+\item a name ending in \code{?}, such as \code{even?}, names a predicate,
+  a function that answers true or false;
+\item a name ending in \code{!}, such as \code{add!}, names a function
+  that may modify one of its arguments;
+\item a name between asterisks, such as \code{*count*}, names a module
+  variable whose value changes.
+\end{itemize}
+
+Names are not case-sensitive: \code{Max}, \code{MAX} and \code{max} are the
+same name. Because spaces separate the parts of a form, you must put
+spaces around operators: \code{(- x 1)} subtracts, but \code{x-1} is a
+single name.
+
+\paragraph{Symbols, keywords and quoting.} A name preceded by a quote
+mark is a \term{symbol}, a value in its own right rather than a reference
+to a variable. A name ending in a colon is a \term{keyword}, which is used
+to label arguments. Both evaluate to themselves:
+
+\begin{dylan}
+'apple       ; => apple
+size:        ; => size:
+\end{dylan}
+
+The quote mark also stops a list from being evaluated, which is one way to
+write a constant list. A hash sign before a list makes a constant vector:
+
+\begin{dylan}
+'(1 2 3)     ; => (1 2 3)
+#(1 2 3)     ; => #(1 2 3)
+\end{dylan}
+
+\paragraph{Comments.} A semicolon starts a comment that runs to the end of
+the line. Text between \code{\#|} and \code{|\#} is a comment that can span
+several lines.
+
+\smallskip
+Chapter~\ref{ch:syntax} describes the syntax completely (\dylanbook{chapter
+3}).
+
+\section{Numbers and arithmetic}\label{sec:tut-numbers}
+
+\index{numbers}
+Dylan has integers, exact ratios and floating-point numbers. Division of
+integers that do not divide evenly gives an exact ratio, not a rounded
+result:
+
+\begin{dylan}
+(/ 10 5)      ; => 2
+(/ 10 4)      ; => 5/2
+(+ 1/3 1/6)   ; => 1/2
+(/ 10.0 4)    ; => 2.5
+(as <float> 1/4)  ; => 0.25
+\end{dylan}
+
+Mixing a float with an exact number gives a float, and \code{as} converts a
+number to another class. Integer division that yields an integer is done
+by the functions whose names end in a slash. Each returns two values, the
+quotient and the remainder:
+
+\begin{dylan}
+(truncate/ 17 5)   ; => 3, 2
+(floor/ -7 2)      ; => -4, 1
+(modulo -7 2)      ; => 1
+(remainder -7 2)   ; => -1
+\end{dylan}
+
+\code{truncate/} rounds the quotient toward zero and \code{floor/} rounds
+it down; \code{modulo} and \code{remainder} return just the remainder that
+\code{floor/} and \code{truncate/} would. Functions that return several
+values are common in Dylan, and Section~\ref{sec:tut-variables} shows how
+to receive them.
+
+There are the usual comparisons and predicates:
+
+\begin{dylan}
+(= 2 2.0)     ; => #t
+(< 1 2 3)     ; => #t
+(even? 4)     ; => #t
+(zero? 0)     ; => #t
+(abs -3)      ; => 3
+(min 3 9 4)   ; => 3
+\end{dylan}
+
+\code{=} compares numbers by value, whatever their class; Dylan also has
+\code{id?}, which answers whether two values are the very same object.
+Powers, roots and the rest of the mathematical library are there too:
+
+\begin{dylan}
+(expt 2 10)   ; => 1024
+(sqrt 16)     ; => 4.0
+(sqrt 2)      ; => 1.4142135623730951
+\end{dylan}
+
+Notice that \code{(sqrt 16)} answers the float \code{4.0}, not the integer
+\code{4}. The 1992 manual defines \code{sqrt}, \code{exp} and the
+trigonometric functions as in Common Lisp, and its own examples show them
+answering floats, so both implementations do the same.
+
+\begin{warnbox}
+The two implementations differ in the size of integers. The interactive
+implementation has integers of any size, as Common Lisp does. A program
+compiled with \cmd{dylanc} has 63-bit integers, and an operation whose
+result does not fit signals an error:
+\begin{dylan}
+(expt 2 62)   ; => 4611686018427387904 in the interactive implementation
+              ; error: integer overflow (integers are 63 bits) when compiled
+\end{dylan}
+Neither implementation has complex numbers.
+\end{warnbox}
+
+Chapter~\ref{ch:numbers} covers numbers in full (\dylanbook{chapter 14}).
+
+\section{Variables}\label{sec:tut-variables}
+
+\index{variables}
+\code{define} creates a \term{module variable}, one that the whole
+program can see, and gives it a value. \code{set!} changes the value of a
+variable that already exists:
+
+\begin{dylan}
+(define *count* 0)            ; => *count*
+(set! *count* (+ *count* 1))  ; => 1
+*count*                       ; => 1
+\end{dylan}
+
+At the loop, a \code{define} answers the name it defined, and
+\code{set!} answers the new value. Writing a variable's name by itself
+evaluates to its value.
+
+\index{bind}
+\code{bind} creates \term{local variables} that exist only inside its
+body. Its first argument is a list of bindings, each a name and an
+initial value; the remaining forms are the body, and the value of the
+last one is the value of the whole \code{bind}:
+
+\begin{dylan}
+(bind ((x 3)
+       (y 4))
+  (sqrt (+ (* x x) (* y y))))   ; => 5.0
+\end{dylan}
+
+The bindings are made in order, so a later initial value can use an
+earlier variable:
+
+\begin{dylan}
+(bind ((a 1)
+       (b (+ a 1)))
+  (list a b))                   ; => (1 2)
+\end{dylan}
+
+A binding with more than one name receives multiple values, one in each
+name. This is how you use the quotient and remainder from
+\code{truncate/}:
+
+\begin{dylan}
+(bind ((quotient rem (truncate/ 17 5)))
+  (list quotient rem))          ; => (3 2)
+\end{dylan}
+
+Local variables are the usual way to name intermediate results. Module
+variables are best kept for things that really belong to the whole
+program; by convention, a module variable whose value changes is named
+between asterisks, as \code{*count*} is. Chapter~\ref{ch:syntax} covers
+variables, and Chapter~\ref{ch:modules} covers modules, the namespaces
+module variables live in (\dylanbook{chapters 4, 5 and 7}).
+
+\section{Defining functions}\label{sec:tut-functions}
+
+\index{define-method}
+The usual way to define a function is \code{define-method}. It takes the
+function's name, a list of parameters, and a body:
+
+\begin{dylan}
+(define-method square ((n <number>))
+  (* n n))                      ; => square
+
+(square 12)                     ; => 144
+(square 1/2)                    ; => 1/4
+\end{dylan}
+
+The parameter \code{(n <number>)} says that \code{n} must be a number. The
+class is called a \term{specializer}; if you leave it out and write just
+\code{n}, the parameter accepts any object. A function returns the value of
+the last form in its body; there is no \code{return} statement. Functions
+can of course call other functions:
+
+\begin{dylan}
+(define-method hypotenuse ((a <real>) (b <real>))
+  (sqrt (+ (square a) (square b))))
+
+(hypotenuse 5 12)               ; => 13.0
+\end{dylan}
+
+\code{define-method} does a little more than define a function: it adds a
+method to a \emph{generic function}, which can hold several methods for
+different classes of argument. Section~\ref{sec:tut-generic} returns to
+this, and it is the heart of Dylan. For now, think of
+\code{define-method} as ``define a function''.
+
+\paragraph{Anonymous functions.}\index{method}
+The special form \code{method} makes a function without naming it. Such a
+function is a value like any other: it can be called directly, stored in
+a variable, or passed to another function.
+
+\begin{dylan}
+((method (x y) (* x y)) 6 7)    ; => 42
+
+(define add1 (method (x) (+ x 1)))
+(add1 41)                       ; => 42
+\end{dylan}
+
+\paragraph{Keyword and rest parameters.}\index{\#key}\index{\#rest}
+After its required parameters, a parameter list may name \term{keyword
+parameters} after \code{\#key}. The caller passes them by name, in any
+order, and each may have a default value. A parameter after \code{\#rest}
+collects any remaining arguments in a sequence.
+
+\begin{dylan}
+(define-method greet (name #key (greeting "Hello"))
+  (concatenate greeting ", " name "!"))
+
+(greet "Ada")                       ; => "Hello, Ada!"
+(greet "Ada" greeting: "Goodbye")   ; => "Goodbye, Ada!"
+
+(define-method sum-all (#rest numbers)
+  (reduce + 0 numbers))
+
+(sum-all 1 2 3 4 5)                 ; => 15
+\end{dylan}
+
+\paragraph{Returning several values.}\index{values}
+\code{values} returns more than one value at once, and \code{bind}
+receives them:
+
+\begin{dylan}
+(define-method smallest-and-largest ((s <sequence>))
+  (values (reduce min (first s) s)
+          (reduce max (first s) s)))
+
+(smallest-and-largest '(3 1 4 1 5 9 2 6))   ; => 1, 9
+
+(bind ((lo hi (smallest-and-largest #(10 -2 7))))
+  (- hi lo))                                ; => 12
+\end{dylan}
+
+\paragraph{Closures.}\index{closure}
+A function made inside another function can use the local variables
+around it, and it keeps them for as long as it exists, even after the
+function that made it has returned. Here \code{make-counter} returns a new
+function each time it is called, and each of those functions has its own
+private count:
+
+\begin{dylan}
+(define-method make-counter ()
+  (bind ((n 0))
+    (method ()
+      (set! n (+ n 1))
+      n)))
+
+(define tick (make-counter))
+(tick)                          ; => 1
+(tick)                          ; => 2
+(tick)                          ; => 3
+\end{dylan}
+
+Chapter~\ref{ch:functions} describes functions and parameter lists in
+detail (\dylanbook{chapters 6 and 10}).
+
+\section{Making decisions}\label{sec:tut-conditionals}
+
+\index{if}
+\code{if} takes a test, a form to evaluate when the test is true, and a
+form to evaluate when it is false:
+
+\begin{dylan}
+(define-method sign-of ((n <real>))
+  (if (negative? n)
+      "negative"
+      (if (zero? n) "zero" "positive")))
+
+(sign-of -4)                    ; => "negative"
+(sign-of 0)                     ; => "zero"
+\end{dylan}
+
+\begin{warnbox}
+In Dylan, \code{\#f} is the \emph{only} false value. Zero, the empty
+list and the empty string all count as true:
+\begin{dylan}
+(if 0 'true 'false)             ; => true
+(if '() 'true 'false)           ; => true
+\end{dylan}
+\end{warnbox}
+
+Each branch of an \code{if} is a single form. To do several things in a
+branch, group them with \code{begin}, which evaluates its forms in order
+and returns the value of the last.
+
+\index{when}\index{unless}
+\code{when} and \code{unless} are handy when there is only one branch.
+\code{when} evaluates its body if the test is true, \code{unless} if it is
+false; otherwise each returns \code{\#f}. Their bodies may contain several
+forms.
+
+\begin{dylan}
+(when (> 3 2) "yes")            ; => "yes"
+(when (> 2 3) "yes")            ; => #f
+(unless (> 2 3) "no")           ; => "no"
+\end{dylan}
+
+\index{cond}
+\code{cond} chooses among several cases. Each clause starts with a test;
+the first clause whose test is true is evaluated, and the rest are skipped.
+A final clause whose test is \code{else:} catches everything else.
+
+\begin{dylan}
+(define-method classify ((n <integer>))
+  (cond ((< n 0)  "negative")
+        ((= n 0)  "zero")
+        ((< n 10) "small")
+        (else:    "large")))
+
+(classify 7)                    ; => "small"
+(classify 42)                   ; => "large"
+\end{dylan}
+
+\index{case}
+\code{case} compares one value against lists of constants, using
+\code{id?}. The constants are not evaluated, so symbols in them need no
+quote marks.
+
+\begin{dylan}
+(define-method day-kind (day)
+  (case day
+    ((saturday sunday) "weekend")
+    ((monday tuesday wednesday thursday friday) "weekday")
+    (else: "unknown")))
+
+(day-kind 'sunday)              ; => "weekend"
+(day-kind 'friday)              ; => "weekday"
+(day-kind 'someday)             ; => "unknown"
+\end{dylan}
+
+Without an \code{else:} clause, a \code{case} with no matching clause
+signals an error. Its relative \code{select} lets you choose the test that
+compares the values; with \code{instance?} as the test it chooses by
+class. Chapter~\ref{ch:control} describes it.
+
+\index{and}\index{or}\index{not}
+\code{and} and \code{or} evaluate their arguments from left to right and
+stop as soon as the answer is known. \code{and} returns \code{\#f} or the
+value of its last argument; \code{or} returns the first true value.
+\code{not} turns \code{\#f} into \code{\#t} and every other value into
+\code{\#f}.
+
+\begin{dylan}
+(and 1 2 3)                     ; => 3
+(or #f 2 3)                     ; => 2
+(not 0)                         ; => #f
+\end{dylan}
+
+Chapter~\ref{ch:control} covers all of these (\dylanbook{chapter 8}).
+
+\section{Output and loops}\label{sec:tut-loops}
+
+\paragraph{Printing.}\index{display}\index{print}\index{newline}
+Before writing loops it helps to be able to print. Both implementations
+have \code{display}, which writes a string or character as it is, and any
+other object in its printed form; \code{newline}, which ends the line; and
+\code{print}, which writes an object the way you would type it, strings in
+quotes, followed by a newline.
+
+\begin{dylan}
+(begin
+  (display "The answer is ")
+  (display 42)
+  (newline))
+; prints: The answer is 42
+\end{dylan}
+
+\begin{notebox}
+The interactive implementation's \code{print} writes its newline
+\emph{before} the object, Thomas's way; the compiled \code{print} writes
+it after. A program that prints with \code{print} therefore puts the
+same lines on the screen in either implementation, but the interactive
+one starts with a blank line and does not end its last line.
+The compiler also has \code{format}, which the interactive implementation
+does not (Chapter~\ref{ch:printing}).
+\end{notebox}
+
+\paragraph{for.}\index{for}
+\code{for} is the general loop. Its first argument lists the loop
+variables, each with an initial value and a form that computes its next
+value. The second is a list of an end test and the forms whose value the
+loop returns when the test becomes true. Any further forms are a body,
+evaluated on each pass. This loop computes a factorial without any body
+at all:
+
+\begin{dylan}
+(define-method factorial ((n <integer>))
+  (for ((i n (- i 1))
+        (product 1 (* product i)))
+       ((<= i 0) product)))
+
+(factorial 10)                  ; => 3628800
+\end{dylan}
+
+On each pass, all the variables are stepped together, using the values
+from the previous pass.
+
+\paragraph{dotimes.}\index{dotimes}
+\code{dotimes} runs its body a fixed number of times, with a variable
+counting from zero:
+
+\begin{dylan}
+(define-method sum-to ((n <integer>))
+  (bind ((total 0))
+    (dotimes (i (+ n 1))
+      (set! total (+ total i)))
+    total))
+
+(sum-to 100)                    ; => 5050
+\end{dylan}
+
+\paragraph{for-each.}\index{for-each}
+\code{for-each} steps through the elements of one or more collections.
+Like \code{for}, it takes a list of variables, an end test with result
+forms, and a body. The loop also ends, returning \code{\#f}, when any of
+the collections runs out.
+
+\begin{dylan}
+(define-method first-even ((s <sequence>))
+  (for-each ((x s))
+            ((even? x) x)))
+
+(first-even '(1 3 8 5 6))       ; => 8
+(first-even '(1 3 5))           ; => #f
+\end{dylan}
+
+When there is no end test, write an empty list in its place. Here two
+collections are stepped together, one of them an unbounded range of
+integers:
+
+\begin{dylan}
+(for-each ((name '(ann bob cy))
+           (i (range from: 1)))
+          ()
+  (display i) (display ". ") (display name) (newline))
+; prints: 1. ann
+;         2. bob
+;         3. cy
+\end{dylan}
+
+\paragraph{while and until.}\index{while}\index{until}
+\code{while} repeats its body as long as a test is true, and \code{until}
+repeats it until a test becomes true. Both return \code{\#f}, so they are
+used for their effects:
+
+\begin{dylan}
+(define-method collatz-steps ((n <integer>))
+  (bind ((steps 0))
+    (until (= n 1)
+      (set! n (if (even? n) (/ n 2) (+ (* 3 n) 1)))
+      (set! steps (+ steps 1)))
+    steps))
+
+(collatz-steps 27)              ; => 111
+\end{dylan}
+
+A method's parameters are ordinary local variables, so \code{set!} can
+change them, as this one changes \code{n}.
+
+In practice, many loops in Dylan are written not with these forms but
+with the collection functions of Section~\ref{sec:tut-functional}.
+Chapter~\ref{ch:control} covers the loops (\dylanbook{chapter 8}).
+
+\section{Lists, vectors and strings}\label{sec:tut-sequences}
+
+\index{sequences}
+Lists, vectors and strings are all \term{sequences}: collections whose
+elements are numbered from zero. They share most of their operations.
+
+\paragraph{Lists.}\index{lists}
+\code{list} makes a list of its arguments. \code{first}, \code{second}
+and \code{third} take elements from the front; \code{element} takes any
+element by its index; \code{size} counts them.
+
+\begin{dylan}
+(define primes (list 2 3 5 7 11))
+
+(first primes)                  ; => 2
+(second primes)                 ; => 3
+(element primes 4)              ; => 11
+(size primes)                   ; => 5
+(last primes)                   ; => 11
+\end{dylan}
+
+A list is a chain of \term{pairs}. \code{cons} makes a new pair, putting
+an element on the front of a list; \code{car} is a list's first element
+and \code{cdr} the rest of it.
+
+\begin{dylan}
+(cons 1 (list 2 3))             ; => (1 2 3)
+(car primes)                    ; => 2
+(cdr primes)                    ; => (3 5 7 11)
+(empty? '())                    ; => #t
+\end{dylan}
+
+Many operations make new sequences and leave their arguments alone:
+
+\begin{dylan}
+(reverse primes)                ; => (11 7 5 3 2)
+(append primes '(13 17))        ; => (2 3 5 7 11 13 17)
+(add primes 1)                  ; => (1 2 3 5 7 11)
+primes                          ; => (2 3 5 7 11)
+\end{dylan}
+
+\code{add} adds an element wherever is most natural for the kind of
+sequence, which for a list is the front.
+
+\paragraph{Vectors.}\index{vectors}
+A vector holds its elements in a block, so any element can be reached in
+the same time. \code{vector} makes one from its arguments; \code{make}
+makes one of a given size. \code{set!} with \code{element} changes an
+element.
+
+\begin{dylan}
+(define scores (vector 10 20 30))
+
+(element scores 1)              ; => 20
+(set! (element scores 1) 99)    ; => 99
+scores                          ; => #(10 99 30)
+
+(make <vector> size: 3 fill: 0) ; => #(0 0 0)
+\end{dylan}
+
+The form \code{(set! (element scores 1) 99)} works because \code{set!} can
+change more than variables: given a call such as \code{(element scores
+1)}, it calls the matching \term{setter} function instead. You will see
+the same thing with the slots of objects in Section~\ref{sec:tut-classes}.
+
+A vector's size is fixed. A \code{<stretchy-vector>} grows as you add to
+it with \code{add!}:
+
+\begin{dylan}
+(define names (make <stretchy-vector>))
+(add! names 'ada)
+(add! names 'grace)
+(size names)                    ; => 2
+(element names 1)               ; => grace
+\end{dylan}
+
+\paragraph{Strings.}\index{strings}
+A string is a sequence of characters, so the sequence operations work on
+strings too:
+
+\begin{dylan}
+(define lang "Dylan")
+
+(size lang)                     ; => 5
+(element lang 0)                ; => #\D
+(concatenate lang " 1992")      ; => "Dylan 1992"
+(as-uppercase lang)             ; => "DYLAN"
+(reverse "abc")                 ; => "cba"
+(copy-sequence "Hello, world" start: 7)   ; => "world"
+\end{dylan}
+
+\code{=} compares sequences element by element, while \code{id?} asks
+whether two values are the same object. \code{as} converts between kinds
+of sequence:
+
+\begin{dylan}
+(= "abc" "abc")                     ; => #t
+(id? "abc" (copy-sequence "abc"))   ; => #f
+(as <list> "abc")                   ; => (#\a #\b #\c)
+(as <string> '(#\x #\y))            ; => "xy"
+\end{dylan}
+
+\paragraph{Ranges.}\index{ranges}
+A \code{<range>} is a sequence of numbers in arithmetic progression. It
+does not store its elements but computes them, so a range can be very
+large or even unbounded, as the one in the \code{for-each} example of
+Section~\ref{sec:tut-loops} was. \code{range} makes one: \code{from:} is
+the first number, \code{up-to:} an upper bound that is not included,
+\code{through:} a bound that is included, \code{by:} the step, and
+\code{size:} the number of elements.
+
+\begin{dylan}
+(as <list> (range from: 1 up-to: 5))            ; => (1 2 3 4)
+(as <list> (range from: 1 through: 5))          ; => (1 2 3 4 5)
+(as <list> (range from: 10 through: 0 by: -5))  ; => (10 5 0)
+(as <list> (range from: 0 size: 4))             ; => (0 1 2 3)
+(reduce + 0 (range from: 1 through: 100))       ; => 5050
+(member? 50 (range from: 0 by: 10))             ; => #t
+\end{dylan}
+
+\paragraph{Deques.}\index{deques}
+A \code{<deque>}, a double-ended queue, grows and shrinks efficiently at
+both ends. \code{push} and \code{pop} work at the front, and
+\code{push-last} and \code{pop-last} at the back:
+
+\begin{dylan}
+(define line-up (make <deque>))
+(push line-up 1)
+(push-last line-up 2)
+(push-last line-up 3)
+(as <list> line-up)             ; => (1 2 3)
+(pop line-up)                   ; => 1
+(pop-last line-up)              ; => 3
+(as <list> line-up)             ; => (2)
+\end{dylan}
+
+\paragraph{Sorting.}\index{sort}
+\code{sort} returns a sorted copy of a sequence. Its \code{test:} keyword
+argument is the function that compares two elements:
+
+\begin{dylan}
+(sort '(3 1 2) test: <)                     ; => (1 2 3)
+(sort (vector "pear" "apple" "fig") test: <) ; => #("apple" "fig" "pear")
+(sort '(3 1 2) test: >)                     ; => (3 2 1)
+\end{dylan}
+
+Chapter~\ref{ch:collections} describes every kind of sequence and its
+operations (\dylanbook{chapter 12}).
+
+\section{Tables}\label{sec:tut-tables}
+
+\index{tables}
+A \code{<table>} maps keys to values; other languages call it a hash
+table, dictionary or map. Make one with \code{make}, store values with
+\code{set!} and \code{element}, and read them back with \code{element}:
+
+\begin{dylan}
+(define ages (make <table>))
+
+(set! (element ages 'alice) 34)
+(set! (element ages 'bob) 27)
+(set! (element ages 'carol) 41)
+
+(element ages 'bob)                     ; => 27
+(size ages)                             ; => 3
+(element ages 'dave default: 'unknown)  ; => unknown
+\end{dylan}
+
+Asking for a key that is not in the table is an error unless you supply
+\code{default:}, whose value is returned instead. \code{remove-key!}
+removes a key. A table is a collection whose elements are its values, so
+the collection operations apply to it; \code{key-sequence} gives its keys.
+
+\begin{dylan}
+(reduce + 0 ages)                       ; => 102
+(remove-key! ages 'bob)
+(size ages)                             ; => 2
+\end{dylan}
+
+Here is a common use: counting how often each word occurs.
+
+\begin{dylan}
+(define word-counts (make <table>))
+
+(for-each ((w '(the cat saw the dog and the bird)))
+          ()
+  (set! (element word-counts w)
+        (+ 1 (element word-counts w default: 0))))
+
+(element word-counts 'the)              ; => 3
+(element word-counts 'cat)              ; => 1
+\end{dylan}
+
+The order of a table's elements and keys is not defined, so sort them when
+the order matters. Tables are described with the other collections in
+Chapter~\ref{ch:collections}.
+
+\section{Classes and objects}\label{sec:tut-classes}
+
+\index{classes}\index{define-class}
+\code{define-class} defines a class. It takes the class's name, a list of
+superclasses, and a description of each \term{slot}. Every class
+ultimately inherits from \code{<object>}.
+
+\begin{dylan}
+(define-class <point> (<object>)
+  (x init-value: 0 init-keyword: x:)
+  (y init-value: 0 init-keyword: y:))
+\end{dylan}
+
+Each slot here has a name, a default value given by \code{init-value:},
+and a keyword given by \code{init-keyword:} that sets the slot when an
+object is made. \code{make} makes an \term{instance} of a class:
+
+\index{make}
+\begin{dylan}
+(define pt (make <point> x: 3 y: 4))
+
+(x pt)                          ; => 3
+(y pt)                          ; => 4
+(y (make <point>))              ; => 0
+\end{dylan}
+
+Defining the class also defined a \term{getter} function for each slot,
+named after the slot, which is why \code{(x pt)} reads the slot \code{x}.
+It defined a setter too, which \code{set!} uses:
+
+\begin{dylan}
+(set! (x pt) 10)                ; => 10
+(x pt)                          ; => 10
+\end{dylan}
+
+\code{instance?} asks whether an object belongs to a class, and
+\code{object-class} answers the object's class:
+
+\begin{dylan}
+(instance? pt <point>)          ; => #t
+(instance? 5 <point>)           ; => #f
+(object-class pt)
+\end{dylan}
+
+The two implementations print a class, or any object without a readable
+printed form, differently. The interactive implementation shows the last
+example's value as \code{\#[dylan-class <point>]}, and a compiled program
+prints it as \code{\{the class <point>\}}; an instance of \code{<point>}
+is \code{\#[instance-of <point>]} in the one and \code{\{instance of
+<point>\}} in the other. Chapter~\ref{ch:printing} explains how to give
+your own classes a printed form.
+
+\paragraph{Inheritance.} A class inherits the slots of its superclasses
+and adds its own. Here is a small family of shapes, which the following
+sections use:
+
+\begin{dylan}
+(define-class <shape> (<object>)
+  (name init-value: "shape" init-keyword: name:))
+
+(define-class <circle> (<shape>)
+  (radius required-init-keyword: radius:))
+
+(define-class <rect> (<shape>)
+  (width  init-keyword: width:)
+  (height init-keyword: height:))
+\end{dylan}
+
+\code{required-init-keyword:} means that \code{make} must be given that
+keyword; making a \code{<circle>} without a \code{radius:} is an error.
+Instances of the subclasses have the inherited \code{name} slot as well
+as their own, and they are instances of \code{<shape>} as well as of their
+own classes:
+
+\begin{dylan}
+(define wheel (make <circle> radius: 2 name: "wheel"))
+
+(name wheel)                    ; => "wheel"
+(radius wheel)                  ; => 2
+(instance? wheel <shape>)       ; => #t
+(subclass? <circle> <shape>)    ; => #t
+\end{dylan}
+
+\paragraph{Multiple inheritance.} A class may have more than one
+superclass, and it then inherits from all of them:
+
+\begin{dylan}
+(define-class <colored> (<object>)
+  (color init-value: 'black init-keyword: color:))
+
+(define-class <colored-circle> (<circle> <colored>))
+
+(define dot (make <colored-circle> radius: 1 color: 'red))
+(list (color dot) (radius dot) (name dot))   ; => (red 1 "shape")
+\end{dylan}
+
+\paragraph{Initializing objects.}\index{initialize}
+A slot's initial value need not be a constant. \code{init-function:}
+gives a function of no arguments that is called to compute the value each
+time an object is made. This matters when each object needs its own
+mutable value, such as a fresh collection, or a value computed afresh,
+such as a serial number:
+
+\begin{dylan}
+(define *next-id* 0)
+
+(define-class <ticket> (<object>)
+  (id    init-function: (method ()
+                          (set! *next-id* (+ *next-id* 1))
+                          *next-id*))
+  (title init-value: "untitled" init-keyword: title:)
+  (notes init-function: (method () (make <stretchy-vector>))))
+
+(id (make <ticket>))                         ; => 1
+(id (make <ticket> title: "printer jam"))    ; => 2
+\end{dylan}
+
+Had \code{notes} used \code{init-value:} instead, every ticket would share
+one and the same stretchy vector.
+
+For initialization that slot options cannot express, add a method to the
+generic function \code{initialize}, which \code{make} calls on each new
+object with the keyword arguments it was given. Call \code{next-method}
+first, so that the slots are filled in the usual way, and then do the
+rest. Here a rectangle made without a height becomes a square;
+\code{slot-initialized?} asks whether a slot has a value yet:
+
+\begin{dylan}
+(define-class <rectangle> (<object>)
+  (width  init-keyword: width:)
+  (height init-keyword: height:))
+
+(define-method initialize ((r <rectangle>) #key)
+  (next-method)
+  (unless (slot-initialized? r height)
+    (set! (height r) (width r))))
+
+(height (make <rectangle> width: 4))             ; => 4
+(height (make <rectangle> width: 4 height: 3))   ; => 3
+\end{dylan}
+
+\begin{warnbox}
+A slot's getter is an ordinary function in the module, so a local
+variable or parameter with the same name hides it. Inside a method with a
+parameter called \code{name}, the call \code{(name s)} would try to call
+the parameter rather than the getter. Give parameters names that differ
+from your slots.
+\end{warnbox}
+
+Chapter~\ref{ch:classes} describes classes, slot options and the
+initialization protocol (\dylanbook{chapters 6 and 11}).
+
+\section{Generic functions and multiple dispatch}\label{sec:tut-generic}
+
+\index{generic function}\index{multiple dispatch}
+Every \code{define-method} you have written so far has added a
+\term{method} to a \term{generic function}. A generic function can hold
+many methods, each for a different class of argument. When the generic
+function is called, it chooses the most specific method whose
+specializers match the arguments and runs it.
+
+\code{define-generic-function} declares a generic function and its
+parameters. It is optional---the first \code{define-method} creates the
+generic function if there is none---but it documents the protocol in one
+place:
+
+\begin{dylan}
+(define-generic-function area (shape))
+
+(define-method area ((c <circle>))
+  (* 3.14159 (radius c) (radius c)))
+
+(define-method area ((r <rect>))
+  (* (width r) (height r)))
+
+(area (make <rect> width: 3 height: 5))     ; => 15
+(area wheel)                                ; => 12.56636
+\end{dylan}
+
+Because \code{area} works on any shape, functions that use it work on any
+shape too:
+
+\begin{dylan}
+(define some-shapes
+  (list (make <circle> radius: 1) (make <rect> width: 2 height: 2)))
+
+(map area some-shapes)          ; => (3.14159 4)
+\end{dylan}
+
+\paragraph{The most specific method wins.} Methods may overlap. When more
+than one applies, the one whose specializers are more specific is chosen.
+A method on \code{<shape>} serves every shape that has no method of its
+own:
+
+\begin{dylan}
+(define-method describe ((s <shape>))
+  (concatenate "a shape called " (name s)))
+
+(describe (make <rect> width: 1 height: 1))   ; => "a shape called shape"
+\end{dylan}
+
+\paragraph{Dispatch on several arguments.} A method can be specialized on
+any or all of its required arguments, and the choice takes all of them
+into account. This is \term{multiple dispatch}, and it is what makes
+generic functions more than methods attached to a single class:
+
+\begin{dylan}
+(define-method collide ((a <circle>) (b <circle>))
+  "two circles")
+
+(define-method collide ((a <circle>) (b <rect>))
+  "a circle and a rectangle")
+
+(define-method collide ((a <shape>) (b <shape>))
+  "two shapes")
+
+(collide wheel (make <rect> width: 1 height: 1))  ; => "a circle and a rectangle"
+(collide (make <rect> width: 1 height: 1) wheel)  ; => "two shapes"
+(collide wheel wheel)                             ; => "two circles"
+\end{dylan}
+
+\paragraph{Specializing on a single object.}\index{singleton}
+A specializer can also be one particular object, written with
+\code{singleton}. Such a method applies only when the argument is that
+object, and it is more specific than any method on a class. This gives a
+neat way to write the base case of a recursion:
+
+\begin{dylan}
+(define-method fact ((n <integer>))
+  (* n (fact (- n 1))))
+
+(define-method fact ((n (singleton 0)))
+  1)
+
+(fact 5)                        ; => 120
+\end{dylan}
+
+Singletons also suit symbols that act as commands or names:
+
+\begin{dylan}
+(define-method speak ((animal (singleton 'dog))) "woof")
+(define-method speak ((animal (singleton 'cat))) "meow")
+(define-method speak ((animal <symbol>)) "...")
+
+(speak 'dog)                    ; => "woof"
+(speak 'fish)                   ; => "..."
+\end{dylan}
+
+Built-in classes such as \code{<integer>}, \code{<string>} and
+\code{<symbol>} are classes like any other, so you can add methods for them
+to your own generic functions. Chapter~\ref{ch:functions} describes
+generic functions and how methods are ordered (\dylanbook{chapters 6 and
+10}).
+
+\section{Calling the next method}\label{sec:tut-next-method}
+
+\index{next-method}
+Often a method for a subclass wants to do what the method for the
+superclass does, and a little more. Inside a method, \code{next-method}
+calls the next most specific method, the one that would have run if this
+one did not exist. Called with no arguments, it passes along the original
+arguments:
+
+\begin{dylan}
+(define-method describe ((c <circle>))
+  (concatenate "a circle, " (next-method)))
+
+(describe wheel)                ; => "a circle, a shape called wheel"
+\end{dylan}
+
+Here the method on \code{<circle>} runs first and calls the method on
+\code{<shape>} for the rest of the description. \code{next-method} may
+also be given arguments, which replace the original ones; the bank
+example in Section~\ref{sec:tut-program} uses this to change an amount
+before passing it on. Chapter~\ref{ch:functions} has the details.
+
+\section{Collections and functional operations}\label{sec:tut-functional}
+
+\index{map}\index{reduce}\index{choose}
+Because functions are values, much of Dylan's power comes from functions
+that take other functions as arguments. These work on every kind of
+collection.
+
+\code{map} applies a function to each element and collects the results in
+a new collection of the same kind as the first argument. Given several
+collections, it takes one element from each. \code{map-as} names the kind
+of collection to return.
+
+\begin{dylan}
+(map (method (x) (* x x)) '(1 2 3 4))   ; => (1 4 9 16)
+(map + '(1 2 3) '(10 20 30))            ; => (11 22 33)
+(map-as <vector> square '(1 2 3))       ; => #(1 4 9)
+\end{dylan}
+
+\code{reduce} combines the elements with a function of two arguments,
+starting from an initial value; \code{reduce1} uses the first element as
+the initial value.
+
+\begin{dylan}
+(reduce + 0 '(1 2 3 4 5))       ; => 15
+(reduce1 max '(3 9 2))          ; => 9
+\end{dylan}
+
+\code{choose} keeps the elements that satisfy a predicate.
+\code{any?} and \code{every?} ask whether some or all of them do.
+\code{find-key} answers the key, or index, of the first element that
+satisfies a predicate.
+
+\begin{dylan}
+(choose even? '(1 2 3 4 5 6))   ; => (2 4 6)
+(any? negative? '(3 -1 4))      ; => #t
+(every? positive? '(3 -1 4))    ; => #f
+(find-key #(5 8 13) even?)      ; => 1
+\end{dylan}
+
+\code{do} calls a function on each element just for its effect, and
+returns \code{\#f}:
+
+\begin{dylan}
+(do (method (s) (display (area s)) (newline)) some-shapes)
+; prints: 3.14159
+;         4
+\end{dylan}
+
+\paragraph{Making functions from functions.}\index{curry}\index{compose}
+\index{complement}
+\code{curry} fixes the first arguments of a function. \code{compose}
+chains functions, the rightmost applied first. \code{complement} turns a
+predicate into its opposite. \code{apply} calls a function with arguments
+taken from a sequence.
+
+\begin{dylan}
+(define add10 (curry + 10))
+(add10 5)                                ; => 15
+(map (curry * 2) '(1 2 3))               ; => (2 4 6)
+
+(define sqrt-of-abs (compose sqrt abs))
+(sqrt-of-abs -16)                        ; => 4.0
+
+(choose (complement even?) '(1 2 3 4 5)) ; => (1 3 5)
+
+(apply max '(4 7 1))                     ; => 7
+\end{dylan}
+
+Together these replace many explicit loops. The total area of a list of
+shapes, for instance, is one line:
+
+\begin{dylan}
+(reduce + 0 (map area some-shapes))      ; => 7.14159
+\end{dylan}
+
+Chapter~\ref{ch:collections} lists the collection operations and
+Chapter~\ref{ch:functional} the functional operations
+(\dylanbook{chapters 12 and 17}).
+
+\section{Leaving early with bind-exit}\label{sec:tut-exits}
+
+\index{bind-exit}
+Sometimes you want to stop a computation partway through and return a
+value at once, for example when a search finds what it was looking for.
+\code{bind-exit} binds a name to an \term{exit procedure}. Calling that
+procedure, from anywhere inside the \code{bind-exit}, however deeply
+nested, ends the \code{bind-exit} immediately and makes its argument the
+value of the whole form.
+
+\begin{dylan}
+(define-method find-first ((pred <function>) (s <sequence>))
+  (bind-exit (return)
+    (do (method (x)
+          (when (pred x) (return x)))
+        s)
+    #f))
+
+(find-first even? '(1 3 4 5 6))     ; => 4
+(find-first even? '(1 3 5))         ; => #f
+\end{dylan}
+
+The exit procedure is called from inside the function passed to
+\code{do}, yet it leaves \code{find-first} entirely. If it is never called,
+\code{bind-exit} returns the value of its last form, here \code{\#f}.
+
+\index{unwind-protect}
+\code{unwind-protect} guarantees that some cleanup forms run, however its
+first form is left, whether normally or by an exit:
+
+\begin{dylan}
+(bind-exit (leave)
+  (unwind-protect
+    (leave 'escaped)
+    (display "cleanup runs anyway")
+    (newline)))
+; prints: cleanup runs anyway
+; => escaped
+\end{dylan}
+
+Chapter~\ref{ch:control} describes non-local exits
+(\dylanbook{chapter 8}).
+
+\section{Conditions and errors}\label{sec:tut-conditions}
+
+\index{conditions}\index{error}
+When something goes wrong, a Dylan program \term{signals} a
+\term{condition}, an object that describes what happened. \code{error}
+signals an error. In its simplest form it takes a message, which may
+contain \code{\textasciitilde{}a} where each further argument is to be
+inserted:
+
+\begin{dylan}
+(define-method safe-divide ((a <number>) (b <number>))
+  (if (zero? b)
+      (error "cannot divide ~a by zero" a)
+      (/ a b)))
+
+(safe-divide 10 4)              ; => 5/2
+\end{dylan}
+
+If nothing handles the error, the interactive implementation enters the
+debugger, as Section~\ref{sec:start-rep} showed, and a compiled program
+prints the message and exits.
+
+\paragraph{Handling errors.}\index{handler-case}
+\code{handler-case} evaluates a form and, if a condition of a given class
+is signaled while it runs, abandons the form and evaluates the matching
+clause instead. Each clause begins with a list of the class and, after
+\code{condition:}, an optional name for the condition object:
+
+\begin{dylan}
+(handler-case (safe-divide 1 0)
+  ((<error> condition: c)
+   (list 'caught (condition-format-string c))))
+; => (caught "cannot divide ~a by zero")
+\end{dylan}
+
+An error signaled by \code{error} with a message is an instance of
+\code{<simple-error>}. The function \code{condition-format-string}
+returns its message, and \code{condition-format-arguments} returns the
+other arguments in a list. Errors that the system itself signals are
+conditions too, and \code{handler-case} catches them the same way:
+
+\begin{dylan}
+(handler-case (element (vector 1 2) 5)
+  ((<error>) "no such element"))    ; => "no such element"
+
+(handler-case (+ 1 'a)
+  ((<error>) "not a number"))       ; => "not a number"
+\end{dylan}
+
+\paragraph{Your own conditions.} Conditions are objects, and their classes
+are ordinary classes. To signal something more specific than a message,
+define a subclass of \code{<error>} with slots that describe the problem,
+and pass an instance of it to \code{error}:
+
+\begin{dylan}
+(define-class <out-of-stock> (<error>)
+  (item  required-init-keyword: item:)
+  (short required-init-keyword: short:))
+
+(define-method take-from-stock ((on-hand <integer>) (wanted <integer>))
+  (if (> wanted on-hand)
+      (error (make <out-of-stock> item: 'widget short: (- wanted on-hand)))
+      (- on-hand wanted)))
+
+(take-from-stock 10 4)          ; => 6
+
+(handler-case (take-from-stock 10 15)
+  ((<out-of-stock> condition: e)
+   (list 'short-by (short e))))  ; => (short-by 5)
+\end{dylan}
+
+A \code{handler-case} may have several clauses; they are tried in order,
+so put the more specific classes first.
+
+\paragraph{Signals that are not errors.}\index{signal}\index{warnings}
+\code{signal} signals a condition that a program may ignore. Given a
+message, it signals a \code{<simple-warning>}. If no handler takes it,
+\code{signal} prints the warning and returns \code{\#f}, and the program
+carries on:
+
+\begin{dylan}
+(handler-case (signal "low on ~a" 'paper)
+  ((<warning> condition: w)
+   (condition-format-arguments w)))   ; => (paper)
+
+(signal "nobody handles this")    ; => #f
+; prints: WARNING: nobody handles this          (interactive)
+;         Dylan warning: nobody handles this    (compiled)
+\end{dylan}
+
+Dylan's condition system can do much more: \code{handler-bind}
+establishes a handler that runs \emph{without} first leaving the
+signaling code, so it can return a value to it, decline, or choose among
+\term{restarts}. Chapter~\ref{ch:conditions} explains it all
+(\dylanbook{chapter 13}).
+
+\section{A complete program}\label{sec:tut-program}
+
+This section builds a small but complete program, a model of a bank, one
+piece at a time. It brings together classes, generic functions,
+\code{next-method}, tables, the collection functions and conditions. Type
+the pieces at the loop as you go, or put them all in a file called
+\file{bank.dyl}; the next section compiles that file.
+
+\paragraph{Accounts.} Every account has an owner and a balance. A savings
+account also earns interest at some rate, and a checking account charges
+a fee on each withdrawal. Balances are whole numbers of dollars, and the
+interest rate is an exact ratio, so no money is lost to rounding until we
+choose to round.
+
+\begin{dylan}
+(define-class <account> (<object>)
+  (owner   required-init-keyword: owner:)
+  (balance init-value: 0 init-keyword: balance:))
+
+(define-class <savings-account> (<account>)
+  (rate init-value: 1/50 init-keyword: rate:))
+
+(define-class <checking-account> (<account>)
+  (fee init-value: 1 init-keyword: fee:))
+\end{dylan}
+
+\paragraph{An error class.} Withdrawing more than the balance is an
+error, and the condition records which account and how much was asked
+for. The slot names are chosen so that they do not clash with the names of
+parameters used elsewhere (see the warning in
+Section~\ref{sec:tut-classes}).
+
+\begin{dylan}
+(define-class <insufficient-funds> (<error>)
+  (refused-account required-init-keyword: account:)
+  (refused-amount  required-init-keyword: amount:))
+\end{dylan}
+
+\paragraph{The operations.} Three generic functions make up the protocol
+of an account. The basic methods are on \code{<account>}:
+
+\begin{dylan}
+(define-generic-function deposit! (account amount))
+(define-generic-function withdraw! (account amount))
+(define-generic-function month-end! (account))
+
+(define-method deposit! ((a <account>) (amount <integer>))
+  (set! (balance a) (+ (balance a) amount)))
+
+(define-method withdraw! ((a <account>) (amount <integer>))
+  (when (> amount (balance a))
+    (error (make <insufficient-funds> account: a amount: amount)))
+  (set! (balance a) (- (balance a) amount)))
+
+(define-method month-end! ((a <account>))
+  (balance a))
+\end{dylan}
+
+Try them on a plain account:
+
+\begin{dylan}
+(define acct (make <account> owner: 'dave balance: 100))
+
+(deposit! acct 25)              ; => 125
+(withdraw! acct 40)             ; => 85
+(balance acct)                  ; => 85
+\end{dylan}
+
+\paragraph{Specializing with next-method.} The other kinds of account
+differ in small ways, which is exactly what \code{next-method} is for. A
+checking account's withdrawal is an ordinary withdrawal of the amount
+\emph{plus the fee}, so its method calls the next method with a changed
+argument. A savings account adds its interest at the end of the month and
+then does whatever any account does.
+
+\begin{dylan}
+(define-method withdraw! ((a <checking-account>) (amount <integer>))
+  (next-method a (+ amount (fee a))))
+
+(define-method month-end! ((a <savings-account>))
+  (deposit! a (round (* (balance a) (rate a))))
+  (next-method))
+\end{dylan}
+
+\code{round} returns two values, the nearest integer and the remainder,
+but \code{deposit!} uses only the first.
+
+\begin{dylan}
+(define chk (make <checking-account> owner: 'erin balance: 100 fee: 2))
+(withdraw! chk 10)              ; => 88
+
+(define sav (make <savings-account> owner: 'fred balance: 500))
+(month-end! sav)                ; => 510
+\end{dylan}
+
+Because the withdrawal for a checking account goes through the method on
+\code{<account>}, it also gets that method's check for insufficient
+funds, fee included:
+
+\begin{dylan}
+(handler-case (withdraw! chk 87)
+  ((<insufficient-funds> condition: c)
+   (refused-amount c)))         ; => 89
+\end{dylan}
+
+\paragraph{The bank.} The bank keeps its accounts in a table, keyed by
+the owner's name. \code{open-account} takes the class of account to open,
+so one function opens every kind. It passes any further keyword arguments
+on to \code{make} with \code{apply}.
+
+\begin{dylan}
+(define *accounts* (make <table>))
+
+(define-method open-account ((class <class>) (who <symbol>) #rest options)
+  (bind ((a (apply make class owner: who options)))
+    (set! (element *accounts* who) a)
+    a))
+
+(define-method lookup ((who <symbol>))
+  (element *accounts* who default: #f))
+\end{dylan}
+
+\paragraph{Handling a refusal.} \code{try-withdraw} attempts a withdrawal
+and reports a refusal instead of letting the error escape. It answers
+whether the withdrawal was made.
+
+\begin{dylan}
+(define-method try-withdraw ((who <symbol>) (amount <integer>))
+  (handler-case (begin (withdraw! (lookup who) amount) #t)
+    ((<insufficient-funds> condition: c)
+     (display "refused: ")
+     (display (owner (refused-account c)))
+     (display " cannot withdraw ")
+     (display (refused-amount c))
+     (newline)
+     #f)))
+\end{dylan}
+
+\paragraph{Reports.} The total of all deposits maps \code{balance} over
+the table and adds up the results. The report lists the accounts in
+alphabetical order of owner; since the table's keys come in no particular
+order, it sorts them, comparing the symbols as strings.
+
+\begin{dylan}
+(define-method total-deposits ()
+  (reduce + 0 (map balance *accounts*)))
+
+(define-method report ()
+  (for-each ((who (sort (key-sequence *accounts*)
+                        test: (method (a b)
+                                (< (as <string> a) (as <string> b))))))
+            ()
+    (display who)
+    (display ": ")
+    (display (balance (lookup who)))
+    (newline)))
+\end{dylan}
+
+\paragraph{A month at the bank.} Finally, the program itself: open three
+accounts, make some transactions, close the month, and report.
+\code{(do month-end! *accounts*)} runs the month's end for every account,
+each with its own method.
+
+\begin{dylan}
+(open-account <savings-account> 'alice balance: 1000)
+(open-account <checking-account> 'bob balance: 200 fee: 2)
+(open-account <account> 'carol)
+
+(deposit! (lookup 'carol) 50)
+(withdraw! (lookup 'bob) 48)
+(try-withdraw 'carol 80)
+(do month-end! *accounts*)
+(report)
+(display "total: ")
+(display (total-deposits))
+(newline)
+\end{dylan}
+
+At the loop, each form's value appears after it as usual, mixed with the
+output. The output itself is this:
+
+\begin{shell}
+refused: carol cannot withdraw 80
+alice: 1020
+bob: 150
+carol: 50
+total: 1220
+\end{shell}
+
+Alice earned two percent interest on 1000; Bob's withdrawal of 48 cost
+him 50 with the fee; and Carol's attempt to withdraw 80 from her 50 was
+refused and reported, without stopping the program.
+
+\section{Compiling the program}\label{sec:tut-compile}
+
+\index{dylanc}
+The bank is a complete program, and \cmd{dylanc} can turn it into an
+executable. Put the definitions and the final forms of the previous
+section---everything except the small experiments with \code{acct},
+\code{chk} and \code{sav}---into \file{bank.dyl}, in the order they were
+given, and compile it:
+
+\begin{shell}
+$ bin/dylanc bank.dyl
+$ ./bank
+refused: carol cannot withdraw 80
+alice: 1020
+bob: 150
+carol: 50
+total: 1220
+\end{shell}
+
+The output is the same as at the loop, because the program uses only
+\code{display} and \code{newline} for its output, which both
+implementations have. Nothing in the program changes a class or adds a
+method while it runs, so it is a static program, and the compiler accepts
+it unchanged.
+
+You can also run the same file in the interactive implementation without
+typing it, either by feeding it to the loop or by compiling it to Lisp, as
+Chapter~\ref{ch:start} showed:
+
+\begin{shell}
+$ (cat bank.dyl; echo dylan:done) | \
+    sbcl --non-interactive --eval '(load "src/load-dylan.lisp")' \
+         --eval '(dylan:rep)'
+\end{shell}
+
+This is the usual way of working with the two implementations: develop
+and test a piece at a time at the loop, where every definition can be
+changed and tried at once, then compile the finished program into a fast
+executable that needs neither SBCL nor Dylan to run.
+
+\begin{tipbox}
+The compiler warns about any name a program uses but never defines.
+Building with \cmd{dylanc} from time to time, even while you are still
+working at the loop, is a quick way to catch misspelled names.
+\end{tipbox}
+
+\section{Where to go from here}\label{sec:tut-next}
+
+You have now seen most of the language at least once. Part~II covers each
+topic thoroughly, in the order of this tutorial: syntax and variables
+(Chapter~\ref{ch:syntax}), control flow (Chapter~\ref{ch:control}),
+functions and generic functions (Chapter~\ref{ch:functions}), classes
+(Chapter~\ref{ch:classes}), numbers (Chapter~\ref{ch:numbers}),
+collections (Chapter~\ref{ch:collections}), functional operations
+(Chapter~\ref{ch:functional}), conditions (Chapter~\ref{ch:conditions}),
+modules (Chapter~\ref{ch:modules}), and printing
+(Chapter~\ref{ch:printing}).
+
+Part~III describes the two implementations as tools. Read
+Chapter~\ref{ch:dylanc} before building larger programs with the compiler,
+and Chapter~\ref{ch:extensions} for its macros, threads and streams.
+Appendix~\ref{app:differences} lists everything in which this system
+differs from the 1992 manual.
+
+The 1992 manual itself is worth reading alongside this book. It is short,
+clearly written, and full of examples, and its annotated copy in
+\file{manual/Dylan-1992/} links each chapter to the design notes that
+later changed it.

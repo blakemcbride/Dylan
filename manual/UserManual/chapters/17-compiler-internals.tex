@@ -1,0 +1,662 @@
+\chapter{Inside the Compiler}\label{ch:internals}
+\sloppy
+
+This chapter describes how the compiler to C works: the stages a program
+passes through, how Dylan values look in memory, how functions are
+called and how tail calls are kept proper, how generic functions
+dispatch, how exits, cleanups and conditions are built, and how the
+garbage collector and threads fit in. You do not need any of it to use
+the compiler. It helps when you want to know why one way of writing a
+program is faster than another (Chapter~\ref{ch:performance}), when you
+read the C the compiler writes, or when you want to work on the compiler
+itself. The design, phase by phase, is also recorded in
+\file{CompilerPlan.md} at the top of the source tree.
+
+\section{The stages}\label{sec:internals-pipeline}
+
+\index{compiler!stages}
+The compiler is about 9\,000 lines of Common Lisp in \file{compiler/}.
+It is a \term{whole-program compiler}: it sees the entire program, with
+the library, before it writes any C, and since nothing changes once the
+program runs, everything it learns about the program is true for good.
+A build passes through these stages:
+
+\begin{enumerate}
+\item \textbf{Reading} (\file{front/source.lisp}). Each file is read
+  with the reader of the interactive implementation
+  (\file{src/compat.lisp}), the only code the two implementations share
+  besides the macros' run time. The reader records the file, line and
+  column where every list begins, so that every later diagnostic, and
+  every \code{\#line} directive, can name a place in the source. A file's
+  \code{module:} header (design note~33) says which module its forms
+  belong to.
+
+\item \textbf{Modules} (\file{front/modules.lisp}). Every
+  \code{define-module} form in the program is found first, and the
+  modules are defined, each after the modules it uses. Then every name
+  in the program is resolved to a \emph{module variable}: one object per
+  variable, owned by one module, however many modules import it and under
+  whatever names. From here on names are gone, and nothing can be
+  confused by renaming or shadowing.
+
+\item \textbf{Macros and core forms} (\file{front/convert.lisp},
+  \file{front/macros.lisp}). Each top-level form is converted to
+  \emph{core Dylan}, about a dozen kinds of node: constants, variable
+  references and assignments, \code{if}, sequences, \code{bind} (with
+  multiple values), mutually recursive local methods, methods, calls,
+  calls of runtime primitives, \code{bind-exit} and
+  \code{unwind-protect}, and the definitions. Every other special form
+  and built-in macro --- \code{cond}, \code{case}, \code{for},
+  \code{for-each}, \code{handler-case}, backquote, \code{with-lock} and
+  the rest --- is rewritten into these. A loop becomes a local method
+  that calls itself in tail position. The program's own macros are
+  expanded here too, by running their bodies in the interactive
+  implementation (Chapter~\ref{ch:extensions}).
+
+\item \textbf{The IR} (\file{ir/anf.lisp}, \file{ir/ir.lisp}). Core
+  Dylan is converted to an intermediate representation in
+  \term{A-normal form}: every intermediate value is given a name, and
+  every operand of a call or primitive is a constant or a variable.
+  Every variable is bound exactly once (the IR is \emph{alpha-converted}),
+  so a variable is a unique object that analyses can annotate. Operands
+  are evaluated left to right, as in the source.
+
+\item \textbf{Analysis} (\file{ir/analyze.lisp}). For each variable:
+  whether it is assigned, whether a function other than the one binding
+  it uses it (it is \emph{captured}), and how often it is referred to.
+  For each local function: where it is called, and whether it
+  \emph{escapes} --- is used other than by being called. For each exit
+  procedure of a \code{bind-exit}: whether it escapes its function. And
+  for each call: whether it is in \emph{tail position}, that is, whether
+  its value is the value of its function.
+
+\item \textbf{Control lowering} (\file{ir/control.lisp}). A
+  \code{bind-exit} whose exit is only called directly within its own
+  function stays, and will become a jump. Every other \code{bind-exit},
+  and every \code{unwind-protect}, is rewritten as a call of a runtime
+  function, with the body moved into a new closure
+  (Section~\ref{sec:internals-exits}).
+
+\item \textbf{Contification} (\file{ir/contify.lisp}). A local function
+  that never escapes and whose every call is a jump --- a call in tail
+  position from the function that defines it, or from another such
+  function --- is not compiled as a function at all, but as a labelled
+  block of the function that contains it, its calls becoming
+  assignments to its parameters and a \code{goto}. This is how loops
+  become C loops.
+
+\item \textbf{Type inference} (\file{backend/types.lisp},
+  Section~\ref{sec:internals-types}) finds a class for as many
+  variables as it can, and decides which \code{<double-float>} variables
+  can be plain C \code{double}s.
+
+\item \textbf{Calls} (\file{backend/calls.lisp},
+  Section~\ref{sec:internals-calls}). Each call whose function is known
+  is resolved: to a method, to a generic function's dispatch function,
+  to a runtime primitive, or to inline C.
+
+\item \textbf{Escape analysis} (in \file{backend/codegen.lisp}) finds
+  \code{\#rest} lists, closures and instances that cannot outlive the
+  function that makes them, and puts them on the C stack instead of the
+  heap.
+
+\item \textbf{Code generation} (\file{backend/codegen.lisp},
+  \file{backend/objects.lisp}, \file{backend/cdata.lisp}). Every
+  remaining function becomes a C function; every class, symbol and
+  constant becomes static C data; every generic function gets a dispatch
+  function.
+
+\item \textbf{Output} (\file{backend/output.lisp}). The C is split into
+  \file{\meta{name}.c}, one file per module, and \file{\meta{name}.h}
+  (Section~\ref{sec:dylanc-files}), and \file{driver.lisp} runs the C
+  compiler.
+\end{enumerate}
+
+When the library is compiled with the program (\cmd{-Os},
+\cmd{-{}-whole}), tree shaking (\file{backend/shake.lisp},
+Section~\ref{sec:internals-shaking}) runs between control lowering and
+code generation.
+
+The library itself is Dylan, in module \code{dylan}, in the files of
+\file{runtime/dylan/} read in name order: conditions, numbers,
+characters, collections, sequences, lists, vectors, strings, stretchy
+vectors, deques, ranges, tables, arrays, printing and threads. It is
+compiled with every program, by the same stages, on top of the
+\code{\%} primitives written in C in \file{runtime/c/library.c} and the
+other files of \file{runtime/c/}.
+
+\section{How values are represented}\label{sec:internals-representation}
+
+\index{representation of values}\index{tagged words}
+Every Dylan value is one 64-bit machine word, the C type \code{D}
+(\file{runtime/c/dylan.h}). The low bits of the word say what it is:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Low bits & Value \\
+\midrule
+\code{...xx1} & an \code{<integer>}: the value shifted left one bit, so
+  63 bits signed \\
+\code{...010} & a \code{<character>}: the Unicode code point shifted left
+  three bits \\
+\code{...000} & a pointer to an object, 8-byte aligned \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Integers and characters are \term{immediate}: they need no memory of
+their own, and allocating one costs nothing. The integer $n$ is the word
+$2n+1$; that is why a debugger shows the integer 100 as 201. Adding two
+tagged integers $2a+1$ and $2b+1$ is one machine addition and a
+subtraction of 1, with the overflow checked by the C compiler's
+\code{\_\_builtin\_add\_overflow}; an overflow signals an error rather
+than wrapping.
+
+Every object a pointer points to begins with a \term{header} word: a
+pointer to its class's \term{wrapper}. The wrapper holds what the
+runtime needs to know about the class --- the class object, the class's
+numeric id, the instance size, how instances are represented (an ordinary
+instance, a pair, a byte string, a double float, and so on), and the set
+of the class's ancestors. Pairs are a header and two words; strings a
+header, a length and the bytes; a \code{<double-float>} a header and a C
+\code{double}; an instance of a class the program defines a header and
+one word per slot.
+
+\code{\#t}, \code{\#f} and \code{()} are three static objects, compared
+by address. \code{\#t} and \code{\#f} are instances of an internal class
+\code{<boolean>}, which the manual does not name and the \code{dylan}
+module does not export.
+
+\paragraph{Class ids.} \index{class ids}
+Since the program is static, the compiler knows every class. It numbers
+them in a preorder walk of the tree that each class makes with its
+\emph{first} superclass, so that a class's descendants in that tree have
+the ids from its own up to a limit. Where every subclass of a class lies
+in that range, \code{(instance? x C)} is a range check on \code{x}'s
+class id: one subtraction and one comparison. Where multiple inheritance
+puts a subclass outside it, the test reads a bit in the ancestor set
+every wrapper carries. The classes, their wrappers and the symbols are
+all static C data emitted by the compiler, so a program does no work at
+startup to build its class hierarchy.
+
+\paragraph{Memory.}
+Objects are allocated by the Boehm-Demers-Weiser collector
+(Section~\ref{sec:internals-gc}): those that can hold pointers with
+\code{GC\_MALLOC}, and those that cannot --- strings, float boxes,
+ratios --- with \code{GC\_MALLOC\_ATOMIC}, so that the collector does
+not scan them.
+
+\section{The calling convention}\label{sec:internals-calls-convention}
+
+\index{calling convention}\index{uniform entry}
+Every Dylan function has a \term{uniform entry}, a C function of one
+prototype:
+
+\begin{ccode}
+D f(D self, D a0, D a1, D a2, D a3, intptr_t argc);
+\end{ccode}
+
+\code{self} is the function object being called --- a closure, a
+generic function, or a method --- through which a closure reaches its
+free variables. The first four arguments travel in \code{a0} to
+\code{a3}, in machine registers; \code{argc} says how many there are.
+Arguments after the fourth go in a per-thread \term{argument area}, which
+the callee reads before it calls anything else. Every function checks
+\code{argc} on entry, so calling a function with the wrong number of
+arguments is an error, not a crash.
+
+One prototype for every function is what makes proper tail calls
+possible (Section~\ref{sec:internals-tail}). It costs a little: a
+function of two arguments is still passed six. So a function that is
+called from places the compiler can see, other than in tail position,
+also gets a \term{specialized entry}, named with \code{\_spec}, with
+exactly its own parameters: \code{double}s where the arguments are
+unboxed floats, and one parameter per keyword, filled in when compiling
+from the keywords the call passes (\code{DY\_UNSUPPLIED} for those it
+does not). A call through a specialized entry passes no count, checks
+no arity and parses no keywords when it runs.
+
+\paragraph{Multiple values.}
+\index{multiple values}
+A function returns its first value as its C return value. When it
+returns some other number of values, it stores the count and all the
+values in a per-thread values buffer. A caller that wants all the values
+sets the count to 1 before the call; a function that returns one value
+leaves the buffer alone unless it has itself made a call that may have
+changed the count. A caller that wants only the first value --- the
+common case --- reads the C return value and ignores the buffer.
+
+\paragraph{\code{next-method}.}
+A method that calls \code{next-method} receives its next method through
+the thread: the dispatch function (or the method before it) stores it
+there, and the method reads it on entry. The chain of methods for each
+combination of argument classes is known when compiling, so the
+next-method objects are static data, one for each tail of each chain.
+Methods that do not use \code{next-method} ignore it, and a method
+whose \code{next-method} is only called, with no arguments, reuses its
+own arguments rather than capturing them in a closure.
+
+\section{Proper tail calls}\label{sec:internals-tail}
+
+\index{tail calls}\index{musttail}
+Dylan requires that a call in tail position not use stack: a loop
+written as a recursion must run in constant space, however many times it
+goes round. C promises nothing of the kind. The compiler meets the
+requirement in three ways.
+
+\begin{enumerate}
+\item A function's tail call of itself, and calls among local methods
+  that have been contified, become \code{goto}s within one C function.
+  This covers almost every loop: \code{for}, \code{while},
+  \code{dotimes} and \code{for-each} all expand into local methods
+  calling themselves in tail position.
+\item Every other tail call --- through a module variable, a closure
+  passed as an argument, a generic function, \code{next-method},
+  \code{apply} --- is a C tail call marked
+  \code{\_\_attribute\_\_((musttail))}, which GCC~15 and later and
+  Clang~13 and later \emph{guarantee} to compile as a jump. The
+  attribute requires caller and callee to have the same prototype, which
+  the uniform entry provides. The generated C writes it with the macro
+  \code{DY\_TAIL\_CALL}.
+\item With \cmd{-{}-trampoline}, a tail call instead stores the function
+  and its arguments in the thread and returns a marker; the nearest
+  caller that is not making a tail call runs a loop that makes the
+  pending call until a real value comes back. Any C11 compiler can
+  compile this.
+\end{enumerate}
+
+A specialized entry cannot make a \code{musttail} call, because its
+prototype differs from its callee's. When a function makes tail calls,
+either its uniform entry holds the only body, or its specialized entry
+gets a second copy of the body whose tail calls are ordinary calls. That
+is safe: a specialized entry is only ever entered by a call that is not
+a tail call, so each holds at most one extra C frame.
+
+Calls inside an \code{unwind-protect}, inside a \code{bind-exit} whose
+exit escapes, and inside a handler's extent are not in tail position:
+their frame must remain until they return, as the language's semantics
+already imply.
+
+\section{Closures}\label{sec:internals-closures}
+
+\index{closures}
+Closures are \emph{flat}: a closure is a function object holding its C
+entry and a copy of the value of each free variable it uses. A variable
+that is both captured by a closure and assigned lives instead in a
+one-word heap \term{cell}, which every closure that uses it shares, so
+all of them see each assignment. A function with no free variables ---
+every method defined at top level, for instance --- is a static object
+and costs nothing to make. A local method that is only called, and never
+escapes, is not made into a closure at all: it is contified or called
+directly.
+
+\section{Generic dispatch}\label{sec:internals-dispatch}
+
+\index{generic functions!dispatch}\index{dispatch}
+Because the program is static, the compiler knows every method of every
+generic function. For each generic function it computes, at compile
+time, which methods apply to each combination of argument classes and
+singletons, sorts each such set by specificity, and writes a C
+\term{dispatch function}: a decision tree that tests the arguments ---
+singletons first, by comparing pointers, then a \code{switch} on the
+class id --- and ends at a leaf for each distinct sorted list of
+methods. A leaf checks keyword arguments, if the methods take any, sets
+the thread's next method, and tail-calls the first method. A call that
+no method fits reaches \code{dy\_no\_applicable\_method}, which signals
+the error.
+
+Here is the dispatch function for a generic function \code{area} with
+one method on \code{<square>} and one on \code{<circle>}:
+
+\begin{ccode}
+D dy_gf_area_51a90f52_dispatch(D self, D a0, D a1, D a2, D a3,
+                               intptr_t argc) {
+    (void)a0; (void)a1; (void)a2; (void)a3;
+    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);
+    D x0 = a0; (void)x0;
+    switch (dy_wrapper_of(x0)->id) {
+    case 61:
+        goto leaf_0;
+    case 62:
+        goto leaf_1;
+    default: goto no_method;
+    }
+leaf_0:
+    dy_thread->next_method = DY_FALSE;
+    DY_TAIL_CALL_DIRECT(fn1197_area, DY_OBJ(&dy_method_326),
+                        a0, a1, a2, a3, argc);
+leaf_1:
+    dy_thread->next_method = DY_FALSE;
+    DY_TAIL_CALL_DIRECT(fn1199_area, DY_OBJ(&dy_method_327),
+                        a0, a1, a2, a3, argc);
+no_method:
+    dy_no_applicable_method(self);
+}
+\end{ccode}
+
+\noindent (Three long lines have been broken to fit the page.)
+
+There are no caches and no locks: the tree is fixed, and threads share
+it freely.
+
+Methods are ordered by the rule of the manual's chapter~10: arguments
+compared left to right, a singleton before any class, a class before its
+superclasses. The manual leaves open the order of two classes neither of
+which is a subclass of the other; this compiler, like CLOS and like the
+interactive implementation, puts first the one that comes earlier in the
+\emph{argument's} class precedence list. Two methods that remain
+unordered are ambiguous, and calling them is an error.
+
+Better still is not to dispatch at all. Where type inference shows that
+only one method can apply, the call goes straight to that method, or the
+method is done inline (Section~\ref{sec:internals-calls}). A generic
+function with a single method, specialized on \code{<object>} for every
+argument, is never dispatched.
+
+\paragraph{Classes and \code{make}.}
+For each class that is instantiated, the compiler writes a
+\term{maker}, which allocates the instance, fills each slot from its
+init-keyword or its default, checks the init-keywords, and calls
+\code{initialize} only if the program defines methods on it. A
+\code{make} of a class the program defines, where only the library's
+\code{make} method on \code{<class>} applies, calls the maker directly.
+Slot offsets are fixed where every possible class of the receiver agrees
+on them; otherwise accessors look the offset up in a small table in the
+wrapper.
+
+\section{Exits, cleanups and conditions}\label{sec:internals-exits}
+
+\index{bind-exit@\code{bind-exit}!implementation}
+\index{unwind-protect@\code{unwind-protect}!implementation}
+A \code{bind-exit} whose exit procedure is only called directly, within
+the function that binds it (or within local methods contified into it),
+compiles to a jump: calling the exit assigns the values and does a
+\code{goto} past the body. This is the common case --- an early return
+from a loop --- and it costs nothing.
+
+Every other \code{bind-exit}, and every \code{unwind-protect}, needs a
+\term{frame} in the thread's \term{dynamic chain}, the list of active
+exits, cleanups and handlers, innermost first. The frames live on the C
+stack of three runtime functions in \file{runtime/c/control.c}:
+\code{dy\_call\_with\_exit}, \code{dy\_unwind\_protect} and
+\code{dy\_handler\_bind}. The compiler moves the body into a closure and
+passes it to one of these:
+
+\begin{dylan}
+(unwind-protect p c)  =>  (%primitive unwind-protect (method () p)
+                                                     (method () c))
+(bind-exit (x) b)     =>  (%primitive call-with-exit (method (x) b))
+\end{dylan}
+
+\code{dy\_call\_with\_exit} pushes an exit frame, calls \code{\_setjmp},
+and calls the body with an exit procedure. Calling that exit procedure
+stores its arguments as the values to return, runs the cleanups of every
+frame between it and the target, innermost first, and \code{longjmp}s to
+the target frame. An exit called after its \code{bind-exit} has returned
+is detected --- each frame carries a serial number --- and signalled as
+an error. Because only these runtime functions call \code{setjmp},
+generated code never does, and can make tail calls everywhere.
+
+\paragraph{Conditions.}
+\index{conditions!implementation}
+Handlers are frames in the same chain. \code{signal} walks the chain
+for a handler whose type matches and whose test, if any, is true, and
+calls it with the condition and a \code{next-handler} that continues the
+search further out; if none applies it calls \code{default-handler}. The
+condition classes and \code{signal}, \code{error}, \code{cerror},
+\code{check-type}, \code{abort}, \code{break} and
+\code{default-handler} are written in Dylan, in
+\file{runtime/dylan/01-conditions.dyl}; only the frame operations and
+the transfer of control are C. When the runtime detects an error of its
+own --- a wrong argument count, a type error, an overflow --- it calls
+back into that Dylan code, so the error is an ordinary
+\code{<simple-error>} or \code{<type-error>} that handlers can catch.
+
+\section{The garbage collector}\label{sec:internals-gc}
+
+\index{garbage collection}\index{Boehm collector}
+Memory is managed by the Boehm-Demers-Weiser collector, \file{libgc},
+built for threads. It is a \emph{conservative} collector: it treats any
+word on a stack, in a register or in a scanned object that looks like a
+pointer into the heap as one. A tagged integer or character that
+happens to look like such a pointer can only keep an object alive longer
+than necessary; it can do no harm. Strings
+and float boxes are allocated atomic so that their contents are not
+mistaken for pointers. Each thread's state --- the values buffer, the
+argument area, the dynamic chain --- is allocated uncollectable, so the
+collector scans it and sees pointers held there.
+
+The collector does mark-and-sweep collection, in parallel on several
+processors, and allocates small objects from thread-local free lists
+without locking. Its behavior can be tuned with environment variables
+(Chapter~\ref{ch:performance}).
+
+\section{Threads}\label{sec:internals-threads}
+
+\index{threads!implementation}
+\file{dylan.h} defines \code{GC\_THREADS} and includes \file{gc.h}
+before \file{pthread.h}, so \code{pthread\_create} goes through the
+collector, which registers each thread's stack. Each thread has one
+\code{\_Thread\_local} pointer, \code{dy\_thread}, to its state: the
+values buffer, the argument area, the dynamic chain, its next method,
+its pending tail call in trampoline mode, its \code{<thread>} object,
+and its values of the program's thread variables.
+
+A thread starts by setting up that state and an exit frame at the top of
+its dynamic chain, then calls its function. An unhandled serious
+condition reaches \code{default-handler}, which in a thread other than
+the main one records the condition in the \code{<thread>} and unwinds to
+that top frame, ending the thread; \code{join-thread}, written in Dylan
+in \file{runtime/dylan/20-threads.dyl}, finds it there and signals a
+\code{<thread-error>}. Threads are detached when made; \code{join-thread}
+waits on a condition variable in the \code{<thread>}. A \code{<lock>}
+is an error-checking POSIX mutex, a \code{<recursive-lock>} a recursive
+one, and an \code{<atomic-integer>} a C11 \code{\_Atomic} integer.
+
+\section{Separate compilation of the library}\label{sec:internals-separate}
+
+\index{separate compilation}\index{library cache}
+Compiling the library's megabyte of C with every program would double
+the time of a small build. So, by default, the compiler compiles the
+library \emph{as if it did not know the program}. Every function the
+\code{dylan} module exports, or that the compiler's expansions name, may
+be called from anywhere with anything: no argument types and no
+specialized entries are derived from the program's calls, and nothing of
+the library is dropped. The C names of the library's constants,
+variables and generic functions are derived from what they are, not
+from the order in which the compiler met them, and its C temporaries are
+numbered within each function. \file{\meta{name}-dylan.c} declares only
+what it refers to. The result is that the library's C is the same text
+for almost every program, and the driver compiles it once per C compiler
+and option set and caches the object (Section~\ref{sec:dylanc-cache}).
+
+What is lost is specialization of library code to the program, and the
+dropping of unused library code. Calls \emph{from} the program
+\emph{into} the library lose little, since the compiler still inlines
+the library's arithmetic, \code{element}, \code{size} and iteration on
+known collections at the call site.
+
+\section{Tree shaking}\label{sec:internals-shaking}
+
+\index{tree shaking}
+With \cmd{-Os} or \cmd{-{}-whole} the library is compiled with the
+program, and \file{backend/shake.lisp} keeps only what the program can
+reach. The program's own top-level forms are all kept, as are the
+library's top-level forms that are not definitions and every
+\code{define-class} (classes are cheap static data). A library
+definition of a variable, generic function or method is kept when
+something kept refers to its variable. A method is kept, besides, only
+if each class its specializers name could have instances --- a class
+the runtime itself makes instances of, or one that something kept uses
+as a value (makes, say, or answers). Naming a class as a specializer or
+a superclass does not count.
+
+Shaking is by name and class, not by data flow, and so it keeps more
+than a program needs: a call of a generic function such as
+\code{print-object}, \code{make} or \code{as} keeps every method that
+could apply to a class with instances. That is why hello world is still
+about 220~KB when built \cmd{-Os}.
+
+\section{Type inference and inlining}\label{sec:internals-types}
+\label{sec:internals-calls}
+
+\index{type inference}
+The type of a variable, for the compiler, is a class all its values are
+instances of, or nothing known. Types come from:
+
+\begin{itemize}
+\item constants;
+\item the result classes of the operations done inline --- an integer
+  addition answers an integer, a float multiplication a
+  \code{<double-float>};
+\item \code{make} of a class whose maker the call goes to;
+\item the getters of slots declared with a \code{type:};
+\item the type a \code{bind} declares, as in
+  \code{(bind (((x <integer>) \meta{init})) ...)}, which is checked when
+  the binding is made;
+\item the specializers of a method defined with \code{define-method},
+  which dispatch has already checked;
+\item for local functions, global functions and sole methods whose every
+  call is known --- a loop, most often --- the classes of the arguments
+  at those calls, and the classes of what the functions return.
+\end{itemize}
+
+These are found together, starting from nothing, until none changes.
+The types are also \emph{flow-sensitive} where a test proves more: in
+the branch an \code{(instance? x C)} test chooses, \code{x} is known to
+be a \code{C}.
+
+Calls whose function is known are then resolved (\file{calls.lisp}). A
+call of \code{+}, \code{-}, \code{*}, \code{/}, \code{<}, \code{>} or
+\code{=} with two arguments calls the binary generic function
+(\code{binary+} and so on) directly. The library's methods for integer
+and float arithmetic and comparison, for \code{size}, \code{element}
+and the iteration protocol on lists, simple object vectors and byte
+strings, and \code{id?}, \code{not}, \code{car}, \code{cdr},
+\code{instance?} and slot getters and setters are done \emph{inline} ---
+when the static program shows that no other method could apply to such
+arguments. Each inline case is guarded by a test of the arguments' classes,
+and the test is left out where their types are known. A float
+operation with one argument known to be a \code{<double-float>} answers a
+\code{<double-float>} (float contagion), so its result's type is known
+even if the other argument's is not.
+
+\paragraph{Unboxing.} \index{unboxing}
+A \code{<double-float>} variable that no closure holds, and every use of
+which wants a C \code{double}, is \emph{unboxed}: it is a C
+\code{double} local, and computing it allocates nothing. A float
+variable that is returned, stored in a slot or passed to an unknown
+function needs its box, and is allocated on the heap each time it
+changes. Integers need no unboxing; they are immediate.
+
+\paragraph{Escape analysis.} \index{escape analysis}
+A \code{\#rest} list that is only walked, through variables no closure
+holds, is built on the C stack (up to eight pairs); keyword arguments
+are parsed where they were passed, with no list at all. A closure, or an
+instance whose class's maker \code{make} calls (and which has no
+\code{initialize} methods), is made on the stack of the function that
+makes it when nothing can reach it after that function returns: it is
+only tested, called, given to a slot accessor sure to apply, or passed to
+a known function whose parameter is used the same way. Constants
+propagate through \code{bind}s, integer arithmetic on constants is done
+when compiling, an \code{if} on a constant keeps one branch, and unused
+pure bindings are dropped.
+
+In a debug build (\cmd{-g}) none of the inferred types is used, so every
+inline operation tests its arguments.
+
+\section{Reading the generated C}\label{sec:internals-reading}
+
+\index{C files!reading}
+\cmd{dylanc -k} keeps the C. Here is a small program, \file{sum.dyl}:
+
+\begin{dylan}
+(define-method sum-to ((n <integer>))
+  (for ((i 0 (+ i 1))
+        (s 0 (+ s i)))
+       ((> i n) s)))
+(print (sum-to 100))
+\end{dylan}
+
+\noindent and the C function the compiler writes for \code{sum-to}, in
+\file{sum-dylan-user.c}:
+
+\begin{ccode}
+D fn1190_sum_to(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;
+    D v105609, v105610, v105612, v105613, v105614, v105615, v105616,
+      v105617, v105618, v105619;
+    D t1;
+    D t2;
+    D t3;
+    D t4;
+#line 1 "sum.dyl"
+    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);
+    v105609 = a0;
+#line 2 "sum.dyl"
+    t1 = DY_INT(0);
+    t2 = DY_INT(0);
+    v105612 = t1;
+    v105613 = t2;
+    goto for_1;
+    for_1:;
+#line 4 "sum.dyl"
+    v105615 = DY_BOOL((intptr_t)(v105609) < (intptr_t)(v105612));
+#line 2 "sum.dyl"
+    if (v105615 != DY_FALSE) {
+        dy_thread->mv_count = 1;
+        return v105613;
+    } else {
+        v105617 = dy_int_add(v105612, DY_INT(1));
+#line 3 "sum.dyl"
+        v105619 = dy_int_add(v105613, v105612);
+#line 2 "sum.dyl"
+        t3 = v105617;
+        t4 = v105619;
+        v105612 = t3;
+        v105613 = t4;
+        goto for_1;
+    }
+}
+\end{ccode}
+
+\noindent (one line of declarations has been broken to fit the page).
+Reading it from the top:
+
+\begin{itemize}
+\item The function has the uniform entry. Its name, \code{fn1190\_sum\_to},
+  is a number and the Dylan name; every variable \code{v}\meta{n} is
+  one IR variable, and every \code{t}\meta{n} a temporary.
+\item It checks that it was given one argument; the method is the only
+  method of \code{sum-to}, and its dispatch function has already checked
+  that the argument is an \code{<integer>}.
+\item The \code{for} loop has become a label, \code{for\_1}, and a
+  \code{goto}. The step forms are evaluated into temporaries before any
+  loop variable is assigned, because \code{for} steps its variables in
+  parallel.
+\item \code{(> i n)} is a single C comparison of the tagged words, with
+  no test of their classes: \code{n} is an integer by its specializer,
+  and \code{i} by type inference, since it starts at 0 and is only ever
+  incremented. \code{(> i n)} became \code{(< n i)}, and on tagged
+  integers $2a+1 < 2b+1$ exactly when $a<b$.
+\item \code{(+ i 1)} and \code{(+ s i)} are \code{dy\_int\_add},
+  an inline function in \file{dylan.h} that adds the tagged words and
+  signals an error on overflow.
+\item Returning one value sets the values count to 1 first, because a
+  value count might be left over from a call made earlier in the
+  function.
+\item The \code{\#line} directives name the Dylan line each statement came
+  from.
+\end{itemize}
+
+If \code{sum-to} were instead written as \code{(define sum-to (method
+((n <integer>)) ...))}, \code{n} would not be known to be an integer
+inside it: a method made by \code{method} and stored in a variable is
+called through the variable, and must check its own argument. The
+comparison would then be preceded by a test, \code{if
+(DY\_IS\_INT(v105609))}, with a call of the generic function
+\code{binary<} for the other case. Small differences like this are the
+subject of the next chapter.
+
+\fussy

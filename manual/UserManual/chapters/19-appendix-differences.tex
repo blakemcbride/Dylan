@@ -1,0 +1,250 @@
+\chapter{Differences from the 1992 Manual}\label{app:differences}
+\sloppy
+
+The standard for both implementations is the 1992 manual,
+\emph{Dylan: an object-oriented dynamic language} (\textsl{DIRM}). Where
+an implementation departs from it --- by necessity, by a decision where
+the manual is silent or contradicts itself, or by adding something ---
+this appendix says so. It collects in one place what the other chapters
+mention as they go. Each entry says which implementation it concerns:
+\emph{both}, the \emph{interactive} Common Lisp implementation, or the
+\emph{compiler} to C.
+
+\section{Different behavior, in both implementations}
+\label{sec:diff-both}
+
+\begin{description}
+\item[\code{!key}, \code{!rest} and \code{!next}.]
+  \index{"!key@\code{"!key}}
+  These are read as \code{\#key}, \code{\#rest} and \code{\#next}, as
+  Thomas read them, because Thomas's programs --- the book's examples
+  among them --- use them. So they cannot be used as variable names.
+  Every other name the manual allows is allowed.
+  \code{((method (a !key (b 2)) (list a b)) 1 b: 5)} \yields{}
+  \code{(1 5)}.
+
+\item[Modules.] \index{modules}
+  The 1992 manual describes modules but leaves the way they are declared
+  to the programming environment. Both implementations declare them with
+  \code{define-module}, as design note~32 describes, written in prefix
+  form, and name a file's module with a \code{module:} header, as design
+  note~33 describes. Chapter~\ref{ch:modules} has the details.
+
+\item[Backquote.] \index{backquote}
+  Chapter 3 of the manual defers backquote to ``a separate section of
+  this manual'' that the manual does not contain. Both implementations
+  follow the usual Lisp rules for \code{`}, \code{,} and \code{,@},
+  nesting included: \code{`(1 ,(+ 1 1) ,@(list 3 4))} \yields{}
+  \code{(1 2 3 4)}.
+
+\item[\code{map-into}.] \index{map-into@\code{map-into}}
+  The function is passed only the elements of the source collections, as
+  chapter 12's prose and design note~27 say. The chapter's one example,
+  \code{(map-into x + '(1 2 3 4))} with \code{x} holding
+  \code{(100 100 200 200)}, shows \code{(101 102 203 204)}, which would
+  require passing the target's elements too; here it answers
+  \code{(1 2 3 4)}.
+
+\item[Irrational functions.]
+  \code{sqrt}, \code{exp}, \code{log}, the trigonometric functions and
+  their kin answer floats for exact arguments, as in Common Lisp, which
+  the manual cites for them, and as the manual's examples show:
+  \code{(sqrt 25)} \yields{} \code{5.0}, \code{(exp 0)} \yields{}
+  \code{1.0}. Rationals are otherwise exact: \code{(/ 6 4)} \yields{}
+  \code{3/2}.
+
+\item[Method specificity among unrelated classes.]
+  \index{specificity}
+  The manual orders applicable methods by comparing their specializers,
+  but leaves open the order of two classes neither of which is a
+  subclass of the other. Both implementations follow CLOS: the class
+  that comes first in the \emph{argument's} class precedence list is
+  more specific.
+\begin{dylan}
+(define-class <a> (<object>))
+(define-class <b> (<object>))
+(define-class <c> (<a> <b>))
+(define-method which ((x <a>)) 'a)
+(define-method which ((x <b>)) 'b)
+(which (make <c>))                 ; => a
+\end{dylan}
+\end{description}
+
+\section{Additions in both implementations}\label{sec:diff-additions}
+
+\begin{description}
+\item[Printing.] \code{display}, \code{newline}, \code{print} and
+  \code{write-line}, and \code{pp}, which pretty-prints an object
+  (Chapter~\ref{ch:printing}). The manual uses some of these in its
+  examples without defining them.
+\end{description}
+
+\section{The interactive implementation}\label{sec:diff-interactive}
+
+\begin{description}
+\item[Lisp access.] \code{lisp-variable} and \code{lisp-procedure}
+  reach Common Lisp values and functions from Dylan. Lisp's \code{NIL}
+  arrives as the empty list, not \code{\#f}
+  (Chapter~\ref{ch:lisp}).
+\item[\code{\#t} and \code{\#f}.] Their class, as \code{object-class}
+  answers it, is \code{<object>}; the manual names no class for them.
+  (The compiler differs; see below.)
+\item[Printed representations.] Objects without a printed syntax print
+  in the implementation's own way: a class as
+  \code{\#[dylan-class <integer>]}, for instance, where the compiled
+  program prints \code{\{the class <integer>\}}. A single float prints
+  as \code{1.5f0} here and \code{1.5s0} in a compiled program.
+\item[No extensions of the compiler.] The interactive implementation has
+  none of the compiler's macros, threads and streams, and no
+  \code{format}, \code{write} or \code{print-object}.
+\end{description}
+
+\section{The compiler to C}\label{sec:diff-compiler}
+
+\subsection{What a static program cannot do}
+
+The compiler compiles whole, static programs, whose classes and generic
+functions are fixed when they are compiled
+(Section~\ref{sec:dylanc-static}). The manual allows a running program
+to change them; a compiled program cannot:
+
+\begin{itemize}
+\item \code{add-method}, \code{remove-method}, \code{add-slot},
+  \code{remove-slot} and \code{freeze-methods} are compile errors,
+  wherever they appear.
+\item Each specializer of a method made with \code{define-method}, and
+  each superclass of a class, must be known when compiling: a class, a
+  constant variable holding one, \code{(singleton \meta{x})}, or
+  \code{(make <singleton> object: \meta{x})} of a constant. A
+  \code{define-slot} owner may be any singleton, but a class owner must
+  be known when compiling.
+\item A class cannot be defined twice.
+\item \code{(make <class> ...)} is an error when it runs. A
+  \code{<generic-function>} made by \code{make} has no methods, and none
+  can be added.
+\item There is no evaluation or loading of code at run time.
+\end{itemize}
+
+\subsection{Numbers}
+
+\begin{itemize}
+\item \textbf{Integers are 63 bits}, from $-2^{62}$ to $2^{62}-1$. There
+  are no bignums. A literal out of range is a compile error; an
+  arithmetic result out of range signals ``integer overflow (integers are
+  63 bits)'' rather than giving a wrong answer. The numerator and
+  denominator of a ratio have the same limit. The interactive
+  implementation has bignums: \code{(* 4611686018427387904 2)}
+  \yields{} \code{9223372036854775808} there, while in a compiled program
+  even the literal is an error.
+\item \textbf{No complex numbers.} \code{<complex>} exists, abstract, as
+  the superclass of \code{<real>} (so \code{(instance? 3 <complex>)}
+  \yields{} \code{\#t}), but it has no instances. A complex literal is a
+  compile error, and a function whose result would be complex signals an
+  error: \code{(sqrt -4.0)} signals ``sqrt: the result would be complex''
+  where the interactive implementation answers \code{\#c(0.0 2.0)}.
+\item \code{<single-float>} is a C \code{float}; \code{<double-float>}
+  and \code{<extended-float>} are both a C \code{double}. Floats print
+  as the shortest decimal that reads back: \code{21.0}, and \code{1.5s0}
+  for a single float.
+\end{itemize}
+
+\subsection{Conditions without a debugger}
+
+There is no interactive debugger. An unhandled serious condition prints
+\code{Dylan error:} and its message on the standard error and ends the
+program with status~1 --- or, in a thread other than the main one, ends
+that thread (Chapter~\ref{ch:extensions}). An unhandled warning prints
+\code{Dylan warning:} and its message and continues. \code{break}
+prints its message and returns \code{\#f}. \code{restart-query} and
+\code{return-query} do nothing.
+
+\subsection{Representation}
+
+\code{\#t} and \code{\#f} are instances of an internal class,
+\code{<boolean>}, which \code{object-class} answers but which the
+\code{dylan} module does not export (the manual names no class for
+them). \code{seal} works as the manual says, and \code{make-read-only}
+answers its argument, a class, unchanged, since a compiled program's
+classes are already fixed.
+
+\subsection{Additions}
+
+All of these are extensions; the 1992 manual has none of them.
+
+\begin{itemize}
+\item \textbf{Macros}: \code{define-macro}, \code{define-for-macros},
+  and \code{gensym} at compile time; \cmd{dylanc -E} to see expansions
+  (Chapter~\ref{ch:extensions}).
+\item \textbf{Threads}: \code{make-thread}, \code{join-thread},
+  \code{current-thread}, \code{thread-yield}; \code{<lock>},
+  \code{<recursive-lock>}, \code{acquire-lock}, \code{release-lock} and
+  \code{with-lock}; \code{<condition-variable>} with
+  \code{wait-condition-variable}, \code{notify-condition-variable} and
+  \code{notify-all-condition-variable}; \code{<atomic-integer>} with
+  \code{atomic-value}, \code{atomic-add!} and
+  \code{atomic-compare-and-swap!}; \code{define-thread-variable} and
+  \code{dynamic-bind}; \code{<thread-error>} with
+  \code{thread-error-thread} and \code{thread-error-condition}
+  (Chapter~\ref{ch:extensions}).
+\item \textbf{Streams}: \code{<stream>}, \code{*standard-output*},
+  \code{*standard-error*}, \code{<string-stream>} with
+  \code{stream-contents}, and \code{format}; every printing function
+  takes \code{stream:}. The manual uses streams but does not define
+  them. There is no input.
+\item \textbf{Printing}: \code{write}, and the generic function
+  \code{print-object}, to which programs add methods to control how
+  their objects print (Chapter~\ref{ch:printing}).
+\item \textbf{Timing}: \code{current-milliseconds}.
+\end{itemize}
+
+\section{Where the two implementations disagree}\label{sec:diff-between}
+
+Besides the differences above, the implementations disagree where the
+manual leaves a choice open or where the host shows through. A portable
+program depends on none of these; each is described where it arises.
+
+\begin{itemize}
+\item The operator of a call is evaluated first by the compiler to C
+  and last by the interactive implementation; arguments are evaluated
+  left to right in both (Section~\ref{sec:syntax-calls}).
+\item A method whose parameter list has \code{\#key} with no keywords
+  accepts no keywords in the compiler to C and any keyword in the
+  interactive implementation (Section~\ref{sec:functions-keyword-checking}).
+\item A handler that returns from the error \code{check-type} signals
+  leaves it unhandled in the compiler to C; in the interactive
+  implementation \code{check-type} answers what the handler returned
+  (Section~\ref{sec:conditions-signalling}).
+\item \code{print} and \code{write-line} write their newline after the
+  object in the compiler to C and before it in the interactive
+  implementation (Section~\ref{sec:printing-functions}).
+\item Strings: in the compiler to C a literal with a character above
+  code 255 is a \code{<unicode-string>}, and equal literals may be one
+  object; in the interactive implementation every string is a
+  \code{<byte-string>} (Section~\ref{sec:collections-strings}).
+\item \code{min} and \code{max} of equal numbers of different classes,
+  and functions whose true result is complex or infinite, answer
+  differently (Sections~\ref{sec:numbers-misc}
+  and~\ref{sec:numbers-transcendental}).
+\item Assigning a read-only module variable is a compile error in the
+  compiler to C and an error when it runs in the interactive
+  implementation, which also needs modules declared before use
+  (Sections~\ref{sec:modules-readonly} and~\ref{sec:modules-lisp}).
+\item Error messages are worded differently
+  (Section~\ref{sec:conditions-runtime-errors}).
+\end{itemize}
+
+\section{Known differences of the interactive implementation from Thomas}
+
+The interactive implementation began as a translation of Thomas, and
+its test compares results with Thomas's 1992 transcripts
+(Appendix~\ref{app:testing}). Where Thomas and the manual disagree, the
+manual is followed: \code{\#f} and the empty list are distinct objects,
+and \code{\#f} prints as \code{\#f}; floats print as the manual prints
+them (\code{9.0}, \code{0.5}); \code{sqrt} answers a float;
+\code{make} given a keyword that no slot and no \code{initialize}
+method accepts is an error, as in the compiler to C; reading a slot that
+nothing initialized is an error; and \code{map-into} behaves as
+described above. These are not differences from the manual, but a
+reader comparing with Thomas's documentation will meet them.
+
+\fussy

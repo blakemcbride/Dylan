@@ -1,0 +1,628 @@
+\chapter{Conditions}\label{ch:conditions}
+
+A \term{condition} is an object that represents an exceptional
+situation: an error, a warning, or a request to recover in some
+particular way. A program \term{signals} a condition when the situation
+arises, and the condition system finds a \term{handler} for it, a
+function that some caller established in advance, and calls it. This
+chapter follows chapter~13 of the 1992 manual (\dylanbook{chapter 13}),
+which both implementations provide complete; it also describes what each
+implementation does with a condition no handler takes, and the errors
+the implementations themselves signal. As in chapter~\ref{ch:numbers}, a
+class in a result is written by its name alone.
+
+\section{How the condition system works}\label{sec:conditions-overview}
+
+\index{signal}\index{handler}
+Dylan's conditions are objects, instances of subclasses of
+\code{<condition>}, and a handler is chosen by the condition's class: a
+handler for \code{<error>} applies to every error, one for
+\code{<type-error>} only to type errors. Handlers are established
+dynamically, for the duration of a form's evaluation, and the most
+recently established applicable handler is tried first.
+
+Signalling is a function call. When a condition is signalled, the
+signaller is still active and the handler runs ``on top of'' it. The
+handler then does one of three things:
+
+\begin{itemize}
+\item It \textbf{exits} non-locally, abandoning the computation that
+  signalled, to a point established outside it. This is the common case,
+  and \code{handler-case} does it for you.
+\item It \textbf{returns} values, which become the values of
+  \code{signal} in the signaller. This is allowed only for conditions
+  whose \term{recovery protocol} says what the values mean, such as
+  warnings.
+\item It \textbf{declines}, by calling the next handler, letting an
+  older handler decide.
+\end{itemize}
+
+\noindent If every handler declines, or there are none, the condition's
+\term{default handler} runs. For a warning it prints the message and
+returns; for an error it stops the program, or in the Common Lisp
+implementation enters the debugger.
+
+Recovery can also be formal. A \term{restart} is a condition that a
+handler signals to ask for a particular recovery, and a \term{restart
+handler}, established by the code that knows how to recover, handles it.
+Section~\ref{sec:conditions-restarts} describes restarts.
+
+\section{The condition classes}\label{sec:conditions-classes}
+
+\index{condition classes}
+The predefined condition classes are these:
+
+\begin{itemize}[nosep]
+\item \code{<condition>}\index{<condition>}
+  \begin{itemize}[nosep]
+  \item \code{<serious-condition>}\index{<serious-condition>}
+    \begin{itemize}[nosep]
+    \item \code{<error>}\index{<error>}
+      \begin{itemize}[nosep]
+      \item \code{<simple-error>}\index{<simple-error>}
+      \item \code{<type-error>}\index{<type-error>}
+      \end{itemize}
+    \end{itemize}
+  \item \code{<warning>}\index{<warning>}
+    \begin{itemize}[nosep]
+    \item \code{<simple-warning>}\index{<simple-warning>}
+    \end{itemize}
+  \item \code{<restart>}\index{<restart>}
+    \begin{itemize}[nosep]
+    \item \code{<simple-restart>}\index{<simple-restart>}
+    \item \code{<abort>}\index{<abort>}
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\begin{description}
+\item[\code{<condition>}] The class of all conditions. Its default
+  handler returns \code{\#f}, so a plain condition nobody handles is
+  ignored.
+\item[\code{<serious-condition>}] Conditions that cannot safely be
+  ignored. Its default handler is the debugger of last resort
+  (section~\ref{sec:conditions-unhandled}).
+\item[\code{<error>}] Serious conditions that represent something wrong
+  with the program, as distinct from its environment; a handler for
+  \code{<error>} does not catch other serious conditions.
+\item[\code{<simple-error>}] An error that is just a message: a format
+  string and arguments. They are given by the init-keywords
+  \code{format-string:} and \code{format-arguments:}, and the functions
+  \code{condition-format-string}\index{condition-format-string} and
+  \code{condition-format-arguments}\index{condition-format-arguments}
+  read them. \code{error} makes one from a string.
+\item[\code{<type-error>}] An error saying a value was not of the
+  expected type. Its init-keywords are \code{value:} and \code{type:},
+  read by \code{type-error-value}\index{type-error-value} and
+  \code{type-error-expected-type}\index{type-error-expected-type}.
+  \code{check-type} signals one, and so do the implementations when a
+  typed slot or variable is given a value of the wrong type.
+\item[\code{<warning>}] Conditions worth reporting but not stopping
+  for. The default handler prints the message and returns \code{\#f}.
+\item[\code{<simple-warning>}] A warning that is a format string and
+  arguments, like \code{<simple-error>}; \code{signal} makes one from a
+  string.
+\item[\code{<restart>}] Requests to recover. The default handler signals
+  an error saying no handler was established for the restart. The
+  init-keyword \code{condition:} is accepted, so that a restart can name
+  the condition it recovers from.
+\item[\code{<simple-restart>}] The restart \code{cerror} and
+  \code{break} establish handlers for.
+\item[\code{<abort>}] The restart that asks to abandon the current
+  command and return to something like a command loop.
+\end{description}
+
+\noindent Conditions are made with \code{make} like any object. A
+condition prints as its message:
+
+\begin{dylan}
+(print (make <simple-error> format-string: "bad value: ~s"
+                            format-arguments: '(42)))
+; prints bad value: 42
+\end{dylan}
+
+\section{Signalling}\label{sec:conditions-signalling}
+
+\index{error}
+\code{(error \meta{condition})} signals a condition and never returns.
+\code{(error \meta{string} \meta{argument} ...)} makes a
+\code{<simple-error>} from a format string and arguments and signals it.
+This is the usual way to report an error:
+
+\begin{dylan}
+(define-method withdraw (balance amount)
+  (if (> amount balance)
+      (error "cannot withdraw ~a from a balance of ~a" amount balance)
+      (- balance amount)))
+\end{dylan}
+
+\noindent If a handler for the error returns instead of exiting,
+\code{error} does not return either: it reports the error as unhandled
+(section~\ref{sec:conditions-unhandled}).
+
+\index{signal}
+\code{(signal \meta{condition})} signals a condition and answers whatever
+values the handler returns. \code{(signal \meta{string} \meta{argument}
+...)} makes a \code{<simple-warning>} and signals it. With no handler, a
+warning is printed and \code{signal} answers \code{\#f}:
+
+\begin{dylan}
+(signal "disk is ~a% full" 91)
+; prints a warning:  disk is 91% full
+; => #f
+\end{dylan}
+
+\noindent The compiler to C prints the warning on standard error as
+\code{Dylan warning: disk is 91\% full}; the Common Lisp implementation
+uses Common Lisp's \code{warn}, which prints
+\code{WARNING: disk is 91\% full}.
+
+\index{format directives}
+The format strings of \code{error}, \code{signal}, \code{cerror} and
+\code{break} understand the directives \code{\textasciitilde{}a} and
+\code{\textasciitilde{}d} (the argument as \code{display} prints it),
+\code{\textasciitilde{}s} (as \code{print} prints it),
+\code{\textasciitilde{}\%} (a new line) and \code{\textasciitilde{}\textasciitilde{}}
+(a tilde). Other directives are copied as they are, and arguments no
+directive uses are printed after the message, separated by spaces.
+
+\index{cerror}
+\code{(cerror \meta{restart-description} \meta{condition-or-string}
+\meta{argument} ...)} is a \term{continuable error}. It signals the error
+as \code{error} does, but first establishes a handler for
+\code{<simple-restart>} described by \meta{restart-description}. If a
+handler (or, in the Common Lisp implementation, a person at the
+debugger) signals a \code{<simple-restart>}, \code{cerror} returns
+\code{\#f} and the program carries on with the correction the
+description promised:
+
+\begin{dylan}
+(define-method careful-sqrt (x)
+  (if (negative? x)
+      (begin (cerror "Use the absolute value" "negative argument ~a" x)
+             (sqrt (abs x)))
+      (sqrt x)))
+
+(handler-bind (<error> (method (c next) (signal (make <simple-restart>))))
+  (careful-sqrt -16))                            ; => 4.0
+\end{dylan}
+
+\index{check-type}
+\code{(check-type \meta{value} \meta{type})} answers the value if it is
+an instance of the type, and signals a \code{<type-error>} if not:
+
+\begin{dylan}
+(check-type 5 <integer>)        ; => 5
+(handler-case (check-type "abc" <integer>)
+  ((<type-error> condition: c)
+   (list (type-error-value c) (type-error-expected-type c))))
+; => ("abc" <integer>)
+\end{dylan}
+
+\noindent The implementations differ when a handler returns from the
+type error: the compiler to C signals it with \code{error}, so a
+returning handler makes it unhandled; the Common Lisp implementation
+signals it with \code{signal}, so \code{check-type} answers whatever the
+handler returned.
+
+\index{abort}
+\code{(abort)} signals an \code{<abort>} with \code{error}; it never
+returns. A handler for \code{<abort>} decides what abandoning means:
+
+\begin{dylan}
+(handler-case (begin (abort) 'not-reached)
+  ((<abort>) 'aborted))         ; => aborted
+\end{dylan}
+
+\index{break}
+\code{(break)} or \code{(break \meta{string} \meta{argument} ...)} is a
+breakpoint. In the Common Lisp implementation it enters the debugger
+with the message, offering a restart that continues; in the compiler to
+C, which has no debugger, it prints \code{Dylan break:} and the message
+on standard error and continues. Either way it then answers \code{\#f}.
+
+\section{Handling with handler-case}\label{sec:conditions-handler-case}
+
+\index{handler-case}
+\code{handler-case} is the usual way to handle conditions: it evaluates a
+form, and if a condition of one of the listed classes is signalled during
+it, abandons the form and evaluates the matching clause instead.
+
+\begin{dylan}
+(handler-case protected-form
+  ((type option ...) form ...)
+  ...)
+\end{dylan}
+
+\noindent If the protected form finishes, \code{handler-case} answers its
+values. If a condition is signalled that is an instance of a clause's
+\meta{type} (a class, or a singleton), the protected form is exited and
+that clause's forms are evaluated, their last value being the answer, or
+\code{\#f} if there are none. The clauses are tried in order, so put the
+more specific classes first. The options are:
+
+\begin{description}
+\item[\code{condition: \meta{name}}] binds the variable \meta{name} to the
+  condition in the clause's forms;
+\item[\code{test: \meta{function}}] a predicate the condition must
+  also satisfy for the clause to apply;
+\item[\code{description: \meta{string}}] a description of the handler,
+  which introspection (\code{do-handlers}) can see.
+\end{description}
+
+\begin{dylan}
+(handler-case (error "bad value: ~s" 42)
+  ((<simple-error> condition: c)
+   (list (condition-format-string c) (condition-format-arguments c))))
+; => ("bad value: ~s" (42))
+
+(handler-case (error "code ~a" 7)
+  ((<simple-error> test: (method (c) (= (first (condition-format-arguments c)) 8)))
+   'eight)
+  ((<error>) 'other))
+; => other
+
+(handler-case (error "x")
+  ((<error>) 'first)
+  ((<simple-error>) 'second))
+; => first
+
+(handler-case (values 1 2)
+  ((<error>) 'oops))
+; => 1 and 2
+\end{dylan}
+
+\noindent The clause's forms run after the exit, in the dynamic
+environment of the \code{handler-case} itself, so its handlers are no
+longer in force there. A singleton type handles one particular
+condition object:
+
+\begin{dylan}
+(define c1 (make <simple-error> format-string: "one"))
+(define c2 (make <simple-error> format-string: "two"))
+(define-method try (c)
+  (handler-case (error c)
+    (((singleton c1)) 'got-c1)
+    ((<simple-error> condition: e) (list 'other (condition-format-string e)))))
+(list (try c1) (try c2))     ; => (got-c1 (other "two"))
+\end{dylan}
+
+\section{Handling with handler-bind}\label{sec:conditions-handler-bind}
+
+\index{handler-bind}\index{next-handler}
+\code{handler-bind} is the primitive form, and both implementations
+have it. It establishes one handler, a function, while its body is
+evaluated, and answers the body's values:
+
+\begin{dylan}
+(handler-bind (type function option ...)
+  form ...)
+\end{dylan}
+
+\noindent The type, function and options are evaluated before the body;
+the options are \code{test:} and \code{description:}, as for
+\code{handler-case}. When an applicable condition is signalled, the
+function is called with two arguments, the condition and a
+\term{next-handler} function, without exiting anything. It may exit
+non-locally (with \code{bind-exit}, chapter~\ref{ch:control}); it may
+return values, which \code{signal} then answers; or it may decline by
+calling the next-handler with no arguments, which tries the next older
+applicable handler.
+
+\begin{dylan}
+(handler-bind (<warning> (method (c next) (print 'outer) 'outer-value))
+  (handler-bind (<warning> (method (c next) (print 'inner-declines) (next)))
+    (signal "low battery")))
+; prints inner-declines, then outer
+; => outer-value
+\end{dylan}
+
+\noindent There is no ``condition wall'': while a handler runs, every
+handler established before it is still in force, including those
+established inside the signalling code. That is what lets a handler
+signal a restart that the signaller handles
+(section~\ref{sec:conditions-restarts}). It also means that a handler
+which signals a condition of its own class, or causes an error it also
+handles, can recurse until the stack is exhausted.
+
+\section{Default handlers}\label{sec:conditions-default-handler}
+
+\index{default-handler}
+When no dynamic handler handles a condition, \code{signal} calls
+\code{default-handler}, a generic function, on it. Its predefined methods
+are:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Method on & Does \\
+\midrule
+\code{<condition>} & answers \code{\#f} \\
+\code{<serious-condition>} & reports the condition as unhandled \\
+\code{<warning>} & prints the message, answers \code{\#f} \\
+\code{<restart>} & signals an error: no handler was established for the restart \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent A condition class of your own inherits the method of its
+superclass. A condition that is neither serious nor a warning is simply
+ignored when unhandled:
+
+\begin{dylan}
+(define-class <note> (<condition>)
+  (text init-keyword: text:))
+
+(signal (make <note> text: "hello"))          ; => #f
+(handler-case (signal (make <note> text: "hi"))
+  ((<note> condition: n) (text n)))           ; => "hi"
+\end{dylan}
+
+\noindent A program may call \code{default-handler} itself, and may add
+methods to it for its own classes.
+
+\section{Restarts}\label{sec:conditions-restarts}
+
+\index{restart}
+A restart is a condition that asks for a particular way of recovering.
+The code that knows how to recover establishes a handler for a restart
+class, usually with \code{handler-case}, around the code that may fail;
+a handler for the original condition, which knows which recovery it
+wants, signals the restart. Values a recovery needs travel in the
+restart's slots.
+
+This program parses digits. When a character is not a digit it signals
+an error, but offers a \code{<use-value>} restart that supplies a value
+instead; the caller's handler chooses that recovery:
+
+\begin{dylan}
+(define-class <use-value> (<restart>)
+  (value init-keyword: value:))
+
+(define-method parse-digit ((c <character>))
+  (if (and (>= c #\0) (<= c #\9))
+      (- (as <integer> c) (as <integer> #\0))
+      (handler-case (error "not a digit: ~s" c)
+        ((<use-value> condition: r) (value r)))))
+
+(handler-bind (<simple-error>
+               (method (c next) (signal (make <use-value> value: -1))))
+  (map parse-digit '(#\4 #\x #\2)))
+; => (4 -1 2)
+\end{dylan}
+
+\noindent The handler for \code{<simple-error>} runs while
+\code{parse-digit}'s \code{handler-case} is still in force, so its
+\code{signal} reaches the restart handler, which exits from the
+\code{handler-case} with the value.
+
+\index{<simple-restart>}
+\code{cerror} establishes a \code{<simple-restart>} handler, as shown in
+section~\ref{sec:conditions-signalling}; signalling a
+\code{<simple-restart>} where none is established is an error. The
+\code{condition:} init-keyword lets a restart be tied to one condition,
+so that a \code{test:} on its handler can accept only restarts meant
+for that condition (\dylanbook{chapter 13} has an example).
+
+\section{Introspection}\label{sec:conditions-introspection}
+
+\index{do-handlers}
+\code{(do-handlers \meta{function})} calls the function on each handler
+in force, the most recent first, with four arguments: the handler's type,
+test, function and description. An absent test is given as a function
+that answers \code{\#t}, and an absent description as \code{\#f}.
+
+\begin{dylan}
+(handler-bind (<warning> (method (c n) #f) description: "ignore warnings")
+  (handler-bind (<error> (method (c n) #f))
+    (do-handlers (method (type test function description)
+                   (print (list type description))))))
+; prints (<error> #f), then (<warning> "ignore warnings")
+\end{dylan}
+
+\noindent At the Common Lisp implementation's prompt the list ends with
+the loop's own handler, an \code{<abort>} described as
+\code{"Return to the read-eval-print loop."}
+
+\index{return-allowed?}\index{return-description}
+\index{restart-query}\index{return-query}
+Four generic functions let an interactive debugger ask whether a
+condition may be handled by returning (\code{return-allowed?}), what
+returning would mean (\code{return-description}), and the user for the
+contents of a restart (\code{restart-query}) or for values to return
+(\code{return-query}). The compiler to C, having no debugger, defines
+only methods that do nothing: all four answer \code{\#f}. In the Common
+Lisp implementation \code{return-allowed?} answers \code{\#t} for a
+warning, whose recovery protocol allows returning, and
+\code{return-description} then answers the string
+\code{"Return; the value is ignored."}; its \code{return-query} reads
+values typed by the user.
+
+\section{Defining your own conditions}\label{sec:conditions-defining}
+
+\index{condition!defining}
+Define a condition class as a subclass of the predefined class closest
+in meaning: \code{<error>} for a program error, \code{<warning>} for
+something worth reporting, \code{<restart>} for a recovery. Slots carry
+whatever a handler needs to know.
+
+The simplest way to give a condition a message that both
+implementations report is to subclass \code{<simple-error>} (or
+\code{<simple-warning>}) and pass \code{format-string:} and
+\code{format-arguments:} when making it:
+
+\begin{dylan}
+(define-class <bad-reading> (<simple-error>)
+  (sensor init-keyword: sensor:))
+
+(define-method report-bad (sensor value)
+  (error (make <bad-reading> sensor: sensor
+               format-string: "sensor ~a read ~a"
+               format-arguments: (list sensor value))))
+
+(handler-case (report-bad 'north 9999)
+  ((<bad-reading> condition: c) (list (sensor c) c)))
+; => (north sensor north read 9999)
+\end{dylan}
+
+\noindent Unhandled, it is reported as \code{sensor south read -1}. A
+direct subclass of \code{<error>} with no message is reported by its
+class only: in the compiler to C as
+\code{Dylan error: \{instance of <oops>\}}, even if the class has a
+\code{print-object} method (chapter~\ref{ch:printing}); that method is
+used when the program prints the condition itself.
+
+\section{Unhandled conditions}\label{sec:conditions-unhandled}
+
+\index{unhandled condition}\index{debugger}
+What happens to a serious condition that no handler takes, the
+``debugger of last resort'' of the manual, is where the implementations
+differ most.
+
+\subsection{In the Common Lisp implementation}
+
+An unhandled error enters the Common Lisp debugger, which shows the
+message and offers restarts: Dylan's restart handlers in force, then
+restarts that return to the Dylan prompt, then Common Lisp's own. Type
+the number of a restart to choose it. Here a \code{cerror} offers its
+restart:
+
+\begin{repl}
+? (define-method checked (n)
+    (when (> n 10)
+      (cerror "Use 10 instead" "~a is too big" n)
+      (set! n 10))
+    n)
+
+;Value: checked
+
+? (checked 99)
+
+debugger invoked on a DYLAN::DYLAN-CONDITION in thread
+#<THREAD tid=712328 "main thread" RUNNING {1200030003}>:
+  Error: 99 is too big
+
+Type HELP for debugger help, or (SB-EXT:EXIT) to exit from SBCL.
+
+restarts (invokable by number or by possibly-abbreviated name):
+  0: [DYLAN-RESTART] Use 10 instead
+  1:                 Return to the read-eval-print loop.
+  2: [DYLAN-REP    ] Return to the Dylan read-eval-print loop.
+  3: [ABORT        ] Exit debugger, returning to top level.
+
+((LAMBDA NIL :IN DYLAN::IMPLEMENTATION-SPECIFIC/INDUCE-ERROR))
+0] 0
+
+;Value: 10
+\end{repl}
+
+\noindent Choosing \code{Return to the read-eval-print loop} abandons the
+form and prints \code{;Aborted}; \code{DYLAN-REP} abandons it
+without the message. \code{break} offers a \code{CONTINUE}
+restart, which makes \code{break} answer \code{\#f}.
+
+An error signalled by Common Lisp itself (a Lisp type error inside a
+built-in function, a floating-point overflow) is offered first to Dylan's
+handlers as a \code{<simple-error>} whose message begins
+\code{Lisp condition:}. If none takes it, it reaches the debugger as the
+Lisp error it is, and the debugger offers \code{DYLAN-REP}, which
+returns to the Dylan prompt, and Common Lisp's own restarts. In a program compiled to Lisp with
+\code{dylan:compile-file} and loaded into the runtime, an unhandled error
+likewise goes to the Common Lisp debugger (or, when SBCL runs with its
+debugger disabled, ends SBCL with a backtrace). Chapter~\ref{ch:lisp} describes the debugger further.
+
+\subsection{In the compiler to C}
+
+A compiled program has no debugger. An unhandled serious condition in
+the main thread prints \code{Dylan error:} and the condition's message
+on standard error and ends the program with exit status 1. Anything the
+program had written to standard output is flushed first.
+
+\begin{shell}
+$ cat range.dyl
+(print "before")
+(error "the value ~s is out of range" 42)
+(print "after")
+$ bin/dylanc range.dyl
+$ ./range
+"before"
+Dylan error: the value 42 is out of range
+$ echo $?
+1
+\end{shell}
+
+\noindent The cleanup forms of \code{unwind-protect} that are in force are
+\emph{not} run when a program stops this way. Some other cases:
+
+\begin{center}
+\begin{tabular}{p{0.38\textwidth}p{0.55\textwidth}}
+\toprule
+Program & Reported \\
+\midrule
+\code{(check-type "x" <integer>)} & \code{Dylan error: "x" is not an instance of \{the class <integer>\}} \\
+a handler returns from \code{(error "nope")} & \code{Dylan error: a handler returned from error: nope} \\
+\code{(abort)} with no handler & \code{Dylan error: no handler was established for the restart \{instance of <abort>\}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent A condition a thread other than the main one does not handle
+ends that thread instead, as chapter~\ref{ch:extensions} describes.
+
+\section{Errors the implementations signal}\label{sec:conditions-runtime-errors}
+
+\index{runtime errors}
+Errors the implementations detect themselves are signalled as Dylan
+conditions, so programs can handle them like any other. They are
+\code{<type-error>}s when a value of the wrong type is stored in a typed
+slot or variable, and \code{<simple-error>}s otherwise. In the compiler
+to C:
+
+\begin{center}
+\begin{tabular}{p{0.36\textwidth}p{0.57\textwidth}}
+\toprule
+Cause & Message \\
+\midrule
+no method applies to the arguments & \code{no applicable method for f} \\
+wrong number of arguments & \code{wrong number of arguments (2)} \\
+a keyword the function does not take & \code{keyword argument not accepted: b:} \\
+calling something not a function & \code{not a function: 5} \\
+integer overflow & \code{integer overflow (integers are 63 bits)} \\
+division by zero & \code{division by zero} \\
+a typed slot or variable given a wrong value & \code{"s" is not an instance of \{the class <integer>\}} (a \code{<type-error>}) \\
+reading an uninitialized slot & \code{the slot s is not initialized} \\
+a variable with no value & \code{the variable x@dylan-user has no value} \\
+\code{car} of a non-list & \code{not a list: 5} \\
+an element that does not exist & \code{element: there is no element at the index 5} \\
+\code{make} of an abstract class & \code{cannot make an instance of this class: \{the class <integer>\}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The compiler also warns, when compiling, about a variable that
+is not defined anywhere (\code{warning: x is not defined}); the program
+is still built, and signals the error above if the reference is
+evaluated.
+
+The Common Lisp implementation detects the same errors with messages of
+its own, for example \code{generic-dispatch -- no applicable methods},
+\code{invalid number of arguments: 3}, \code{illegal keyword argument b:
+(a:)} and \code{unbound variable x}. An error that arises inside Common
+Lisp, such as \code{(car 5)}, has a message beginning
+\code{Lisp condition:} followed by Common Lisp's own description.
+
+\begin{dylan}
+(define-method f ((x <integer>)) x)
+
+(handler-case (f "s")
+  ((<error> condition: c) c))
+; C:    no applicable method for f
+; Lisp: generic-dispatch -- no applicable methods #[generic function f] ("s")
+
+(define-class <account> (<object>)
+  (balance type: <integer> init-value: 0))
+
+(handler-case (set! (balance (make <account>)) "lots")
+  ((<type-error> condition: c) (type-error-value c)))
+; => "lots"
+\end{dylan}

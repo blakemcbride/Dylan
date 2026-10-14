@@ -1,0 +1,578 @@
+\chapter{Library Reference}\label{app:library}
+
+\index{library reference}
+This appendix lists every name the module \code{dylan} exports, in
+either implementation, and the special forms of the language. Each entry
+gives the name with its parameters, as a call would be written, and a
+one-line description. The full definitions are in the DIRM, cited by
+chapter at the head of each section, and in the chapters of this book.
+
+In a signature, \code{\#rest} and \code{\#key} introduce rest and keyword
+parameters as in a method's parameter list (Chapter~\ref{ch:functions}).
+A name in angle brackets is a class. Where a function answers several
+values, the description says so.
+
+The narrow last column says which implementations provide the name.
+\begin{itemize}
+\item An empty column means both do.
+\item \textsc{c} means only the compiler to C provides it.
+\item \textsc{l} means only the interactive (Common Lisp) implementation
+  provides it.
+\end{itemize}
+
+\noindent
+Every entry was checked by referring to it in a small program compiled
+with \cmd{bin/dylanc} and by evaluating it at the interactive
+implementation's read-eval-print loop. A name marked \textsc{l} is either
+unknown to the compiler to C or rejected by it when compiling: the
+compiler reports \code{add-method}, \code{remove-method},
+\code{add-slot}, \code{remove-slot} and \code{freeze-methods} as
+impossible in a static program, and \code{<rectangular-complex>} and
+\code{(setter direct-superclasses)} as not supported.
+
+\section{Objects, equality and comparison}\label{sec:lib-objects}
+
+{\sloppy The root class and the operations every object supports.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<object>}\index{<object>} & The class of all objects; every class has it as a superclass. &  \\
+\code{(id? object1 object2 \#rest objects)}\index{id?} & True if the arguments are all the same object. &  \\
+\code{(= object1 object2 \#rest objects)}\index{=} & True if the arguments are all equal, as \code{binary=} decides. &  \\
+\code{(/= object1 object2)}\index{/=} & True if the arguments are not equal. &  \\
+\code{(binary= object1 object2)}\index{binary=} & The generic equality test on which \code{=} is built; add methods to it to define equality for a class. &  \\
+\code{(=hash object)}\index{=hash} & A hash code for \code{object} consistent with \code{=}: equal objects answer equal codes. &  \\
+\code{(< object1 object2 \#rest objects)}\index{<} & True if each argument is less than the next, as \code{binary<} decides. &  \\
+\code{(> object1 object2 \#rest objects)}\index{>} & True if each argument is greater than the next. &  \\
+\code{(<= object1 object2 \#rest objects)}\index{<=} & True if each argument is less than or equal to the next. &  \\
+\code{(>= object1 object2 \#rest objects)}\index{>=} & True if each argument is greater than or equal to the next. &  \\
+\code{(binary< object1 object2)}\index{binary<} & The generic ordering on which \code{<}, \code{>}, \code{<=} and \code{>=} are built; methods exist for reals, characters and strings. &  \\
+\code{(not object)}\index{not} & \code{\#t} if \code{object} is \code{\#f}, otherwise \code{\#f}. &  \\
+\code{(identity object)}\index{identity} & Answers \code{object}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Classes, instances and slots}\label{sec:lib-classes}
+
+{\sloppy Making objects and examining classes (\dylanbook{chapter 11}). The compiler to C fixes a program's classes when it compiles it, so it rejects \code{add-slot} and \code{remove-slot} (Chapter~\ref{ch:dylanc}).\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<class>}\index{<class>} & The class of classes. &  \\
+\code{<singleton>}\index{<singleton>} & The class of singleton specializers, each matching exactly one object. &  \\
+\code{(singleton object)}\index{singleton} & A singleton specializer for \code{object}. &  \\
+\code{<slot-descriptor>}\index{<slot-descriptor>} & The class of the objects that describe slots. &  \\
+\code{(make class \#rest key-value-pairs)}\index{make} & Makes and initializes a new instance of \code{class}, passing it the init arguments. &  \\
+\code{(initialize instance \#rest init-arguments)}\index{initialize} & Called by \code{make} on each new instance; add methods to it to finish initializing instances of a class. &  \\
+\code{(instance? object type)}\index{instance?} & True if \code{object} is a general instance of \code{type} (a class or singleton). &  \\
+\code{(subclass? class1 class2)}\index{subclass?} & True if \code{class1} is \code{class2} or one of its subclasses. &  \\
+\code{(object-class object)}\index{object-class} & The class of which \code{object} is a direct instance. &  \\
+\code{(all-superclasses class)}\index{all-superclasses} & The class and all its superclasses, in precedence order. &  \\
+\code{(direct-superclasses class)}\index{direct-superclasses} & The class's direct superclasses. &  \\
+\code{((setter direct-superclasses) class superclasses)} & Changes the class's direct superclasses. & \textsc{l} \\
+\code{(direct-subclasses class)}\index{direct-subclasses} & The class's direct subclasses. &  \\
+\code{(as class object)}\index{as} & Converts \code{object} to an instance of \code{class}, for example a list to a vector or a character to an integer. &  \\
+\code{(shallow-copy object)}\index{shallow-copy} & A new object like \code{object}, sharing its contents. &  \\
+\code{(class-for-copy object)}\index{class-for-copy} & The class that \code{map}, \code{copy-sequence} and the like use for a copy of \code{object}. &  \\
+\code{(seal class)}\index{seal} & Makes the class read-only and forbids new subclasses of it; answers it. &  \\
+\code{(make-read-only object)}\index{make-read-only} & Makes a class or generic function read-only, so that its slots or methods cannot change; answers it. &  \\
+\code{(slot-descriptors class)}\index{slot-descriptors} & The descriptors of the class's slots. &  \\
+\code{(add-slot owner \#key getter setter type init-value init-function init-keyword allocation)}\index{add-slot} & Adds a slot to a class (or singleton) that may already have instances. & \textsc{l} \\
+\code{(remove-slot owner slot-descriptor)}\index{remove-slot} & Removes a slot. & \textsc{l} \\
+\code{(slot-descriptor instance getter)}\index{slot-descriptor} & The descriptor of the slot of \code{instance} that \code{getter} reads. &  \\
+\code{(slot-getter slot-descriptor)}\index{slot-getter} & The slot's getter, or \code{\#f}. &  \\
+\code{(slot-setter slot-descriptor)}\index{slot-setter} & The slot's setter, or \code{\#f}. &  \\
+\code{(slot-type slot-descriptor)}\index{slot-type} & The slot's type. &  \\
+\code{(slot-allocation slot-descriptor)}\index{slot-allocation} & The slot's allocation, a symbol such as \code{instance} or \code{class}. &  \\
+\code{(init-value slot-descriptor)}\index{init-value} & The slot's init value, and a second value saying whether it has one. &  \\
+\code{(init-function slot-descriptor)}\index{init-function} & The slot's init function, or \code{\#f}. &  \\
+\code{(init-keyword slot-descriptor)}\index{init-keyword} & The slot's init keyword, or \code{\#f}. &  \\
+\code{(slot-value instance slot-descriptor)}\index{slot-value} & The value of the slot in \code{instance}. &  \\
+\code{((setter slot-value) instance slot-descriptor new-value)} & Sets the slot's value. &  \\
+\code{(slot-initialized? instance getter)}\index{slot-initialized?} & True if the slot \code{getter} reads has a value in \code{instance}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Functions and generic functions}\label{sec:lib-functions}
+
+{\sloppy Calling functions and examining and changing generic functions (\dylanbook{chapter 10}). The compiler to C rejects \code{add-method}, \code{remove-method} and \code{freeze-methods}, and a \code{<generic-function>} it makes with \code{make} has no methods.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<function>}\index{<function>} & The class of all functions. &  \\
+\code{<generic-function>}\index{<generic-function>} & The class of generic functions. &  \\
+\code{<method>}\index{<method>} & The class of methods. &  \\
+\code{(apply function \#rest arguments)}\index{apply} & Calls \code{function}; the last argument is a sequence of further arguments. &  \\
+\code{(values \#rest objects)}\index{values} & Answers its arguments as multiple values. &  \\
+\code{(add-method generic-function method)}\index{add-method} & Adds a method to a generic function, replacing one with the same specializers; answers the method and the one replaced, or \code{\#f}. & \textsc{l} \\
+\code{(remove-method generic-function method)}\index{remove-method} & Removes a method from a generic function. & \textsc{l} \\
+\code{(freeze-methods generic-function \#rest specializers)}\index{freeze-methods} & Forbids changes to the methods applicable to arguments of the given classes. & \textsc{l} \\
+\code{(generic-function-methods generic-function)}\index{generic-function-methods} & The generic function's methods. &  \\
+\code{(method-specializers method)}\index{method-specializers} & The specializers of the method's required parameters. &  \\
+\code{(function-arguments function)}\index{function-arguments} & Three values: the number of required arguments, whether there is a \code{\#rest} argument, and the keywords accepted. &  \\
+\code{(applicable-method? function \#rest sample-arguments)}\index{applicable-method?} & True if \code{function} could be called with such arguments. &  \\
+\code{(sorted-applicable-methods generic-function \#rest sample-arguments)}\index{sorted-applicable-methods} & The methods applicable to such arguments, most specific first, and those whose order is ambiguous. &  \\
+\code{(find-method generic-function specializers)}\index{find-method} & The method with exactly these specializers, or \code{\#f}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Functional operations}\label{sec:lib-functional}
+
+{\sloppy Functions that make functions (\dylanbook{chapter 17}).\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(compose function1 \#rest functions)}\index{compose} & A function that applies the functions from right to left. &  \\
+\code{(complement predicate)}\index{complement} & A function that answers \code{\#t} where \code{predicate} answers \code{\#f}, and \code{\#f} otherwise. &  \\
+\code{(disjoin predicate1 \#rest predicates)}\index{disjoin} & A function true when any of the predicates is true of its arguments. &  \\
+\code{(conjoin predicate1 \#rest predicates)}\index{conjoin} & A function true when all of the predicates are true of its arguments. &  \\
+\code{(curry function \#rest arguments)}\index{curry} & A function that calls \code{function} with these arguments first, then its own. &  \\
+\code{(rcurry function \#rest arguments)}\index{rcurry} & A function that calls \code{function} with its own arguments first, then these. &  \\
+\code{(always object)}\index{always} & A function that ignores its arguments and answers \code{object}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Numbers}\label{sec:lib-numbers}
+
+{\sloppy The number classes and arithmetic (\dylanbook{chapter 14}). In the compiler to C integers are 63 bits, overflow is an error, and there are no complex numbers: \code{<complex>} has no instances, \code{make-rectangular} and \code{make-polar} signal an error unless the result is real, and so do the functions whose result would be complex, such as \code{(sqrt -4)}. The interactive implementation has Common Lisp's unlimited integers and complex numbers.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<number>}\index{<number>} & The class of all numbers. &  \\
+\code{<complex>}\index{<complex>} & Complex numbers, the superclass of \code{<real>}. &  \\
+\code{<rectangular-complex>}\index{<rectangular-complex>} & Complex numbers with a nonzero imaginary part. & \textsc{l} \\
+\code{<real>}\index{<real>} & Real numbers. &  \\
+\code{<float>}\index{<float>} & Floating-point numbers. &  \\
+\code{<single-float>}\index{<single-float>} & Single-precision floats. &  \\
+\code{<double-float>}\index{<double-float>} & Double-precision floats, the class of float literals such as \code{1.5}. &  \\
+\code{<extended-float>}\index{<extended-float>} & Extended-precision floats. &  \\
+\code{<rational>}\index{<rational>} & Exact rational numbers. &  \\
+\code{<ratio>}\index{<ratio>} & Ratios that are not integers, such as \code{3/4}. &  \\
+\code{<integer>}\index{<integer>} & Integers. &  \\
+\code{(odd? integer)}\index{odd?} & True if \code{integer} is odd. &  \\
+\code{(even? integer)}\index{even?} & True if \code{integer} is even. &  \\
+\code{(zero? number)}\index{zero?} & True if \code{number} is zero. &  \\
+\code{(positive? real)}\index{positive?} & True if \code{real} is greater than zero. &  \\
+\code{(negative? real)}\index{negative?} & True if \code{real} is less than zero. &  \\
+\code{(integral? number)}\index{integral?} & True if \code{number} has an integer value. &  \\
+\code{(+ \#rest numbers)}\index{+} & The sum; \code{(+)} is \code{0}. &  \\
+\code{(* \#rest numbers)}\index{*} & The product; \code{(*)} is \code{1}. &  \\
+\code{(- number \#rest numbers)}\index{-} & The difference, or the negation of a single argument. &  \\
+\code{(/ number \#rest numbers)}\index{/} & The quotient, or the reciprocal of a single argument. Integers divide exactly, giving a ratio when needed. &  \\
+\code{(binary+ number1 number2)}\index{binary+} & The generic addition \code{+} is built on; similarly the next five. &  \\
+\code{(binary- number1 number2)}\index{binary-} & Generic subtraction. &  \\
+\code{(binary* number1 number2)}\index{binary*} & Generic multiplication. &  \\
+\code{(binary/ number1 number2)}\index{binary/} & Generic division. &  \\
+\code{(unary- number)}\index{unary-} & Generic negation. &  \\
+\code{(unary/ number)}\index{unary/} & Generic reciprocal. &  \\
+\code{(floor real)}\index{floor} & The greatest integer not above \code{real}, and the remainder. &  \\
+\code{(ceiling real)}\index{ceiling} & The least integer not below \code{real}, and the remainder. &  \\
+\code{(round real)}\index{round} & The nearest integer (to even on a tie), and the remainder. &  \\
+\code{(truncate real)}\index{truncate} & The integer part, toward zero, and the remainder. &  \\
+\code{(floor/ real1 real2)}\index{floor/} & The quotient rounded down, and the remainder. &  \\
+\code{(ceiling/ real1 real2)}\index{ceiling/} & The quotient rounded up, and the remainder. &  \\
+\code{(round/ real1 real2)}\index{round/} & The quotient rounded to nearest, and the remainder. &  \\
+\code{(truncate/ real1 real2)}\index{truncate/} & The quotient truncated toward zero, and the remainder. &  \\
+\code{(modulo real1 real2)}\index{modulo} & The remainder of \code{floor/}, with the sign of \code{real2}. &  \\
+\code{(remainder real1 real2)}\index{remainder} & The remainder of \code{truncate/}, with the sign of \code{real1}. &  \\
+\code{(abs number)}\index{abs} & The absolute value. &  \\
+\code{(magnitude number)}\index{magnitude} & The magnitude (the absolute value of a real). &  \\
+\code{(min real \#rest reals)}\index{min} & The smallest argument. &  \\
+\code{(max real \#rest reals)}\index{max} & The largest argument. &  \\
+\code{(gcd \#rest integers)}\index{gcd} & The greatest common divisor. &  \\
+\code{(lcm \#rest integers)}\index{lcm} & The least common multiple. &  \\
+\code{(binary-gcd integer1 integer2)}\index{binary-gcd} & The generic function \code{gcd} is built on. &  \\
+\code{(binary-lcm integer1 integer2)}\index{binary-lcm} & The generic function \code{lcm} is built on. &  \\
+\code{(numerator rational)}\index{numerator} & The numerator, in lowest terms. &  \\
+\code{(denominator rational)}\index{denominator} & The denominator, in lowest terms. &  \\
+\code{(rationalize number)}\index{rationalize} & A simple rational close to \code{number}. &  \\
+\code{(sqrt number)}\index{sqrt} & The square root, a float (\code{(sqrt 25)} is \code{5.0}). &  \\
+\code{(exp number)}\index{exp} & $e$ raised to the power \code{number}. &  \\
+\code{(log number)}\index{log} & The natural logarithm. &  \\
+\code{(expt number1 number2)}\index{expt} & \code{number1} raised to the power \code{number2}; exact for an integer power of an exact number. &  \\
+\code{(sin number) (cos number) (tan number)}\index{sin}\index{cos}\index{tan} & The trigonometric functions, in radians. &  \\
+\code{(asin number) (acos number) (atan number)}\index{asin}\index{acos}\index{atan} & Their inverses. &  \\
+\code{(atan2 number1 number2)}\index{atan2} & The arc tangent of \code{number1/number2}, using both signs to choose the quadrant. &  \\
+\code{(sinh number) (cosh number) (tanh number)}\index{sinh}\index{cosh}\index{tanh} & The hyperbolic functions. &  \\
+\code{(asinh number) (acosh number) (atanh number)}\index{asinh}\index{acosh}\index{atanh} & Their inverses. &  \\
+\code{(make-rectangular real imaginary)}\index{make-rectangular} & The complex number with these parts. &  \\
+\code{(make-polar magnitude angle)}\index{make-polar} & The complex number with this magnitude and angle. &  \\
+\code{(real-part number)}\index{real-part} & The real part. &  \\
+\code{(imag-part number)}\index{imag-part} & The imaginary part (\code{0} for a real). &  \\
+\code{(angle number)}\index{angle} & The angle of a complex number in radians. &  \\
+\code{(logior \#rest integers)}\index{logior} & Bitwise inclusive or. &  \\
+\code{(logxor \#rest integers)}\index{logxor} & Bitwise exclusive or. &  \\
+\code{(logand \#rest integers)}\index{logand} & Bitwise and. &  \\
+\code{(logeqv \#rest integers)}\index{logeqv} & Bitwise equivalence (exclusive nor). &  \\
+\code{(lognot integer)}\index{lognot} & Bitwise complement. &  \\
+\code{(lognand integer1 integer2)}\index{lognand} & The complement of \code{logand}. &  \\
+\code{(lognor integer1 integer2)}\index{lognor} & The complement of \code{logior}. &  \\
+\code{(logandc1 integer1 integer2)}\index{logandc1} & The and of the complement of \code{integer1} with \code{integer2}. &  \\
+\code{(logandc2 integer1 integer2)}\index{logandc2} & The and of \code{integer1} with the complement of \code{integer2}. &  \\
+\code{(logorc1 integer1 integer2)}\index{logorc1} & The or of the complement of \code{integer1} with \code{integer2}. &  \\
+\code{(logorc2 integer1 integer2)}\index{logorc2} & The or of \code{integer1} with the complement of \code{integer2}. &  \\
+\code{(logbit? index integer)}\index{logbit?} & True if bit \code{index} of \code{integer} is 1. &  \\
+\code{(ash integer count)}\index{ash} & \code{integer} shifted left \code{count} bits (right if \code{count} is negative). &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Characters, strings and symbols}\label{sec:lib-chars}
+
+{\sloppy Characters (\dylanbook{chapter 16}), symbols and keywords (\dylanbook{chapter 15}), and the case conversions. The string classes are collections, listed with them below.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<character>}\index{<character>} & The class of characters. &  \\
+\code{<symbol>}\index{<symbol>} & The class of symbols. &  \\
+\code{<keyword>}\index{<keyword>} & The class of keywords such as \code{foo:}. &  \\
+\code{(as-uppercase object)}\index{as-uppercase} & The upper-case version of a character, or a new upper-case string. &  \\
+\code{(as-lowercase object)}\index{as-lowercase} & The lower-case version of a character, or a new lower-case string. &  \\
+\code{(as-uppercase! string)}\index{as-uppercase"!} & Converts \code{string} to upper case in place. &  \\
+\code{(as-lowercase! string)}\index{as-lowercase"!} & Converts \code{string} to lower case in place. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Collection classes}\label{sec:lib-coll-classes}
+
+{\sloppy The classes of the collection library (\dylanbook{chapter 12}).\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<collection>}\index{<collection>} & All collections. &  \\
+\code{<explicit-key-collection>}\index{<explicit-key-collection>} & Collections whose keys are not simply indices, such as tables. &  \\
+\code{<mutable-collection>}\index{<mutable-collection>} & Collections whose elements can be changed. &  \\
+\code{<mutable-explicit-key-collection>}\index{<mutable-explicit-key-collection>} & Mutable explicit-key collections. &  \\
+\code{<sequence>}\index{<sequence>} & Collections whose keys are the integers from 0. &  \\
+\code{<mutable-sequence>}\index{<mutable-sequence>} & Sequences whose elements can be changed. &  \\
+\code{<array>}\index{<array>} & Multi-dimensional arrays; make one with \code{dimensions:}. &  \\
+\code{<vector>}\index{<vector>} & One-dimensional arrays. &  \\
+\code{<simple-object-vector>}\index{<simple-object-vector>} & The vectors \code{vector} makes; they hold any object. &  \\
+\code{<stretchy-vector>}\index{<stretchy-vector>} & Vectors that grow as elements are added. &  \\
+\code{<string>}\index{<string>} & Strings, the superclass of the two below. &  \\
+\code{<byte-string>}\index{<byte-string>} & Strings of 8-bit characters; string literals are byte strings. &  \\
+\code{<unicode-string>}\index{<unicode-string>} & Strings of any characters. &  \\
+\code{<deque>}\index{<deque>} & Double-ended queues. &  \\
+\code{<list>}\index{<list>} & Lists: the empty list and pairs. &  \\
+\code{<pair>}\index{<pair>} & Pairs (cons cells). &  \\
+\code{<empty-list>}\index{<empty-list>} & The class of the empty list, \code{()}. &  \\
+\code{<range>}\index{<range>} & Arithmetic sequences, possibly unbounded. &  \\
+\code{<table>}\index{<table>} & Hash tables, keyed by any object, compared with \code{=}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Collection operations}\label{sec:lib-coll-ops}
+
+{\sloppy Operations on every collection, and the iteration protocol that a new collection class implements to take part in them.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(element collection key \#key default)}\index{element} & The element at \code{key}; \code{default} if there is none (an error if no default is given). &  \\
+\code{((setter element) collection key new-value)} & Sets the element at \code{key}. Usually written \code{(set! (element c k) v)}. &  \\
+\code{(size collection)}\index{size} & The number of elements, or \code{\#f} for an unbounded collection. &  \\
+\code{((setter size) sequence new-size)} & Changes the size of a stretchy sequence. &  \\
+\code{(empty? collection)}\index{empty?} & True if the collection has no elements. &  \\
+\code{(do procedure collection \#rest collections)}\index{do} & Calls \code{procedure} on the elements, in parallel across the collections; answers \code{\#f}. &  \\
+\code{(map procedure collection \#rest collections)}\index{map} & A new collection of the results of \code{procedure} on the elements. &  \\
+\code{(map-as class procedure collection \#rest collections)}\index{map-as} & As \code{map}, but the result is an instance of \code{class}. &  \\
+\code{(map-into collection procedure source \#rest sources)}\index{map-into} & Stores the results of \code{procedure} on the sources' elements into \code{collection}; answers it. (Only the sources' elements are passed; see Appendix~\ref{app:differences}.) &  \\
+\code{(any? procedure collection \#rest collections)}\index{any?} & The first true result of \code{procedure} on the elements, or \code{\#f}. &  \\
+\code{(every? procedure collection \#rest collections)}\index{every?} & True if \code{procedure} is true of every element. &  \\
+\code{(reduce procedure initial-value collection)}\index{reduce} & Combines the elements with \code{procedure}, starting from \code{initial-value}. &  \\
+\code{(reduce1 procedure collection)}\index{reduce1} & As \code{reduce}, starting from the first element. &  \\
+\code{(member? value collection \#key test)}\index{member?} & True if \code{value} is an element (compared with \code{test}, default \code{id?}). &  \\
+\code{(find-key collection procedure \#key skip failure)}\index{find-key} & The key of the first element (after skipping \code{skip} matches) for which \code{procedure} is true; \code{failure} (default \code{\#f}) if none. &  \\
+\code{(replace-elements! collection predicate new-value-function \#key count)}\index{replace-elements"!} & Replaces each element satisfying \code{predicate} with \code{new-value-function} of it, at most \code{count} times. &  \\
+\code{(fill! collection value \#key start end)}\index{fill"!} & Stores \code{value} into every element (of a sequence, from \code{start} to \code{end}). &  \\
+\code{(key-sequence collection)}\index{key-sequence} & A sequence of the collection's keys. &  \\
+\code{(initial-state collection)}\index{initial-state} & The state of the first element, or \code{\#f} if there is none. &  \\
+\code{(next-state collection state)}\index{next-state} & The state of the next element, or \code{\#f} at the end. &  \\
+\code{(current-element collection state)}\index{current-element} & The element at \code{state}. &  \\
+\code{((setter current-element) collection state new-value)} & Replaces the element at \code{state}. &  \\
+\code{(current-key collection state)}\index{current-key} & The key of the element at \code{state}. &  \\
+\code{(final-state collection)}\index{final-state} & The state of the last element of a sequence, or \code{\#f}. &  \\
+\code{(previous-state collection state)}\index{previous-state} & The state of the element before \code{state}, or \code{\#f}. &  \\
+\code{(copy-state collection state)}\index{copy-state} & A copy of \code{state} that can be advanced independently. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Sequence operations}\label{sec:lib-sequences}
+
+{\sloppy Operations on sequences. Unless \code{test:} is given, elements are compared with \code{id?}.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(add sequence new-element)}\index{add} & A new sequence with \code{new-element} added (at the front of a list). &  \\
+\code{(add! sequence new-element)}\index{add"!} & Adds \code{new-element}, altering \code{sequence} if it can; answers the result. &  \\
+\code{(add-new sequence new-element \#key test)}\index{add-new} & As \code{add}, unless the element is already present. &  \\
+\code{(add-new! sequence new-element \#key test)}\index{add-new"!} & As \code{add!}, unless the element is already present. &  \\
+\code{(remove sequence value \#key test count)}\index{remove} & A new sequence without the elements equal to \code{value} (at most \code{count} of them). &  \\
+\code{(remove! sequence value \#key test count)}\index{remove"!} & As \code{remove}, altering \code{sequence} if it can. &  \\
+\code{(choose predicate sequence)}\index{choose} & A new sequence of the elements satisfying \code{predicate}. &  \\
+\code{(choose-by predicate test-sequence value-sequence)}\index{choose-by} & The elements of \code{value-sequence} whose corresponding elements of \code{test-sequence} satisfy \code{predicate}. &  \\
+\code{(intersection sequence1 sequence2 \#key test)}\index{intersection} & The elements of \code{sequence1} that are also in \code{sequence2}. &  \\
+\code{(union sequence1 sequence2 \#key test)}\index{union} & The elements of either sequence, without duplicates between them. &  \\
+\code{(remove-duplicates sequence \#key test)}\index{remove-duplicates} & A new sequence with each element only once. &  \\
+\code{(remove-duplicates! sequence \#key test)}\index{remove-duplicates"!} & As \code{remove-duplicates}, altering \code{sequence} if it can. &  \\
+\code{(copy-sequence sequence \#key start end)}\index{copy-sequence} & A new sequence of the elements from \code{start} to \code{end}. &  \\
+\code{(concatenate sequence \#rest sequences)}\index{concatenate} & A new sequence of all the elements, of the first sequence's kind. &  \\
+\code{(concatenate-as class sequence \#rest sequences)}\index{concatenate-as} & As \code{concatenate}, but an instance of \code{class}. &  \\
+\code{(replace-subsequence! sequence insert-sequence \#key start)}\index{replace-subsequence"!} & Overwrites elements of \code{sequence}, from \code{start}, with those of \code{insert-sequence}. &  \\
+\code{(reverse sequence)}\index{reverse} & A new sequence with the elements in reverse order. &  \\
+\code{(reverse! sequence)}\index{reverse"!} & As \code{reverse}, reusing \code{sequence} if it can. &  \\
+\code{(sort sequence \#key test stable)}\index{sort} & A new sequence sorted by \code{test} (default \code{<}). &  \\
+\code{(sort! sequence \#key test stable)}\index{sort"!} & As \code{sort}, reusing \code{sequence} if it can. &  \\
+\code{(first sequence) (second sequence) (third sequence)}\index{first}\index{second}\index{third} & The first, second and third elements. &  \\
+\code{(last sequence)}\index{last} & The last element. &  \\
+\code{((setter first) sequence value) }\textrm{and likewise}\code{ second, third, last} & Set the first, second, third and last elements. &  \\
+\code{(subsequence-position big pattern \#key test count)}\index{subsequence-position} & The index at which \code{pattern} occurs in \code{big} (the \code{count}th occurrence), or \code{\#f}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Lists}\label{sec:lib-lists}
+
+{\sloppy Pairs and lists.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(cons car cdr)}\index{cons} & A new pair. &  \\
+\code{(list \#rest objects)}\index{list} & A new list of the arguments. &  \\
+\code{(list* \#rest objects)}\index{list*} & A new list of the arguments, the last of which is its tail. &  \\
+\code{(car list) (cdr list)}\index{car}\index{cdr} & The first element, and the rest, of a pair; both are \code{()} for \code{()}. &  \\
+\code{(caar list) }\textrm{\dots}\code{ (cdddr list)}\index{caar}\index{cdddr} & The compositions of \code{car} and \code{cdr} to three levels: \code{caar}, \code{cadr}, \code{cdar}, \code{cddr}, \code{caaar}, \code{caadr}, \code{cadar}, \code{caddr}, \code{cdaar}, \code{cdadr}, \code{cddar}, \code{cdddr}. &  \\
+\code{((setter car) pair value) }\textrm{and likewise for the others}\code{} & Store into a pair; every \code{c\dots r} above has a setter. &  \\
+\code{(append list \#rest lists)}\index{append} & A new list of the elements of all the lists. &  \\
+\code{(find-pair item list \#key test)}\index{find-pair} & The first pair in \code{list} whose \code{car} matches \code{item}, or \code{\#f}. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Vectors, arrays, deques, ranges and tables}\label{sec:lib-other-coll}
+
+{\sloppy Operations specific to particular collections.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(vector \#rest objects)}\index{vector} & A new simple object vector of the arguments. &  \\
+\code{(aref array \#rest indices)}\index{aref} & The element of \code{array} at the indices. &  \\
+\code{((setter aref) array \#rest indices-and-new-value)} & Sets an element of an array. &  \\
+\code{(dimensions array)}\index{dimensions} & A sequence of the array's dimensions. &  \\
+\code{(push deque new-value)}\index{push} & Adds \code{new-value} at the front of the deque. &  \\
+\code{(pop deque)}\index{pop} & Removes and answers the first element. &  \\
+\code{(push-last deque new-value)}\index{push-last} & Adds \code{new-value} at the end of the deque. &  \\
+\code{(pop-last deque)}\index{pop-last} & Removes and answers the last element. &  \\
+\code{(range \#key from up-to through by size)}\index{range} & A range from \code{from} (default 0) by \code{by} (default 1), stopping before \code{up-to}, at \code{through}, or after \code{size} elements; unbounded if none is given. &  \\
+\code{(remove-key! table key)}\index{remove-key"!} & Removes \code{key} and its element from the table. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Conditions}\label{sec:lib-conditions}
+
+{\sloppy Signaling and handling conditions (\dylanbook{chapter 13}).\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<condition>}\index{<condition>} & The class of all conditions. &  \\
+\code{<serious-condition>}\index{<serious-condition>} & Conditions that must be dealt with. &  \\
+\code{<error>}\index{<error>} & Errors. &  \\
+\code{<simple-error>}\index{<simple-error>} & Errors with a message; init arguments \code{format-string:} and \code{format-arguments:}. &  \\
+\code{<type-error>}\index{<type-error>} & A value not of the expected type; init arguments \code{value:} and \code{type:}. &  \\
+\code{<warning>}\index{<warning>} & Warnings; their default handler prints them and returns \code{\#f}. &  \\
+\code{<simple-warning>}\index{<simple-warning>} & Warnings with a message, like \code{<simple-error>}. &  \\
+\code{<restart>}\index{<restart>} & The class of restarts. &  \\
+\code{<simple-restart>}\index{<simple-restart>} & A plain restart. &  \\
+\code{<abort>}\index{<abort>} & The restart that abandons the current operation. &  \\
+\code{(signal condition \#rest arguments)}\index{signal} & Signals a condition (or a \code{<simple-warning>} made from a format string and arguments); answers what a handler returns. &  \\
+\code{(error condition \#rest arguments)}\index{error} & Signals an error (or a \code{<simple-error>} made from a format string and arguments); never returns. &  \\
+\code{(cerror restart-description condition \#rest arguments)}\index{cerror} & As \code{error}, but with a restart that makes \code{cerror} return \code{\#f}. &  \\
+\code{(break \#rest arguments)}\index{break} & Enters the debugger with a message made like \code{signal}'s. The compiler to C, which has no debugger, prints the message and continues. &  \\
+\code{(check-type value type)}\index{check-type} & Signals a \code{<type-error>} unless \code{value} is an instance of \code{type}; otherwise answers \code{value}. &  \\
+\code{(abort)}\index{abort} & Signals an \code{<abort>}. &  \\
+\code{(default-handler condition)}\index{default-handler} & Called when no handler takes a condition: a serious condition enters the debugger (in the compiler to C, is reported and stops the program or thread), a warning is printed, and other conditions answer \code{\#f}. &  \\
+\code{(do-handlers function)}\index{do-handlers} & Calls \code{function} with the type, test, function and description of each active handler. &  \\
+\code{(restart-query restart)}\index{restart-query} & Asks the user for what a restart needs (in the compiler to C, does nothing and answers \code{\#f}). &  \\
+\code{(return-query condition)}\index{return-query} & Asks the user for values to return from \code{signal} (in the compiler to C, answers \code{\#f}). &  \\
+\code{(return-allowed? condition)}\index{return-allowed?} & True if a handler may return from this condition. &  \\
+\code{(return-description condition)}\index{return-description} & A description of what returning from the condition means. &  \\
+\code{(condition-format-string condition)}\index{condition-format-string} & The format string of a simple error, warning or restart. &  \\
+\code{(condition-format-arguments condition)}\index{condition-format-arguments} & Its format arguments. &  \\
+\code{(type-error-value type-error)}\index{type-error-value} & The value that had the wrong type. &  \\
+\code{(type-error-expected-type type-error)}\index{type-error-expected-type} & The type it should have had. &  \\
+\bottomrule
+\end{longtable}}
+
+\section{Printing and streams}\label{sec:lib-printing}
+
+{\sloppy Output (Chapter~\ref{ch:printing}). The 1992 manual defines none of these. In the interactive implementation the first five take exactly one argument (\code{newline} none); in the compiler to C each also takes \code{stream:}.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(print object \#key stream verbose)}\index{print} & Prints \code{object} escaped on a line of its own; answers it. &  \\
+\code{(write-line object \#key stream)}\index{write-line} & The same as \code{print}. &  \\
+\code{(display object \#key stream)}\index{display} & Prints \code{object} plain; answers it. &  \\
+\code{(newline \#key stream)}\index{newline} & Ends the line; answers \code{\#f}. &  \\
+\code{(pp object \#key stream)}\index{pp} & Pretty-prints \code{object} (in the compiler to C, prints it as \code{print} does). &  \\
+\code{(write object \#key stream)}\index{write} & Prints \code{object} escaped, with no newline; answers it. & \textsc{c} \\
+\code{(print-object object stream escape?)}\index{print-object} & The generic function all printing goes through; add methods to change how a class prints. & \textsc{c} \\
+\code{(format stream control-string \#rest arguments)}\index{format} & Formatted output: \code{\textasciitilde a}, \code{\textasciitilde s}, \code{\textasciitilde d}, \code{\textasciitilde\%}, \code{\textasciitilde\&}, \code{\textasciitilde\textasciitilde}. A stream of \code{\#t} is standard output; of \code{\#f}, answer a string. & \textsc{c} \\
+\code{<stream>}\index{<stream>} & The class of streams. & \textsc{c} \\
+\code{<string-stream>}\index{<string-stream>} & Streams that collect their output in memory. & \textsc{c} \\
+\code{*standard-output*}\index{*standard-output*} & The stream to standard output. & \textsc{c} \\
+\code{*standard-error*}\index{*standard-error*} & The stream to standard error. & \textsc{c} \\
+\code{(stream-contents string-stream)}\index{stream-contents} & A string of everything written to the stream. & \textsc{c} \\
+\bottomrule
+\end{longtable}}
+
+\section{Threads}\label{sec:lib-threads}
+
+{\sloppy An extension of the compiler to C (Chapter~\ref{ch:extensions}). The special forms \code{with-lock}, \code{define-thread-variable} and \code{dynamic-bind} are in Section~\ref{sec:lib-forms}.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{<thread>}\index{<thread>} & The class of threads. & \textsc{c} \\
+\code{(make-thread function)}\index{make-thread} & Starts a thread that calls \code{function} with no arguments; answers the thread. & \textsc{c} \\
+\code{(join-thread thread)}\index{join-thread} & Waits for the thread to end and answers its function's values; signals a \code{<thread-error>} if the thread ended with an unhandled condition. & \textsc{c} \\
+\code{(current-thread)}\index{current-thread} & The thread that calls it. & \textsc{c} \\
+\code{(thread-yield)}\index{thread-yield} & Lets other threads run. & \textsc{c} \\
+\code{<thread-error>}\index{<thread-error>} & The error \code{join-thread} signals for a thread that ended with an unhandled condition. & \textsc{c} \\
+\code{(thread-error-thread thread-error)}\index{thread-error-thread} & The thread that failed. & \textsc{c} \\
+\code{(thread-error-condition thread-error)}\index{thread-error-condition} & The condition it did not handle. & \textsc{c} \\
+\code{<lock>}\index{<lock>} & Mutual-exclusion locks; \code{(make <lock>)}. & \textsc{c} \\
+\code{<recursive-lock>}\index{<recursive-lock>} & Locks the holding thread may acquire again. & \textsc{c} \\
+\code{(acquire-lock lock)}\index{acquire-lock} & Waits for and takes the lock. & \textsc{c} \\
+\code{(release-lock lock)}\index{release-lock} & Releases the lock. & \textsc{c} \\
+\code{<condition-variable>}\index{<condition-variable>} & Condition variables; \code{(make <condition-variable>)}. & \textsc{c} \\
+\code{(wait-condition-variable condition-variable lock)}\index{wait-condition-variable} & Releases \code{lock}, waits for a notification, and takes \code{lock} again. & \textsc{c} \\
+\code{(notify-condition-variable condition-variable)}\index{notify-condition-variable} & Wakes one waiting thread. & \textsc{c} \\
+\code{(notify-all-condition-variable condition-variable)}\index{notify-all-condition-variable} & Wakes all waiting threads. & \textsc{c} \\
+\code{<atomic-integer>}\index{<atomic-integer>} & Integers updated atomically; \code{(make <atomic-integer> value: n)}. & \textsc{c} \\
+\code{(atomic-value atomic-integer)}\index{atomic-value} & The current value. & \textsc{c} \\
+\code{(atomic-add! atomic-integer n)}\index{atomic-add"!} & Adds \code{n} atomically and answers the new value. & \textsc{c} \\
+\code{(atomic-compare-and-swap! atomic-integer old new)}\index{atomic-compare-and-swap"!} & If the value is \code{old}, makes it \code{new} and answers \code{\#t}; otherwise answers \code{\#f}. & \textsc{c} \\
+\bottomrule
+\end{longtable}}
+
+\section{Other extensions}\label{sec:lib-other}
+
+{\sloppy Extensions found in only one implementation.\par}
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(current-milliseconds)}\index{current-milliseconds} & The time in milliseconds from a fixed but arbitrary moment, for timing. & \textsc{c} \\
+\code{(lisp-variable symbol)}\index{lisp-variable} & The value of the Common Lisp variable named \code{symbol} (Section~\ref{sec:lisp-interop}). & \textsc{l} \\
+\code{(lisp-procedure symbol)}\index{lisp-procedure} & A Dylan function that calls the Common Lisp function named \code{symbol}. & \textsc{l} \\
+\bottomrule
+\end{longtable}}
+
+\section{Special forms and macros}\label{sec:lib-forms}
+
+\index{special form}
+These forms are not functions: each has its own rules for which of its
+parts are evaluated. They are listed by the shape of a use. The five
+marked \textsc{c} are extensions of the compiler to C
+(Chapter~\ref{ch:extensions}). In the compiler to C, programs can also
+define macros of their own with \code{define-macro}; the interactive
+implementation has none.
+
+
+
+
+{\small\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
+\toprule
+Name & Description & \\
+\midrule
+\endhead
+\code{(quote object)}\index{quote} & The object itself, unevaluated; also written \code{'object}. &  \\
+\code{(begin form \dots)}\index{begin} & Evaluates the forms in order; answers the last one's values. &  \\
+\code{(if test consequent alternative)}\index{if} & Evaluates \code{consequent} if \code{test} is true, otherwise \code{alternative}. &  \\
+\code{(when test form \dots) (unless test form \dots)}\index{when}\index{unless} & Evaluates the forms if \code{test} is true (false). &  \\
+\code{(cond (test form \dots) \dots (else: form \dots))}\index{cond} & Evaluates the forms of the first clause whose test is true. &  \\
+\code{(case target ((key \dots) form \dots) \dots (else: form \dots))}\index{case} & Chooses the clause whose keys include the target (compared with \code{id?}). &  \\
+\code{(select target test ((match \dots) form \dots) \dots (else: form \dots))}\index{select} & As \code{case}, but the matches are evaluated and compared with the function \code{test}, such as \code{=} or \code{instance?}. &  \\
+\code{(and form \dots) (or form \dots)}\index{and}\index{or} & Logical and and or, evaluating only as many forms as needed. &  \\
+\code{(bind ((var \dots init) \dots) form \dots)}\index{bind} & Binds local variables (several to the values of one form if more than one is named) and evaluates the forms. &  \\
+\code{(set! place new-value)}\index{set"!} & Assigns a variable, or calls the setter of \code{place}: \code{(set! (f x) v)} is \code{((setter f) x v)}. &  \\
+\code{(setter name)}\index{setter} & The setter function of \code{name}, \code{(setter name)}. &  \\
+\code{(method parameter-list form \dots)}\index{method} & An anonymous method. &  \\
+\code{(bind-methods ((name parameter-list form \dots) \dots) form \dots)}\index{bind-methods} & Local methods that may call each other. &  \\
+\code{(for ((var init step) \dots) (end-test result \dots) form \dots)}\index{for} & General iteration. &  \\
+\code{(for-each ((var collection) \dots) (end-test result \dots) form \dots)}\index{for-each} & Iterates over collections in parallel. &  \\
+\code{(dotimes (var count result) form \dots)}\index{dotimes} & Evaluates the forms with \code{var} from 0 below \code{count}. &  \\
+\code{(while test form \dots) (until test form \dots)}\index{while}\index{until} & Repeats the forms while (until) \code{test} is true; answers \code{\#f}. &  \\
+\code{(bind-exit (var) form \dots)}\index{bind-exit} & Binds \code{var} to an exit procedure that returns from the form. &  \\
+\code{(unwind-protect protected-form cleanup-form \dots)}\index{unwind-protect} & Evaluates the cleanup forms however \code{protected-form} is left. &  \\
+\code{(handler-bind (type function \#key test description) form \dots)}\index{handler-bind} & Evaluates the forms with a condition handler in effect. &  \\
+\code{(handler-case form ((type \#key condition test description) form \dots) \dots)}\index{handler-case} & Evaluates \code{form}; if a condition of a listed type is signaled, exits and evaluates that clause. &  \\
+\code{(define name value)}\index{define} & Defines a module variable. &  \\
+\code{(define-class name (superclass \dots) slot-spec \dots)}\index{define-class} & Defines a class and its slot accessors; the variable is read-only. &  \\
+\code{(define-generic-function name parameter-list)}\index{define-generic-function} & Defines a generic function; the variable is read-only. &  \\
+\code{(define-method name parameter-list form \dots)}\index{define-method} & Adds a method to a generic function, creating it if need be. &  \\
+\code{(define-slot owner keyword value \dots)}\index{define-slot} & Adds a slot to a class or singleton. &  \\
+\code{(define-module name clause \dots)}\index{define-module} & Declares a module (Chapter~\ref{ch:modules}). &  \\
+\code{`template ,form ,@form}\index{backquote} & Backquote: a list built from a template, as in Common Lisp. &  \\
+\code{(define-macro name parameter-list form \dots)}\index{define-macro} & Defines a macro (Chapter~\ref{ch:extensions}). & \textsc{c} \\
+\code{(define-for-macros form \dots)}\index{define-for-macros} & Forms run only while compiling, for macros to use. & \textsc{c} \\
+\code{(define-thread-variable name value)}\index{define-thread-variable} & Defines a variable each thread can rebind. & \textsc{c} \\
+\code{(dynamic-bind ((name value) \dots) form \dots)}\index{dynamic-bind} & Gives thread variables new values in this thread while the forms run. & \textsc{c} \\
+\code{(with-lock (lock) form \dots)}\index{with-lock} & Holds the lock while the forms run. & \textsc{c} \\
+\bottomrule
+\end{longtable}}

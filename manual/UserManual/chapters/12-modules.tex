@@ -1,0 +1,541 @@
+\chapter{Modules}\label{ch:modules}
+
+\index{module}
+A small program can live comfortably in one namespace: every class,
+generic function and variable it defines sits side by side, and every
+name means the same thing everywhere. A larger program soon outgrows
+that. Two parts of it want to use the same name for different things, or
+one part wants to keep its helpers private so that nobody else comes to
+depend on them. Dylan's answer is the \term{module}.
+
+This chapter explains what a module is, how the \code{define-module} form
+declares one, how a source file says which module its code belongs to,
+and how each implementation handles programs spread over several modules
+and several files. It ends with a complete multi-file program.
+
+\section{What a module is}\label{sec:modules-what}
+
+\index{module variable}
+A module is a mapping from names to \term{module variables}. It is not a
+container for classes or functions as such: Dylan modules deal only in
+variables. Since classes and functions are ordinary values stored in
+variables, controlling who can see a variable controls who can use the
+class or function in it. If you export the variable \code{<point>}, other
+modules can make points; if you do not, the class is private
+\dylanbook{chapter 5}.
+
+A module gets its variables in two ways.
+
+\begin{itemize}
+\item It may \term{own} a variable. A definition compiled in the
+  module creates the variable there if the name does not already refer
+  to one. The defining forms are \code{define}, \code{define-class},
+  \code{define-method} and \code{define-generic-function}.
+\item It may \term{import} a variable that another module exports, by
+  \term{using} that module. An imported variable is the very same
+  variable as in the module that owns it, not a copy: an assignment made
+  through one module is seen through every other.
+\end{itemize}
+
+Each variable is owned by exactly one module, but it may be visible in
+many. Within one module a name refers to at most one variable; it is an
+error to import two different variables under the same name, or to import
+a name and also define it.
+
+Only \term{exported} variables can be imported. A module exports a
+variable it owns by naming it in an \code{export} or \code{create} clause,
+and it can pass on variables it imported with the \code{export:} option
+of a \code{use} clause.
+
+\index{lexical variable}
+Modules affect only module variables. A local variable made by
+\code{bind}, by a method's parameters or by any other binding form is
+looked up lexically, as always, and hides a module variable of the same
+name.
+
+\section{The predefined modules}\label{sec:modules-predefined}
+
+\index{dylan module}\index{dylan-user module}
+Two modules exist before any program runs.
+
+\begin{description}
+\item[\code{dylan}] owns every predefined variable of the language:
+  \code{+}, \code{make}, \code{<object>}, \code{map} and the rest
+  (Appendix~\ref{app:library} lists them all). It exports them all. It
+  cannot be redefined. In the compiler to C the library itself is
+  written in Dylan, in the module \code{dylan}, and it also owns a few
+  internal variables, whose names begin with \code{\%}, which it does not
+  export.
+\item[\code{dylan-user}] uses \code{dylan} and owns nothing else to begin
+  with. Code goes here unless something says otherwise, which is why the
+  examples in the rest of this book never mention modules at all.
+\end{description}
+
+\section{Declaring a module}\label{sec:modules-define}
+
+\index{define-module}
+The 1992 manual says that modules are ``manipulated by the programming
+environment'' and gives no syntax for declaring them. Apple's later
+design note~32 supplied one, in the infix syntax. Both implementations
+accept it in prefix form:
+
+\begin{dylan}
+(define-module module-name clause ...)
+\end{dylan}
+
+\noindent
+Each \meta{clause} is a \code{use} clause, an \code{export} clause or a
+\code{create} clause. The module name is a symbol. Module names live in a
+namespace of their own, separate from variables, so \code{define-module}
+creates no variable, and a module may share its name with a variable.
+\code{define-module} is a defining form: it belongs at top level or
+inside a top-level \code{begin}. The compiler to C reports one inside a
+method (``define-module must be at top level''); the interactive
+implementation does not check.
+
+\subsection{\code{use} clauses}\label{sec:modules-use}
+
+\index{use clause}
+A \code{use} clause imports variables from another module:
+
+\begin{dylan}
+(use used-module
+     import:  all | (name-or-rename ...)
+     exclude: (name ...)
+     prefix:  "string"
+     rename:  ((old-name => new-name) ...)
+     export:  all | (name ...))
+\end{dylan}
+
+\noindent
+All the options are optional. With none, every variable the used module
+exports is imported under its own name, and nothing is exported again.
+The options work as follows.
+
+\begin{description}
+\item[\code{import:}]\index{import: (module option)} Which variables to
+  import. The default, \code{all}, imports everything the used module
+  exports. A list imports only the names listed. An entry of the form
+  \code{(old => new)} imports \code{old} under the name \code{new}; it
+  is shorthand for listing \code{old} and adding the same pair to
+  \code{rename:}.
+\item[\code{exclude:}]\index{exclude: (module option)} Names not to
+  import. It is allowed only when \code{import:} is \code{all}.
+\item[\code{prefix:}]\index{prefix: (module option)} A string put in
+  front of each imported name. With \code{prefix: "gfx\$"} the used
+  module's \code{draw-line} is \code{gfx\$draw-line} here. Names given in
+  \code{rename:} do not get the prefix.
+\item[\code{rename:}]\index{rename: (module option)} Pairs
+  \code{(old => new)}. Each \code{old} is imported, whatever
+  \code{import:} says, under the name \code{new}.
+\item[\code{export:}]\index{export: (module option)} Variables imported
+  by this clause that the module being defined exports again, named by
+  their names in this module; \code{all} re-exports everything the
+  clause imports. The default is to re-export nothing.
+\end{description}
+
+\noindent
+Renaming and excluding work on symbols, not on single variables. A name
+\code{foo} and the setter name \code{(setter foo)} travel together: if
+you import a slot getter \code{x} under the name \code{px}, its setter
+comes with it, and \code{(set! (px p) 3)} works in the importing module.
+
+A module may use the same module in more than one clause; it gets the
+union of what the clauses import. Each clause's options apply to that
+clause alone.
+
+\subsection{\code{export} and \code{create} clauses}\label{sec:modules-export}
+
+\index{export clause}\index{create clause}
+\begin{dylan}
+(export name ...)
+(create name ...)
+\end{dylan}
+
+\noindent
+An \code{export} clause names variables that the module owns, which a
+definition in the module will create, and makes them visible to modules
+that use it. A \code{create} clause names variables that the module owns
+and exports but does \emph{not} define: they are to be defined by a module
+that uses this one. That is how one module can publish an interface whose
+implementation lives in another. It is an error to name in either clause
+a variable the module imports. A name may appear more than once.
+
+\subsection{Rules}\label{sec:modules-rules}
+
+\begin{itemize}
+\item The uses must not form a cycle: if \code{a} uses \code{b}, \code{b}
+  may not use \code{a}, directly or through other modules.
+\item A module cannot use itself, and \code{dylan} cannot be redefined.
+\item A module may not define a variable it imports, with one exception:
+  it may define a variable that the owning module named in a
+  \code{create} clause. Adding a \emph{method} to an imported generic
+  function with \code{define-method} is not defining the variable; it is
+  the normal way one module extends another's generic functions, and it
+  is always allowed.
+\end{itemize}
+
+\section{An example of each option}\label{sec:modules-example-options}
+
+Design note~32 gives a set of four modules that between them use every
+option. Written in prefix form and cut down a little, they are:
+
+\begin{dylan}
+(define-module graphics
+  (use dylan)
+  (create draw-line erase-line skew-line))
+
+(define-module lines
+  (use dylan)
+  (use graphics import: (draw-line erase-line skew-line)))
+
+(define-module rects
+  (use dylan)
+  (use graphics prefix: "g$" exclude: (skew-line)))
+
+(define-module gx
+  (use dylan export: all)
+  (use graphics rename: ((skew-line => warp-line)) export: all))
+\end{dylan}
+
+\begin{itemize}
+\item \code{graphics} owns and exports three variables and defines none
+  of them.
+\item \code{lines} imports all three and supplies their definitions,
+  which \code{create} allows.
+\item \code{rects} sees \code{g\$draw-line} and \code{g\$erase-line},
+  and not \code{skew-line} under any name.
+\item \code{gx} sees \code{draw-line}, \code{erase-line} and
+  \code{warp-line}, and re-exports them together with everything in
+  \code{dylan}. A module that says only \code{(use gx)} therefore gets the
+  whole language plus the three graphics operations.
+\end{itemize}
+
+\noindent
+Given these declarations, the file for \code{lines} might read
+
+\begin{dylan}
+module: lines
+
+(define-method draw-line (from to)
+  (display "draw ") (display from) (display "-") (display to) (newline))
+(define-method erase-line (from to)
+  (display "erase ") (display from) (display "-") (display to) (newline))
+(define-method skew-line (line)
+  (display "skew ") (display line) (newline))
+\end{dylan}
+
+\noindent
+a file in \code{rects} calls \code{(g\$draw-line 1 2)}, and a file in a
+module that uses \code{gx} calls \code{(warp-line 'l1)}, which runs the
+\code{skew-line} method above and prints \code{skew l1}. Both
+implementations run this program as shown.
+
+\section{Which module code belongs to}\label{sec:modules-header}
+
+\index{module: (file header)}\index{file header}
+Every expression is compiled in some module, and that module decides
+what each free name in it means. Design note~33 says how a source file
+names its module: by a \term{file header}, a set of lines of the form
+\code{keyword: value} at the very top of the file, ended by a blank line.
+
+\begin{dylan}
+module: shapes
+author: A. Programmer
+        Example Software, Inc.
+version: 1.2
+
+(define-class <shape> (<object>))
+...
+\end{dylan}
+
+\noindent
+The rules for the header are these.
+
+\begin{itemize}
+\item Each keyword starts at the beginning of a line. Keywords are not
+  case-sensitive, so \code{Module:} is the same as \code{module:}.
+\item A line that begins with white space continues the value of the
+  line before it.
+\item The first blank line ends the header. It is required: without it
+  the header runs on into the code, and both implementations silently
+  skip every line up to the first blank one.
+\item \code{module:} names the module. The other keywords
+  (\code{author:}, \code{copyright:}, \code{version:} and any others) are
+  read and ignored by both implementations.
+\end{itemize}
+
+\noindent
+A file without a header, one whose first line is not of the form
+\code{keyword: value}, is compiled in \code{dylan-user}. Design note~33
+makes \code{module:} required; both implementations instead treat its
+absence as \code{module: dylan-user}, so that a one-file program needs no
+header at all.
+
+A \code{define-module} form is itself compiled in some module, normally
+\code{dylan-user}, but the names in its clauses are not looked up there:
+they name variables of the module being declared or of the modules it
+uses. It is usual to put all the \code{define-module} forms of a program
+in one file with no header.
+
+\section{Modules in the compiler to C}\label{sec:modules-dylanc}
+
+\index{dylanc!modules}
+The compiler to C compiles a whole program at once, so it sees every
+module before it compiles any code. Give \cmd{dylanc} all the files of the
+program:
+
+\begin{shell}
+$ bin/dylanc -o app modules.dyl shapes.dyl app.dyl
+\end{shell}
+
+\noindent
+It first finds every top-level \code{define-module} form in every file,
+then defines each module after the modules it uses. The order of the
+\code{define-module} forms, and of the files that contain them, therefore
+does not matter. Then it compiles each file's forms in the module its
+header names. The top-level forms of all the files run in the order the
+files were given on the command line, and within each file from top to
+bottom.
+
+Mistakes in modules are reported when compiling, with the file and line:
+
+\begin{shell}
+e4.dyl:2:1: error: define-module: modules m1 use each other
+e5.dyl:1:1: error: unknown module nosuch
+e7.dyl:1:1: error: define-module: cannot export car, which is imported
+e8b.dyl:5:5: error: define of f: the variable is imported from module a
+\end{shell}
+
+\noindent
+A name that is used in a module but defined nowhere it can see draws a
+warning, not an error, and an error only if the program actually reaches
+it:
+
+\begin{shell}
+e1b.dyl:1:8: warning: g is not defined (module b)
+$ ./e1
+Dylan error: the variable g@b has no value
+\end{shell}
+
+\noindent
+As the message shows, the compiler writes a variable as
+\meta{name}\code{@}\meta{module} when the module matters. Here \code{g}
+was defined in module \code{a} but not exported, so the \code{g} in module
+\code{b} is a different, undefined variable.
+
+\index{NAME-MODULE.c}
+The generated C is organized by module. With \cmd{-k} (keep the C), a
+program \code{app} with code in the modules \code{shapes} and \code{app}
+leaves \file{app.c} (data, dispatch and \code{main}), \file{app.h},
+\file{app-shapes.c} and \file{app-app.c}, one file of functions for each
+module that has any, and \file{app-dylan.c}, the library's own functions.
+Chapter~\ref{ch:dylanc} describes these files and the compiler's other
+options.
+
+\section{Modules in the interactive implementation}\label{sec:modules-lisp}
+
+\index{interactive implementation!modules}
+The Common Lisp implementation compiles one form at a time, so a module
+must be declared before any code that uses it is compiled, and a module
+must be declared after the modules it uses:
+
+\begin{repl}
+? (define-module m1 (use dylan) (use m2))
+
+debugger invoked on a DYLAN::DYLAN-CONDITION ...
+  Error: unknown module m2
+\end{repl}
+
+\noindent
+Declaring the modules in order is enough. Redefining a module with
+\code{define-module} replaces its clauses, and every module that uses it
+is brought up to date at once, as \dylanbook{chapter 5} asks: variables
+newly exported become visible immediately in the modules that import
+them.
+
+\subsection{At the read-eval-print loop}
+
+\index{in-module@\code{dylan:in-module}}
+The loop starts in \code{dylan-user}. Typing
+\code{(dylan:in-module \meta{name})} at the \code{?} prompt switches the
+module that later input is compiled in; from Lisp, the function
+\code{(dylan:in-module "\meta{name}")}, given the name as a string, does
+the same. The loop answers with
+\code{;Module:} and the new module's name.
+
+\begin{repl}
+? (define-module counter (use dylan) (export next-count))
+;Value: counter
+
+? (dylan:in-module counter)
+;Module: counter
+
+? (define count 0)
+;Value: count
+
+? (define-method next-count () (set! count (+ count 1)) count)
+;Value: next-count
+
+? (dylan:in-module dylan-user)
+;Module: dylan-user
+
+? (define-module client (use dylan) (use counter))
+;Value: client
+
+? (dylan:in-module client)
+;Module: client
+
+? (next-count)
+;Value: 1
+
+? (next-count)
+;Value: 2
+\end{repl}
+
+\noindent
+Module \code{client} can call \code{next-count} but cannot see
+\code{count}, which \code{counter} keeps to itself.
+(Chapter~\ref{ch:lisp} describes the loop in full.)
+
+\subsection{Files}
+
+\code{dylan:compile-file} reads a file's header and compiles the file in
+the module it names. Names are resolved to variables as the file is
+compiled, so the compiled Lisp needs no module information to run, and a
+compiled \code{define-module} form defines its module again when the
+file is loaded. To
+compile a program of several files, compile them in one Lisp session in
+the order a reader would need them, the file of \code{define-module}
+forms first, and then load the results in the same order:
+
+\begin{shell}
+$ sbcl --non-interactive --eval '(load "src/load-compiler.lisp")' \
+    --eval '(dylan:compile-file "modules.dyl" "modules.lisp")' \
+    --eval '(dylan:compile-file "shapes.dyl" "shapes.lisp")' \
+    --eval '(dylan:compile-file "app.dyl" "app.lisp")'
+$ sbcl --non-interactive --eval '(load "src/load-runtime.lisp")' \
+    --eval '(load "modules.lisp")' --eval '(load "shapes.lisp")' \
+    --eval '(load "app.lisp")'
+\end{shell}
+
+\noindent
+Compiling \file{shapes.dyl} in a session that has not seen
+\file{modules.dyl} fails with ``unknown module shapes''. When the Lisp
+files are loaded, SBCL may print \code{WARNING: redefining ...} lines for
+the small accessor functions that each file declares for the module
+variables it shares with the others; they are harmless.
+
+\section{Read-only variables}\label{sec:modules-readonly}
+
+\index{read-only variable}
+\dylanbook{Chapter 5} makes some module variables \term{read-only}: the
+variable always holds the same object, though that object may itself be
+changed. \code{define-class} and \code{define-generic-function} create
+read-only variables, so a class or generic function cannot be replaced by
+assignment. Variables made by \code{define} (or by \code{define-method}
+alone) are ordinary and can be assigned with \code{set!}.
+
+The two implementations check this at different times. The compiler to C
+refuses the program:
+
+\begin{shell}
+e3.dyl:2:1: error: <p> holds a class or generic function and cannot be assigned
+\end{shell}
+
+\noindent
+The interactive implementation signals an error when the assignment is
+run:
+
+\begin{repl}
+? (define-class <p> (<object>))
+;Value: <p>
+
+? (set! <p> 3)
+
+debugger invoked on a DYLAN::DYLAN-CONDITION ...
+  Error: variable is read-only <p>
+\end{repl}
+
+\noindent
+Methods can still be added to a read-only generic function: the variable
+does not change, only the function in it.
+
+\section{A complete multi-file program}\label{sec:modules-example}
+
+This program has three files. The first declares the modules; it has no
+header, so it is compiled in \code{dylan-user}.
+
+\begin{dylan}
+;;; modules.dyl
+(define-module shapes
+  (use dylan)
+  (export <shape> <circle> <square> area describe-shape))
+
+(define-module app
+  (use dylan)
+  (use shapes import: (<circle> <square> (describe-shape => show))))
+\end{dylan}
+
+\noindent
+Module \code{shapes} exports five variables. Module \code{app} imports
+only two classes and one function, and calls the function \code{show}.
+It does not import \code{area} or \code{<shape>}.
+
+\begin{dylan}
+;;; shapes.dyl
+module: shapes
+author: A. Programmer
+
+(define-class <shape> (<object>))
+(define-class <circle> (<shape>)
+  (radius init-keyword: radius:))
+(define-class <square> (<shape>)
+  (side init-keyword: side:))
+
+(define-generic-function area (shape))
+(define-method area ((c <circle>)) (* 3 (radius c) (radius c)))
+(define-method area ((s <square>)) (* (side s) (side s)))
+
+(define-method describe-shape ((s <shape>))
+  (display "a shape of area ")
+  (display (area s))
+  (newline))
+\end{dylan}
+
+\noindent
+The slot getters \code{radius} and \code{side} are owned by \code{shapes}
+but not exported, so no other module can read the slots directly.
+
+\begin{dylan}
+;;; app.dyl
+module: app
+
+(show (make <circle> radius: 2))
+(show (make <square> side: 3))
+\end{dylan}
+
+\noindent
+With the compiler to C:
+
+\begin{shell}
+$ bin/dylanc -o app modules.dyl shapes.dyl app.dyl
+$ ./app
+a shape of area 12
+a shape of area 9
+\end{shell}
+
+\noindent
+With the interactive implementation, compile the three files and load
+them as shown in Section~\ref{sec:modules-lisp}; the output is the same.
+
+If \file{app.dyl} also called \code{(area (make <square> side: 1))}, the
+compiler to C would warn that \code{area} is not defined in module
+\code{app}, and the program would stop with an error on reaching the
+call, because \code{app} did not import it.
+
+The example uses \code{display} rather than \code{format} because
+\code{format} exists only in the compiler to C
+(Chapter~\ref{ch:printing}). A program meant to run in both
+implementations must keep to the names both provide;
+Appendix~\ref{app:library} marks the ones that only one of them has.

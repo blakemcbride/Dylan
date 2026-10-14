@@ -1,0 +1,743 @@
+\chapter{Macros, Threads and Streams}\label{ch:extensions}
+\sloppy
+
+The 1992 manual defines a language without macros, without threads, and
+without streams --- though it uses streams in passing. The compiler to C
+adds all three. They are \emph{extensions}: a program that uses them is
+not a program of the 1992 language, and the interactive Common Lisp
+implementation does not have them (it has its own extensions, described
+in Chapter~\ref{ch:lisp}). Everything in this chapter applies to
+programs compiled with \cmd{dylanc}.
+
+\section{Macros}\label{sec:ext-macros}
+
+\index{macros}
+A \term{macro} is a function that runs while the program is being
+compiled. It receives the forms of a call, unevaluated, and answers a new
+form, its \term{expansion}, which the compiler compiles in place of the
+call. Macros let you add new syntax to the language: a new looping form,
+a definition form that writes several definitions, a form that evaluates
+its argument in a special way.
+
+The macros here are Common Lisp's kind. If you know \code{defmacro}, you
+know them already: the parameters are bound to the argument forms, the
+body builds the expansion, usually with backquote, and nothing protects
+the expansion's names from the names around the call except the care of
+the macro's writer and \code{gensym}.
+
+The manual calls \code{and}, \code{or}, \code{cond}, \code{case},
+\code{for} and the other syntax of Chapter~\ref{ch:control} macros. In
+this system those are built into the compiler, not written with
+\code{define-macro}, and the program cannot redefine them: the compiler
+accepts a \code{define-macro} of one of their names without complaint,
+but a call of the name still means the built-in form.
+
+\subsection{\code{define-macro}}\label{sec:ext-define-macro}
+
+\index{define-macro@\code{define-macro}}
+\begin{quote}
+\code{(define-macro \meta{name} \meta{parameter-list} \meta{form} ...)}
+\end{quote}
+
+\noindent at top level makes \meta{name}, a variable of the current
+module, a macro. From then on, a call \code{(\meta{name}
+\meta{argument} ...)} is replaced, while compiling, by the value of the
+\meta{form}s, run with the parameters bound to the argument forms. The
+parameter list is a method's: required parameters, \code{\#rest} and
+\code{\#key} are all allowed.
+
+\begin{dylan}
+(define-macro my-unless (test #rest body)
+  `(if ,test #f (begin ,@body)))
+
+(my-unless (= 1 2)
+  (print 'one)
+  (print 'two))
+(print (my-unless #t 'never))
+\end{dylan}
+
+\noindent prints
+
+\begin{dylan}
+one
+two
+#f
+\end{dylan}
+
+Here \code{test} is bound to the form \code{(= 1 2)} and \code{body} to
+the list of the two \code{print} forms; the backquote template builds an
+\code{if} form from them. Backquote follows the usual Lisp rules
+(\code{,} inserts a value, \code{,@} splices a list, and backquotes may
+nest); see Appendix~\ref{app:differences}.
+
+Because the argument forms arrive unevaluated, a macro can use a form
+both as data and as code:
+
+\begin{dylan}
+(define-macro show (form)
+  `(format #t "~s => ~s~%" ',form ,form))
+
+(show (+ 1 2))
+(show (reverse '(a b c)))
+\end{dylan}
+
+\noindent prints
+
+\begin{dylan}
+(+ 1 2) => 3
+(reverse (quote (a b c))) => (c b a)
+\end{dylan}
+
+A macro's body is ordinary Dylan, and it may compute its expansion any
+way it likes; it need not use backquote, and its result need not even be
+a list. Keyword parameters work as in a method:
+
+\begin{dylan}
+(define-macro scaled (#key (scale 1) value)
+  (* scale value))
+(print (list (scaled value: 5) (scaled scale: 3 value: 5)))
+; prints (5 15)
+\end{dylan}
+
+Here the multiplication happens when the program is compiled; the
+expansions are the constants \code{5} and \code{15}.
+
+Macros may expand into uses of other macros, or of themselves; the
+compiler expands again until no macro call is left. An expansion may also
+be a definition, or a \code{begin} of several, at top level. A macro that
+never stops expanding is reported (``macros expanded 500 deep --- one
+never stops?'').
+
+\subsection{Rules}
+
+\begin{itemize}
+\item \code{define-macro} must be at top level. Inside a method it is a
+  compile error (``define-macro must be at top level'').
+\item A macro must be defined before its first use in the program. A
+  call that comes earlier is compiled as a call of a variable that is not
+  defined: the compiler warns, and the call fails when it runs.
+\item A name cannot be both a macro and a variable. \code{(define m 2)}
+  after \code{(define-macro m () 1)}, or a use of \code{m} other than as
+  the operator of a call, is a compile error (``m is a macro'').
+\item A call of a macro must be a proper list, and must supply arguments
+  its parameter list accepts (``macro m: wrong number of arguments'').
+\item An error signalled by a macro's body is a compile error, reported
+  at the call with the macro's name: \code{(define-macro m (a) (error "no
+  good: \textasciitilde{}s" a))} and a call \code{(m 1)} report
+  ``\code{macro m: no good: 1}''.
+\end{itemize}
+
+\subsection{Names in expansions: \code{gensym} and capture}
+\label{sec:ext-hygiene}
+
+\index{gensym@\code{gensym}}\index{macros!hygiene}
+The names in an expansion mean what they mean \emph{where the macro is
+used}. This is simple and predictable, but it means that the expansion
+and the code around it can interfere. A macro that binds a variable of
+its own risks capturing a variable of the same name at the call:
+
+\begin{dylan}
+(define-macro bad-swap! (a b)
+  `(bind ((tmp ,a)) (set! ,a ,b) (set! ,b tmp)))
+
+(bind ((tmp 1) (other 2))
+  (bad-swap! tmp other)
+  (print (list tmp other)))
+; prints (1 2): nothing was swapped
+\end{dylan}
+
+The expansion binds a new \code{tmp}, and \code{(set! tmp other)} then
+assigns that one, not the caller's. The cure is \code{(gensym)}, which
+answers a fresh symbol that no program can write, for the expansion to
+bind:
+
+\begin{dylan}
+(define-macro swap! (a b)
+  (bind ((tmp (gensym "tmp")))
+    `(bind ((,tmp ,a))
+       (set! ,a ,b)
+       (set! ,b ,tmp))))
+
+(define tmp 1)
+(define other 2)
+(swap! tmp other)
+(print (list tmp other))      ; prints (2 1)
+\end{dylan}
+
+\code{gensym} takes an optional string, the start of the new name, and
+appends a number. The name only \emph{looks} like one a program could
+write: \cmd{dylanc -E} shows it as \code{tmp1}, but it is not the symbol
+\code{tmp1}, and nothing in the program can refer to it.
+
+Capture can happen the other way too: an expansion that calls a function
+by name gets whatever that name means at the call. If the caller has a
+local variable of that name, the expansion uses it:
+
+\begin{dylan}
+(define-macro pair-of (x) `(list ,x ,x))
+(print (pair-of 1))                     ; prints (1 1)
+(bind ((list vector))
+  (print (pair-of 2)))                  ; prints #(2 2)
+\end{dylan}
+
+\noindent There is no protection against this short of not binding, near
+a macro's use, the names its expansions call. The built-in syntax ---
+\code{for}, \code{case}, \code{with-lock} and the rest --- is not exposed
+to either kind of capture: its expansions refer to the library's
+variables directly and make their temporaries with names no program can
+write.
+
+A local variable or parameter with the name of a macro hides the macro,
+as it would hide a module variable:
+
+\begin{dylan}
+(define-macro double (x) `(* 2 ,x))
+(print (double 4))                              ; prints 8
+(define apply-it (method (double) (double 4)))
+(print (apply-it (method (n) (+ n 100))))       ; prints 104
+\end{dylan}
+
+\subsection{The compile-time environment and \code{define-for-macros}}
+\label{sec:ext-compile-time}
+
+\index{define-for-macros@\code{define-for-macros}}
+Macro bodies run inside the compiler, in the interactive Common Lisp
+implementation of Dylan (Chapter~\ref{ch:lisp}), which is loaded with
+the compiler. They run in a \emph{compile-time environment} of their own,
+separate from the program being compiled. It holds the whole library of
+the interactive implementation, \code{gensym}, and whatever
+\code{define-for-macros} has defined --- but nothing the program itself
+defines. A macro body that calls one of the program's functions fails:
+
+\begin{dylan}
+(define helper (method (x) (list x x)))
+(define-macro use-helper (x) (helper x))
+(print (use-helper 3))
+; error: macro use-helper: unbound variable helper
+\end{dylan}
+
+Functions and variables for macro bodies to use are defined with
+
+\begin{quote}
+\code{(define-for-macros \meta{form} ...)}
+\end{quote}
+
+\noindent at top level, which runs the \meta{form}s in the compile-time
+environment while compiling, and leaves nothing in the compiled program.
+A variable defined there keeps its value from one expansion to the next.
+Here a helper builds the names of accessors for a macro that defines a
+class:
+
+\begin{dylan}
+(define-for-macros
+  (define accessor-name
+    (method (class-name slot)
+      (as <symbol>
+          (concatenate (as <string> class-name) "-" (as <string> slot))))))
+
+(define-macro define-record (name #rest slots)
+  `(define-class ,name (<object>)
+     ,@(map (method (s)
+              `(,(accessor-name name s)
+                init-keyword: ,(as <keyword> (as <string> s))))
+            slots)))
+
+(define-record point x y)
+(bind ((p (make point x: 3 y: 4)))
+  (print (list (point-x p) (point-y p))))   ; prints (3 4)
+\end{dylan}
+
+Two consequences of running macro bodies in the interactive
+implementation are worth knowing. First, \code{gensym} and anything
+\code{define-for-macros} defines exist only at compile time; a compiled
+program cannot call \code{gensym}. Second, where the two implementations
+differ, a macro body sees the interactive one: it has bignums, for
+instance (Appendix~\ref{app:differences}).
+
+\subsection{Macros and modules}\label{sec:ext-macro-modules}
+
+A macro is a variable of the module it is defined in, and it is
+exported, imported, renamed and excluded exactly as a variable is
+(Chapter~\ref{ch:modules}). Here the module \code{macros} defines and
+exports \code{repeat}, and \code{user} uses it:
+
+\begin{dylan}
+; macmods.dyl
+(define-module macros (use dylan) (export repeat))
+(define-module user (use dylan) (use macros))
+\end{dylan}
+
+\begin{dylan}
+; macdef.dyl
+module: macros
+
+(define-macro repeat (n #rest body)
+  (bind ((i (gensym)))
+    `(dotimes (,i ,n) ,@body)))
+\end{dylan}
+
+\begin{dylan}
+; macuse.dyl
+module: user
+
+(repeat 3 (print 'hi))
+\end{dylan}
+
+\begin{shell}
+$ bin/dylanc -o macs macmods.dyl macdef.dyl macuse.dyl
+$ ./macs
+hi
+hi
+hi
+\end{shell}
+
+(The first lines of \file{macdef.dyl} and \file{macuse.dyl} are the
+\code{module:} headers; the comments above them are not part of the
+files.) The names in an expansion are looked up in the module where the
+macro is \emph{used}, so \code{dotimes} must mean the same there as in
+the macro's module --- here both use \code{dylan}.
+
+\subsection{Seeing expansions: \cmd{dylanc -E}}\label{sec:ext-expand}
+
+\index{dylanc@\cmd{dylanc}!-E@\cmd{-E}}
+\cmd{dylanc -E} writes each use of the program's own macros, where it
+occurs, and its expansion, and makes no C. It is the way to debug a
+macro:
+
+\begin{shell}
+$ bin/dylanc -E m1.dyl
+m1.dyl:4:1: (my-unless (= 1 2) (print 'one) (print 'two))
+  => (if (= 1 2) #f (begin (print 'one) (print 'two)))
+m1.dyl:7:8: (my-unless #t 'never)
+  => (if #t #f (begin 'never))
+m1.dyl:12:1: (show (+ 1 2))
+  => (format #t "~s => ~s~%" '(+ 1 2) (+ 1 2))
+m1.dyl:13:1: (show (reverse '(a b c)))
+  => (format #t "~s => ~s~%" '(reverse '(a b c)) (reverse '(a b c)))
+\end{shell}
+
+Only the program's macros are shown, not the built-in syntax. Each step
+of a macro that expands into another macro is shown separately.
+
+\section{Threads}\label{sec:ext-threads}
+
+\index{threads}
+A compiled program can run several \term{threads} at once. Each Dylan
+thread is a POSIX thread, so threads really do run in parallel on a
+machine with several processors. The garbage collector is built for
+threads and collects while they all allocate. Threads share the
+program's module variables and every object they can reach; each has
+its own stack, its own handlers and exits, and its own values of thread
+variables (Section~\ref{sec:ext-thread-variables}).
+
+The threads API is small. Table~\ref{tab:ext-threads} lists it; the
+sections after it explain each part.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.47\textwidth}%
+                >{\raggedright\arraybackslash}p{0.45\textwidth}}
+\toprule
+Form & What it does \\
+\midrule
+\code{(make-thread \meta{function})} & start a thread calling
+  \meta{function}, which takes no arguments; answer the \code{<thread>} \\
+\code{(join-thread \meta{thread})} & wait for \meta{thread} to end;
+  answer its function's values \\
+\code{(current-thread)} & the \code{<thread>} running \\
+\code{(thread-yield)} & let other threads run; answer \code{\#f} \\
+\code{(make <lock>)}, \code{(make <recursive-lock>)} & a new lock \\
+\code{(acquire-lock \meta{lock})}, \code{(release-lock \meta{lock})} &
+  hold and let go of a lock \\
+\code{(with-lock (\meta{lock}) \meta{form} ...)} & the forms, holding
+  the lock \\
+\code{(make <condition-variable>)} & a new condition variable \\
+\code{(wait-condition-variable \meta{cv} \meta{lock})} & release the
+  lock, wait to be notified, acquire it again \\
+\code{(notify-condition-variable \meta{cv})} & wake one waiting thread \\
+\code{(notify-all-condition-variable \meta{cv})} & wake every waiting
+  thread \\
+\code{(make <atomic-integer> value: \meta{n})} & an integer cell for
+  atomic updates (\meta{n} defaults to 0) \\
+\code{(atomic-value \meta{a})} & its value \\
+\code{(atomic-add! \meta{a} \meta{n})} & add \meta{n}; answer the new
+  value \\
+\code{(atomic-compare-and-swap! \meta{a} \meta{old} \meta{new})} & if
+  it holds \meta{old}, store \meta{new} and answer \code{\#t}; else
+  \code{\#f} \\
+\code{(define-thread-variable \meta{name} \meta{value})} & a module
+  variable with a value for each thread \\
+\code{(dynamic-bind ((\meta{name} \meta{value}) ...) \meta{form} ...)} &
+  the forms, with thread variables given new values in this thread \\
+\code{<thread-error>}, \code{thread-error-thread},
+  \code{thread-error-condition} & what \code{join-thread} signals when a
+  thread ended with an unhandled condition \\
+\bottomrule
+\end{tabular}
+\caption{The threads API.}\label{tab:ext-threads}
+\end{table}
+
+\subsection{Making and joining threads}\label{sec:ext-make-thread}
+
+\index{make-thread@\code{make-thread}}\index{join-thread@\code{join-thread}}
+\code{(make-thread \meta{function})} starts a new thread that calls
+\meta{function} with no arguments, and answers at once with the
+\code{<thread>} object. \code{(join-thread \meta{thread})} waits until
+that thread's function returns, and answers the values it returned. A
+thread may be joined more than once, and by any thread but itself; each
+join answers the same values.
+
+This program sums the integers below a million in four threads, each
+summing a quarter, and adds the four results:
+
+\begin{dylan}
+(define sum-range
+  (method (from below)
+    (for ((i from (+ i 1))
+          (s 0 (+ s i)))
+         ((= i below) s))))
+
+(define workers
+  (map (method (k)
+         (make-thread
+           (method () (sum-range (* k 250000) (* (+ k 1) 250000)))))
+       '(0 1 2 3)))
+
+(print (reduce + 0 (map join-thread workers)))
+; prints 499999500000
+\end{dylan}
+
+The threads run in whatever order the operating system chooses, but the
+program's output does not depend on it: each thread computes alone, and
+the main thread waits for all four before it adds. Write threaded
+programs this way where you can --- threads that share nothing while they
+work and are joined to collect their results.
+
+A thread's function may return several values, and \code{join-thread}
+answers them all:
+
+\begin{dylan}
+(define t (make-thread (method () (values 1 2 3))))
+(print (bind ((a b c (join-thread t))) (list a b c)))   ; prints (1 2 3)
+\end{dylan}
+
+\code{(current-thread)} answers the thread that calls it. In the main
+thread it answers a \code{<thread>} too, but the main thread cannot be
+joined. \code{(thread-yield)} asks the operating system to run other
+threads before this one continues; it answers \code{\#f}. A thread
+prints as \code{\{thread\}}.
+
+\subsection{When the program ends}\label{sec:ext-program-exit}
+
+\index{threads!program exit}
+The program ends when the main thread has run the last top-level form,
+\emph{whatever its other threads are doing}. It does not wait for them;
+they simply stop. This program prints \code{main-is-done} and exits with
+status 0, although its other thread would loop forever:
+
+\begin{dylan}
+(define spinner
+  (make-thread
+    (method ()
+      (bind-methods ((spin () (thread-yield) (spin)))
+        (spin)))))
+(print 'main-is-done)
+\end{dylan}
+
+Join every thread whose work must finish. Equally, an unhandled error in
+the main thread ends the whole program at once, with the other threads.
+
+\subsection{Unhandled conditions in threads}\label{sec:ext-thread-errors}
+
+\index{thread-error@\code{<thread-error>}}
+A serious condition that a thread does not handle ends \emph{that thread
+only}. The program goes on. The condition is kept with the thread, and
+\code{join-thread} on it signals a \code{<thread-error>} --- a subclass
+of \code{<error>} --- in the joining thread. \code{thread-error-thread}
+answers the thread that ended, and \code{thread-error-condition} the
+condition that ended it:
+
+\begin{dylan}
+(define worker (make-thread (method () (error "disk ~a is full" 3))))
+
+(handler-case (join-thread worker)
+  ((<thread-error> condition: e)
+   (bind ((original (thread-error-condition e)))
+     (format #t "worker failed: ~a ~s~%"
+             (condition-format-string original)
+             (condition-format-arguments original))
+     (print (id? (thread-error-thread e) worker)))))
+\end{dylan}
+
+\noindent prints
+
+\begin{dylan}
+worker failed: disk ~a is full (3)
+#t
+\end{dylan}
+
+If the \code{<thread-error>} is not handled either, it ends the joining
+thread in turn --- in the main thread, the program --- with a message
+that carries the original one:
+
+\begin{shell}
+Dylan error: a thread ended with an unhandled condition: disk 3 is full
+\end{shell}
+
+A thread that is never joined ends silently when a condition is not
+handled in it. Warnings are not serious conditions: an unhandled warning
+in a thread is reported on the standard error stream, as in the main
+thread, and the thread goes on.
+
+\subsection{Locks}\label{sec:ext-locks}
+
+\index{lock@\code{<lock>}}\index{recursive-lock@\code{<recursive-lock>}}
+\index{with-lock@\code{with-lock}}
+Threads that change shared data must take turns, or their changes will
+be lost. A \term{lock} lets one thread at a time hold it. \code{(make
+<lock>)} makes one; \code{(acquire-lock \meta{lock})} waits until no other
+thread holds it and then holds it; \code{(release-lock \meta{lock})} lets
+it go. Usually you will use
+
+\begin{quote}
+\code{(with-lock (\meta{lock}) \meta{form} ...)}
+\end{quote}
+
+\noindent which holds the lock while the forms run and releases it
+however they are left --- by returning, by a non-local exit, or by an
+error --- and answers the forms' values. Three threads each adding
+100\,000 to a shared counter:
+
+\begin{dylan}
+(define counter 0)
+(define counter-lock (make <lock>))
+(define bump
+  (method ()
+    (dotimes (i 100000)
+      (with-lock (counter-lock)
+        (set! counter (+ counter 1))))))
+(define threads (list (make-thread bump) (make-thread bump)
+                      (make-thread bump)))
+(for-each ((t threads)) () (join-thread t))
+(print counter)                                  ; prints 300000
+\end{dylan}
+
+Without the lock, two threads can read the same old value of
+\code{counter} and both store one more than it, and the total comes out
+short.
+
+A \code{<lock>} checks its use. Acquiring a \code{<lock>} the thread
+already holds would wait forever, so it is an error instead
+(``acquire-lock: the thread holds the lock already''), and so is
+releasing a lock the thread does not hold (``release-lock: the thread
+does not hold the lock''). A \code{<recursive-lock>} --- a subclass of
+\code{<lock>} --- may be acquired again by the thread holding it, and is
+released when it has been released as many times:
+
+\begin{dylan}
+(define r (make <recursive-lock>))
+(print (with-lock (r) (with-lock (r) 'nested)))   ; prints nested
+\end{dylan}
+
+Neither kind of lock takes init-keywords.
+
+\subsection{Condition variables}\label{sec:ext-condition-variables}
+
+\index{condition-variable@\code{<condition-variable>}}
+A thread that must wait until another thread has done something --- put
+an item in a queue, say --- waits on a \term{condition variable}.
+\code{(wait-condition-variable \meta{cv} \meta{lock})}, called while
+holding \meta{lock}, which must be a \code{<lock>} (not a
+\code{<recursive-lock>}), releases the lock and waits; when another
+thread calls \code{(notify-condition-variable \meta{cv})}, one waiting
+thread wakes, acquires the lock again, and returns.
+\code{notify-all-condition-variable} wakes every waiting thread.
+
+A wait can also end without a notification, and another thread may get
+to the data first. So always wait in a loop that tests what is awaited,
+with the lock held. Here a consumer thread takes ten numbers from a
+queue that the main thread fills:
+
+\begin{dylan}
+(define lock (make <lock>))
+(define not-empty (make <condition-variable>))
+(define queue (make <deque>))
+
+(define put!
+  (method (item)
+    (with-lock (lock)
+      (push-last queue item)
+      (notify-condition-variable not-empty))))
+
+(define take!
+  (method ()
+    (with-lock (lock)
+      (while (empty? queue)
+        (wait-condition-variable not-empty lock))
+      (pop queue))))
+
+(define consumer
+  (make-thread
+    (method ()
+      (for ((n 0 (+ n 1))
+            (total 0 (+ total (take!))))
+           ((= n 10) total)))))
+
+(dotimes (i 10) (put! (* i i)))
+(print (join-thread consumer))                  ; prints 285
+\end{dylan}
+
+However the two threads interleave, the consumer takes the ten squares
+and answers their sum.
+
+\subsection{Atomic integers}\label{sec:ext-atomic}
+
+\index{atomic-integer@\code{<atomic-integer>}}
+For a counter or a flag, a lock is more than is needed. An
+\code{<atomic-integer>} holds an integer that threads can update without
+one. \code{(make <atomic-integer> value: \meta{n})} makes one holding
+\meta{n} (0 if \code{value:} is not given); \code{atomic-value} reads it;
+\code{(atomic-add! \meta{a} \meta{n})} adds \meta{n} and answers the new
+value, as one indivisible step; and \code{(atomic-compare-and-swap!
+\meta{a} \meta{old} \meta{new})} stores \meta{new} only if \meta{a}
+still holds \meta{old}, answering \code{\#t} if it did and \code{\#f} if
+not.
+
+\begin{dylan}
+(define hits (make <atomic-integer>))
+(define bump-atomically
+  (method () (dotimes (i 100000) (atomic-add! hits 1))))
+(do join-thread (list (make-thread bump-atomically)
+                      (make-thread bump-atomically)))
+(print (atomic-value hits))                          ; prints 200000
+(print (atomic-compare-and-swap! hits 200000 0))     ; prints #t
+(print (atomic-compare-and-swap! hits 200000 0))     ; prints #f
+(print (atomic-add! hits 5))                         ; prints 5
+\end{dylan}
+
+The values must be integers, and an addition that overflows the 63-bit
+range signals an error, as ordinary arithmetic does.
+
+\subsection{Thread variables and \code{dynamic-bind}}
+\label{sec:ext-thread-variables}
+
+\index{define-thread-variable@\code{define-thread-variable}}
+\index{dynamic-bind@\code{dynamic-bind}}
+\begin{quote}
+\code{(define-thread-variable \meta{name} \meta{value})}
+\end{quote}
+
+\noindent at top level defines a module variable that has a separate
+value in each thread. Reading it, and assigning it with \code{set!},
+affect only the current thread's value. The main thread starts with
+\meta{value}, and so does every thread made after the definition has run
+--- a new thread does \emph{not} inherit its creator's current value.
+
+\begin{quote}
+\code{(dynamic-bind ((\meta{name} \meta{value}) ...) \meta{form} ...)}
+\end{quote}
+
+\noindent gives each thread variable \meta{name} the new \meta{value} in
+the current thread while the forms run, and restores the old value
+however they are left. This is how such variables are normally used: as
+settings that a computation and everything it calls can see, without
+passing them as arguments, and without one thread's settings disturbing
+another's.
+
+\begin{dylan}
+(define-thread-variable *indent* 0)
+
+(define show
+  (method (text)
+    (format #t "~a~a~%" (make <string> size: *indent* fill: #\space) text)))
+
+(define nested
+  (method (depth)
+    (show depth)
+    (when (< depth 2)
+      (dynamic-bind ((*indent* (+ *indent* 2)))
+        (nested (+ depth 1))))))
+
+(nested 0)
+(print *indent*)
+(print (join-thread (make-thread (method () (set! *indent* 99) *indent*))))
+(print *indent*)
+\end{dylan}
+
+\noindent prints
+
+\begin{dylan}
+0
+  1
+    2
+0
+99
+0
+\end{dylan}
+
+The other thread's \code{set!} changed only its own value.
+
+\subsection{What threads may share}\label{sec:ext-thread-sharing}
+
+Assigning a module variable or a slot is a single store of one machine
+word, so a thread never sees a value half written. Beyond that, data
+that threads share and change must be protected with locks. In
+particular the library's collections --- tables, stretchy vectors,
+deques and the rest --- do no locking of their own: two threads adding to
+one table at once can leave it in a wrong state. The runtime's own shared state, such as the table of
+symbols, is locked internally, and since the program's classes and
+generic functions never change, method dispatch needs no locks at all.
+
+\section{Streams}\label{sec:ext-streams}
+
+\index{streams}
+The 1992 manual's printing functions take a \code{stream:} argument, and
+its examples call \code{format}, but it defines no streams. The compiler
+to C provides a minimal set:
+
+\begin{description}
+\item[\code{<stream>}] The class of streams.
+\item[\code{*standard-output*}, \code{*standard-error*}] Streams to the
+  program's standard output and standard error.
+\item[\code{(make <string-stream>)}] A stream that collects what is
+  written to it; \code{(stream-contents \meta{s})} answers what it holds
+  so far, as a string.
+\item[\code{(format \meta{stream} \meta{control} \meta{argument} ...)}]
+  Formatted output to \meta{stream}; a \meta{stream} of \code{\#t} means
+  \code{*standard-output*}, and \code{\#f} makes \code{format} answer the
+  output as a string. The directives are described in
+  Chapter~\ref{ch:printing}.
+\end{description}
+
+Every printing function --- \code{print}, \code{write}, \code{display},
+\code{newline}, \code{write-line}, \code{pp} --- takes \code{stream:},
+which defaults to \code{*standard-output*}:
+
+\begin{dylan}
+(define s (make <string-stream>))
+(write 'total: stream: s)
+(display " " stream: s)
+(print (list 1 "two" #\3) stream: s)
+(format s "~a items~%" 3)
+(write (stream-contents s))
+(newline)
+(print (format #f "~s and ~a" "quoted" "plain"))
+(format *standard-error* "this goes to standard error~%")
+\end{dylan}
+
+\noindent writes to the standard output
+
+\begin{dylan}
+"total: (1 \"two\" #\\3)
+3 items
+"
+"\"quoted\" and plain"
+\end{dylan}
+
+\noindent and \code{this goes to standard error} to the standard error.
+There is no input: a compiled program cannot read from a stream or a
+file. How objects print, and how to make your own classes print
+differently with \code{print-object}, is in Chapter~\ref{ch:printing}.
+
+\fussy

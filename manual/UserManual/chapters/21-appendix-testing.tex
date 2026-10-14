@@ -1,0 +1,320 @@
+\chapter{Testing}\label{app:testing}
+\sloppy
+
+Both implementations come with tests. This appendix describes each
+suite: what it tests, how to run it, how long it takes, how to run a
+single case, and how to add one. All commands are run from the root of
+the source tree.
+
+\begin{notebox}
+The expected results of the tests come from the 1992 manual, not from
+either implementation. Where the manual gives an example with its
+result, the test expects that result; where it specifies behavior
+without an example, the test is written from the specification and cites
+the chapter and section. Neither implementation is taken as the
+reference for the other.
+\end{notebox}
+
+\section{The suites at a glance}\label{sec:test-overview}
+
+\begin{center}
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.33\textwidth}%
+                >{\raggedright\arraybackslash}p{0.58\textwidth}}
+\toprule
+Command & What it tests \\
+\midrule
+\cmd{sbcl --script tests/front-end/run.lisp} & the compiler's front end:
+  reading, modules, conversion to core forms, diagnostics \\
+\cmd{sbcl --script tests/ir/run.lisp} & the IR and its analysis \\
+\cmd{sbcl --script tests/codegen/run.lisp} & the compiler's features,
+  phase by phase: programs compiled, run, and their output compared \\
+\cmd{sbcl --script tests/conformance/run.lisp} & the manual's examples
+  and specifications, chapter by chapter \\
+\cmd{sbcl --script tests/stress/run.lisp} & 10\textsuperscript{8} tail
+  calls; many threads at once \\
+\cmd{sh tests/driver/run.sh} & the command line, \cmd{bin/dylanc} \\
+\cmd{make -C runtime test} & the C runtime's data representation \\
+\code{(dylan:test-examples)} & the interactive implementation, on the
+  book's examples \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each command prints one line per failure, beginning \code{FAIL}, and a
+summary; the suites of the compiler exit with status 0 when everything
+passed and 1 otherwise.
+
+\section{The front end and the IR}\label{sec:test-front-ir}
+
+\file{tests/front-end/cases.lisp} holds 55 cases. Each is a list
+
+\begin{lisp}
+(name "dylan source" expected)
+\end{lisp}
+
+\noindent where \meta{expected} is either the core forms the source
+converts to, as the compiler's \code{unparse} writes them, one per line,
+or \code{(:diagnostics "text" ...)}: the diagnostics the source must
+produce, in order, each given as a string it must contain. For example:
+
+\begin{lisp}
+ (no-complex
+  "#c(1 2)"
+  (:diagnostics "error: complex numbers are not supported"))
+\end{lisp}
+
+After the cases, the runner converts \file{dylan-examples.dyl}, the
+book's examples, which must produce no diagnostic but the one error that
+its page~68 example is meant to cause.
+
+\file{tests/ir/cases.lisp} holds 18 cases of the form
+
+\begin{lisp}
+(name "dylan source" "expected IR" check ...)
+\end{lisp}
+
+\noindent The expected IR is the A-normal form of each top-level form;
+each \meta{check} names a variable or function and properties it must
+have --- whether a variable is captured or assigned, how many references
+it has, whether a function escapes, where it is called from and which of
+those calls are tail calls, and so on (the file's header lists them).
+The IR of \file{dylan-examples.dyl} must then pass the checker of the
+IR's invariants.
+
+Neither suite runs a C compiler. Given the argument
+\cmd{print}, each shows what every case converts to, which is how to
+write the expected text of a new case:
+
+\begin{shell}
+$ sbcl --script tests/front-end/run.lisp print
+\end{shell}
+
+\section{Programs compiled and run}\label{sec:test-programs}
+
+Three suites --- \file{tests/codegen}, \file{tests/conformance} and
+\file{tests/stress} --- consist of whole Dylan programs that are
+compiled, built, run, and whose output is compared with what the test
+expects. They share one runner, \file{tests/codegen/runner.lisp}.
+
+\begin{description}
+\item[\file{tests/codegen/cases*.lisp}] 108 programs testing the
+  compiler's features phase by phase: \file{cases.lisp} (calls, tail
+  calls, closures, \code{\#rest} and \code{\#key}, multiple values,
+  run-time errors), \file{cases-control.lisp} (exits, cleanups,
+  conditions), \file{cases-objects.lisp} (classes, slots, dispatch,
+  \code{next-method}, reflection), \file{cases-library.lisp},
+  \file{cases-threads.lisp}, \file{cases-macros.lisp} and
+  \file{cases-optimize.lisp} (type inference, inlining, unboxing,
+  escape analysis).
+\item[\file{tests/conformance/ch*.lisp}] 236 programs, one file for each
+  chapter of the manual from 2 to 18: the manual's examples with the
+  results it gives, and its specifications, each test citing its
+  section. What a static program cannot do is not tested here; it is
+  listed in Appendix~\ref{app:differences}.
+\item[\file{tests/stress/cases-*.lisp}] 11 programs that take minutes:
+  $10^8$ tail calls through unknown functions, generic functions,
+  closures, \code{next-method} and \code{apply}, each in a 256~KB stack;
+  and many threads allocating, contending for a bounded buffer,
+  interning symbols, signalling conditions, binding thread variables
+  and making threads.
+\end{description}
+
+\subsection{The case format}\label{sec:test-case-format}
+
+\index{test cases}
+A file of cases holds one list of cases, each
+
+\begin{lisp}
+(name "dylan source" "expected standard output"
+      [:error "text"] [:compile-error "text"])
+\end{lisp}
+
+The program is the source string; the strings follow Lisp's rules, so a
+double quote inside is written \code{\textbackslash"} and a backslash
+\code{\textbackslash\textbackslash}. The output must be exactly the
+expected text, newline for newline. With \code{:error}, the program must
+instead stop with status~1 and an error message on the standard error
+containing the text --- after writing the expected output. With
+\code{:compile-error}, the compiler must report an error containing the
+text, and the program is not run. From \file{cases-threads.lisp}:
+
+\begin{lisp}
+ (thread-values
+  "(define t1 (make-thread (method () (values 1 2))))
+   (bind ((a b (join-thread t1))) (print (list a b)))
+   (print (join-thread t1))
+   (define t2 (make-thread (method () (current-thread))))
+   (print (list (id? (join-thread t2) t2) (id? (current-thread) t2)))
+   (print (instance? t2 <thread>))"
+  "(1 2)
+1
+(#t #f)
+#t
+")
+\end{lisp}
+
+\noindent and from \file{cases-macros.lisp}, a case that must fail to
+compile:
+
+\begin{lisp}
+ (macro-not-top-level
+  "(define f (method () (define-macro m () 1)))"
+  ""
+  :compile-error "define-macro must be at top level")
+\end{lisp}
+
+Threads run in any order, so a test of threads must print only what does
+not depend on the order. Every test program runs with a 256~KB stack
+(\cmd{ulimit -s 256}), so a call in tail position that was not compiled
+as a jump overflows it quickly and the test fails.
+
+\subsection{Modes}\label{sec:test-modes}
+
+\index{test modes}
+Each program is compiled to C once and then built and run in each
+\emph{configuration} of a \emph{mode}, named on the command line:
+
+\begin{description}
+\item[\cmd{all}] (the default) GCC and Clang, each with \code{musttail}
+  and with trampolines: four builds of each program, the first at
+  \cmd{-O2} and the others at \cmd{-O0}.
+\item[\cmd{quick}] The first of those only: GCC, \code{musttail},
+  \cmd{-O2}.
+\item[\cmd{whole}] As \cmd{quick}, but with the library compiled with
+  each program and tree shaken (\cmd{-{}-whole}), not compiled apart.
+\item[\cmd{gc-stress}] GCC, with \code{musttail} and with trampolines,
+  each forcing a collection every 1000 allocations
+  (\cmd{-{}-gc-stress} with \code{DYLAN\_GC\_STRESS=1000}).
+\item[\cmd{address}] AddressSanitizer and UndefinedBehaviorSanitizer,
+  GCC and Clang, in debug builds.
+\item[\cmd{thread}] ThreadSanitizer, GCC, in a debug build.
+\end{description}
+
+\begin{shell}
+$ sbcl --script tests/codegen/run.lisp quick
+$ sbcl --script tests/conformance/run.lisp            # all
+$ sbcl --script tests/stress/run.lisp thread
+\end{shell}
+
+The builds go in \file{runtime/build/tests/} (a subdirectory named for
+the mode, except in \cmd{all}). The sanitizer and stress modes build
+their own variants of the runtime library the first time they need them.
+
+\subsection{Running some of the cases}\label{sec:test-single}
+
+Further arguments name the case files to run, and the cases: any
+argument ending in \file{.lisp} is a file to read instead of the suite's
+own, and any other (besides the mode) is the name of a case to run,
+whichever file holds it.
+
+\begin{shell}
+$ sbcl --script tests/codegen/run.lisp quick thread-values
+$ sbcl --script tests/codegen/run.lisp quick tests/codegen/cases-macros.lisp
+$ sbcl --script tests/conformance/run.lisp quick ch08-true-false
+\end{shell}
+
+The summary line counts the programs, the configurations and the
+failures, as in \code{1 program in 1 configuration, 0 failures}.
+
+\subsection{How long they take}\label{sec:test-time}
+
+The programs are built and run one after another, so the time grows
+with the number of programs and configurations. A build takes one to two
+seconds once the compiler and the library's object are cached
+(Section~\ref{sec:dylanc-cache}); a configuration whose C compiler and
+options are new must first compile the library, which takes some
+seconds more. On the 32-thread machine of Chapter~\ref{ch:performance},
+the conformance suite in mode \cmd{all} --- 236 programs in four
+configurations --- took about a quarter of an hour; \cmd{quick} needs a
+fraction of that. The \cmd{address}, \cmd{thread} and \cmd{gc-stress}
+modes are much slower, because their programs run slowly, and the stress
+suite takes minutes in any mode. The front-end and IR suites run no C
+compiler and are quick. Use \cmd{quick} while working, and \cmd{all} and the other
+modes before committing a change to the compiler or runtime.
+
+\section{The command line}\label{sec:test-driver}
+
+\cmd{sh tests/driver/run.sh} tests \cmd{bin/dylanc} itself, in a
+temporary directory: the default executable name and \cmd{-o}; that the
+C is removed unless \cmd{-k} is given, and what \cmd{-k} keeps; the
+\code{\#line} directives and \cmd{-{}-no-lines}; \cmd{-C}, and compiling
+its C by hand; each \cmd{-O} level, \cmd{-Os} and \cmd{-g};
+\cmd{-{}-trampoline}, \cmd{-{}-cc}, \code{CC}, \cmd{-{}-lto} with GCC and
+with Clang, and \cmd{-{}-whole}; the library's object cache, and that two
+programs' library C is the same text; a program of several modules,
+with a file for each; a macro exported from its module, and \cmd{-E};
+run-time errors and their exit status; and the exit status of compile
+errors and of bad command lines. It prints \code{FAIL} and a description
+for each check that fails, and a count of checks and failures.
+
+\section{The runtime}\label{sec:test-runtime}
+
+\cmd{make -C runtime test} builds and runs
+\file{runtime/build/test-runtime}, a C program that tests the runtime's
+data representation without any Dylan program: the built-in classes as
+the compiler emits them (which \file{tests/runtime/generate.lisp}
+writes): immediate values, whether each class is a subclass of each
+other, how constants print, integer arithmetic at the edges of the
+63-bit range and its errors, other numbers, strings and symbols, the
+collector, and threads. It runs in moments once built.
+
+\section{The interactive implementation}\label{sec:test-interactive}
+
+\index{test-examples@\code{test-examples}}
+The interactive implementation is tested on the examples from the Dylan
+book, \file{dylan-examples.dyl}:
+
+\begin{shell}
+$ cd src
+$ sbcl --eval '(load "load-dylan.lisp")' \
+       --eval '(load "full-test.lisp")' \
+       --eval '(dylan:test-examples)'
+\end{shell}
+
+\code{test-examples} reads the file form by form, echoes each form,
+evaluates it, and prints its values --- or, for a form that signals a
+condition, \code{;Error:} and the condition's message, after which it
+goes on with the next form. It does not compare the results itself. The
+expected results are in \file{src/reference/}, the transcripts Thomas
+produced from the same file in 1992 (\file{MIT.output} among them);
+compare the output with them. Where they and the manual disagree, the
+manual decides; the few remaining differences are listed in
+\file{src/README} and in Appendix~\ref{app:differences}. Run it from the
+\file{src} directory, as shown, since \code{test-examples} finds the
+examples at \file{../dylan-examples.dyl}; give it another file name as
+its argument to run other examples the same way.
+
+\section{Adding a test}\label{sec:test-adding}
+
+\begin{enumerate}
+\item Choose the suite. A feature of the compiler goes in the
+  \file{tests/codegen/cases-*.lisp} file for its area; an example or
+  specification from the manual goes in the
+  \file{tests/conformance/ch}\meta{nn}\file{.lisp} of its chapter, with
+  a comment citing the section and saying whether the expected result
+  is the manual's example or follows from its text; a test that takes
+  long goes in \file{tests/stress/}.
+\item Write the case in the format of Section~\ref{sec:test-case-format}:
+  a unique name, the program, and the output the manual or the
+  specification requires --- not merely what the implementation prints
+  today. Print every result with \code{print} or \code{format}, and,
+  for threads, print only what does not depend on their order.
+\item Run it alone in \cmd{quick} mode until it passes, then in the
+  default mode, and in \cmd{gc-stress}, \cmd{address} or \cmd{thread}
+  if it exercises memory or threads:
+\begin{shell}
+$ sbcl --script tests/codegen/run.lisp quick my-new-case
+$ sbcl --script tests/codegen/run.lisp my-new-case
+\end{shell}
+\item For the front end or the IR, add a case to its \file{cases.lisp},
+  using the runner's \cmd{print} argument to see what the source
+  converts to, and checking that by hand against the manual before
+  making it the expected text.
+\end{enumerate}
+
+A test that fails because the implementation is wrong is a bug to fix
+in the implementation, not in the test; a test is changed only when it
+misread the manual.
+
+\fussy

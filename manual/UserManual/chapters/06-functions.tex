@@ -1,0 +1,775 @@
+\chapter{Functions and Methods}\label{ch:functions}
+
+Functions are Dylan's means of doing anything. This chapter describes the
+two kinds of function, methods and generic functions; how a method's
+parameter list says what arguments it takes; how a generic function
+chooses which of its methods to run; and the operations that call
+functions and examine them. The standard is \dylanbook{chapters 6
+and 10}.
+
+\section{Methods and generic functions}\label{sec:functions-overview}
+
+Every function is an instance of the class
+\code{<function>}\index{<function>@\code{<function>}}, and there are two
+kinds.
+
+A \term{method} (class \code{<method>}) is a piece of code with a parameter
+list. The parameter list may give a \term{specializer} for each required
+parameter, a class or a singleton that the corresponding argument must
+match. A method can be called directly, like a procedure in Scheme or a
+closure in Lisp; called with arguments that do not match its specializers,
+it signals an error.
+
+A \term{generic function} (class \code{<generic-function>}) holds a set of
+methods. When it is called, it finds the methods whose specializers match
+the arguments, the \term{applicable} methods, and runs the most specific of
+them. This choice, \term{method dispatch}, is how Dylan does
+object-oriented programming: behavior is attached to classes by defining
+methods on generic functions, not by putting functions inside classes.
+
+\begin{dylan}
+(define-method double ((thing <number>))
+  (+ thing thing))
+(define-method double ((thing <sequence>))
+  (concatenate thing thing))
+(double 10)                   ; => 20
+(double "the rain ")          ; => "the rain the rain "
+(double '(a b c))             ; => (a b c a b c)
+(double 'cup)                 ; => error: no applicable method
+(instance? double <generic-function>)          ; => #t
+(instance? (method (x) x) <method>)            ; => #t
+(instance? double <function>)                  ; => #t
+\end{dylan}
+
+\noindent Functions are ordinary objects. They can be stored in variables
+and data structures, passed as arguments and returned as results.
+
+\section{Making methods: method}\label{sec:functions-method}
+
+\index{method@\code{method}}
+\begin{quote}
+\code{(method \meta{parameter-list} \meta{form} \ldots)}
+\end{quote}
+
+\noindent The special form \code{method} makes and returns a method. When
+the method is called, its parameters are bound to the arguments as lexical
+variables and the forms, its \term{body}, are evaluated in order; the
+method returns the values of the last form, or \code{\#f} if there are none.
+
+\begin{dylan}
+((method (a b) (+ a b)) 3 4)             ; => 7
+(bind ((square (method (n) (* n n))))
+  (square (square 3)))                   ; => 81
+(sort '(3 1 2) test: (method (a b) (> a b)))   ; => (3 2 1)
+\end{dylan}
+
+\noindent A method made by \code{method} is an \term{anonymous method}. It
+can be given to a function, as the test to \code{sort} above, or kept in a
+variable. To give a group of local methods names that can call one another,
+use \code{bind-methods} (Section~\ref{sec:control-bind-methods}).
+
+\subsection{Closures}\label{sec:functions-closures}
+
+A method can refer to the variables in scope where it was made, and it
+keeps them for as long as it exists, even after the form that bound them
+has returned. Such a method is a \term{closure}. The variables are shared,
+not copied: assignments made through one closure are seen by every other
+closure over the same variable.
+
+\begin{dylan}
+(define-method make-counter ()
+  (bind ((count 0))
+    (values (method () (set! count (+ count 1)))
+            (method () count))))
+(define-method demo ()
+  (bind ((next current (make-counter)))
+    (next)
+    (next)
+    (list (next) (current))))
+(demo)                         ; => (3 3)
+\end{dylan}
+
+\noindent A method that returns a method is a common idiom. The method below
+takes a function and returns one that calls it twice:
+
+\begin{dylan}
+(define-method twice ((f <function>))
+  (method (#rest args)
+    (apply f args)
+    (apply f args)))
+(define print-twice (twice (method (n) (print n))))
+(print-twice 55)                 ; prints: 55
+                               ; prints: 55
+                               ; => 55
+\end{dylan}
+
+\section{Parameter lists}\label{sec:functions-parameters}
+
+The complete syntax of a parameter list (\dylanbook{chapter 6}) is
+
+\begin{quote}
+\code{(\{\meta{required} | (\meta{required} \meta{specializer})\}*\\
+\phantom{(}[\#next \meta{next}]\\
+\phantom{(}[\#rest \meta{rest}]\\
+\phantom{(}[\#key \{\meta{keyparam} | ([\meta{keyword}] \meta{keyparam} [\meta{default}])\}*])}
+\end{quote}
+
+\noindent The parts must appear in this order. \code{\#next}, \code{\#rest}
+and \code{\#key} may also be written \code{!next}, \code{!rest} and
+\code{!key} (Section~\ref{sec:syntax-parameter-tokens}).
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Parameter list & Accepts \\
+\midrule
+\code{(a b c)} & three required arguments \\
+\code{((a <list>) b \#rest c)} & two required (the first a list), then any number \\
+\code{(\#rest a)} & any number of arguments \\
+\code{(a b \#key foo bar)} & two required, then keywords \code{foo:} and \code{bar:} \\
+\code{(\#key bar baz bim)} & keywords only \\
+\code{(\#rest all \#key fee fi)} & keyword arguments, all kept in \code{all} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Required parameters}
+
+Required parameters come first, and a call must supply an argument for
+each, in order. A required parameter is a name, or a list of a name and a
+specializer: \code{(x <integer>)}. A parameter without a specializer
+accepts any object, as if specialized on \code{<object>}. Specializers are
+described in Section~\ref{sec:functions-singletons}.
+
+Calling a method with too few or too many arguments, or with an argument
+that does not match its specializer, is an error:
+
+\begin{dylan}
+((method ((s <string>)) s) "x")   ; => "x"
+((method ((s <string>)) s) 3)     ; => error: 3 does not match <string>
+((method (a #rest r) a))          ; => error: too few arguments
+\end{dylan}
+
+\subsection{Rest parameters}
+
+After \code{\#rest} comes one name. When the method is called, the
+arguments left after the required ones are put into a sequence, which
+becomes the value of the rest parameter; it is empty if there are none.
+
+\begin{dylan}
+(define-method show-rest (a #rest b)
+  (list a b))
+(show-rest 10 20 30 40)        ; => (10 (20 30 40))
+(show-rest 10)                 ; => (10 ())
+\end{dylan}
+
+\noindent In both implementations the sequence is a list, but a program
+should rely only on its being a sequence.
+
+\subsection{Keyword parameters}\label{sec:functions-keywords}
+
+After \code{\#key} come the \term{keyword parameters}. Keyword arguments are
+optional, are given after the required arguments, and may come in any
+order; each is a keyword followed by a value. A keyword parameter is
+written in one of four ways:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Written & Meaning \\
+\midrule
+\code{\meta{name}} & keyword \code{\meta{name}:}, parameter \meta{name}, default \code{\#f} \\
+\code{(\meta{name} \meta{default})} & keyword \code{\meta{name}:}, parameter \meta{name} \\
+\code{(\meta{keyword} \meta{param})} & the keyword and the parameter named separately \\
+\code{(\meta{keyword} \meta{param} \meta{default})} & the same, with a default \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The \meta{default} is an expression evaluated each time the method
+is called without that keyword. It is evaluated in a scope that includes all
+the parameters before it: the required parameters, the next-method and
+rest parameters, and the earlier keyword parameters. Without a default, an
+unsupplied keyword parameter is \code{\#f}.
+
+\begin{dylan}
+(define-method percolate (#key (brand 'maxwell-house)
+                               (cups 4)
+                               (strength (if (> cups 6) 'strong 'mild)))
+  (list brand cups strength))
+(percolate)                          ; => (maxwell-house 4 mild)
+(percolate cups: 10 brand: 'folgers) ; => (folgers 10 strong)
+\end{dylan}
+
+\noindent Naming the keyword and the parameter separately lets a method take
+a keyword such as \code{position:} without calling its parameter
+\code{position}, which would shadow the module variable of that name, often
+a generic function the method needs:
+
+\begin{dylan}
+(define-method place (widget #key (position: the-pos 0) (size: the-size))
+  (list widget the-pos the-size))
+(place 'w size: 3)                   ; => (w 0 3)
+\end{dylan}
+
+\noindent All the required arguments are taken before any keyword argument.
+If a call supplies too few, keywords and values are taken as required
+arguments:
+
+\begin{dylan}
+(define-method show-keys (req1 req2 #key foo)
+  (list req1 req2 foo))
+(show-keys 'one 'two foo: 'three)    ; => (one two three)
+(show-keys foo: 'three)              ; => (foo: three #f)
+\end{dylan}
+
+\noindent The arguments after the required ones must be keyword/value pairs;
+anything else is an error. If the same keyword is given more than once, the
+leftmost occurrence is used.
+
+\begin{dylan}
+(define-method grow ((x <number>) #key (by 1)) (+ x by))
+(grow 5 by: 2 by: 100)               ; => 7
+(grow 5 'by 2)                       ; => error: not keyword/value pairs
+\end{dylan}
+
+\subsection{Combining \#rest and \#key}
+
+When a parameter list has both, \code{\#rest} comes first. The rest
+parameter then receives all the keyword arguments, keywords and values, as a
+sequence, and the method accepts any keyword
+(Section~\ref{sec:functions-keyword-checking}); the arguments must still be
+keyword/value pairs.
+
+\begin{dylan}
+(define-method test (the-req #rest the-rest #key a b)
+  (list the-req the-rest a b))
+(test 1 a: 2 b: 3 c: 4)              ; => (1 (a: 2 b: 3 c: 4) 2 3)
+\end{dylan}
+
+\subsection{The next-method parameter}
+
+After the required parameters may come \code{\#next} and a name. That
+parameter receives the \term{next method}, used to call less specific
+methods (Section~\ref{sec:functions-next-method}). \code{define-method} gives every
+method a next-method parameter named \code{next-method} unless the parameter
+list names one with \code{\#next}, so it is normally written only to choose
+another name, or in a method made with \code{method} that will be added to a
+generic function.
+
+\subsection{Keyword argument checking}\label{sec:functions-keyword-checking}
+
+A method accepts only the keywords its parameter list names after
+\code{\#key}, unless it has a rest parameter, in which case it accepts any
+keyword. A generic function accepts, for a given call, every keyword that
+any of the methods applicable to that call accepts; so if any applicable
+method has \code{\#rest}, any keyword is accepted. The check is made by the
+generic function before it runs any method, and a method called through a
+generic function or through \code{next-method} does not check again.
+Calling a method or generic function with a keyword it does not accept is an
+error.
+
+\begin{dylan}
+(define-method label ((x <object>) #key price)
+  (list price x))
+(define-method label ((x <sequence>) #key unit-price)
+  (add x (* unit-price (size x))))
+(define-method label ((x <list>) #rest info #key calories)
+  (add x calories))
+(label 'grape price: 189)                       ; => (189 grape)
+(label 'grape price: 189 unit-price: 2)         ; => error
+(label (vector 3 4 5) price: 189 unit-price: 2) ; => #(6 3 4 5)
+(label (vector 3 4 5) calories: 9)              ; => error
+(label (list 3 4 5) protein: 7 calories: 9)     ; => (9 3 4 5)
+\end{dylan}
+
+\noindent The first \code{label} method is the only one applicable to a
+symbol, so only \code{price:} is accepted. A vector is a sequence, so both
+\code{price:} and \code{unit-price:} are. For a list the third method
+applies, and it has \code{\#rest}, so anything goes.
+
+The two implementations differ on one point. A method whose parameter list
+has \code{\#key} with no keywords after it accepts no keywords in the
+compiler to C, as the rule above says; in the Common Lisp implementation it
+accepts any.
+
+\section{Defining methods: define-method}\label{sec:functions-define-method}
+
+\index{define-method@\code{define-method}}
+\begin{quote}
+\code{(define-method \meta{name} \meta{parameter-list} \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{define-method} makes a method, as \code{method} would, and
+adds it to the generic function in the module variable \meta{name}. If the
+variable does not exist, it is created, holding a new generic function. If
+the generic function already has a method with exactly the same
+specializers, the new method replaces it. \meta{name} may be a setter name,
+\code{(setter \meta{symbol})} (Section~\ref{sec:functions-setters}). At the
+interactive prompt \code{define-method} returns the name.
+
+%! lisp-only
+\begin{dylan}
+(define-method area ((r <integer>)) (* r r))
+(area 3)                       ; => 9
+(define-method area ((r <integer>)) (* 3 r r))
+(area 3)                       ; => 27
+\end{dylan}
+
+\noindent That is the Common Lisp implementation, where each definition
+takes effect when it is evaluated. In the compiler to C all of a program's
+methods exist before it starts (Section~\ref{sec:syntax-when}), so the later
+definition simply wins: both calls of \code{area} above return 27.
+
+\noindent It is an error for \meta{name} to hold something other than a
+generic function. The compiler to C also refuses to add methods to the
+functions the manual calls methods rather than generic functions, such as
+\code{id?}, \code{not}, \code{list} and \code{apply}, and to the
+reflective functions it implements in C.
+
+\subsection{Congruent parameter lists}
+
+All the methods of a generic function, and its
+\code{define-generic-function} if it has one, must have \term{congruent}
+parameter lists: the same number of required parameters, and either all of
+them have \code{\#rest} or \code{\#key} (or both), or none has either.
+Adding a method that is not congruent is an error, reported when compiling
+by the compiler to C.
+
+\begin{center}
+\begin{tabular}{@{}l@{}}
+\toprule
+Groups of congruent parameter lists \\
+\midrule
+\code{(a b)} \quad \code{(x y)} \\
+\code{(a b \#key)} \quad \code{(x y \#key foo)} \quad
+  \code{(a b \#rest l)} \quad \code{(a b \#rest l \#key quux)} \\
+\code{(a b c)} \quad \code{(d e f)} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent When \code{define-method} creates the generic function, the
+generic function takes the same number of required arguments as the method,
+and, if the method has \code{\#rest} or \code{\#key}, a rest argument.
+\code{function-arguments} (Section~\ref{sec:functions-reflection}) shows this:
+
+\begin{dylan}
+(define-method foo (a #key x) x)
+(function-arguments foo)       ; => 1, #t, #f
+\end{dylan}
+
+\noindent A generic function with no required parameters can hold only one
+method, since all its methods have the same (empty) specializers; defining
+another replaces the first.
+
+\section{Declaring generic functions: define-generic-function}\label{sec:functions-define-generic}
+
+\index{define-generic-function@\code{define-generic-function}}
+\begin{quote}
+\code{(define-generic-function \meta{name} \meta{parameter-list} \meta{keyword} \meta{option} \ldots)}
+\end{quote}
+
+\noindent \code{define-generic-function} creates a generic function with no
+methods and stores it in the module variable \meta{name}, which is made
+read-only. It is never required, since \code{define-method} creates generic
+functions as needed, but it documents the protocol in one place and fixes
+the parameter list that every method must be congruent with.
+
+The parameter list has the form
+
+\begin{quote}
+\code{(\meta{required} \ldots{} [\#rest \meta{rest}] [\#key \meta{keyword} \ldots])}
+\end{quote}
+
+\noindent Required parameters are names only, without specializers. The
+keys may be written as symbols or keywords, and \code{\#key} may appear with
+no keys at all. \code{\#key} means that the arguments after the required
+ones must be keyword/value pairs; \code{\#rest} means any number of further
+arguments. Either way, every method must have \code{\#rest} or \code{\#key}.
+The meaning of giving both is unspecified.
+
+\begin{dylan}
+(define-generic-function resize (shape #key scale))
+(define-method resize ((n <integer>) #key scale)
+  (* n (or scale 1)))
+(resize 4 scale: 3)            ; => 12
+(function-arguments resize)    ; => 1, #f, (scale:)
+\end{dylan}
+
+\noindent When keys are listed, every method is meant to accept them, by
+naming them after \code{\#key} or by having \code{\#rest}. The Common Lisp
+implementation checks this when the method is added; the compiler to C does
+not.
+
+The options are keyword/value pairs reserved by the manual for future use.
+Both implementations accept them and ignore them. In the compiler to C a
+generic function may be declared only once.
+
+\section{Specializers and singletons}\label{sec:functions-singletons}
+
+A specializer is an expression, evaluated once when the method is made, not
+on each call. It must evaluate to a class or to a singleton.
+
+\begin{itemize}
+\item A \term{class} specializer matches any \emph{general instance} of the
+  class: a direct instance, or an instance of any subclass. The specializer
+  \code{<number>} matches integers, ratios and floats.
+\item A \term{singleton} specializer matches one object, compared with
+  \code{id?}. \code{(singleton \meta{object})} makes one; so does
+  \code{(make <singleton> object: \meta{object})}.
+\end{itemize}
+
+\begin{dylan}
+(define-method factorial ((n <integer>))
+  (* n (factorial (- n 1))))
+(define-method factorial ((n (singleton 0)))
+  1)
+(factorial 5)                  ; => 120
+(define-method measure ((x (singleton 'cup))) 'pint)
+(measure 'cup)                 ; => pint
+(instance? 3 (singleton 3))    ; => #t
+\end{dylan}
+
+\noindent \index{singleton@\code{singleton}}\code{singleton} is a function;
+\code{<singleton>}\index{<singleton>@\code{<singleton>}} is the class of
+singletons, and a singleton prints as \code{\{singleton 3\}}. Because
+singletons compare their objects with \code{id?}, they suit symbols,
+keywords, characters, small integers, classes and other objects whose
+identity is what matters; a singleton of a string literal matches only that
+very string object.
+
+Singletons can also give an individual object slots of its own
+(Section~\ref{sec:classes-define-slot}).
+
+\begin{warnbox}
+In the compiler to C every specializer of a method added to a generic
+function must be known when compiling: a class or a variable whose value is
+a class, or \code{(singleton \meta{x})} or \code{(make <singleton> object:
+\meta{x})} where \meta{x} is a literal, a class, or a variable whose
+\code{define} gives it a literal value. \code{(singleton (+ 1 2))}, and a
+singleton of an object made at run time, are errors there, though the
+Common Lisp implementation accepts them.
+\end{warnbox}
+
+\section{Method dispatch}\label{sec:functions-dispatch}
+
+When a generic function is called, it
+\begin{enumerate}
+\item finds the \emph{applicable} methods: those whose every specializer
+  matches the corresponding argument;
+\item sorts them from most to least specific;
+\item calls the most specific, passing it the next one as its next method.
+\end{enumerate}
+\noindent If no method is applicable, an error is signaled.
+
+\subsection{Specificity}\label{sec:functions-specificity}
+
+For one argument, a singleton specializer is more specific than any class,
+and a class is more specific than its superclasses. So a method on
+\code{<integer>} overrides one on \code{<number>} for integer arguments, and
+a method on \code{(singleton 5)} overrides both for the argument 5.
+
+\begin{dylan}
+(define-method describe ((x <number>)) 'number)
+(define-method describe ((x <integer>)) 'integer)
+(define-method describe ((x (singleton 5))) 'five)
+(describe 2.5)                 ; => number
+(describe 2)                   ; => integer
+(describe 5)                   ; => five
+\end{dylan}
+
+\noindent Methods that specialize more than one parameter are
+\term{multimethods}, and dispatch considers all the specialized arguments.
+Following \dylanbook{chapter 10}, both implementations sort the applicable
+methods by comparing their specializer lists \emph{lexicographically}: the
+first parameter decides, and a later parameter is looked at only when the
+earlier specializers are the same.
+
+\begin{dylan}
+(define-method meet ((a <number>) (b <integer>)) 'number-integer)
+(define-method meet ((a <integer>) (b <number>)) 'integer-number)
+(meet 1 2)                     ; => integer-number
+\end{dylan}
+
+\noindent Both methods apply to \code{(meet 1 2)}. The first parameter's
+specializers differ, and \code{<integer>} is more specific than
+\code{<number>}, so the second method wins, though the first is more
+specific in the second parameter.
+
+\subsection{The class precedence list}\label{sec:functions-cpl}
+
+When a class has several direct superclasses, two specializers can both be
+superclasses of an argument's class without either being a subclass of the
+other. They are then ordered by the argument's class's \term{class
+precedence list}: the class, then all its superclasses, in an order that
+keeps each class before its superclasses, keeps the direct superclasses in
+the order the class's definition lists them, and keeps each simple chain of
+superclasses together. \code{all-superclasses} returns this list
+(Section~\ref{sec:classes-reflection}). The algorithm is the one CLOS uses, given
+in design note 31.
+
+\begin{dylan}
+(define-class <life-form> (<object>))
+(define-class <sentient> (<life-form>))
+(define-class <bipedal> (<life-form>))
+(define-class <intelligent> (<sentient>))
+(define-class <humanoid> (<bipedal>))
+(define-class <vulcan> (<intelligent> <humanoid>))
+(define-class <human> (<humanoid> <intelligent>))
+(all-superclasses <vulcan>)
+  ; => ({the class <vulcan>} {the class <intelligent>}
+  ;     {the class <sentient>} {the class <humanoid>}
+  ;     {the class <bipedal>} {the class <life-form>}
+  ;     {the class <object>})
+(define-method psychoanalyze ((being <intelligent>)) 'intelligent)
+(define-method psychoanalyze ((being <humanoid>)) 'humanoid)
+(psychoanalyze (make <vulcan>)) ; => intelligent
+(psychoanalyze (make <human>))  ; => humanoid
+\end{dylan}
+
+\noindent A \code{<vulcan>} lists \code{<intelligent>} first among its
+superclasses, so the \code{<intelligent>} method is more specific for it; a
+\code{<human>} lists \code{<humanoid>} first. With multimethods the same
+rule is applied lexicographically:
+
+%! cont
+\begin{dylan}
+(define-method superior ((a <intelligent>) (b <intelligent>)) 'smarter)
+(define-method superior ((a <humanoid>) (b <humanoid>)) 'better-looking)
+(superior (make <vulcan>) (make <human>))   ; => smarter
+(superior (make <human>) (make <vulcan>))   ; => better-looking
+\end{dylan}
+
+\begin{notebox}
+Design note 31 later replaced the lexicographic rule with one that compares
+every argument position and calls the methods \emph{ambiguous}, an error,
+when the positions disagree, as they do in the last two calls above. Neither
+implementation follows that note: both use the 1992 rule, under which a call
+whose applicable methods all have class or singleton specializers is never
+ambiguous.
+\end{notebox}
+
+\subsection{Calling the next method}\label{sec:functions-next-method}
+
+\index{next-method@\code{next-method}}
+A method often wants to add to the behavior it overrides rather than
+replace it. Its next-method parameter, normally named \code{next-method},
+holds a function that calls the next most specific applicable method. Called
+with no arguments, it passes along the arguments the current method
+received; called with arguments, it passes those instead.
+
+\begin{dylan}
+(define-method greet ((x <object>)) (list 'object x))
+(define-method greet ((x <integer>)) (cons 'integer (next-method)))
+(define-method greet ((x (singleton 5))) (cons 'five (next-method 7)))
+(greet "hi")                   ; => (object "hi")
+(greet 3)                      ; => (integer object 3)
+(greet 5)                      ; => (five integer object 7)
+\end{dylan}
+
+\noindent When new arguments are given, they must lead to the same
+applicable methods, in the same order, as the original ones; otherwise the
+result is undefined. (In \code{greet} above, 7 is still an integer and an
+object.) Keyword arguments passed to \code{next-method} with changed values
+are not checked.
+
+When there is no next method, the parameter is \code{\#f}, so a method can
+test it before calling it; calling \code{\#f} is an error.
+
+\begin{dylan}
+(define-method last-one ((x <object>)) next-method)
+(last-one 1)                   ; => #f
+(define-method chain ((x <number>) #next more) (list 'number more))
+(define-method chain ((x <integer>) #next more) (list 'integer (more)))
+(chain 1)                      ; => (integer (number #f))
+\end{dylan}
+
+\noindent When methods take different keyword arguments, giving each a rest
+parameter lets a method pass all of them on, changed or not, with
+\code{apply} (Section~\ref{sec:functions-apply}):
+
+\begin{dylan}
+(define-method grow ((x <number>) #rest options #key (by 1))
+  (+ x by))
+(define-method grow ((x <integer>) #rest options #key by)
+  (apply next-method x by: 10 options))
+(grow 5)                       ; => 15
+(grow 5 by: 2)                 ; => 15
+\end{dylan}
+
+\noindent The second call shows the leftmost-keyword rule at work: the
+\code{by: 10} the integer method puts first wins over the caller's
+\code{by: 2}.
+
+\section{Calling functions: apply}\label{sec:functions-apply}
+
+\index{apply@\code{apply}}
+\begin{quote}
+\code{(apply \meta{function} \meta{argument} \ldots{} \meta{sequence})}
+\end{quote}
+
+\noindent \code{apply} calls \meta{function} with the given arguments
+followed by the elements of \meta{sequence}, the last argument, and returns
+its values.
+
+\begin{dylan}
+(apply + 1 '(2 3))             ; => 6
+(apply max (vector 3 9 2))     ; => 9
+(define math-functions (list + * -))
+(apply (first math-functions) 1 2 '(3 4))   ; => 10
+(apply list '())               ; => ()
+\end{dylan}
+
+\section{Setters as generic functions}\label{sec:functions-setters}
+
+A setter is an ordinary function, normally a generic function, stored in a
+setter variable \code{(setter \meta{name})}. Its arguments are those of the
+getter followed by the new value. \code{define-class} defines setter methods
+for slots, and a program can define its own with \code{define-method}, so
+that \code{set!} works on a computed property as it does on a slot:
+
+\begin{dylan}
+(define-class <temperature> (<object>)
+  (kelvin init-value: 0 init-keyword: kelvin:))
+(define-method celsius ((t <temperature>))
+  (- (kelvin t) 273))
+(define-method (setter celsius) ((t <temperature>) c)
+  (set! (kelvin t) (+ c 273)))
+(define t1 (make <temperature>))
+(set! (celsius t1) 25)         ; => 25
+(kelvin t1)                    ; => 298
+(celsius t1)                   ; => 25
+\end{dylan}
+
+\noindent Section~\ref{sec:control-extended-set} describes how \code{set!}
+calls a setter. Later Dylan changed both the name, to \code{celsius-setter},
+and the argument order, putting the new value first; neither change is part
+of this language.
+
+\section{Reflective operations}\label{sec:functions-reflection}
+
+These functions examine functions and generic functions
+(\dylanbook{chapter 10}). Ordinary programs seldom need them, but they are
+useful in tools and for understanding dispatch.
+
+\begin{description}
+\item[\code{(function-arguments \meta{function})}]
+  \index{function-arguments@\code{function-arguments}}
+  returns three values: the number of required arguments, whether the
+  function takes a rest argument, and a sequence of the keywords it
+  accepts, or \code{\#f} if it has no \code{\#key}. The sequence is empty
+  for \code{\#key} with no keywords.
+\item[\code{(applicable-method? \meta{function} \meta{argument} \ldots)}]
+  \index{applicable-method?@\code{applicable-method?}}
+  returns true if \meta{function} is a method applicable to the arguments,
+  or a generic function with such a method.
+\item[\code{(sorted-applicable-methods \meta{generic-function} \meta{argument} \ldots)}]
+  \index{sorted-applicable-methods@\code{sorted-applicable-methods}}
+  returns a sequence of the methods applicable to the arguments, most
+  specific first.
+\item[\code{(find-method \meta{generic-function} \meta{specializers})}]
+  \index{find-method@\code{find-method}}
+  returns the method whose specializers are exactly the classes and
+  singletons in the sequence \meta{specializers}, or \code{\#f}.
+\item[\code{(generic-function-methods \meta{generic-function})}]
+  returns a sequence of all its methods, in no particular order.
+\item[\code{(method-specializers \meta{method})}]
+  returns a sequence of a method's specializers, one for each required
+  parameter.
+\end{description}
+
+\noindent None of the sequences these functions return should be modified.
+
+\begin{dylan}
+(function-arguments (method (a b #rest r) a))     ; => 2, #t, #f
+(function-arguments (method (a #key x (y: z 3)) a)) ; => 1, #f, (x: y:)
+(define-method kind ((x <number>)) 'number)
+(define-method kind ((x <integer>)) 'integer)
+(define-method kind ((x (singleton 5))) 'five)
+(applicable-method? kind 1/2)                     ; => #t
+(applicable-method? kind "x")                     ; => #f
+(map (method (m) (m 5))
+     (sorted-applicable-methods kind 5))          ; => (five integer number)
+((find-method kind (list <integer>)) 7)           ; => integer
+(find-method kind (list <string>))                ; => #f
+(size (generic-function-methods kind))            ; => 3
+(method-specializers (find-method kind (list <integer>)))
+                                                  ; => ({the class <integer>})
+\end{dylan}
+
+\subsection{Changing generic functions}\label{sec:functions-changing}
+
+The 1992 manual also has functions that change a generic function while the
+program runs. \code{add-method}, \code{remove-method} and
+\code{freeze-methods} exist only in the Common Lisp implementation; in the
+compiler to C, whose generic functions are fixed when the program is
+compiled, using them is an error when compiling. \code{make-read-only}
+exists in both, but in the compiler to C it changes nothing, since no
+generic function can change there anyway; it returns its argument.
+
+\begin{description}
+\item[\code{(add-method \meta{generic-function} \meta{method})}] adds the
+  method, replacing any with the same specializers, and returns two values:
+  the method, and the method it replaced or \code{\#f}.
+\item[\code{(remove-method \meta{generic-function} \meta{method})}] removes
+  the method and returns it.
+\item[\code{(make-read-only \meta{generic-function})}] forbids adding or
+  removing methods from then on.
+\item[\code{(freeze-methods \meta{generic-function} \meta{specializer} \ldots)}]
+  forbids adding, replacing or removing methods whose specializers are the
+  given ones or more specific.
+\end{description}
+
+%! lisp-only
+\begin{dylan}
+(define-method double ((x <number>)) (+ x x))
+(define m (method ((s <string>)) (concatenate s s)))
+(add-method double m)          ; => {method}, #f
+(double "ab")                  ; => "abab"
+(remove-method double m)       ; => {method}
+(double "ab")                  ; => error: no applicable method
+\end{dylan}
+
+\noindent A generic function can also be made with \code{make}, with the
+init-keywords \code{required:} (the number of required arguments, which must
+be given), \code{rest?:}, \code{key?:} and \code{debug-name:}. It starts with
+no methods. In the compiler to C such a generic function can never have any,
+since methods cannot be added at run time, so it is of little use there;
+that implementation also ignores \code{rest?:} and \code{key?:}.
+
+%! lisp-only
+\begin{dylan}
+(define expand
+  (make <generic-function> required: 1 debug-name: 'expand))
+(add-method expand (method ((n <integer>)) (* n 10)))
+(expand 5)                     ; => 50
+\end{dylan}
+
+\section{Proper tail calls}\label{sec:functions-tail-calls}
+
+A call is in \term{tail position} when its value is the value of the
+enclosing method: the last form of a method's body, either branch of an
+\code{if} in tail position, the last form of a \code{begin} or \code{bind}
+in tail position, and so on. The compiler to C guarantees \term{proper tail
+calls}: every call in tail position, to a known method, a generic function,
+a closure or a function in a variable, runs in constant stack space. A
+recursive method whose recursive calls are all tail calls is therefore a
+loop, and two methods can call each other in tail position indefinitely.
+The \code{for}, \code{while} and other loops of
+Chapter~\ref{ch:control} are themselves compiled this way.
+
+\begin{dylan}
+(define-method my-even? ((n <integer>))
+  (if (= n 0) #t (my-odd? (- n 1))))
+(define-method my-odd? ((n <integer>))
+  (if (= n 0) #f (my-even? (- n 1))))
+(my-even? 10000000)            ; => #t
+\end{dylan}
+
+\noindent The Common Lisp implementation compiles Dylan to Common Lisp, and
+SBCL eliminates tail calls in that code too, so the example above runs there
+as well; but the Common Lisp standard does not require it, and the Common
+Lisp implementation makes no guarantee. Chapter~\ref{ch:dylanc} describes how the
+compiler to C implements tail calls, with the C compiler's \code{musttail}
+or with trampolines.

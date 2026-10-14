@@ -1,0 +1,624 @@
+\chapter{Syntax and Program Structure}\label{ch:syntax}
+
+Dylan, as the 1992 manual defines it, is written in a parenthesized prefix
+notation of the kind Lisp and Scheme use. A program is a sequence of
+\emph{forms}; each form is either an atom, such as a number, a string or a
+name, or a list whose first element says what the form does. There are no
+statements, no operator precedence and no semicolons ending lines: a
+semicolon starts a comment.
+
+This chapter describes the notation itself: how the reader turns
+characters into Dylan objects (Section~\ref{sec:syntax-reader}), how those objects
+are evaluated as expressions (Section~\ref{sec:syntax-eval}), and how a program is
+put together from top-level forms and source files
+(Section~\ref{sec:syntax-program}). The standard is \dylanbook{chapters 2 and 3};
+symbols and keywords are also covered in \dylanbook{chapter 15}. Both
+implementations read programs with the same reader, so everything in
+Section~\ref{sec:syntax-reader} holds for both.
+
+\section{How the examples are shown}\label{sec:syntax-conventions}
+
+The examples in this part of the book are Dylan source. Each has been run
+with both implementations, compiled with \cmd{bin/dylanc} and typed at the
+read-eval-print loop of the Common Lisp implementation, except where the
+text says that an example applies to only one of them. The value of an
+expression is shown in a comment after it, introduced by \code{=>}:
+
+%! skip
+\begin{dylan}
+(+ 3 4)                 ; => 7
+\end{dylan}
+
+\noindent When an expression returns several values, the comment lists them
+in order, separated by commas; \code{(values 98 102)} is shown as
+\code{; => 98, 102}. When it returns no values at all, the comment says
+\code{(no values)}. A long value continues on the comment lines below. Output that a form prints is shown in comments
+introduced by \code{prints:}, one line of output to each comment:
+
+%! skip
+\begin{dylan}
+(print "hello")         ; prints: "hello"
+\end{dylan}
+
+\noindent A form whose evaluation signals an error is marked
+\code{; => error}, usually followed by a short description of the error.
+The exact wording of error messages differs between the two
+implementations, and the comment does not try to reproduce either.
+
+Values that cannot be read back in, such as classes and functions, are
+printed inside braces: \code{\{the class <integer>\}}. That is how the
+compiler to C prints them and how the 1992 manual writes them. The Common
+Lisp implementation prints the same objects differently, as
+\code{\#[dylan-class <integer>]}; the examples show the braces.
+
+\section{The reader}\label{sec:syntax-reader}
+
+The \term{reader} turns the characters of a program into Dylan objects:
+numbers, strings, symbols, lists and so on. A program is just those objects;
+evaluation (Section~\ref{sec:syntax-eval}) gives them meaning. The reader is the
+same in both implementations: the compiler to C uses the Common Lisp
+implementation's reader, so a file that one reads, the other reads
+identically.
+
+\subsection{White space and delimiters}
+
+Spaces, tabs, newlines, returns and page breaks are \term{white space}. White
+space separates tokens, and the amount of it does not matter, so a program
+can be laid out freely. A token also ends at a parenthesis, a double quote,
+a semicolon, a quote mark, a backquote or a comma. Everything else is
+part of a token, which is why names such as \code{set!}, \code{even?},
+\code{<integer>} and \code{*standard-output*} are single names.
+
+\subsection{Comments}\label{sec:syntax-comments}
+
+A semicolon\index{comment} starts a comment that runs to the end of the
+line. The characters \code{\#|} start a block comment, which runs to the
+matching \code{|\#}. Block comments may span lines and may be nested, so a
+block comment can comment out code that already contains one:
+
+\begin{dylan}
+(+ 1 #| an inline comment |# 2)   ; => 3
+#| (print "never run")
+   #| a nested comment |#
+   (print "still inside the outer comment") |#
+\end{dylan}
+
+\noindent A comment is white space as far as the reader is concerned. Note
+that \code{\#;}, which comments out one form in some Lisps, does not exist
+in Dylan.
+
+\subsection{Numbers}\label{sec:syntax-numbers}
+
+Numbers are written in the usual way. Chapter~\ref{ch:numbers} describes the
+number classes and arithmetic; here is only how numbers are written.
+
+\begin{itemize}
+\item An \term{integer} is an optional sign followed by decimal digits:
+  \code{0}, \code{42}, \code{-17}, \code{+57}. A trailing decimal point is
+  allowed and still denotes an integer: \code{1.} is the integer \code{1}.
+\item A \term{ratio} is two integers separated by a slash, with no spaces:
+  \code{1/3}, \code{-6/4}. Ratios are always reduced, and a ratio that
+  reduces to a whole number is an integer: \code{4/2} reads as \code{2}.
+\item A \term{floating-point number} has a decimal point with digits after
+  it, an exponent, or both: \code{1.5}, \code{-4.0}, \code{.5},
+  \code{1e10}, \code{2.5d2}. An exponent is introduced by \code{e} or
+  \code{d} for a double float, the default, or by \code{f} or \code{s} for
+  a single float; \code{1.5s0} is a single float.
+\item An integer or ratio in another base is written \code{\#x} (hexadecimal),
+  \code{\#o} (octal) or \code{\#b} (binary) followed by the digits, which
+  may have a sign: \code{\#x1f4e}, \code{\#xFF}, \code{\#o-17},
+  \code{\#b101}. Letters may be in either case.
+\end{itemize}
+
+\begin{dylan}
+(list 123 +57 -4.0 1.5 #x1f4e)     ; => (123 57 -4.0 1.5 8014)
+(list 1. 6/4 4/2 .5)               ; => (1 3/2 2 0.5)
+(list #o-17 #b101 #xff/2 1.0e-3)   ; => (-15 5 255/2 0.001)
+\end{dylan}
+
+\noindent Both implementations print double floats the same way, but they
+print a single float and a large or small double float differently: the
+compiler to C prints \code{1.5s0} and \code{10000000000.0} where the Common
+Lisp implementation prints \code{1.5f0} and \code{1.0e10}.
+
+\begin{warnbox}
+The compiler to C has no bignums: an integer is 63 bits, and an integer
+literal that does not fit is an error when compiling. It has no complex
+numbers either. The Common Lisp implementation has both, and reads a
+complex number in Common Lisp's notation, \code{\#c(1 2)}. See
+Chapter~\ref{ch:numbers}.
+\end{warnbox}
+
+\subsection{Characters}\label{sec:syntax-characters}
+
+A \term{character} is written \code{\#\textbackslash} followed by the
+character itself, or by the character's name. The names of the 1992 manual
+are \code{newline}, \code{space}, \code{rubout}, \code{page}, \code{tab},
+\code{backspace}, \code{return} and \code{linefeed}; their case does not
+matter, so \code{\#\textbackslash Space} and \code{\#\textbackslash space}
+are the same character. \code{\#\textbackslash linefeed} is the same
+character as \code{\#\textbackslash newline}. A single letter after the
+backslash is that letter, in its case: \code{\#\textbackslash a} and
+\code{\#\textbackslash A} are different characters. Any other single
+character may follow the backslash too, parentheses, semicolons and quotes
+included.
+
+\begin{dylan}
+(list #\a #\A #\( #\; #\")   ; => (#\a #\A #\( #\; #\")
+(list #\Space #\TAB)         ; => (#\space #\tab)
+(map (method (c) (as <integer> c))
+     (list #\newline #\linefeed #\space #\tab #\rubout))
+                             ; => (10 10 32 9 127)
+\end{dylan}
+
+\noindent Because the reader is built on Common Lisp's, it also accepts the
+other character names Common Lisp knows, such as \code{\#\textbackslash
+Nul} and \code{\#\textbackslash Escape}. A program that is to be portable to
+other Dylan implementations should keep to the manual's names.
+
+\subsection{Strings}\label{sec:syntax-strings}
+
+A \term{string} is written between double quotes. Every character between
+the quotes is part of the string, white space and newlines included. A
+backslash quotes the character after it, which is how a string includes a
+double quote or a backslash:
+
+\begin{dylan}
+"abc"              ; => "abc"
+(size "a\"b")      ; => 3
+(size "a\\b")      ; => 3
+(element "a\"b" 1) ; => #\"
+\end{dylan}
+
+\noindent A backslash does nothing more than quote the next character, as
+\dylanbook{chapter 3} says. In particular there are no escape sequences:
+\code{"a\textbackslash nb"} is the three characters \code{a}, \code{n} and
+\code{b}, not a string with a newline in it.
+
+\begin{dylan}
+(size "a\nb")      ; => 3
+(element "a\nb" 1) ; => #\n
+\end{dylan}
+
+\noindent To put a newline into a string, write the newline itself between
+the quotes, or build the string from characters at run time:
+
+\begin{dylan}
+(size (as <string> (list #\a #\newline #\b)))   ; => 3
+\end{dylan}
+
+\subsection{Symbols}\label{sec:syntax-symbols}
+
+Any token that is not a number, and does not end in a colon, is a
+\term{symbol}. Symbols name variables, and they are also objects in their
+own right, of class \code{<symbol>}\index{<symbol>@\code{<symbol>}}. A
+symbol may contain letters, digits and most punctuation: \code{+},
+\code{<=}, \code{set!}, \code{even?}, \code{*x*}, \code{\$pi}, \code{1+},
+\code{-} and \code{...} are all symbols.
+
+\begin{dylan}
+(list '+ '<= 'set! 'even? '*x* '$pi '1+ '- '...)
+                       ; => (+ <= set! even? *x* $pi 1+ - ...)
+(instance? 'foo <symbol>)   ; => #t
+\end{dylan}
+
+\noindent Symbols are not case-sensitive\index{case of symbols}:
+\code{Foo}, \code{foo} and \code{FOO} are the same symbol. But a symbol
+remembers the case it was first written in, and that is how it prints
+(\dylanbook{chapter 15}). In the example below the symbol is written
+\code{Hello} first, so it prints that way however it is written later:
+
+\begin{dylan}
+(id? 'Hello 'hello)        ; => #t
+'HELLO                     ; => Hello
+(as <string> 'hello)       ; => "Hello"
+\end{dylan}
+
+\noindent ``First written'' means first read. The compiler to C reads a
+whole program before running any of it, so a symbol's spelling is the one
+in the source text that comes first. The Common Lisp implementation reads a
+form at a time, so a symbol first made at run time by
+\code{(as <symbol> "Abc")} keeps the spelling \code{Abc} if no form read
+earlier wrote it.
+
+Dylan programs follow naming conventions (\dylanbook{chapter 3}). Except
+for setter variables, described below, the conventions mean nothing to the
+language; they only help a reader.
+
+\begin{itemize}
+\item Names of classes begin and end with angle brackets: \code{<window>},
+  \code{<integer>}.
+\item Module variables meant to change while the program runs begin and
+  end with asterisks: \code{*window-count*}.
+\item Constants begin with a dollar sign: \code{\$pi}.
+\item Predicates, functions that answer true or false, end with a question
+  mark: \code{even?}, \code{instance?}.
+\item Operations that destructively modify their arguments end with an
+  exclamation point: \code{reverse!}, \code{sort!}.
+\end{itemize}
+
+\subsection{Setter names}\label{sec:syntax-setter-names}
+
+A variable name is either a symbol or a list of the form
+\code{(setter \meta{symbol})}. The second kind names a \term{setter
+variable}, the variable that holds the function which stores into the
+place the function in \meta{symbol} reads. The value of \code{element} reads
+an element of a collection; the value of \code{(setter element)} stores
+one. A setter name can be used wherever a symbol can name a variable:
+
+\begin{dylan}
+(define (setter my-variable) 20)
+(setter my-variable)            ; => 20
+\end{dylan}
+
+\noindent Because \code{setter} has this special meaning, the symbol
+\code{setter} itself cannot be the name of a variable. The design note that
+later replaced \code{(setter foo)} with \code{foo-setter} is not part of
+this language. Setters are described in Section~\ref{sec:control-assignment} and
+Section~\ref{sec:functions-setters}.
+
+\subsection{Keywords}\label{sec:syntax-keywords}
+
+A token ending in a colon is a \term{keyword}: \code{foo:}, \code{size:},
+\code{init-value:}. Keywords look like symbols but are a separate class,
+\code{<keyword>}\index{<keyword>@\code{<keyword>}}, and are used as
+symbolic constants, chiefly to name keyword arguments. The colon is not
+part of a keyword's name. Keywords, like symbols, are not case-sensitive and
+remember the case they were first written in.
+
+\begin{dylan}
+foo:                         ; => foo:
+(id? hello: HELLO:)          ; => #t
+(instance? foo: <keyword>)   ; => #t
+(instance? foo: <symbol>)    ; => #f
+(as <keyword> "size")        ; => size:
+(as <string> size:)          ; => "size"
+\end{dylan}
+
+\noindent Two keywords, or two symbols, with the same name are always the
+same object: \code{id?} is true of them.
+
+\subsection{True, false and the empty list}\label{sec:syntax-booleans}
+
+\code{\#t}\index{t@\code{\#t}} is the canonical true value and
+\code{\#f}\index{f@\code{\#f}} is the false value; either may be written in
+upper case. \code{\#f} is the \emph{only} false value: every other object
+counts as true when tested, including \code{0}, the empty string and the
+empty list.
+
+The empty list, written \code{()}, is an object of its own, of class
+\code{<empty-list>}. Unlike in older Lisps it is not the same object as
+\code{\#f}, and it is true:
+
+\begin{dylan}
+(id? '() #f)                    ; => #f
+(if '() 'true 'false)           ; => true
+(instance? '() <list>)          ; => #t
+\end{dylan}
+
+\subsection{Lists and vectors}\label{sec:syntax-lists}
+
+A list is written as its elements between parentheses. A dot between the
+last two elements writes a dotted list, whose final tail is not the empty
+list. A vector, a one-dimensional array, is written like a list with a
+\code{\#} before the opening parenthesis.
+
+\begin{dylan}
+'(a (b c) ())        ; => (a (b c) ())
+'(a . b)             ; => (a . b)
+'#(1 2 3)            ; => #(1 2 3)
+(instance? '#(1 2) <vector>)   ; => #t
+\end{dylan}
+
+\noindent A list in a program is normally a form to be evaluated, so a list
+meant as data must be quoted. A vector need not be: \code{\#(1 2 3)}
+evaluates to itself. The elements of a literal list or vector are not
+evaluated, and literal data should not be modified.
+
+\subsection{Quote and backquote}\label{sec:syntax-quote}
+
+A single quote before a form, \code{'\meta{form}}, is an abbreviation for
+\code{(quote \meta{form})}\index{quote@\code{quote}}, which evaluates to
+the form itself, unevaluated. Quoting is needed for symbols and lists used
+as data; other literals evaluate to themselves and need no quote, though
+quoting them does no harm.
+
+\begin{dylan}
+(quote foo)          ; => foo
+'foo                 ; => foo
+'(+ 10 10)           ; => (+ 10 10)
+(+ 10 10)            ; => 20
+'"s"                 ; => "s"
+\end{dylan}
+
+A \term{backquote} quotes a template in which parts are filled in when it is
+evaluated. Within a backquoted form, a comma, \code{,\meta{form}},
+evaluates \meta{form} and puts its value in that place; \code{,@\meta{form}}
+evaluates \meta{form}, which must answer a list, and splices its elements
+in. \dylanbook{chapter 3} defers backquote to a section the manual does not
+contain, so both implementations follow the usual Lisp rules, including
+backquotes nested inside backquotes and backquoted vectors.
+
+\begin{dylan}
+(define x 5)
+(define xs '(a b))
+`(x ,x)              ; => (x 5)
+`(1 ,@xs 2)          ; => (1 a b 2)
+`(1 . ,x)            ; => (1 . 5)
+`#(1 ,x)             ; => #(1 5)
+\end{dylan}
+
+\noindent The reader turns \code{'x}, \code{`x}, \code{,x} and \code{,@x}
+into the lists \code{(quote x)}, \code{(quasiquote x)}, \code{(unquote x)}
+and \code{(unquote-splicing x)}. The compiler to C prints these lists in
+that long form; the Common Lisp implementation prints them abbreviated,
+as \code{'x} and so on. A comma outside any backquote is an error. Backquote
+is most useful in macros, an extension of the compiler to C described in
+Chapter~\ref{ch:extensions}.
+
+\subsection{\#key, \#rest and \#next}\label{sec:syntax-parameter-tokens}
+
+The tokens \code{\#key}\index{key@\code{\#key}},
+\code{\#rest}\index{rest@\code{\#rest}} and
+\code{\#next}\index{next@\code{\#next}} mark the parts of a parameter
+list (Section~\ref{sec:functions-parameters}); \code{\#rest} also appears in
+\code{bind} (Section~\ref{sec:control-bind}). Like \code{\#t} and \code{\#f} they are
+case-insensitive.
+
+Both implementations also read \code{!key}, \code{!rest} and \code{!next}
+as these same tokens, because Thomas, from which the Common Lisp
+implementation grew, wrote them that way, and so do its programs, the
+manual's examples among them. As a consequence those three names cannot
+name variables. Any other name may.
+
+\subsection{Unreadable objects}
+
+Some objects, such as functions and classes, have no notation that reads
+back as the same object. They print inside braces, \code{\{the generic
+function print\}}, and there is no notation that reads them back. Any other
+\code{\#} syntax than those above (\code{\#t}, \code{\#f},
+\code{\#\textbackslash}, \code{\#(}, \code{\#x}, \code{\#o}, \code{\#b},
+\code{\#|}, \code{\#key}, \code{\#rest}, \code{\#next}, and \code{\#c} in the
+Common Lisp implementation) is an error.
+
+\section{Expressions and evaluation}\label{sec:syntax-eval}
+
+A program is made of expressions. Evaluating an expression yields zero or
+more values, may have side effects, and may evaluate other expressions
+inside it. There are four kinds of expression (\dylanbook{chapter 3}):
+literal constants, variable references, function calls and syntax forms.
+
+\subsection{Literal constants}
+
+Numbers, characters, strings, keywords, vectors, \code{\#t}, \code{\#f}
+and the empty list \code{()} evaluate to themselves. Symbols and non-empty
+lists must be quoted to be used as constants, because unquoted they are
+variable references and calls.
+
+\begin{dylan}
+"abc"      ; => "abc"
+123        ; => 123
+foo:       ; => foo:
+#\a        ; => #\a
+#t         ; => #t
+()         ; => ()
+'(1 2 3)   ; => (1 2 3)
+\end{dylan}
+
+\subsection{Variable references}
+
+A symbol, or a setter name \code{(setter \meta{symbol})}, evaluates to the
+value of the variable it names. There are two kinds of variable.
+\term{Lexical variables} are created by \code{bind}, by a method's parameter
+list and by several other forms, and are visible only in the text of the
+form that creates them. \term{Module variables} are created by the defining
+forms (Section~\ref{sec:syntax-program}) and are visible throughout their module
+(Chapter~\ref{ch:modules}). An inner variable \emph{shadows} any outer one of the
+same name, lexical or module.
+
+\begin{dylan}
+(define my-variable 25)
+my-variable                     ; => 25
+(bind ((my-variable 50))
+  (+ my-variable my-variable))  ; => 100
+\end{dylan}
+
+\noindent Referring to a variable that has no value is an error. The
+compiler to C also warns, when compiling, of a module variable that is used
+but defined nowhere in the program.
+
+\subsection{Function calls}\label{sec:syntax-calls}
+
+A list whose first element is not the name of a syntax operator is a
+\term{function call}. Its first element, the \term{operator}, is evaluated
+to give the function; the rest are evaluated to give the arguments, and the
+function is called with them. The values of the call are the values the
+function returns.
+
+The operator may be any expression that evaluates to a function, not only a
+name. In this Dylan is like Scheme and unlike Common Lisp:
+
+\begin{dylan}
+(+ 3 4)              ; => 7
+(* (+ 3 4) 5)        ; => 35
+((if #t + *) 4 5)    ; => 9
+((method (x) (* x x)) 6)   ; => 36
+\end{dylan}
+
+\noindent The arguments are evaluated from left to right. The manual allows
+the operator to be evaluated at any time before, during or after the
+arguments, and the two implementations differ: the compiler to C evaluates
+the operator first, and the Common Lisp implementation evaluates it last. A
+program should not depend on either order.
+
+%! pre: (define trail '())
+%! pre: (define-method note (x) (set! trail (cons x trail)) x)
+\begin{dylan}
+(list (note 1) (note 2) (note 3))   ; => (1 2 3)
+(reverse trail)                     ; => (1 2 3)
+\end{dylan}
+
+\noindent (Here \code{note} records each argument in a list as it is
+evaluated.)
+
+\subsection{Syntax forms}\label{sec:syntax-forms}
+
+A list whose first element names a \term{syntax operator} is a
+\term{syntax form}. A syntax form looks like a call, but it is not one:
+each syntax operator has its own rule for which of its parts are evaluated,
+when, and what the others mean. In \code{(bind ((x 10)) (+ x 1))}, for
+example, \code{((x 10))} is not evaluated at all; \code{bind} reads it as a
+list of bindings.
+
+There are three kinds of syntax operator.
+
+\begin{description}
+\item[Special forms] are built into the language:
+  \code{begin}, \code{bind}, \code{bind-exit}, \code{bind-methods},
+  \code{if}, \code{method}, \code{quote}, \code{set!}, \code{setter} and
+  \code{unwind-protect}.
+\item[Macros] are syntax forms defined in terms of others. The language's
+  macros are \code{and}, \code{or}, \code{when}, \code{unless}, \code{cond}, \code{case}, \code{select}, \code{for},
+  \code{for-each}, \code{dotimes}, \code{while}, \code{until}, and the
+  condition forms \code{handler-bind} and \code{handler-case}
+  (Chapter~\ref{ch:conditions}). Backquote, \code{quasiquote}, is one too.
+\item[Definitions] create module variables: \code{define},
+  \code{define-class}, \code{define-generic-function}, \code{define-method},
+  \code{define-slot} and \code{define-module}.
+\end{description}
+
+\noindent \code{not}, by contrast, is an ordinary function. A syntax operator is
+not a function and has no value: \code{(map and ...)} is meaningless, and
+so is passing \code{if} as an argument.
+
+The 1992 manual has no way for a program to define its own syntax forms.
+The compiler to C adds Common Lisp--style macros, defined with
+\code{define-macro} and expanded when compiling (Chapter~\ref{ch:extensions}); the
+Common Lisp implementation does not have them.
+
+\subsection{Multiple values}
+
+An expression can return one value, several, or none. \code{values} returns
+its arguments as multiple values, and \code{bind} receives them
+(Section~\ref{sec:control-values}). Where only one value is wanted, as an argument
+to a call, for instance, the first value is used, or \code{\#f} if there are
+none.
+
+\begin{dylan}
+(values 1 2 3)             ; => 1, 2, 3
+(print (list (values 1 2) 3))   ; prints: (1 3)
+(print (list (values)))         ; prints: (#f)
+\end{dylan}
+
+\section{Program structure}\label{sec:syntax-program}
+
+\subsection{Top-level forms and definitions}
+
+A form that is not part of any other form is a \term{top-level form}; so are
+the forms directly inside a \code{begin} that is itself at top level.
+A program is a sequence of top-level forms. Some are definitions, which
+create module variables; the rest are expressions, evaluated for their
+effects.
+
+\begin{center}
+\begin{tabular}{@{}lp{0.55\textwidth}@{}}
+\toprule
+Definition & Creates \\
+\midrule
+\code{define} & a variable with an initial value (Section~\ref{sec:control-define}) \\
+\code{define-method} & a method, added to a generic function (Section~\ref{sec:functions-define-method}) \\
+\code{define-generic-function} & a generic function (Section~\ref{sec:functions-define-generic}) \\
+\code{define-class} & a class, its slots and their accessors (Section~\ref{sec:classes-define-class}) \\
+\code{define-slot} & a slot of an existing class or object (Section~\ref{sec:classes-define-slot}) \\
+\code{define-module} & a module (Chapter~\ref{ch:modules}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent The compiler to C adds three more definitions, which are
+described in Chapter~\ref{ch:extensions}: \code{define-macro},
+\code{define-for-macros} and \code{define-thread-variable}.
+
+The 1992 manual describes definitions as if they were ordinary forms that
+could appear anywhere, and both implementations accept \code{define} inside
+a method, where it still defines a module variable. Later design notes
+(``Definitions are Declarative'') restrict definitions to top level, and
+that is the only place they belong: a definition inside a method happens
+again each time the method runs, and in the compiler to C a
+\code{define-method} that refers to local variables cannot be compiled:
+it stops with \code{define-method: the method refers to local variables
+(k)}, naming the variables.
+Put definitions at top level.
+
+\subsection{When things happen}\label{sec:syntax-when}
+
+The two implementations agree on what a program means, but not on when a
+definition takes effect, because one runs a static program and the other
+is interactive.
+
+The \textbf{Common Lisp implementation} evaluates each top-level form when
+it reaches it, at the prompt or in a file. A definition takes effect then,
+and not before; a later form may redefine a variable, which only draws a
+warning, or redefine a class or add methods to a generic function that is
+already in use.
+
+The \textbf{compiler to C} compiles a whole program at once. Every class,
+generic function and method the program defines exists before any of its
+expressions run, wherever in the program it is defined. The top-level
+expressions, and the initial values of \code{define}, are then evaluated in
+order, from the first file to the last. A method may therefore be called
+by an expression that comes before its definition in the source, but a
+variable defined with \code{define} has no value until its definition has
+been evaluated.
+
+%! c-only
+\begin{dylan}
+(later 2)                   ; => 20
+(define-method later (x) (* x 10))
+later-var                   ; => error: later-var has no value yet
+(define later-var 5)
+\end{dylan}
+
+\noindent In the Common Lisp implementation the first expression is an error
+too, since \code{later} is not yet defined when it is evaluated.
+
+A static program is also stricter about definitions. In the compiler to C a
+class or generic function may be defined only once, a name cannot be
+defined both by \code{define} and as a generic function, and a variable
+that holds a class or a generic function cannot be assigned. These are
+errors when compiling. Chapter~\ref{ch:dylanc} lists the full set of restrictions.
+
+\subsection{Source files and the module: header}\label{sec:syntax-files}
+
+A Dylan source file conventionally has the extension \file{.dyl}. It may
+begin with a \term{header} (design note 33): lines of the form
+\meta{keyword}\code{:} \meta{value}, each starting at the beginning of a
+line, ended by a blank line. The keyword \code{module:} names the module
+the file's forms belong to; any other keywords, such as \code{author:},
+\code{copyright:} and \code{version:}, are accepted and ignored. A file
+without a header belongs to the module \code{dylan-user}.
+
+%! skip
+\begin{dylan}
+module: shapes
+author: A. Programmer
+version: 1.0
+
+(define-method greet ()
+  (print "hello from shapes"))
+(greet)
+\end{dylan}
+
+\noindent The header is not Dylan syntax: it is read before the reader
+starts, and design note 33 does not allow comments in it. The module it names must be
+defined by a \code{define-module} form, which can be in an earlier file of
+the program; Chapter~\ref{ch:modules} describes modules. Both implementations
+honor the header when they compile a file: the compiler to C for each file
+on its command line, and the Common Lisp implementation in
+\code{dylan:compile-file}. At the interactive prompt, \code{(dylan:in-module
+\meta{name})} sets the module instead (Chapter~\ref{ch:lisp}).
+
+A program for the compiler to C may be spread over several files, given on
+the command line in order: \cmd{bin/dylanc -o app a.dyl b.dyl}. They form
+one program, and their top-level expressions run in that order
+(Chapter~\ref{ch:dylanc}).

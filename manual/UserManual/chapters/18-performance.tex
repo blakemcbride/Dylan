@@ -1,0 +1,485 @@
+\chapter{Performance}\label{ch:performance}
+\sloppy
+
+Dylan was designed to be both dynamic and efficient, and the compiler to
+C aims at its original targets: small and fast. This chapter reports how
+fast compiled programs are on a set of benchmarks, explains what makes a
+Dylan program fast or slow under each implementation, and shows how to
+measure a program and tune the garbage collector. Most of the advice
+follows from how the compiler works (Chapter~\ref{ch:internals}); the
+measurements here show how much each point matters.
+
+\begin{notebox}
+Every time in this chapter was measured on one machine: an Intel Core
+i9-14900KF running Fedora Linux, with SBCL~2.6.3 and GCC~16.2.1. Times
+depend on the processor, the C compiler, the collector's version and the
+load on the machine, and vary by several percent from run to run.
+Treat them as an indication of proportions, not as absolute figures, and
+run the benchmarks on your own machine for numbers that apply to you.
+\end{notebox}
+
+\section{The benchmarks}\label{sec:perf-benchmarks}
+
+\index{benchmarks}
+The directory \file{bench/} holds eleven small programs, each written
+three times: in Dylan (\file{benchmarks.dyl}), in plain Common Lisp
+(\file{reference.lisp}) and in plain C (\file{reference.c}). Each answers
+a value, and the three versions must agree.
+
+\begin{center}
+\small
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.17\textwidth}%
+                >{\raggedright\arraybackslash}p{0.72\textwidth}}
+\toprule
+Name & What it does \\
+\midrule
+\code{table} & insert into and look up in a \code{<table>} \\
+\code{sort} & sort a list of pseudo-random integers \\
+\code{string} & build and compare strings \\
+\code{deque} & push and pop at both ends of a \code{<deque>} \\
+\code{stretchy} & grow a \code{<stretchy-vector>} and walk it \\
+\code{range} & iterate over ranges \\
+\code{exit} & leave a computation early with \code{bind-exit} \\
+\code{condition} & signal errors and handle them with \code{handler-case} \\
+\code{next-method} & call down a chain of methods with \code{next-method} \\
+\code{tak} & the Takeuchi function: integer arithmetic and calls \\
+\code{float} & points of a grid inside the Mandelbrot set: floating
+  point \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two scripts run them. Each prints, for every benchmark, the best of
+three runs.
+
+\begin{shell}
+$ sbcl --script bench/run-c.lisp          # compiled Dylan vs C and Lisp
+$ sbcl --script bench/run.lisp            # interactive Dylan vs Lisp
+$ sbcl --script bench/run.lisp table tak  # just these
+\end{shell}
+
+\noindent Their builds go in \file{bench/build/}. A line marked
+\code{MISMATCH} means the versions answered differently, which would be
+a bug.
+
+\index{BENCH\_SCALE@\code{BENCH\_SCALE}}
+At their usual sizes several benchmarks finish in a few milliseconds,
+too quickly to compare reliably. The environment variable
+\code{BENCH\_SCALE}, if set to an integer, multiplies every size, in
+both scripts and in \file{reference.c}:
+
+\begin{shell}
+$ BENCH_SCALE=10 sbcl --script bench/run-c.lisp
+\end{shell}
+
+\noindent The file \file{SpeedComparison.md} at the top of the
+repository puts the three ways of running the benchmarks --- plain SBCL,
+the Common Lisp implementation and the compiler to C --- side by side,
+with hand-written C, at \code{BENCH\_SCALE=10}, and discusses the
+results. The tables below were run at the usual sizes.
+
+\subsection{The compiler to C}
+
+\cmd{bench/run-c.lisp} compiles the Dylan with \cmd{dylanc} (at
+\cmd{-O2}), compiles \file{reference.c} with \cmd{cc -O2}, and loads
+\file{reference.lisp} into SBCL. A run gave:
+
+\begin{shell}
+benchmark     Dylan->C ms     C ms      D/C    Lisp ms   D/Lisp
+table                  13        6     2.17        8.0     1.63
+sort                   29       13     2.23       26.0     1.12
+string                 11        2     5.50        7.0     1.57
+deque                   6        2     3.00        2.0     3.00
+stretchy                3        0        -        2.0     1.50
+range                   5        0        -        2.0     2.50
+exit                    1        3     0.33        1.0     1.00
+condition               4        0        -        1.0     4.00
+next-method             5        2     2.50        8.0     0.62
+tak                    22       17     1.29       35.0     0.63
+float                   3        2     1.50       55.0     0.05
+\end{shell}
+
+The columns are the compiled Dylan's time, the C's, their ratio, plain
+SBCL's time and the ratio to it. A ratio is shown as \code{-} when the
+other time is under a millisecond and the ratio would mean nothing.
+
+Read it this way. On calls and integer arithmetic (\code{tak}) and on
+floating point (\code{float}), compiled Dylan takes 1.3 to 1.5 times as
+long as hand-written C. On the collections it is two to three times the C's
+time, and on strings about five times. Non-local exits (\code{exit}) are
+\emph{faster} than the C, because the Dylan exit becomes a jump where
+the C uses \code{setjmp}. Against plain SBCL, compiled Dylan is faster
+on calls, \code{next-method} and floats, and slower on the collection
+benchmarks by up to three times. The very short benchmarks
+(\code{stretchy}, \code{range}, \code{condition}) take a few
+milliseconds where the C takes under one, so their ratios vary most from
+run to run; in other runs the \code{string} ratio was 6.5 and the
+\code{table} ratio 1.6.
+
+\subsection{The interactive implementation}
+
+\cmd{bench/run.lisp} compiles \file{benchmarks.dyl} with the interactive
+implementation's \code{dylan:compile-file}, compiles the resulting Lisp
+with SBCL, and compares it with \file{reference.lisp}:
+
+\begin{shell}
+benchmark         size      dylan       lisp    ratio
+table           200000     0.076s     0.007s    10.9x
+sort            100000     0.083s     0.025s     3.3x
+string          200000     0.050s     0.005s    10.0x
+deque           300000     0.029s     0.002s    14.5x
+stretchy        300000     0.026s     0.002s    13.0x
+range          1000000     0.048s     0.003s    16.0x
+exit            300000     0.027s     0.001s    27.0x
+condition        30000     0.010s     0.000s    10.0x
+next-method     300000     0.039s     0.008s     4.9x
+tak                300     0.469s     0.036s    13.0x
+float              300     0.089s     0.054s     1.6x
+\end{shell}
+
+The interactive implementation is typically ten to fifteen times slower
+than plain Lisp, and so ten to twenty times slower than the compiler to
+C. That is the price of a language whose classes and methods can change
+while it runs: every call of a generic function must allow for methods
+added since the last call. The interactive implementation is for
+developing and exploring; the compiler is for running.
+
+\section{Writing fast Dylan for the compiler}\label{sec:perf-c}
+
+The compiler is fastest where it knows the classes of the values it
+works with. Then it calls methods directly, does arithmetic and
+collection access inline without tests, and keeps floats unboxed. Each
+point below says how to give it that knowledge, with a measurement. The
+programs are small, and each was timed as a whole, run as a separate
+executable built at \cmd{-O2}.
+
+\subsection{Prefer \code{define-method} to \code{define} of a \code{method}}
+
+How a function is defined matters more than you might expect. These
+four versions of \code{tak}, computing \code{(tak 30 22 12)}, differ
+only in their first lines:
+
+\begin{center}
+\small
+\begin{tabular}{lr}
+\toprule
+Definition & Time \\
+\midrule
+\code{(define tak (method (x y z) ...))} & 0.04 s \\
+\code{(define-method tak (x y z) ...)} & 0.04 s \\
+\code{(define-method tak ((x <integer>) (y <integer>) (z <integer>)) ...)}
+  & 0.08 s \\
+\code{(define tak (method ((x <integer>) (y <integer>) (z <integer>)) ...))}
+  & 0.30 s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{itemize}
+\item An unspecialized \code{define-method} with only one method is not
+  dispatched at all, and a \code{define} of a \code{method} with no
+  specializers is called directly; both are as fast as the program can
+  be.
+\item Specializing the only method on \code{<integer>} makes every call
+  go through the dispatch function, which tests the argument classes.
+  Inside the method the arguments are then known to be integers, which
+  helps a method that does much work with them, but here the method is
+  tiny and the dispatch doubles its cost.
+\item A \code{method} with specializers stored with \code{define} is the
+  slowest: it is a closure that checks its own arguments on every call,
+  is called through the variable, and does not pass on to the compiler
+  the knowledge its specializers give.
+\end{itemize}
+
+So: specialize methods when you need dispatch, or when the method does
+enough with its arguments to profit from knowing their classes; do not
+specialize a lone method merely to document its argument types; and
+define functions with \code{define-method}, or with \code{define} of an
+unspecialized \code{method}.
+
+\subsection{Let the compiler know classes: declarations in \code{bind}}
+
+\index{bind@\code{bind}!type declarations}
+A value fetched from a collection, or returned by a function the
+compiler cannot see into, has no known class. Every operation on it is
+then preceded by tests of its class, and a float result must be boxed
+because the compiler cannot be sure it is a float. A type declaration in
+\code{bind} (\dylanbook{chapter 4}) tells the compiler the class; it is
+checked once, when the binding is made. Summing squares of the floats in
+a vector of 1000 elements, 100\,000 times:
+
+\begin{dylan}
+(define-method sum-squares (v)
+  (bind ((s 0.0))
+    (for-each ((x v)) ()
+      (set! s (+ s (* x x))))
+    (> s 0.0)))                                   ; 1.06 s
+\end{dylan}
+
+\begin{dylan}
+(define-method sum-squares (v)
+  (bind ((s 0.0))
+    (for-each ((x v)) ()
+      (bind (((y <double-float>) x))
+        (set! s (+ s (* y y)))))
+    (> s 0.0)))                                   ; 0.20 s
+\end{dylan}
+
+In the first version \code{(* x x)} tests whether \code{x} is an integer
+or a float and allocates a box for the product; in the second it is one
+machine multiplication, and nothing is allocated. Specializing a method
+on the class of its argument has the same effect inside the method; so
+does a \code{type:} on a slot, for the values its getter answers.
+
+Collections are no different. A \code{for-each} over a parameter of
+unknown class tests, on each step, whether it is walking a list or a
+vector; over one known to be a \code{<simple-object-vector>} it is a
+plain indexed loop. Summing a vector of 1000 integers 100\,000 times took
+0.16~s with an unspecialized parameter and 0.10~s with the parameter
+specialized on \code{<simple-object-vector>}.
+
+\subsection{Keep floats unboxed}
+
+\index{unboxing}
+A \code{<double-float>} is a heap object, so a float computation that
+creates a new one on every step spends most of its time allocating. The
+compiler avoids this by keeping a float variable as a C \code{double}
+when \emph{every} use of it wants a \code{double}
+(Section~\ref{sec:internals-types}). Returning the variable, storing it,
+or passing it to a function the compiler cannot see into each need a
+box, and force one on every step. Compare (100 million steps each):
+
+\begin{dylan}
+(define-method norm-sum (scale n)
+  (for ((i 0 (+ i 1))
+        (s 0.0 (+ s (* scale i))))
+       ((= i n) s)))                    ; returns s itself: 0.87 s
+
+(define-method norm-sum (scale n)
+  (for ((i 0 (+ i 1))
+        (s 0.0 (+ s (* scale i))))
+       ((= i n) (> s 1.0)))             ; only compares s: 0.04 s
+\end{dylan}
+
+The difference is not the work but the boxes. A hot loop should keep its
+float accumulators in variables used only arithmetically, and box the
+result once, after the loop, by passing it to a function or returning it
+from an enclosing one.
+
+\paragraph{Use float contagion, not \code{as}.}
+\index{float contagion}
+Mixing an integer into float arithmetic converts it automatically
+(\dylanbook{chapter 14}), and the compiler does the conversion inline.
+An explicit \code{(as <double-float> i)} calls the generic function
+\code{as} instead. In the loop above, writing \code{(* scale (as
+<double-float> i))} instead of \code{(* scale i)} made it two and a half
+times slower (2.2~s against 0.87~s).
+
+\subsection{Typed slots}
+
+A slot declared with \code{type: <double-float>} lets the compiler know
+the class of what its getter answers, so arithmetic on it needs no test.
+The value stored in the slot is still a boxed float, so the gain is
+modest when the program writes the slot often: stepping a particle's
+position 100 million times took 1.18~s with untyped slots and 1.05~s
+with typed ones.
+
+\subsection{Local exits are free; escaping ones are not}
+
+\index{bind-exit@\code{bind-exit}!cost}
+A \code{bind-exit} whose exit procedure is called only directly within
+the function that binds it --- an early return from a loop --- compiles
+to a jump. One whose exit is passed to another function needs a frame in
+the dynamic chain, \code{setjmp}, \code{longjmp}, and a closure
+(Section~\ref{sec:internals-exits}). Searching a ten-element vector 30
+million times, returning early:
+
+\begin{dylan}
+(define-method find-first (v (x <integer>))
+  (bind-exit (return)
+    (for-each ((e v)) ()
+      (when (= e x) (return e)))
+    #f))                                              ; 0.08 s
+
+(define-method check (e x return) (when (= e x) (return e)))
+(define-method find-first (v (x <integer>))
+  (bind-exit (return)
+    (for-each ((e v)) ()
+      (check e x return))
+    #f))                                              ; 1.48 s
+\end{dylan}
+
+The second is nearly twenty times slower. Keep the calls of an exit
+procedure inside the function that binds it where you can. The same
+applies to \code{unwind-protect} (and so to \code{with-lock} and
+\code{dynamic-bind}, which use it), whose cleanup always needs a frame,
+and to \code{handler-case}: a handled error costs a few hundred
+nanoseconds.
+
+\subsection{First-class calls}
+
+A call of a function held in a variable or passed as an argument goes
+through the function's uniform entry, with no inlining and no
+specialized entry. In a hot loop it costs more than a direct call or
+inline code, but often less than you might fear: summing squares of a
+vector with \code{(reduce (method (acc x) (+ acc (* x x))) 0 v)} took
+0.19~s where the equivalent \code{for-each} loop took 0.16~s. It matters
+most when the function called is small and could otherwise have been
+inlined. \code{apply} with a long list, and \code{\#rest} lists that
+escape, allocate.
+
+\subsection{\code{\#rest} and keywords}
+
+A \code{\#rest} list that is only walked --- not stored, returned, or
+captured by a closure --- is built on the C stack, for up to eight
+elements, and costs no allocation. Keyword arguments to a function the
+compiler can see are matched when compiling, with no list built at all.
+So these are cheap in the common cases; a \code{\#rest} list that is
+stored or returned is allocated on the heap.
+
+\subsection{What the static program gives}
+
+Everything in a compiled program is effectively sealed: the compiler
+knows every class and every method. That is what allows it to do
+\code{+} on integers inline, or \code{element} on a vector: it can see
+that no method but the library's could apply to such arguments. If your
+program defines methods on the library's generic functions for the
+library's own classes --- a method on \code{binary+} for two integers,
+say, or on \code{element} for \code{<simple-object-vector>} --- the
+inline code for those classes is dropped, and every such call in the
+program goes through dispatch. (With a method on \code{binary+} for two
+integers, \code{+} of two integers calls it, as it must; the inline
+cases for floats remain.) Methods for your own classes, or for
+combinations the library does not handle inline, do not have this
+effect.
+
+\section{Writing fast Dylan for the interactive implementation}
+\label{sec:perf-lisp}
+
+The interactive implementation compiles Dylan to Common Lisp, which SBCL
+compiles to machine code. Generic functions dispatch through caches;
+calls of known functions are made directly; arithmetic on numbers,
+\code{element} on simple vectors and strings, and iteration over simple
+vectors, lists and ranges are done inline, behind a test of the
+arguments' classes; and slots are read directly. Two things defeat the
+fast paths:
+
+\begin{itemize}
+\item Each inline operation is guarded by a flag that is true only while
+  the generic functions behind it have no methods but the predefined
+  ones that could apply to those arguments. Adding a method to
+  \code{+}, \code{element}, \code{<} and the like for a built-in class
+  turns the fast path off for the rest of the session.
+\item Redefining things as the program runs (adding methods, adding
+  slots) invalidates dispatch caches, which are then rebuilt on the next
+  calls.
+\end{itemize}
+
+Beyond that, the advice for the compiler applies here too, in smaller
+measure: local exits are cheaper than escaping ones, and code that works
+on known collection classes is faster. For a program whose speed matters,
+develop it interactively and compile it with \cmd{dylanc}.
+
+\section{Size}\label{sec:perf-size}
+
+\index{size builds}
+By default the library is compiled apart from the program and linked
+whole (Section~\ref{sec:dylanc-cache}), which makes builds fast but
+executables large: hello world is about 460~KB of code and data. With
+\cmd{-Os}, the library is compiled with the program and shaken
+(Section~\ref{sec:internals-shaking}), and hello world is about 220~KB,
+stripped; Section~\ref{sec:dylanc-size} compares the builds. The
+original goal was under 100~KB. The shaking is by name and class, so a
+call of a generic function such as \code{print-object}, \code{make} or
+\code{as} keeps every method that could apply to a class with instances,
+and those reach much of the library; getting further needs an analysis
+of which classes flow to which calls, which the compiler does not yet
+do.
+
+A program built \cmd{-Os} may also run slower than one built
+\cmd{-O2}, as C optimized for size often does: the vector-summing loop
+of Section~\ref{sec:perf-c} took 0.27~s built \cmd{-Os} against 0.16~s,
+though \code{tak} and the float loop ran at nearly the same speed.
+
+\section{Measuring}\label{sec:perf-measuring}
+
+\index{perf@\cmd{perf}}\index{profiling}
+An ordinary build is compiled with \cmd{-g}, so the usual tools for C
+programs work on compiled Dylan, and its \code{\#line} directives make
+them name Dylan source lines. On Linux, \cmd{perf} is the simplest:
+
+\begin{shell}
+$ bin/dylanc takp.dyl
+$ perf stat -e task-clock ./takp
+15
+             78.05 msec task-clock:u
+       0.078615932 seconds time elapsed
+$ perf record ./takp
+$ perf report --stdio
+    50.04%  takp     takp                  [.] fn1190_tak
+    49.68%  takp     takp                  [.] dy_gf_tak_e10c5970_dispatch
+...
+\end{shell}
+
+The functions are named as the compiler names them
+(Section~\ref{sec:internals-reading}): \code{fn1190\_tak} is a method
+\code{tak}; \code{dy\_gf\_tak\_e10c5970\_dispatch} is the dispatch
+function of the generic function \code{tak}. Here, with the method
+specialized on \code{<integer>}, half the time goes to dispatch --- the
+case of the second table above. Other names to recognize:
+\code{\_spec} marks a specialized entry, \code{dy\_maker\_}\meta{class}
+a class's maker, and \code{GC\_}\meta{name} the collector; time in the
+collector's functions is time spent allocating and collecting.
+\cmd{perf annotate} shows the hot instructions with the Dylan lines they
+came from.
+
+For timing inside a program, the \code{dylan} module of the compiler to
+C exports \code{(current-milliseconds)}, an extension that answers a
+millisecond count, as the benchmark driver uses it.
+
+\section{Tuning the garbage collector}\label{sec:perf-gc}
+
+\index{garbage collection!tuning}
+The collector is configured by environment variables, which it reads
+when the program starts; nothing in Dylan needs to change. These were
+checked with this collector (version 8.2.6), with a program that builds
+and discards 200 lists of 100\,000 elements. \code{GC\_PRINT\_STATS=1}
+makes the collector report each collection on the standard error, which
+is how the counts below were made.
+
+\begin{description}
+\item[\code{GC\_INITIAL\_HEAP\_SIZE}] The heap's starting size, in bytes
+  or with a suffix such as \code{64M} or \code{1G}. The heap starts small
+  and grows; a larger start means fewer collections. The test program
+  made 202 collections by default and 10 with \code{64M}. Fewer
+  collections are not automatically faster: here the larger heap made
+  the run slower (0.24~s against 0.18~s), because touching fresh memory
+  costs more than the small collections it saved. It helps programs that
+  keep much live data.
+\item[\code{GC\_FREE\_SPACE\_DIVISOR}] How eagerly the heap grows rather
+  than collecting; the default is 3, and smaller values grow the heap
+  more and collect less. With 1, the test program made 101 collections
+  instead of 202 and used about 13~MB instead of 7~MB.
+\item[\code{GC\_MARKERS}] How many threads mark in parallel during a
+  collection. By default the collector uses one per processor, up to a
+  limit (on the 32-thread test machine it started 15 helper threads
+  besides the collecting one); \code{GC\_MARKERS=1}
+  turns parallel marking off. For a program with a small heap that
+  collects often, parallel marking can cost more than it saves; the test
+  program ran in 0.17~s with one marker and 0.18~s with the default.
+\item[\code{GC\_PRINT\_STATS}] Set to 1 to report each collection.
+\end{description}
+
+\begin{shell}
+$ GC_PRINT_STATS=1 ./alloc 2>&1 | grep -c 'Marking for collection'
+202
+$ GC_INITIAL_HEAP_SIZE=64M GC_PRINT_STATS=1 ./alloc 2>&1 |
+      grep -c 'Marking for collection'
+10
+\end{shell}
+
+The collector's own documentation lists further variables. As with the
+compiler's options, measure your program before and after: the right
+settings depend on how much it allocates and how much it keeps.
+
+\fussy

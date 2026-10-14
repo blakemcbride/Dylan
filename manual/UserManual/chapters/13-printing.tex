@@ -1,0 +1,447 @@
+\chapter{Printing and Streams}\label{ch:printing}
+
+\index{printing}
+The 1992 manual says remarkably little about output. Its examples print
+values, its chapter on conditions passes streams to functions and calls
+\code{format}, but it defines no printing functions and no streams at
+all. Both implementations fill the gap, and they fill it differently.
+They share a small common core, \code{print}, \code{display},
+\code{write-line}, \code{newline} and \code{pp}, which Thomas provided in
+1992 and which are enough for most programs. The compiler to C adds
+streams, \code{format}, \code{write}, and a generic function,
+\code{print-object}, through which a program decides how its own objects
+print.
+
+This chapter describes the common core first, then how each kind of
+object prints, then the compiler's streams and \code{format}, and
+finally what the interactive implementation offers instead.
+
+\section{Two ways to print an object}\label{sec:printing-escape}
+
+\index{escape (printing)}
+Every printing function prints an object in one of two styles.
+
+\begin{itemize}
+\item \term{Escaped} output, the style of \code{print} and \code{write},
+  is meant to be read by a programmer, and where possible by the Dylan
+  reader. Strings appear in double quotes with \code{"} and \code{\textbackslash}
+  escaped by a backslash, and characters appear as \code{\#\textbackslash a}
+  or \code{\#\textbackslash space}.
+\item \term{Plain} output, the style of \code{display}, is meant for the
+  person running the program. Strings and characters appear as
+  themselves, with no quotes or \code{\#\textbackslash}.
+\end{itemize}
+
+\noindent
+The two styles differ only for strings and characters, and for
+collections and objects that contain them. A number, a symbol or a list
+of numbers looks the same either way.
+
+\section{The common printing functions}\label{sec:printing-functions}
+
+These five functions exist in both implementations. Each answers its
+argument (\code{newline} answers \code{\#f}), so a \code{print} can be
+wrapped around an expression without changing its value.
+
+\begin{description}
+\item[\code{(print \meta{object})}]\index{print} prints the object
+  escaped, on a line of its own.
+\item[\code{(write-line \meta{object})}]\index{write-line} does the
+  same as \code{print}.
+\item[\code{(display \meta{object})}]\index{display} prints the object
+  plain, and nothing else: no newline, no space.
+\item[\code{(newline)}]\index{newline} ends the line.
+\item[\code{(pp \meta{object})}]\index{pp} prints the object escaped on
+  a line of its own; in the interactive implementation it is
+  \term{pretty-printed}, broken over lines and indented as Dylan code is.
+\end{description}
+
+\begin{dylan}
+(print "a \"quoted\" string")     ; prints "a \"quoted\" string"
+(display "a \"quoted\" string")   ; prints a "quoted" string
+(print #\a)                       ; prints #\a
+(display #\a)                     ; prints a
+(display 42) (newline)            ; prints 42 and ends the line
+\end{dylan}
+
+\begin{warnbox}
+The two implementations put the newline of \code{print} and
+\code{write-line} in different places. The compiler to C prints the
+object and \emph{then} a newline, as most languages do. The interactive
+implementation, following Thomas, prints a newline \emph{first} and then
+the object, leaving the line unfinished. A sequence of \code{print}s
+therefore gives the same lines in both, but output that mixes
+\code{print} with \code{display} does not:
+\begin{dylan}
+(print 1) (display "x") (newline)
+;; compiler to C:          1
+;;                         x
+;; interactive:            (an empty line)
+;;                         1x
+\end{dylan}
+(At the read-eval-print loop the \code{;Value:} lines come in between;
+this is the output of a compiled file.)
+A program meant to run in both should build its lines with
+\code{display} and \code{newline}, which behave identically.
+\end{warnbox}
+
+In the interactive implementation each of the five takes exactly one
+argument (\code{newline} none). In the compiler to C each also takes a
+\code{stream:} keyword argument (Section~\ref{sec:printing-streams}), and
+\code{print} takes a \code{verbose:} keyword, which it accepts and
+ignores. The compiler's \code{pp} does no pretty-printing; it is
+\code{print} under another name.
+
+\section{How objects print}\label{sec:printing-classes}
+
+The table below shows how each kind of object prints in each
+implementation; ``the same'' means that the interactive implementation
+prints exactly what the compiler to C does. Where they differ, the
+difference is only in the printed form; the objects are the same.
+
+{\frenchspacing
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.27\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}>{\raggedright\arraybackslash}p{0.33\textwidth}@{}}
+\toprule
+Object & Compiler to C & Interactive \\
+\midrule
+\endhead
+\code{42}, \code{-7} & \code{42}, \code{-7} & the same \\
+\code{3/4} & \code{3/4} & the same \\
+\code{1.5}, \code{9.0}, \code{0.1} & \code{1.5}, \code{9.0}, \code{0.1} & the same \\
+\code{1.0e20}, \code{(sqrt 2)} & \code{1.0e20}, \code{1.4142135623730951} & the same \\
+\code{\#t}, \code{\#f}, \code{'()} & \code{\#t}, \code{\#f}, \code{()} & the same \\
+\code{'foo}, \code{'Hello} & \code{foo}, \code{Hello} & the same \\
+\code{foo:} & \code{foo:} & the same \\
+\code{'(1 (2 3) . 4)} & \code{(1 (2 3) . 4)} & the same \\
+\code{'{}'x} & \code{(quote x)} & \code{'x} \\
+\code{(vector 1 "two" \#\textbackslash 3)} & \code{\#(1 "two" \#\textbackslash 3)} & the same \\
+a stretchy vector of 1 and 2 & \code{\{<stretchy-vector> 1 2\}} & \code{\#[instance-of <stretchy-vector>]} \\
+a deque of 1 and 2 & \code{\{<deque> 1 2\}} & \code{\#[instance-of <deque>]} \\
+\code{(range from: 0 up-to: 5)} & \code{\{range 0 by 1 size 5\}} & \code{\#[instance-of <range>]} \\
+\code{(range from: 0)} & \code{\{range 0 by 1\}} & \code{\#[instance-of <range>]} \\
+a table mapping \code{a} to 1 & \code{\{table a => 1\}} & \code{\#[instance-of <table>]} \\
+an array & \code{\{instance of <\%general-array>\}} & \code{\#[instance-of <array>]} \\
+the class \code{<point>} & \code{\{the class <point>\}} & \code{\#[dylan-class <point>]} \\
+an instance of \code{<point>} & \code{\{instance of <point>\}} & \code{\#[instance-of <point>]} \\
+a generic function & \code{\{the generic function print\}} & \code{\#[generic function area]} \\
+a method & \code{\{method\}} & \code{\#[method]} \\
+\code{(singleton 3)} & \code{\{singleton 3\}} & \code{\#[dylan-singleton 3]} \\
+a \code{<simple-error>} & its message, \code{bad thing} & the same \\
+\bottomrule
+\end{longtable}}
+
+\noindent
+Some details:
+
+\begin{itemize}
+\item \textbf{Floats} print in the shortest form that reads back as the
+  same number, with at least one digit after the point (\code{9.0},
+  never \code{9.}). Very large and very small values take an exponent,
+  but the implementations switch at different points. The compiler to C
+  writes a float without an exponent when its magnitude is at least
+  $10^{-5}$ and below $10^{16}$; the interactive implementation, which
+  uses Common Lisp's printer, only when it is at least $10^{-3}$ and below
+  $10^{7}$. So \code{123456789.0} prints as \code{123456789.0} in the
+  first and \code{1.23456789e8} in the second, and \code{0.0001} as
+  \code{0.0001} and \code{1.0e-4}.
+\item \textbf{Ratios} print as \meta{numerator}\code{/}\meta{denominator}
+  in lowest terms; \code{(/ 6 4)} prints as \code{3/2}.
+\item \textbf{Symbols} print as they were first spelled. Dylan symbols
+  are not case-sensitive, but the reader remembers the spelling a symbol
+  was first entered in, so \code{'Hello} prints as \code{Hello}
+  \dylanbook{chapter 15}. \textbf{Keywords} print with their colon.
+\item \textbf{Characters} with names print escaped by name:
+  \code{\#\textbackslash space}, \code{\#\textbackslash newline},
+  \code{\#\textbackslash tab}, \code{\#\textbackslash return},
+  \code{\#\textbackslash page}, \code{\#\textbackslash null},
+  \code{\#\textbackslash rubout}, \code{\#\textbackslash backspace}.
+\item \textbf{Lists and vectors} print their elements in the same style
+  as the whole: \code{(display (list "a" \#\textbackslash b))} prints
+  \code{(a b)}.
+\item \textbf{Conditions} print as their message, the format string
+  filled in with the format arguments, as \dylanbook{chapter 13}
+  suggests. A \code{<type-error>} prints as
+  ``\meta{value} is not an instance of \meta{type}'', where the type is
+  printed as a class prints: \code{3 is not an instance of \{the class
+  <string>\}} in the compiler to C, \code{3 is not an instance of
+  <string>} in the interactive implementation.
+\item \textbf{Functions} that the language predefines as plain methods,
+  such as \code{car}, print as methods. Which predefined functions are
+  generic differs between the implementations: \code{print} is a generic
+  function in the compiler to C and a method in the interactive one.
+\end{itemize}
+
+\section{Customizing printing with \code{print-object}}\label{sec:printing-print-object}
+
+\index{print-object}
+In the compiler to C every printing function, \code{format} included,
+works by calling one generic function:
+
+\begin{dylan}
+(print-object object stream escape?)
+\end{dylan}
+
+\noindent
+\code{print-object} writes \meta{object} to \meta{stream}; \meta{escape?}
+is \code{\#t} for escaped output (\code{print}, \code{write}, \code{\textasciitilde s})
+and \code{\#f} for plain output (\code{display}, \code{\textasciitilde a}). The library
+defines a method for each of its own classes, and a default method on
+\code{<object>} that prints \code{\{instance of \meta{class}\}}. To make
+the instances of your own class print differently, add a method:
+
+\begin{dylan}
+(define-class <point> (<object>)
+  (x init-keyword: x: init-value: 0)
+  (y init-keyword: y: init-value: 0))
+
+(define-method print-object ((p <point>) stream escape?)
+  (format stream "{point ~s, ~s}" (x p) (y p)))
+
+(define p (make <point> x: 3 y: 4))
+(print p)                     ; prints {point 3, 4}
+(print (list p p))            ; prints ({point 3, 4} {point 3, 4})
+(format #t "p is ~a~%" p)     ; prints p is {point 3, 4}
+\end{dylan}
+
+\noindent
+The method is used wherever a point is printed, including inside lists,
+vectors and other collections, and by \code{format}. Write the output
+to the \meta{stream} argument, never to \code{*standard-output*}
+directly, or printing into a string will not work.
+
+A method can honor the \meta{escape?} argument, so that \code{print}
+shows something a programmer can recognize and \code{display} shows what
+a user should see:
+
+\begin{dylan}
+(define-class <name> (<object>) (text init-keyword: text:))
+
+(define-method print-object ((n <name>) stream escape?)
+  (if escape?
+      (format stream "#<name ~s>" (text n))
+      (display (text n) stream: stream)))
+
+(define n (make <name> text: "Ada"))
+(print n)                       ; prints #<name "Ada">
+(display n)                     ; prints Ada
+(format #t "~a / ~s~%" n n)     ; prints Ada / #<name "Ada">
+\end{dylan}
+
+\noindent
+Methods are inherited and can call \code{next-method} like any other:
+
+\begin{dylan}
+(define-class <temp> (<object>) (deg init-keyword: deg:))
+(define-method print-object ((t <temp>) stream escape?)
+  (display (deg t) stream: stream)
+  (display " degrees" stream: stream))
+
+(define-class <hot> (<temp>))
+(define-method print-object ((t <hot>) stream escape?)
+  (display "hot! " stream: stream)
+  (next-method))
+
+(print (make <hot> deg: 99))    ; prints hot! 99 degrees
+\end{dylan}
+
+\noindent
+\code{print-object} is an extension: the 1992 manual has no such
+function, and the interactive implementation does not provide one
+(Section~\ref{sec:printing-lisp}).
+
+\section{Streams in the compiler to C}\label{sec:printing-streams}
+
+\index{stream}
+The compiler to C provides a small set of streams, enough for the uses
+the 1992 manual makes of them. They are an extension, described with the
+compiler's other extensions in Chapter~\ref{ch:extensions}.
+
+\begin{description}
+\item[\code{<stream>}]\index{<stream>@\code{<stream>}} The class of all
+  streams.
+\item[\code{*standard-output*}]\index{*standard-output*@\code{*standard-output*}}
+  A stream that writes to the program's standard output.
+\item[\code{*standard-error*}]\index{*standard-error*@\code{*standard-error*}}
+  A stream that writes to the program's standard error.
+\item[\code{<string-stream>}]\index{<string-stream>@\code{<string-stream>}}
+  A stream that collects what is written to it, in memory. You make
+  one by calling \code{make}: \code{(make <string-stream>)}.
+\item[\code{(stream-contents \meta{string-stream})}]\index{stream-contents}
+  Answers a new string of everything written to the stream so far. The
+  stream keeps its contents; calling \code{stream-contents} again answers
+  them again, with anything written since.
+\end{description}
+
+\noindent
+Every printing function takes a \code{stream:} keyword argument naming
+the stream to write to. It defaults to \code{*standard-output*}, and
+\code{\#t} (or \code{\#f}) also means \code{*standard-output*}.
+
+\begin{dylan}
+(define s (make <string-stream>))
+(print 42 stream: s)
+(display "hello" stream: s)
+(write #\x stream: s)
+(display (stream-contents s))
+;; prints  42
+;;         hello#\x
+
+(display "warning: disk nearly full" stream: *standard-error*)
+(newline stream: *standard-error*)
+\end{dylan}
+
+\noindent
+\code{write}\index{write} prints its argument escaped, like
+\code{print} but with no newline:
+
+\begin{description}
+\item[\code{(write \meta{object} \#key stream)}] prints the object
+  escaped and answers it.
+\end{description}
+
+\noindent
+\code{<stream>} cannot usefully be subclassed by a program. The
+operation that puts characters on a stream is internal to the library,
+so printing to an instance of your own subclass of \code{<stream>} fails
+with ``no applicable method''.
+
+\section{\code{format}}\label{sec:printing-format}
+
+\index{format}
+\begin{dylan}
+(format stream control-string argument ...)
+\end{dylan}
+
+\noindent
+\code{format} writes \meta{control-string} to \meta{stream}, replacing
+each \term{directive}, a tilde and a letter, by output for the next
+argument. Its directives are a small subset of Common Lisp's, the ones
+the 1992 manual's examples use:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Directive & Output \\
+\midrule
+\code{\textasciitilde a} & the next argument, plain, as \code{display} prints it \\
+\code{\textasciitilde s} & the next argument, escaped, as \code{print} and \code{write} print it \\
+\code{\textasciitilde d} & the next argument, plain (the same as \code{\textasciitilde a}) \\
+\code{\textasciitilde\%} & a newline \\
+\code{\textasciitilde\&} & a newline (the same as \code{\textasciitilde\%}) \\
+\code{\textasciitilde\textasciitilde} & a tilde \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+The letters may be upper or lower case. Any other tilde sequence is
+copied to the output unchanged. There are no field widths, no
+padding and no number bases: \code{\textasciitilde d} prints an integer
+exactly as \code{display} would, and \code{\textasciitilde\&} always
+starts a new line, even at the beginning of one.
+
+The \meta{stream} argument is a stream, or one of two booleans:
+
+\begin{itemize}
+\item \code{\#t} writes to \code{*standard-output*}, and \code{format}
+  answers \code{\#f}.
+\item \code{\#f} writes to a new string, and \code{format} answers the
+  string.
+\end{itemize}
+
+\begin{dylan}
+(format #t "~a + ~a = ~a~%" 1 2 (+ 1 2))    ; prints 1 + 2 = 3
+(format #f "~a + ~a = ~a" 1 2 (+ 1 2))      ; => "1 + 2 = 3"
+(format #f "~A ~S ~D ~z" "x" "x" 5)         ; => "x \"x\" 5 ~z"
+(format *standard-error* "to stderr~%")
+\end{dylan}
+
+\noindent
+Too few arguments for the directives is an error
+(``\code{format: too few arguments for "\textasciitilde a and \textasciitilde a"}''); arguments left
+over after the last directive are ignored.
+
+\section{Printing in the interactive implementation}\label{sec:printing-lisp}
+
+\index{interactive implementation!printing}
+The interactive implementation has exactly the five functions of
+Section~\ref{sec:printing-functions}, each with one argument and no
+\code{stream:} keyword. It has no streams, no \code{format}, no
+\code{write} and no \code{print-object}, so the way an object prints
+cannot be changed from Dylan: an instance of a class of your own always
+prints as \code{\#[instance-of \meta{class}]}. To show its contents,
+print them yourself:
+
+\begin{dylan}
+(define-method show ((p <point>))
+  (display "{point ") (display (x p))
+  (display ", ") (display (y p)) (display "}"))
+\end{dylan}
+
+\noindent
+The read-eval-print loop prints each result escaped after
+\code{;Value:}, so at the \code{?} prompt you seldom need \code{print}
+at all (Chapter~\ref{ch:lisp}).
+
+\subsection{Pretty-printing}
+
+\index{pp}
+\code{pp} uses the Common Lisp pretty printer, set up to show Dylan's
+notation, to lay out a long list as code:
+
+\begin{repl}
+? (pp '(define-method foo ((x <integer>))
+         (bind ((y (* x x)) (z (+ x x x x x x x x x x x x x x x x x x x x)))
+           (list y z y z y z))))
+
+(define-method foo ((x <integer>))
+ (bind ((y (* x x)) (z (+ x x x x x x x x x x x x x x x x x x x x)))
+  (list y z y z y z)))
+\end{repl}
+
+\subsection{Formatted output through Common Lisp}
+
+\index{lisp-procedure}
+When you need formatted output in the interactive implementation, Common
+Lisp's own \code{format} can be reached with \code{lisp-procedure}
+(Section~\ref{sec:lisp-interop}). It has every Common Lisp directive,
+field widths included. Pass \code{\#t} for standard output, or the empty
+list, which is Lisp's \code{NIL}, to get a string back:
+
+\begin{repl}
+? (define cl-format (lisp-procedure 'format))
+;Value: cl-format
+
+? (cl-format #t "~5,2f|~8d|~r~%" 3.14159 42 12)
+ 3.14|      42|twelve
+;Value: ()
+
+? (cl-format '() "~a-~a" 1 2)
+;Value: "1-2"
+\end{repl}
+
+\begin{warnbox}
+Common Lisp's \code{format} prints Dylan values as Common Lisp sees
+them, not as Dylan's printer does: \code{\#t} comes out as \code{T}, a
+keyword \code{foo:} as \code{FOO}, and \code{\#f}, which is not a Lisp
+value at all, as \code{\#f} only because the implementation teaches Lisp
+to print it so. Use it for numbers and strings. Do not pass \code{\#f}
+as the destination: to Common Lisp it is an ordinary true object, not
+\code{NIL}.
+\end{warnbox}
+
+\section{Writing portable output}\label{sec:printing-portable}
+
+A program that must run in both implementations should
+
+\begin{itemize}
+\item build its output from \code{display} and \code{newline}, which
+  behave the same in both;
+\item use \code{print} only for whole lines, remembering where each
+  implementation puts the newline;
+\item avoid \code{format}, \code{write}, streams and \code{print-object},
+  which only the compiler to C has; and
+\item not depend on the printed form of collections other than lists,
+  vectors and strings, or of classes, functions and instances, which
+  differ (Section~\ref{sec:printing-classes}).
+\end{itemize}

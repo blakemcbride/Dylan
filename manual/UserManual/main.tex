@@ -1,0 +1,146 @@
+\documentclass[11pt,letterpaper,twoside,openright]{book}
+\usepackage[letterpaper,top=1in,bottom=1in,inner=1.25in,outer=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{makeidx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{upquote}
+\usepackage[hidelinks]{hyperref}
+
+% ---- House macros (frozen; chapters use only these) ----
+% Inline code: a Dylan name, form or value.  The argument is typeset in
+% typewriter type; escape TeX's specials in it (\#, \_, \{, \}, \%, \&,
+% \textbackslash{}, \textasciitilde{}, \textasciicircum{}).
+\newcommand{\code}[1]{\texttt{#1}}
+% A file or directory name, or a command typed at the shell.
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\cmd}[1]{\texttt{#1}}
+% A term defined where it appears, and indexed.
+\newcommand{\term}[1]{\emph{#1}\index{#1}}
+% A metavariable in a syntax description.
+\newcommand{\meta}[1]{\textit{#1}}
+% A reference to a chapter or section of the 1992 manual.
+\newcommand{\dylanbook}[1]{\textsl{DIRM}~#1}
+% The result of evaluating an example, in running text.
+\newcommand{\yields}{\,$\Rightarrow$\,}
+
+\newenvironment{tipbox}{\par\medskip\noindent\textbf{Tip:}\ }{\par\medskip}
+\newenvironment{warnbox}{\par\medskip\noindent\textbf{Important:}\ }{\par\medskip}
+\newenvironment{notebox}{\par\medskip\noindent\textbf{Note:}\ }{\par\medskip}
+
+% Code blocks.  dylan: Dylan source; results are shown as comments,
+% ; => value.  shell: a terminal session, $ before what is typed.
+% repl: a session at the Common Lisp implementation's ? prompt.
+% ccode: C source.  lisp: Common Lisp source.
+\lstset{basicstyle=\ttfamily\small,columns=fullflexible,keepspaces=true,
+  showstringspaces=false,upquote=true,xleftmargin=1.5em,
+  aboveskip=0.6\baselineskip,belowskip=0.6\baselineskip,
+  commentstyle=\color{black!60},literate={~}{{\textasciitilde}}1}
+\lstdefinelanguage{Dylan}{morecomment=[l]{;},morestring=[b]",
+  sensitive=false}
+\lstnewenvironment{dylan}{\lstset{language=Dylan}}{}
+\lstnewenvironment{shell}{\lstset{}}{}
+\lstnewenvironment{repl}{\lstset{}}{}
+\lstnewenvironment{ccode}{\lstset{language=C}}{}
+\lstnewenvironment{lisp}{\lstset{language=Lisp}}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\slshape\nouppercase{\leftmark}}
+\fancyhead[RO]{\slshape\nouppercase{\rightmark}}
+\fancyfoot[LE,RO]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
+
+\makeindex
+
+\title{\Huge Dylan\\[0.5em]\LARGE The Language, the Interpreter and the Compiler}
+\author{Blake McBride}
+% Manual revision date: when the manual itself was last revised and
+% rebuilt, not a release of the software.  It appears identically on the
+% title page and the copyright page.
+\newcommand{\revisiondate}{\today}
+\newcommand{\revisionline}{Manual revised \revisiondate}
+
+\begin{document}
+\frontmatter
+
+% ---- Title page ----
+\thispagestyle{empty}
+\vspace*{2in}
+\begin{center}
+  {\Huge Dylan\par}
+  \vspace{1em}
+  {\LARGE The Language, the Interpreter\par}
+  \vspace{0.3em}
+  {\LARGE and the Compiler\par}
+  \vspace{1.5em}
+  {\large A User Manual\par}
+\end{center}
+\vfill
+\begin{center}
+  {\large Blake McBride\par}
+  \vspace{0.5em}
+  {\large \revisionline\par}
+\end{center}
+\vspace{0.5in}
+\clearpage
+
+% ---- Copyright page ----
+\thispagestyle{empty}
+\vspace*{4in}
+\noindent This document was typeset with \LaTeX{} on Linux.\par
+\bigskip
+\noindent Copyright \copyright{} 2026 Blake McBride\par
+\noindent All rights reserved.\par
+\noindent \url{https://github.com/blakemcbride/Dylan}\par
+\noindent \revisionline\par
+\bigskip
+\noindent The language this manual describes is the one defined in
+\emph{Dylan(TM): an object-oriented dynamic language}, Apple Computer
+Eastern Research and Technology, April 1992, cited here as
+\emph{DIRM}. Dylan is a trademark of Apple Computer, Inc.\par
+\clearpage
+
+\tableofcontents
+
+\mainmatter
+\part{Getting Started}
+\include{chapters/01-introduction}
+\include{chapters/02-getting-started}
+\include{chapters/03-tutorial}
+
+\part{The Language}
+\include{chapters/04-syntax}
+\include{chapters/05-control}
+\include{chapters/06-functions}
+\include{chapters/07-classes}
+\include{chapters/08-numbers}
+\include{chapters/09-collections}
+\include{chapters/10-functional}
+\include{chapters/11-conditions}
+\include{chapters/12-modules}
+\include{chapters/13-printing}
+
+\part{The Implementations}
+\include{chapters/14-lisp-implementation}
+\include{chapters/15-dylanc}
+\include{chapters/16-extensions}
+\include{chapters/17-compiler-internals}
+\include{chapters/18-performance}
+
+\appendix
+\include{chapters/19-appendix-differences}
+\include{chapters/20-appendix-library}
+\include{chapters/21-appendix-testing}
+
+\backmatter
+\printindex
+\end{document}

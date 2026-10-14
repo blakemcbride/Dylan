@@ -17,7 +17,9 @@ language moved to an infix syntax:
   It adds macros, threads and streams, which the manual lacks.
 
 The standard both follow is the 1992 manual itself; an annotated copy is in
-`manual/Dylan-1992/`.
+`manual/Dylan-1992/`. A user manual for this system — a tutorial, the
+language, and both implementations — is in `manual/UserManual/`
+(`Dylan_User_Manual.pdf`).
 
 The home for this package is **<https://github.com/blakemcbride/Dylan>**.
 
@@ -321,6 +323,8 @@ Each line gives the best of three runs for each, their ratios, and
 | `tests/` | its tests |
 | `bench/` | benchmarks against plain Common Lisp and C |
 | `CompilerPlan.md` | the compiler's design, phase by phase, and where it stands |
+| `SpeedComparison.md` | the benchmarks in plain SBCL, the Common Lisp implementation and the compiler to C |
+| `manual/UserManual/` | the user manual — a tutorial, the language, both implementations (LaTeX; `make` builds the PDF) |
 | `manual/Dylan-1992/` | the 1992 manual, annotated |
 | `examples-from-book.text` | the raw extraction the examples were edited from |
 | `README.thomas` | the original 1992 Thomas README |

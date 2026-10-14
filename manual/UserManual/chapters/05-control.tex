@@ -1,0 +1,758 @@
+\chapter{Variables and Control}\label{ch:control}
+
+This chapter covers the forms a program uses to name values and to direct
+the flow of evaluation: defining and binding variables, assigning them,
+choosing between alternatives, repeating, returning several values, and
+leaving a computation early. They are the subject of
+\dylanbook{chapters 4, 7 and 8}. Most of them are syntax forms, special
+forms or macros (Section~\ref{sec:syntax-forms}); for each, this chapter says which
+of its parts are evaluated, in what order, and what it returns.
+
+\section{Module variables: define}\label{sec:control-define}
+
+\index{define@\code{define}}
+\begin{quote}
+\code{(define \meta{variable-name} \meta{initial-value})}
+\end{quote}
+
+\noindent \code{define} creates a module variable named
+\meta{variable-name} in the current module and stores in it the value of
+\meta{initial-value}. The name is not evaluated; it must be a symbol or a
+setter name \code{(setter \meta{symbol})}. The initial value is evaluated,
+and if it returns several values, the first is used. At the interactive
+prompt \code{define} returns the variable's name.
+
+\begin{dylan}
+(define foo 10)
+(define bar foo)
+(+ foo bar)               ; => 20
+(define (setter my-place) 0)
+(setter my-place)         ; => 0
+(define v (values 1 2))
+v                         ; => 1
+\end{dylan}
+
+\noindent A module variable can be read from anywhere in its module, by
+code before or after its definition, though it has no value until the
+definition has been evaluated (Section~\ref{sec:syntax-when}). A variable created by
+\code{define} may be assigned with \code{set!}
+(Section~\ref{sec:control-assignment}).
+
+Defining a variable that already exists in the module is allowed by the
+Common Lisp implementation, which warns \code{redefining variable} and
+stores the new value; in the compiler to C, defining a variable twice with
+\code{define} simply stores twice, but defining a name both with
+\code{define} and as a class or generic function is an error when
+compiling.
+
+\begin{notebox}
+Later design notes changed \code{define}: one renamed it
+\code{define-constant} and added \code{define-variable}, another let it
+declare types and receive multiple values, as \code{bind} does. None of
+these is part of this language. There is no \code{define-variable} or
+\code{define-constant}, and \code{define} takes exactly one plain name and
+one expression; \code{(define (x <integer>) 3)} and \code{(define a b
+(values 1 2))} are errors in both implementations. The compiler to C adds
+\code{define-thread-variable}, which defines a variable each thread has its
+own value of (Chapter~\ref{ch:extensions}).
+\end{notebox}
+
+\section{Lexical variables: bind}\label{sec:control-bind}
+
+\index{bind@\code{bind}}
+\begin{quote}
+\code{(bind (\meta{binding} \ldots) \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{bind} creates lexical variables and evaluates the
+\meta{form}s, its \term{body}, with them in scope. It returns the values of
+the last form, or \code{\#f} if there are no forms. Each \meta{binding} is
+a list of one or more variables followed by an expression, the
+\meta{init}:
+
+\begin{quote}
+\code{(\meta{variable} \ldots{} [\#rest \meta{rest-variable}] \meta{init})}
+\end{quote}
+
+\noindent where each \meta{variable} is a name, or a list \code{(\meta{name}
+\meta{type})} that declares the variable's type.
+
+The bindings are made one after another. Each init is evaluated in an
+environment that includes the variables of the bindings before it, so a
+later init can use an earlier variable:
+
+\begin{dylan}
+(bind ((x 20)
+       (y (+ x x)))
+  (+ y y))                ; => 80
+(bind ((x 1)))            ; => #f
+\end{dylan}
+
+\noindent A variable made by \code{bind} shadows any module variable or
+outer lexical variable of the same name, for the extent of the body:
+
+\begin{dylan}
+(define foo 10)
+(bind ((foo 35))
+  (+ foo foo))            ; => 70
+(bind ((foo 20))
+  (bind ((foo 50))
+    (+ foo foo)))         ; => 100
+foo                       ; => 10
+\end{dylan}
+
+\subsection{Receiving multiple values}
+
+When a binding has several variables, they receive the values of its init
+in order. Missing values are \code{\#f}, and values left over are ignored,
+unless the variables end with \code{\#rest} and a name, in which case that
+variable receives a sequence of the remaining values.
+
+%! print
+\begin{dylan}
+(bind ((a b c (values 1 2 3)))
+  (list a b c))           ; => (1 2 3)
+(bind ((a b (values 1)))
+  (list a b))             ; => (1 #f)
+(bind ((first #rest others (values 1 2 3)))
+  others)                 ; => (2 3)
+(bind ((#rest all (values)))
+  (empty? all))           ; => #t
+\end{dylan}
+
+\noindent Multiple values also give parallel binding, like \code{let} in
+Lisp, since the init is evaluated before any of its variables exist:
+
+%! print
+\begin{dylan}
+(bind ((x 10) (y 20))
+  (bind ((x y (values y x)))
+    (list x y)))          ; => (20 10)
+\end{dylan}
+
+\subsection{Type declarations}\label{sec:control-bind-types}
+
+A variable written \code{(\meta{name} \meta{type})} must receive an
+instance of \meta{type}, or an error is signaled. The type is an
+expression, evaluated before the binding's init; it must evaluate to a class
+or a singleton (Section~\ref{sec:functions-singletons}).
+
+\begin{dylan}
+(bind (((n <integer>) (+ 1 2)))
+  n)                      ; => 3
+(bind (((x <integer>) (sqrt 2)))
+  x)                      ; => error: 1.4142135623730951 is not
+                          ;    an instance of <integer>
+\end{dylan}
+
+\noindent The type is checked when the variable is bound. It is not checked
+again when the variable is assigned: in both implementations \code{(bind
+(((x <integer>) 1)) (set! x 'a) x)} returns \code{a}. (A later design note
+made the restriction apply to assignment too; the 1992 manual does not.)
+The compiler to C uses declared types to choose faster code
+(Chapter~\ref{ch:performance}).
+
+\section{Assignment: set!}\label{sec:control-assignment}
+
+\index{set"!@\code{set"!}}
+\begin{quote}
+\code{(set! \meta{place} \meta{new-value})}
+\end{quote}
+
+\noindent \code{set!} stores a new value in a place and returns the new
+value (\dylanbook{chapter 7}). The place is either a variable name or a
+call-like list.
+
+When \meta{place} is a variable name, lexical or module, the variable is
+given the value of \meta{new-value}. It is an error if there is no such
+variable.
+
+\begin{dylan}
+(define counter 0)
+(set! counter (+ counter 1))   ; => 1
+counter                        ; => 1
+(bind ((x 1))
+  (set! x (* x 10))
+  x)                           ; => 10
+\end{dylan}
+
+\noindent Some module variables cannot be assigned. A variable made by
+\code{define-class} is read-only in both implementations. In the compiler
+to C a variable holding a generic function cannot be assigned either, nor
+can any variable of the \code{dylan} module; these are errors when
+compiling. The Common Lisp implementation allows assigning a generic
+function's variable, as the 1992 manual does.
+
+\subsection{The extended form}\label{sec:control-extended-set}
+
+When \meta{place} is a list \code{(\meta{name} \meta{arg} \ldots)}, it
+stands for a location that the call \code{(\meta{name} \meta{arg} \ldots)}
+would read, and \code{set!} stores into it by calling the setter function:
+
+\begin{quote}
+\code{(set! (\meta{name} \meta{arg} \ldots) \meta{new-value})}\\
+means\\
+\code{((setter \meta{name}) \meta{arg} \ldots{} \meta{new-value})}
+\end{quote}
+
+\noindent The new value comes \emph{last} among the setter's arguments.
+Whatever the setter itself returns, \code{set!} returns the new value.
+
+\begin{dylan}
+(define v (vector 'a 'b 'c))
+(set! (element v 1) 'sea)       ; => sea
+v                               ; => #(a sea c)
+((setter element) v 0 'x)       ; => x
+v                               ; => #(x sea c)
+\end{dylan}
+
+\noindent The arguments and the new value are each evaluated once. The
+compiler to C evaluates the arguments first, left to right, and the new
+value last, the order of the call \code{set!} stands for; the Common Lisp
+implementation evaluates the new value first. Slot accessors
+(Chapter~\ref{ch:classes}) and \code{element} (Chapter~\ref{ch:collections}) are the
+setters used most, and a program can define its own
+(Section~\ref{sec:functions-setters}).
+
+\section{Truth and if}\label{sec:control-if}
+
+\code{\#f} is the only false value; every other object is true
+(Section~\ref{sec:syntax-booleans}). A function described as ``returning true'' may
+return any object other than \code{\#f}, not necessarily \code{\#t}.
+
+\index{if@\code{if}}
+\begin{quote}
+\code{(if \meta{test} \meta{consequent} \meta{alternate})}
+\end{quote}
+
+\noindent \code{if} evaluates \meta{test}. If its value is true, \code{if}
+evaluates \meta{consequent} and returns its values; otherwise it evaluates
+\meta{alternate} and returns its values. Exactly three operands are
+required: an \code{if} without an alternate, or with more than one form in
+either branch, is an error in both implementations. Use \code{when} or
+\code{unless} for a one-armed test, and \code{begin} to put several forms in
+a branch.
+
+\begin{dylan}
+(if (< -11 0) 'negative 'non-negative)   ; => negative
+(if 0 'yes 'no)                          ; => yes
+(if '() 'yes 'no)                        ; => yes
+(if #f 1 (values 4 5))                   ; => 4, 5
+\end{dylan}
+
+\index{not@\code{not}}
+\code{(not \meta{thing})} is a function: it returns \code{\#t} if
+\meta{thing} is \code{\#f}, and \code{\#f} otherwise.
+
+\begin{dylan}
+(not #f)                  ; => #t
+(not 3)                   ; => #f
+\end{dylan}
+
+\section{Sequencing: begin}
+
+\index{begin@\code{begin}}
+\code{(begin \meta{form} \ldots)} evaluates the forms in order and returns
+the values of the last one, or \code{\#f} if there are none. Many forms,
+such as \code{bind}, \code{method} and \code{when}, already contain an
+implicit \code{begin} around their bodies; an explicit one is needed where
+a single form is expected, as in a branch of \code{if}.
+
+\begin{dylan}
+(if #t
+    (begin (print "it was true")
+           #t)
+    #f)                  ; prints: "it was true"
+                         ; => #t
+(begin)                  ; => #f
+\end{dylan}
+
+\noindent A \code{begin} at top level makes its forms top-level forms too
+(Section~\ref{sec:syntax-program}).
+
+\section{Conditionals}\label{sec:control-conditionals}
+
+\subsection{when and unless}
+
+\index{when@\code{when}}\index{unless@\code{unless}}
+\begin{quote}
+\code{(when \meta{test} \meta{form} \ldots)}\\
+\code{(unless \meta{test} \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{when} evaluates \meta{test}; if it is true, it evaluates
+the forms and returns the values of the last. \code{unless} evaluates the
+forms if \meta{test} is false. When the forms are not evaluated, or there
+are none, the result is \code{\#f}.
+
+\begin{dylan}
+(when (> 3 2) 'big)      ; => big
+(when (> 2 3) 'big)      ; => #f
+(unless (> 2 3) 'a 'b)   ; => b
+(when #t)                ; => #f
+\end{dylan}
+
+\subsection{and and or}
+
+\index{and@\code{and}}\index{or@\code{or}}
+\begin{quote}
+\code{(and \meta{form} \ldots)}\\
+\code{(or \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{and} evaluates the forms from left to right until one
+returns \code{\#f} as its first value; then it returns \code{\#f} and
+evaluates no more. If none does, it returns all the values of the last
+form. \code{or} evaluates the forms from left to right until one returns a
+true first value, and returns that value alone; if every form but the last
+is false, it returns all the values of the last. With no forms, \code{and}
+returns \code{\#t} and \code{or} returns \code{\#f}.
+
+\begin{dylan}
+(and 1 2 3)              ; => 3
+(and 1 #f (error "never evaluated"))   ; => #f
+(and 1 (values 2 3))     ; => 2, 3
+(or #f 'x 'y)            ; => x
+(or (values #f 3) 4)     ; => 4
+(or #f (values 1 2))     ; => 1, 2
+(and)                    ; => #t
+(or)                     ; => #f
+\end{dylan}
+
+\subsection{cond}
+
+\index{cond@\code{cond}}
+\begin{quote}
+\code{(cond (\meta{test} \meta{consequent} \ldots) \ldots)}
+\end{quote}
+
+\noindent \code{cond} evaluates the tests in order. At the first that is
+true, it evaluates that clause's consequents and returns the values of the
+last; later tests are not evaluated. A clause with no consequents returns
+the value of its test. If no test is true, \code{cond} returns \code{\#f}.
+By convention the last clause's test is \code{else:} or \code{\#t}; both are
+simply true values.
+
+\begin{dylan}
+(define-method compare (new old)
+  (cond ((< new old) "the new position is less")
+        ((= new old) "the positions are equal")
+        (else: "the new position is greater")))
+(compare 1 2)            ; => "the new position is less"
+(compare 3 2)            ; => "the new position is greater"
+(cond (#f 'no) ((+ 1 2)))     ; => 3
+(cond (#f 1))            ; => #f
+\end{dylan}
+
+\subsection{case}
+
+\index{case@\code{case}}
+\begin{quote}
+\code{(case \meta{target} (\meta{match-list} \meta{consequent} \ldots) \ldots)}
+\end{quote}
+
+\noindent \code{case} evaluates \meta{target} and looks for its value in the
+match lists, comparing with \code{id?}. The match lists are lists of
+objects and are not evaluated. At the first clause whose list contains the
+value, \code{case} evaluates that clause's consequents and returns the
+values of the last, or \code{\#f} if it has none. A clause whose match list
+is \code{else:} or \code{\#t} matches when no other does; it must be the last
+clause. If nothing matches and there is no such clause, an error is
+signaled.
+
+\begin{dylan}
+(define-method size-name (n)
+  (case n
+    ((0) 'none)
+    ((1 2 3) 'few)
+    (else: 'many)))
+(size-name 2)            ; => few
+(size-name 10)           ; => many
+(case 'Red ((red green) 'warm-or-cool) (else: 'other))   ; => warm-or-cool
+(case 9 ((3) 'three))    ; => error: no clause matches 9
+\end{dylan}
+
+\noindent Because the comparison is \code{id?}, matches are normally
+numbers, characters, symbols, keywords, \code{\#t}, \code{\#f} or
+\code{()}. Strings and lists are not suitable: two strings with the same
+characters need not be the same object. The same match may not appear in
+two clauses; the compiler to C reports that when compiling, and the Common
+Lisp implementation uses the first.
+
+\subsection{select}
+
+\index{select@\code{select}}
+\begin{quote}
+\code{(select \meta{target} \meta{test} (\meta{match-list} \meta{consequent} \ldots) \ldots)}
+\end{quote}
+
+\noindent \code{select} is like \code{case}, but the matches are expressions,
+evaluated, and the comparison is the function \meta{test}, called as
+\code{(\meta{test} \meta{target-value} \meta{match})}. The clauses are tried
+in order, and within a clause the matches from left to right; the matches
+are evaluated only as they are reached, and once one matches, no more are
+evaluated or tested (design note 34). \code{else:} and \code{\#t} work as in
+\code{case}, and no match without them is an error.
+
+\begin{dylan}
+(define-method kind-of (x)
+  (select x instance?
+    ((<integer> <ratio>) "exact")
+    ((<float>) "inexact")
+    (else: "not a number")))
+(kind-of 3)              ; => "exact"
+(kind-of 2.5)            ; => "inexact"
+(kind-of 'x)             ; => "not a number"
+(select "b" = (("a") 1) (("b") 2))   ; => 2
+(select 5 < ((3 4) 'small) ((6) 'medium) (else: 'large))   ; => medium
+\end{dylan}
+
+\noindent With a test of \code{instance?}, as in \code{kind-of},
+\code{select} does what \code{typecase} does in Common Lisp.
+
+\section{Iteration}\label{sec:control-loops}
+
+The loops below are the language's iteration forms. Collections can also
+be walked with functions such as \code{do} and \code{map}
+(Chapters~\ref{ch:collections} and~\ref{ch:functional}), and any loop can be
+written as a recursive method, since tail calls do not use stack
+(Section~\ref{sec:functions-tail-calls}).
+
+\subsection{for}
+
+\index{for@\code{for}}
+\begin{quote}
+\code{(for ((\meta{var} \meta{init} \meta{step}) \ldots)\\
+\phantom{(for }(\meta{end-test} \meta{result} \ldots)\\
+\phantom{(for }\meta{body-form} \ldots)}
+\end{quote}
+
+\noindent \code{for} is the general loop. Each \code{(\meta{var}
+\meta{init} \meta{step})} is a \term{variable clause}, and it is the only
+kind of clause: each must have all three parts. The loop runs like this:
+
+\begin{enumerate}
+\item The inits are evaluated, in a scope that does not include any of the
+  loop variables, and the variables are bound to their values.
+\item The end test is evaluated. If it is true, the results are evaluated
+  in order and \code{for} returns the values of the last, or \code{\#f} if
+  there are none.
+\item Otherwise the body forms are evaluated, for their effects.
+\item The steps are evaluated, in a scope that includes the variables'
+  current values, and the variables are bound afresh to the new values.
+  The loop continues at step 2.
+\end{enumerate}
+
+\noindent The end-test clause may be the empty list \code{()}, meaning no
+end test: the loop then runs until something exits from it
+(Section~\ref{sec:control-exits}). Because all the steps are evaluated before any
+variable is rebound, the variables are stepped in parallel.
+
+\begin{dylan}
+(define-method factorial ((n <integer>))
+  (for ((i n (- i 1))
+        (v 1 (* v i)))
+       ((<= i 0) v)))
+(factorial 5)            ; => 120
+(for ((i 0 (+ i 1))
+      (acc '() (cons i acc)))
+     ((= i 4) acc))      ; => (3 2 1 0)
+(for ((a 0 b) (b 1 (+ a b)) (i 0 (+ i 1)))
+     ((= i 10) a))       ; => 55
+\end{dylan}
+
+\noindent Each pass binds the variables anew; it does not assign them. A
+method made in the body therefore keeps the values of that pass:
+
+\begin{dylan}
+(define thunks
+  (for ((i 0 (+ i 1))
+        (acc '() (cons (method () i) acc)))
+       ((= i 3) acc)))
+(map (method (f) (f)) thunks)   ; => (2 1 0)
+\end{dylan}
+
+\subsection{for-each}
+
+\index{for-each@\code{for-each}}
+\begin{quote}
+\code{(for-each ((\meta{var} \meta{collection}) \ldots)\\
+\phantom{(for-each }(\meta{end-test} \meta{result} \ldots)\\
+\phantom{(for-each }\meta{body-form} \ldots)}
+\end{quote}
+
+\noindent \code{for-each} iterates over the elements of one or more
+collections at once. The collection expressions are evaluated first. Then,
+on each pass, each \meta{var} is bound to the next element of its
+collection; if any collection has no more elements, the loop ends and
+returns \code{\#f}. Otherwise the end test is evaluated, with the variables
+in scope; if it is true, the results are evaluated and the values of the
+last returned (\code{\#f} if none). Otherwise the body forms are evaluated
+and the next pass begins. As with \code{for}, the end-test clause may be
+\code{()}, and each pass binds the variables anew.
+
+\begin{dylan}
+(define-method first-even ((s <sequence>))
+  (for-each ((number s))
+            ((even? number) number)))
+(first-even '(1 3 5 4 7 9 10))   ; => 4
+(first-even '(1 3))              ; => #f
+(for-each ((c "abc")
+           (i (range from: 0)))
+          ()
+  (print (list c i)))            ; prints: (#\a 0)
+                                 ; prints: (#\b 1)
+                                 ; prints: (#\c 2)
+                                 ; => #f
+\end{dylan}
+
+\noindent The second example stops after three passes because the string
+runs out, although the range \code{(range from: 0)} is unbounded. Any
+collection may be used: lists, vectors, strings, ranges, tables
+(whose elements are its values) and the program's own collection classes.
+\code{for-each} uses the iteration protocol of Chapter~\ref{ch:collections}.
+
+\subsection{dotimes}
+
+\index{dotimes@\code{dotimes}}
+\begin{quote}
+\code{(dotimes (\meta{var} \meta{count} [\meta{result}]) \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{dotimes} evaluates \meta{count}, which should be an
+integer, then evaluates the forms once for each integer from 0 up to but not
+including the count, with \meta{var} bound to it. If the count is zero or
+negative, the forms are not evaluated. Then \meta{result} is evaluated and
+its values returned; without a result, \code{dotimes} returns \code{\#f}.
+In both implementations the result form can see \meta{var}, bound to the
+number of passes made (as in Common Lisp).
+
+\begin{dylan}
+(dotimes (i 3)
+  (print i))             ; prints: 0
+                         ; prints: 1
+                         ; prints: 2
+                         ; => #f
+(dotimes (i 4 i))        ; => 4
+(dotimes (i -2 'done))   ; => done
+\end{dylan}
+
+\subsection{while and until}
+
+\index{while@\code{while}}\index{until@\code{until}}
+\begin{quote}
+\code{(while \meta{test} \meta{form} \ldots)}\\
+\code{(until \meta{test} \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{while} evaluates \meta{test} before each pass and evaluates
+the forms as long as it is true. \code{until} evaluates the forms as long as
+\meta{test} is false. Both always return \code{\#f}.
+
+\begin{dylan}
+(define n 0)
+(while (< n 3)
+  (set! n (+ n 1)))      ; => #f
+n                        ; => 3
+(until (= n 0)
+  (set! n (- n 1)))      ; => #f
+n                        ; => 0
+\end{dylan}
+
+\section{Local methods: bind-methods}\label{sec:control-bind-methods}
+
+\index{bind-methods@\code{bind-methods}}
+\begin{quote}
+\code{(bind-methods ((\meta{name} \meta{parameter-list} \meta{form} \ldots) \ldots)\\
+\phantom{(bind-methods }\meta{body-form} \ldots)}
+\end{quote}
+
+\noindent \code{bind-methods} binds each \meta{name} to a method, made as
+\code{method} makes one (Section~\ref{sec:functions-method}), and evaluates the
+body forms, returning the values of the last. The scope of the names
+includes the methods themselves, so the methods can call themselves and each
+other. (\code{bind} cannot do that, since an init cannot see its own
+variable.)
+
+\begin{dylan}
+(define-method root-mean-square ((s <sequence>))
+  (bind-methods ((average (numbers)
+                   (/ (reduce1 + numbers) (size numbers)))
+                 (square (n) (* n n)))
+    (sqrt (average (map square s)))))
+(root-mean-square '(5 6 6 7 4))   ; => 5.692099788303083
+\end{dylan}
+
+\noindent The next example, Newton's method for square roots, has a method
+that calls itself and two helpers:
+
+\begin{dylan}
+(define-method newtons-sqrt (x)
+  (bind-methods ((sqrt1 (guess)
+                   (if (close? guess)
+                       guess
+                       (sqrt1 (improve guess))))
+                 (close? (guess)
+                   (< (abs (- (* guess guess) x)) .0001))
+                 (improve (guess)
+                   (/ (+ guess (/ x guess)) 2)))
+    (sqrt1 1)))
+(newtons-sqrt 25.0)      ; => 5.000000000053722
+\end{dylan}
+
+\noindent The 1992 manual calls \code{(newtons-sqrt 25)}. With an integer
+argument the arithmetic stays exact, and the guesses become ratios with
+ever larger numerators and denominators: the Common Lisp implementation
+returns an enormous ratio, and in the compiler to C, which has no bignums,
+the integers overflow and an error is signaled. A float argument keeps the
+computation in floating point.
+
+Later versions of Dylan have a \code{local} form for this purpose; this
+language has only \code{bind-methods}.
+
+\section{Multiple values}\label{sec:control-values}
+
+\index{values@\code{values}}\index{multiple values}
+\begin{quote}
+\code{(values \meta{object} \ldots)}
+\end{quote}
+
+\noindent An expression may return any number of values. The function
+\code{values} returns its arguments as multiple values; \code{(values)}
+returns none. \code{bind} (Section~\ref{sec:control-bind}) receives them.
+
+\begin{dylan}
+(define-method edges ((center <number>) (radius <number>))
+  (values (- center radius) (+ center radius)))
+(edges 100 2)            ; => 98, 102
+(define-method opposite-edges ((center <number>) (radius <number>))
+  (bind ((min max (edges center radius)))
+    (values max min)))
+(opposite-edges 100 2)   ; => 102, 98
+(bind ((#rest nums (edges 100 2)))
+  nums)                  ; => (98 102)
+\end{dylan}
+
+\noindent Multiple values pass through the forms that return the values
+of a subform: \code{begin}, \code{bind}, \code{if}, \code{when},
+\code{unless}, \code{cond}, \code{case}, \code{select}, the last form of
+\code{and} and \code{or} as described above, the results of \code{for},
+\code{for-each} and \code{dotimes}, \code{bind-exit}, \code{unwind-protect}'s
+protected form, and calls of methods whose last form returns them. Anywhere
+else, as an argument to a function, as the init of a one-variable binding,
+as the value in a \code{set!} or a \code{define}, only the first value is
+used, and an expression that returns no values supplies \code{\#f}.
+
+\begin{dylan}
+(begin 1 (values 2 3))   ; => 2, 3
+(print (list (values 1 2) 3))   ; prints: (1 3)
+(bind ((x (values))) x)  ; => #f
+(values)                 ; => (no values)
+\end{dylan}
+
+\section{Non-local exits}\label{sec:control-exits}
+
+\subsection{bind-exit}
+
+\index{bind-exit@\code{bind-exit}}
+\begin{quote}
+\code{(bind-exit (\meta{exit-variable}) \meta{form} \ldots)}
+\end{quote}
+
+\noindent \code{bind-exit} binds \meta{exit-variable} to an \term{exit
+procedure} and evaluates the forms. If the exit procedure is not called,
+\code{bind-exit} returns the values of the last form, or \code{\#f} if
+there are none. Calling the exit procedure, with any number of arguments,
+leaves the \code{bind-exit} at once, and the arguments become its values.
+This is a \term{non-local exit}.
+
+\begin{dylan}
+(bind-exit (return)
+  1
+  (return 2 3)
+  4)                     ; => 2, 3
+(bind-exit (return))     ; => #f
+\end{dylan}
+
+\noindent The exit procedure is an ordinary function: it can be passed to
+other functions and stored. But it is valid only during the
+\term{dynamic extent} of the \code{bind-exit} that made it, that is, until
+that \code{bind-exit} returns or is itself exited. Calling it afterwards is
+an error.
+
+\begin{dylan}
+(define-method first-even ((seq <sequence>))
+  (bind-exit (exit)
+    (do (method (item)
+          (when (even? item)
+            (exit item)))
+        seq)
+    #f))
+(first-even '(1 3 5 4 7 9 10))   ; => 4
+\end{dylan}
+
+\noindent In the compiler to C a non-local exit is a jump and costs little;
+\code{bind-exit} is the normal way to return early from a loop or a method.
+
+\subsection{unwind-protect}
+
+\index{unwind-protect@\code{unwind-protect}}
+\begin{quote}
+\code{(unwind-protect \meta{protected-form} \meta{cleanup-form} \ldots)}
+\end{quote}
+
+\noindent \code{unwind-protect} evaluates \meta{protected-form}, then the
+cleanup forms. The cleanup forms are evaluated however the protected form
+is left: normally, by a non-local exit through it, or by an error that a
+handler outside it handles by exiting (Chapter~\ref{ch:conditions}). When the
+protected form returns normally, \code{unwind-protect} returns its values;
+the cleanup forms' values are discarded.
+
+\begin{dylan}
+(unwind-protect (values 1 2)
+  (print 'cleanup))      ; prints: cleanup
+                         ; => 1, 2
+(bind-exit (k)
+  (unwind-protect (k 5)
+    (print 'cleanup)))   ; prints: cleanup
+                         ; => 5
+(handler-case
+    (unwind-protect (error "boom")
+      (print 'cleanup))
+  ((<error>) 'caught))   ; prints: cleanup
+                         ; => caught
+\end{dylan}
+
+\noindent A cleanup form may itself exit. If it does, the new exit replaces
+the one in progress, and the remaining cleanup forms of that
+\code{unwind-protect} are skipped:
+
+\begin{dylan}
+(bind-exit (k)
+  (unwind-protect (k 1)
+    (k 2)))              ; => 2
+(bind-exit (one)
+  (bind-exit (two)
+    (unwind-protect (two 2)
+      (one 1)))
+  3)                     ; => 1
+\end{dylan}
+
+\noindent These are the rules design note 25 later gave for its
+\code{block} form, which replaced \code{bind-exit} and
+\code{unwind-protect} in later Dylan; this language keeps the two forms of
+the 1992 manual.
+
+\section{quote}
+
+\code{(quote \meta{object})}, usually written \code{'\meta{object}}, returns
+\meta{object} without evaluating it (Section~\ref{sec:syntax-quote}). It is a
+special form of its own, listed here for completeness with the other
+evaluation forms of \dylanbook{chapter 8}. \code{apply}, the last function
+of that chapter, calls a function on a list of arguments and is described
+with functions (Section~\ref{sec:functions-apply}).
+
+\begin{dylan}
+'+                       ; => +
+(quote (+ 10 10))        ; => (+ 10 10)
+\end{dylan}

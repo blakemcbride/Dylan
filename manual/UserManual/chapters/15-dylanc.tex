@@ -1,0 +1,691 @@
+\chapter{The Compiler to C}\label{ch:dylanc}
+\sloppy
+
+The second implementation in this system is a compiler. It reads a whole
+Dylan program, translates it into C, and runs a C compiler to make a
+native executable. The executable needs nothing from SBCL at run time: it
+is an ordinary program linked with a small runtime library written in C,
+with the Boehm-Demers-Weiser garbage collector, and with the system's
+thread library.
+
+This chapter is about using the compiler: the \cmd{bin/dylanc} command
+and every one of its options, the files it writes, the cache it keeps,
+the kinds of build it can make, how to call it from Common Lisp, what a
+compiled program does when something goes wrong, and what a program must
+not do because it is compiled whole and in advance. How the compiler
+works inside is the subject of Chapter~\ref{ch:internals}, and how to
+make compiled programs fast is the subject of
+Chapter~\ref{ch:performance}.
+
+\section{A first build}\label{sec:dylanc-first}
+
+\index{dylanc@\cmd{dylanc}}
+A program is one or more files of Dylan source, conventionally with the
+extension \file{.dyl}. Here is the smallest useful one:
+
+\begin{dylan}
+(define-method greet ((name <string>))
+  (format #t "Hello, ~a!~%" name))
+(greet "world")
+\end{dylan}
+
+Compile it and run the result:
+
+\begin{shell}
+$ bin/dylanc hello.dyl
+$ ./hello
+Hello, world!
+\end{shell}
+
+\cmd{bin/dylanc} is a short shell script that runs
+\file{compiler/dylanc.lisp} under \cmd{sbcl -{}-script}, so SBCL must be
+on your \code{PATH}; the script can be run from any directory, and can be
+linked into a directory on your \code{PATH}. The executable is named
+after the first file, less its \file{.dyl}, and is written beside that
+file: \cmd{bin/dylanc src/hello.dyl} makes \file{src/hello}.
+
+The top-level forms of the program run in order, from the first file to
+the last, when the executable starts. There is no \code{main} function to
+write: the program \emph{is} its top-level forms, as it would be if you
+typed them into the interactive implementation's read-eval-print loop. A
+top-level form's value is not printed; use \code{print}, \code{format}
+and the other printing functions (Chapter~\ref{ch:printing}) to produce
+output. When the last top-level form has run, the program exits with
+status~0.
+
+\paragraph{Several files.}
+Give several files to make one program from them all:
+
+\begin{shell}
+$ bin/dylanc -o app utilities.dyl shapes.dyl main.dyl
+\end{shell}
+
+The files are read in the order given, and their top-level forms run in
+that order. A file whose first line is a \code{module:} header (design
+note~33; see Chapter~\ref{ch:modules}) is compiled in the module it
+names; any other file is compiled in \code{dylan-user}. Every
+\code{define-module} form in every file is known before any other form is
+compiled, so a module may be defined after the files that use it.
+
+\paragraph{What a first build costs.}
+The compiler is SBCL code, compiled into \file{compiler/fasl/} the first
+time it is used, and the runtime library is compiled by \cmd{make} the
+first time a build needs it. After that, a small program builds in about a
+second and a half on a current machine. The first build with a new
+combination of C compiler and options takes several seconds longer,
+because the library's C must be compiled for it
+(Section~\ref{sec:dylanc-cache}).
+
+\section{The options}\label{sec:dylanc-options}
+
+\index{dylanc@\cmd{dylanc}!options}
+\cmd{bin/dylanc -h} lists the options:
+
+\begin{shell}
+Usage: dylanc [options] file.dyl ...
+
+Compile the Dylan files, in order, into one executable.
+
+Options:
+  -o FILE          the executable (default: the first file's name, less .dyl)
+  -O0 -O1 -O2 -O3  how much the C compiler optimizes (default -O2)
+  -Os              a small executable: optimized for size, unused code dropped
+                   (the library compiled with the program, as --whole)
+  --whole          compile the library with the program, not apart (the
+                   library's C, compiled apart, is compiled once and kept)
+  --lto            optimize the program and the runtime library together when
+                   linking (link-time optimization)
+  -g, --debug      for debugging: no optimization, debugging information, and
+                   every inline operation checking its arguments when run
+  -k, --keep-c     keep the C: FILE.c, FILE-MODULE.c for each module, FILE.h
+  -C, --c-only     write the C only (FILE.c and the rest); do not compile it
+  -E, --expand     write each use of the program's macros and its expansion;
+                   no C
+  --trampoline     tail calls by trampolines, for C compilers without musttail
+  --cc CC          the C compiler (default: $CC, or cc)
+  --no-lines       no #line directives pointing to the Dylan source
+  --sanitize KIND  for testing: a debug build with the sanitizers, KIND
+                   address (AddressSanitizer and UndefinedBehaviorSanitizer)
+                   or thread (ThreadSanitizer)
+  --gc-stress      for testing: a collection every DYLAN_GC_STRESS (default
+                   100) allocations
+  -h, --help       this
+\end{shell}
+
+Options and file names may be mixed in any order. Each option is
+described below, with the occasions for using it.
+
+\begin{description}
+\item[\cmd{-o} \meta{file}] \index{dylanc@\cmd{dylanc}!-o@\cmd{-o}}
+  Names the executable. Without it the executable is named after the
+  first file. The C files, when they are kept, are named after the
+  executable: \cmd{-o build/app} writes \file{build/app.c} and the rest.
+
+\item[\cmd{-O0}, \cmd{-O1}, \cmd{-O2}, \cmd{-O3}]
+  How hard the C compiler optimizes. The default, \cmd{-O2}, is right for
+  almost every use. \cmd{-O0} compiles fastest, which matters only for
+  large programs while you are developing them; measure before assuming
+  that \cmd{-O3} helps, since it makes larger code. An
+  ordinary build is also compiled with \cmd{-g}, so a debugger can show
+  the Dylan source even in an optimized program (see
+  Section~\ref{sec:dylanc-debug}). The Dylan compiler's own optimizations
+  (Chapter~\ref{ch:internals}) are always on; these options affect only
+  the C compiler.
+
+\item[\cmd{-Os}] \index{size builds}
+  Makes a small executable. The library is compiled with the program,
+  and only the parts of it the program can reach are kept (\term{tree
+  shaking}); the C is compiled with \cmd{-Os}, each function and datum in
+  its own section, the linker drops the sections nothing uses, and the
+  executable is stripped of its symbols. Use it for programs you ship or
+  copy elsewhere, when size matters more than build time. Section~\ref{sec:dylanc-size}
+  shows what it gains.
+
+\item[\cmd{-{}-whole}]
+  Compiles the library with the program, as \cmd{-Os} does, and shakes it
+  the same way, but optimizes for speed as usual. Normally the library is
+  compiled apart from the program, once, and kept
+  (Section~\ref{sec:dylanc-cache}); with \cmd{-{}-whole} its C is compiled
+  afresh with every build. The result is smaller than an ordinary build,
+  and a build takes about twice as long. It is mostly a check that the
+  separately compiled library and the shaken one agree, which the test
+  suites make (Appendix~\ref{app:testing}).
+
+\item[\cmd{-{}-lto}] \index{link-time optimization}
+  Link-time optimization: the C compiler optimizes the program and the C
+  runtime library together when it links them, so that small runtime
+  functions can be inlined into the program. The runtime library is built
+  for this the first time it is asked for, with \cmd{-O2 -g -flto}, in
+  \file{runtime/build/lto-\meta{cc}/}. The effect on speed is usually
+  small; try it on your own program and measure. It is ignored by
+  \cmd{-g} and by the testing builds below.
+
+\item[\cmd{-g}, \cmd{-{}-debug}]
+  A build for debugging: the C is compiled with \cmd{-O0 -g
+  -DDY\_DEBUG}, and the compiler trusts none of the types it infers, so
+  every operation it would have done inline tests its arguments when the
+  program runs. Section~\ref{sec:dylanc-debug} has more.
+
+\item[\cmd{-k}, \cmd{-{}-keep-c}]
+  Keeps the C files, which are otherwise deleted once the executable is
+  made. Use it to read what the compiler wrote
+  (Section~\ref{sec:internals-reading}), or to see what a debugger is
+  showing you.
+
+\item[\cmd{-C}, \cmd{-{}-c-only}]
+  Writes the C files and stops: no C compiler is run and no executable is
+  made. Use it to compile the C elsewhere, with a build system of your
+  own, or on a machine without SBCL. Section~\ref{sec:dylanc-files}
+  shows the command that compiles the result by hand.
+
+\item[\cmd{-E}, \cmd{-{}-expand}]
+  Writes each use of the program's own macros, with the place it occurs
+  and what it expands into, and stops; no C is written. Use it to see
+  what your macros do (Chapter~\ref{ch:extensions}).
+
+\item[\cmd{-{}-trampoline}] \index{trampoline}
+  Makes tail calls with trampolines instead of the \code{musttail}
+  attribute. Every Dylan call in tail position must run in constant
+  stack space, and C does not promise that; GCC~15 and later and Clang~13
+  and later do, through \code{musttail}. With an older or different C
+  compiler, \cmd{-{}-trampoline} makes each tail call return to a loop
+  that makes the call, which any C11 compiler can do. Programs built this
+  way are correct but slower: a call-heavy benchmark (\code{tak}) took
+  about 1.7 times as long. Without this option, a C compiler that lacks
+  \code{musttail} stops with the error ``This C compiler cannot guarantee
+  tail calls (musttail): define DY\_TRAMPOLINE.''
+
+\item[\cmd{-{}-cc} \meta{cc}]
+  The C compiler to run, such as \cmd{gcc} or \cmd{clang}, or a full path.
+  Without it, the compiler is the value of the \code{CC} environment
+  variable, or \cmd{cc} if that is not set. It is worth trying both GCC
+  and Clang on a program whose speed matters.
+
+\item[\cmd{-{}-no-lines}]
+  Leaves out the \code{\#line} directives that point the C back to the
+  Dylan source (Section~\ref{sec:dylanc-files}). C compilers' messages,
+  and debuggers, then refer to the C files themselves. Use it when you
+  want to step through the generated C rather than the Dylan.
+
+\item[\cmd{-{}-sanitize} \meta{kind}]
+  For testing the compiler and runtime: a debug build with
+  \meta{kind} \cmd{address} (AddressSanitizer and
+  UndefinedBehaviorSanitizer) or \cmd{thread} (ThreadSanitizer). See
+  Section~\ref{sec:dylanc-testing-builds}.
+
+\item[\cmd{-{}-gc-stress}]
+  For testing: a garbage collection every few allocations. See
+  Section~\ref{sec:dylanc-testing-builds}.
+
+\item[\cmd{-h}, \cmd{-{}-help}]
+  Prints the summary above and exits with status 0.
+\end{description}
+
+When options conflict, the more specific build wins: a testing build
+(\cmd{-{}-sanitize}, \cmd{-{}-gc-stress}) uses its own C flags whatever
+else is given; otherwise \cmd{-g} wins over \cmd{-Os}, and \cmd{-Os} over
+\cmd{-O}\meta{n}.
+
+\section{The files the compiler writes}\label{sec:dylanc-files}
+
+\index{C files}
+For a program whose executable is \meta{name}, the compiler writes these
+C files:
+
+\begin{description}
+\item[\file{\meta{name}.c}] The program's static data --- every class,
+  symbol, keyword and constant, laid out as the runtime expects --- with
+  the object system's functions (the dispatch function of each generic
+  function, slot accessors, and the makers \code{make} calls), and
+  \code{main}.
+\item[\file{\meta{name}-\meta{module}.c}] The functions written in each
+  module, one file for each module. A program written in
+  \code{dylan-user} has \file{\meta{name}-dylan-user.c}; a program with
+  modules \code{counting} and \code{app} has
+  \file{\meta{name}-counting.c} and \file{\meta{name}-app.c} too.
+\item[\file{\meta{name}-dylan.c}] The library's functions: the module
+  \code{dylan}, written in Dylan in \file{runtime/dylan/} and compiled
+  with every program. This is the largest file by far, about a megabyte.
+\item[\file{\meta{name}.h}] What the files share: a declaration of every
+  object \file{\meta{name}.c} defines and a prototype of every function.
+\end{description}
+
+The C is linked with \file{runtime/build/libdylan.a}, the runtime library
+compiled from \file{runtime/c/}, and with \cmd{-lgc -lm -lpthread}. With
+\cmd{-k} the files stay after the build:
+
+\begin{shell}
+$ bin/dylanc -k hello.dyl
+$ ls hello*
+hello  hello.c  hello.dyl  hello-dylan.c  hello-dylan-user.c  hello.h
+\end{shell}
+
+\paragraph{\code{\#line} directives.} \index{\#line directives}
+The generated C carries \code{\#line} directives that name the Dylan file
+and line each statement came from, and after each function a directive
+back to the C file itself. A C compiler's warnings, a debugger's
+breakpoints and stack traces, and a profiler's reports therefore name
+places in your Dylan source. Here is the start of the function
+\file{hello-dylan-user.c} holds for \code{greet}:
+
+\begin{ccode}
+D fn1190_greet(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;
+    D v105609, v105610, v105611;
+#line 1 "hello.dyl"
+    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);
+    v105609 = a0;
+#line 2 "hello.dyl"
+    ...
+\end{ccode}
+
+\paragraph{Compiling the C yourself.}
+With \cmd{-C}, the compiler writes the C and stops. The files can then be
+compiled with the C compiler's options and the runtime library's
+directory:
+
+\begin{shell}
+$ bin/dylanc -C hello.dyl
+$ cc -O2 -std=c11 -pthread -I$DYLAN/runtime/c \
+     hello.c hello-dylan.c hello-dylan-user.c \
+     $DYLAN/runtime/build/libdylan.a -lgc -lm -lpthread -o hello
+$ ./hello
+Hello, world!
+\end{shell}
+
+Here \code{\$DYLAN} stands for the root of the source tree. The runtime
+library \file{libdylan.a} must exist; \cmd{make -C runtime} makes it, and
+any build with \cmd{dylanc} makes it too. Add \cmd{-DDY\_TRAMPOLINE} to
+the C compiler's options, and link \file{libdylan-trampoline.a} instead,
+if your C compiler lacks \code{musttail}. The C is C11 with POSIX
+threads; \file{runtime/c/dylan.h} checks what it assumes (64-bit
+pointers, arithmetic right shifts) with \code{\_Static\_assert}, and
+checks that the runtime it is compiled against is the version the
+compiler wrote for.
+
+\section{The library's cache}\label{sec:dylanc-cache}
+
+\index{library cache}
+Every program carries the whole Dylan library, about a megabyte of C. To
+avoid compiling that with every build, the compiler writes the library's
+C so that it does not depend on the program: \file{\meta{name}-dylan.c}
+is the same text for almost every program. The driver compiles it once
+for each C compiler and set of options and keeps the object in
+\file{runtime/build/library/}, named for a digest (MD5) of the C text,
+the C compiler's name and \cmd{-{}-version} output, the options, and the
+runtime headers \file{dylan.h} and \file{primitive.h}. A later build that
+would compile the same text the same way uses the object instead. This
+halves the time of a small build.
+
+The newest 40 objects are kept, with the C each was compiled from; older
+ones are deleted. The cache is safe to delete at any time
+(\cmd{rm -r runtime/build/library}); it is rebuilt as needed. Builds
+running at the same time share it safely.
+
+A program can change the library's C --- for example by defining a method
+that replaces one of the library's own. Then the digest differs and the
+library is simply compiled for that build. \cmd{-Os} and
+\cmd{-{}-whole} do not use the cache at all: they compile the library
+with the program, keeping only what the program can reach.
+
+\section{Size}\label{sec:dylanc-size}
+
+These are the sizes of the \code{greet} program above, built with GCC~16
+on x86-64 Linux, as reported by \cmd{size} (the code, the initialized
+data and the uninitialized data, excluding the shared C and collector
+libraries):
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Build & text + data (KB) & file size (KB) \\
+\midrule
+default (\cmd{-O2}) & 463 & 2765 \\
+\cmd{-{}-whole} & 307 & 1798 \\
+\cmd{-{}-lto} & 334 & 2374 \\
+\cmd{-Os} & 221 & 231 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The file sizes of all but the \cmd{-Os} build include debugging
+information. Hello world built \cmd{-Os} is about 220~KB of code and data;
+most of it is library code that a call of a generic function such as
+\code{print-object}, \code{make} or \code{as} could reach.
+Chapter~\ref{ch:performance} says more about size.
+
+\section{Debug builds}\label{sec:dylanc-debug}
+
+\index{debugging}
+A program built with \cmd{-g} differs from an ordinary one in three ways:
+
+\begin{itemize}
+\item The C is compiled with \cmd{-O0 -g}, so a debugger can show every
+  variable and step through every line.
+\item The compiler trusts none of the classes it has inferred. Where an
+  ordinary build adds two integers with no test because it has proved
+  them integers, a debug build tests them anyway. A debug build therefore
+  catches a mistake in the compiler's reasoning as an error, rather than
+  as a crash or a wrong answer.
+\item \code{DY\_DEBUG} is defined, which makes the runtime's accessors
+  check the representation of each value they take apart: that what is
+  read as a pair \emph{is} a pair, and so on. A violation stops the
+  program with a message naming what was expected.
+\end{itemize}
+
+None of these change what a correct program does: a debug build reports
+the same Dylan errors, in the same way, as an ordinary one. Debug builds
+are for finding bugs in the compiler or runtime, and for using a
+debugger. Because of the \code{\#line} directives, a debugger works in
+Dylan terms --- breakpoints can be set at lines of the Dylan file. Given
+this \file{sum.dyl},
+
+\begin{dylan}
+(define-method sum-to ((n <integer>))
+  (for ((i 0 (+ i 1))
+        (s 0 (+ s i)))
+       ((> i n) s)))
+(print (sum-to 100))
+\end{dylan}
+
+\noindent a debug build stops where it is asked to:
+
+\begin{shell}
+$ bin/dylanc -g -o sum sum.dyl
+$ gdb -batch -ex "break sum.dyl:3" -ex run sum
+...
+Thread 1 "sum" hit Breakpoint 1, fn1190_sum_to (self=4692864, a0=201,
+    a1=0, a2=0, a3=0, argc=1) at /home/me/sum.dyl:3
+3               (s 0 (+ s i)))
+\end{shell}
+
+The names of the C functions are those the compiler gave the Dylan
+functions (\code{fn1190\_sum\_to} is the method \code{sum-to}), and the
+values are Dylan values in their machine representation: \code{a0=201}
+is the integer 100, stored shifted left one bit with the low bit set.
+Chapter~\ref{ch:internals} explains the representation.
+
+\section{Testing builds}\label{sec:dylanc-testing-builds}
+
+Two options build programs for testing the compiler and runtime rather
+than for use. Each builds its own variant of the runtime library, the
+first time it is needed, in \file{runtime/build/\meta{variant}-\meta{cc}/},
+with the same C flags as the program.
+
+\begin{description}
+\item[\cmd{-{}-sanitize address}] Compiles with \cmd{-O1 -g
+  -fno-omit-frame-pointer -fsanitize=address,undefined -DDY\_DEBUG}, as a
+  debug build: AddressSanitizer reports any read or write outside an
+  object, and UndefinedBehaviorSanitizer any undefined behavior in C,
+  such as a signed overflow or a misaligned access.
+\item[\cmd{-{}-sanitize thread}] Compiles with \cmd{-O1 -g
+  -fsanitize=thread -DDY\_DEBUG}: ThreadSanitizer reports data races
+  between threads.
+\item[\cmd{-{}-gc-stress}] Compiles with \cmd{-O2 -g -DDY\_GC\_STRESS}:
+  the program forces a garbage collection every \meta{n} allocations,
+  where \meta{n} is the value of the environment variable
+  \code{DYLAN\_GC\_STRESS}, or 100. A pointer the collector cannot see
+  --- a bug in the compiler or runtime --- shows up quickly as a crash or
+  a wrong answer. Such a program runs very slowly.
+\end{description}
+
+\begin{shell}
+$ bin/dylanc --gc-stress -o hgc hello.dyl
+$ DYLAN_GC_STRESS=10 ./hgc
+Hello, world!
+\end{shell}
+
+The test suites use these builds (Appendix~\ref{app:testing}). An
+ordinary Dylan program has no need of them, but a program that misbehaves
+in a way you cannot explain is worth running under them: what they find
+is a bug to report.
+
+\section{Calling the compiler from Lisp}\label{sec:dylanc-lisp}
+
+\index{dylanc@\code{dylanc} package}
+The compiler is a Common Lisp program, and it can be called from a Lisp
+session. Load \file{compiler/load.lisp}, which loads the interactive
+implementation's reader and the compiler, compiling any source newer
+than its fasl; the package is \code{DYLAN-COMPILER}, nicknamed
+\code{DYLANC}. Two functions do the work:
+
+\begin{description}
+\item[\code{(dylanc:build \meta{files} \meta{executable} \&key ...)}]
+  Compiles the list of Dylan \meta{files} to C and on to the
+  \meta{executable}. The keyword arguments correspond to the options of
+  \cmd{dylanc}: \code{:optimize} (a string such as \code{"-O3"},
+  default \code{"-O2"}), \code{:size}~\code{t} (\cmd{-Os}),
+  \code{:whole}~\code{t}, \code{:lto}~\code{t}, \code{:debug}~\code{t},
+  \code{:trampoline}~\code{t}, \code{:cc} (default \code{"cc"}; the
+  \code{CC} environment variable is not consulted here),
+  \code{:variant} (\code{:address}, \code{:thread} or
+  \code{:gc-stress}), and \code{:c-file}, the name of the main C file
+  (default \meta{executable}\code{.c}). It answers \code{T} if the
+  executable was made and \code{NIL} if not. Diagnostics are written to
+  \code{*error-output*}. Unlike \cmd{dylanc}, it leaves the C files in
+  place.
+\item[\code{(dylanc:compile-files \meta{files} \meta{c-file})}]
+  Writes the C only, as \cmd{-C} does. It answers the list of C files
+  written, or \code{NIL} after reporting errors.
+\end{description}
+
+\begin{lisp}
+(load "compiler/load.lisp")
+(dylanc:build '("hello.dyl") "hello")              ; => T
+(dylanc:build '("hello.dyl") "hello-small" :size t) ; => T
+(dylanc:compile-files '("hello.dyl") "cf.c")
+;; => (#P"cf.c" #P"cf-dylan.c" #P"cf-dylan-user.c")
+\end{lisp}
+
+Relative file names are taken relative to the Lisp's current directory
+(\code{*default-pathname-defaults*}).
+
+\section{Errors when compiling}\label{sec:dylanc-diagnostics}
+
+\index{diagnostics}
+The compiler reports problems as \term{diagnostics}, one to a line, on
+the standard error stream, in the form \meta{file}\code{:}\meta{line}%
+\code{:}\meta{column}\code{: }\meta{kind}\code{: }\meta{message}, where
+\meta{kind} is \code{error} or \code{warning}:
+
+\begin{shell}
+$ cat r1.dyl
+(print (undefined-thing 3))
+$ bin/dylanc r1.dyl
+r1.dyl:1:8: warning: undefined-thing is not defined (module dylan-user)
+\end{shell}
+
+A \textbf{warning} does not stop the build. The commonest is a variable
+that is referred to but defined nowhere in the program; the program is
+built, and fails only if the reference is reached (see
+Section~\ref{sec:dylanc-runtime-errors}). Treat such a warning as an
+error unless you know why it is there: it is usually a misspelling.
+
+An \textbf{error} stops the build: no executable is made and
+\cmd{dylanc} exits with status~1. Errors found while reading and
+converting the source --- an unbalanced parenthesis, a malformed special
+form, an integer too large --- are all reported in one run; the compiler
+abandons the top-level form that has the error and goes on to the next.
+Errors found later, when the program is analysed as a whole, stop at the
+first. For example:
+
+\begin{shell}
+$ cat err2.dyl
+(define f (method (x) (+ x 1))
+(print (f 1))
+$ bin/dylanc err2.dyl
+err2.dyl:2:14: error: End of file inside a Dylan list.
+\end{shell}
+
+The position of a reading error is where the reader stopped, which for a
+missing closing parenthesis is the end of the file; the unclosed list
+began earlier.
+
+\paragraph{Exit status.} \index{exit status!of dylanc@of \cmd{dylanc}}
+\cmd{dylanc} exits with status 0 when it has made what was asked; 1 when
+the program had errors or the C compiler failed (``\code{dylanc: the C
+compiler failed.}''); and 2 for a bad command line --- an unknown option,
+an option missing its value, no files, or a file that does not exist ---
+after printing the usage summary.
+
+\section{Errors when running}\label{sec:dylanc-runtime-errors}
+
+\index{unhandled conditions}
+A compiled program signals conditions as Chapter~\ref{ch:conditions}
+describes, and handlers established with \code{handler-case} or
+\code{handler-bind} see them as they would in the interactive
+implementation. The runtime's own errors --- a wrong number of
+arguments, no applicable method, a type error, integer overflow,
+division by zero, an unbound variable --- are signalled as Dylan
+conditions too, \code{<simple-error>} or \code{<type-error>}, and can be
+handled.
+
+There is no debugger to fall into when a condition is not handled.
+Instead, the default handler (\code{default-handler}) acts as follows:
+
+\begin{itemize}
+\item An unhandled \textbf{serious condition} --- any \code{<error>},
+  among others --- writes \code{Dylan error:} and the condition's message
+  to the standard error stream, and the program exits with status~1.
+  The standard output is flushed first, so everything printed before the
+  error appears.
+\item An unhandled \textbf{warning} writes \code{Dylan warning:} and its
+  message to the standard error stream, and \code{signal} returns
+  \code{\#f}; the program continues.
+\item \code{break} writes \code{Dylan break:} and its message, and
+  returns \code{\#f}.
+\item \code{restart-query} and \code{return-query} do nothing.
+\end{itemize}
+
+\begin{dylan}
+(define f (method (x) (+ x 1)))
+(print (f 1))
+(print (f "one"))
+(print 'never)
+\end{dylan}
+
+\begin{shell}
+$ bin/dylanc err1.dyl && ./err1; echo "status $?"
+2
+Dylan error: no applicable method for binary+
+status 1
+\end{shell}
+
+The message names the generic function \code{binary+}: a call of
+\code{+} with two arguments calls the library's binary addition directly
+(Chapter~\ref{ch:internals}). In a thread other than the main one, an
+unhandled serious condition ends only that thread; see
+Chapter~\ref{ch:extensions}.
+
+\begin{warnbox}
+A recursion that is \emph{not} in tail position uses C stack, and a
+program that recurses too deeply --- millions of frames --- overflows the
+stack and is killed by the operating system with a segmentation fault,
+not a Dylan error. Output it had printed but not yet flushed is lost.
+Calls in tail position never do this: they run in constant space however
+deep they go. Write deep recursions as tail calls, or raise the stack
+limit with \cmd{ulimit -s}.
+\end{warnbox}
+
+\section{What a compiled program cannot do}\label{sec:dylanc-static}
+
+\index{static program}
+The compiler compiles a \term{static program}: everything the program
+defines is known when it is compiled, and its classes and generic
+functions do not change while it runs. That is what lets the compiler
+lay out every class, compile every generic function's dispatch in
+advance, and call methods directly. The 1992 manual describes a dynamic
+language in which a running program may add methods and slots and make
+new classes, and the interactive implementation allows all of that. A
+compiled program does not. The restrictions, and how each shows itself,
+are these.
+
+\paragraph{Changing classes and generic functions.}
+\code{add-method}, \code{remove-method}, \code{add-slot},
+\code{remove-slot} and \code{freeze-methods} cannot be used. Any use of
+them --- even one that would never run --- is a compile error:
+
+\begin{shell}
+$ cat s.dyl
+(define-generic-function g (x))
+(add-method g (method ((x <integer>)) x))
+$ bin/dylanc s.dyl
+s.dyl:2:1: error: add-method cannot be used: a program's classes and
+generic functions are fixed when it is compiled
+\end{shell}
+
+(The message is on one line; it is broken here to fit the page.)
+Define methods with \code{define-method} instead, which adds them when
+the program is compiled. A class cannot be defined twice
+(``\code{<a> is defined twice (classes cannot be redefined)}'').
+
+\paragraph{Specializers and superclasses known when compiling.}
+Each specializer of a method made by \code{define-method}, and each
+superclass of a class, must be something the compiler can find: a class
+named directly, a variable defined as a constant class, \code{(singleton
+\meta{x})}, or \code{(make <singleton> object: \meta{x})} of a constant.
+A variable whose value is computed when the program runs is a compile
+error:
+
+\begin{dylan}
+(define c (if (> 2 1) <integer> <string>))
+(define-method m ((x c)) x)
+; error: a specializer must be a class or a singleton known at compile time
+\end{dylan}
+
+\noindent while this is accepted, because \code{c} is defined as a class:
+
+\begin{dylan}
+(define c <integer>)
+(define-method m ((x c)) 'yes)
+(print (m 3))        ; prints yes
+\end{dylan}
+
+The owner of a slot added with \code{define-slot} may be any singleton,
+but a class owner must be known when compiling.
+
+\paragraph{Making classes and generic functions when running.}
+\code{(make <class> ...)} is an error when it runs (``cannot make an
+instance of this class''). \code{(make <generic-function> ...)}
+answers a generic function with no methods; since no method can be
+added, every call of it signals ``no applicable method''. \code{seal}
+works as the manual says, and \code{make-read-only} answers its
+argument.
+
+\paragraph{Numbers.}
+Integers are 63 bits: from $-2^{62}$ to $2^{62}-1$, that is from
+\code{-4611686018427387904} to \code{4611686018427387903}. There are no
+bignums. An integer literal outside that range is a compile error; an
+operation whose result falls outside it signals an error when it runs:
+
+\begin{dylan}
+(print (* 4611686018427387903 2))
+; Dylan error: integer overflow (integers are 63 bits)
+\end{dylan}
+
+The same overflow rule applies to the numerator and denominator of a
+ratio. \code{<complex>} exists, as the abstract superclass of
+\code{<real>}, but has no instances, and a complex literal such as
+\code{\#c(1 2)} is a compile error. The interactive implementation has
+both bignums and complex numbers (Chapter~\ref{ch:numbers}).
+
+\paragraph{No evaluation at run time.}
+A compiled program cannot evaluate or load code while it runs: there is
+no \code{eval} and no \code{load}. Any code it runs must be in its
+source when it is compiled. (Macros, which run at compile time, can
+compute code; see Chapter~\ref{ch:extensions}.)
+
+\paragraph{Undefined variables.}
+A reference to a variable that nothing defines is only a warning when
+compiling, as shown in Section~\ref{sec:dylanc-diagnostics}. If the
+reference is reached, it is an error when the program runs:
+
+\begin{shell}
+$ ./r1
+Dylan error: the variable undefined-thing@dylan-user has no value
+\end{shell}
+
+Appendix~\ref{app:differences} collects these restrictions with every
+other difference from the 1992 manual.
+
+\fussy

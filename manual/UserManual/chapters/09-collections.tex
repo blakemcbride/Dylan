@@ -1,0 +1,1075 @@
+\chapter{Collections}\label{ch:collections}
+
+A \term{collection} is an object that holds other objects, its
+\term{elements}, each under a \term{key}: lists, vectors, strings,
+tables, ranges and the rest. Dylan defines collections by a protocol of
+generic functions rather than by their representations, so that one
+function, \code{map} or \code{sort} or \code{reduce}, works on all of
+them, and a class you define joins them by providing a handful of
+methods. This chapter follows chapter~12 of the 1992 manual
+(\dylanbook{chapter 12}) and the parts of chapter~9 that concern
+collections.
+
+The chapter first describes the classes and the protocol every
+collection shares, then the functions on all collections and on
+sequences, and then each built-in class in turn. Examples show their
+results as comments. A list, a vector and a string print the same in
+both implementations; the other collections print differently, and
+where that matters the examples convert them to lists first. A class in
+a result is written by its name alone, as in chapter~\ref{ch:numbers}.
+
+\section{The collection classes}\label{sec:collections-classes}
+
+\index{collection classes}
+Collections are classified along two independent lines. A collection
+either finds its elements by integer position, as a \term{sequence}
+does, or by keys of any kind, as an \term{explicit-key collection} does;
+and it either can be changed after it is made, as a \term{mutable
+collection} can, or cannot. The abstract classes that express this, and
+the concrete classes below them, are:
+
+\begin{itemize}[nosep]
+\item \code{<collection>}\index{<collection>}
+  \begin{itemize}[nosep]
+  \item \code{<explicit-key-collection>}\index{<explicit-key-collection>}
+  \item \code{<mutable-collection>}\index{<mutable-collection>}
+  \item \code{<sequence>}\index{<sequence>}
+    \begin{itemize}[nosep]
+    \item \code{<range>}
+    \end{itemize}
+  \item \code{<mutable-explicit-key-collection>}\index{<mutable-explicit-key-collection>}
+    (an explicit-key and a mutable collection)
+    \begin{itemize}[nosep]
+    \item \code{<table>}
+    \item \code{<array>}
+    \end{itemize}
+  \item \code{<mutable-sequence>}\index{<mutable-sequence>}
+    (a mutable collection and a sequence)
+    \begin{itemize}[nosep]
+    \item \code{<list>}, with subclasses \code{<pair>} and \code{<empty-list>}
+    \item \code{<deque>}
+    \item \code{<string>}
+    \item \code{<vector>} (also an \code{<array>})
+      \begin{itemize}[nosep]
+      \item \code{<simple-object-vector>}
+      \item \code{<stretchy-vector>}
+      \item \code{<byte-string>} (also a \code{<string>})
+      \item \code{<unicode-string>} (also a \code{<string>})
+      \end{itemize}
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\noindent The concrete classes, the ones a program makes instances of,
+are these:
+
+\begin{center}
+\begin{tabular}{p{0.32\textwidth}p{0.6\textwidth}}
+\toprule
+Class & What it is \\
+\midrule
+\code{<list>}, \code{<pair>}, \code{<empty-list>} & linked lists of pairs (sealed) \\
+\code{<simple-object-vector>} & a fixed-size vector of any objects (sealed) \\
+\code{<byte-string>} & a fixed-size string of 8-bit characters (sealed) \\
+\code{<unicode-string>} & a fixed-size string of any characters (sealed; compiler to C only) \\
+\code{<stretchy-vector>} & a vector that grows and shrinks \\
+\code{<deque>} & a double-ended queue \\
+\code{<range>} & an arithmetic progression, possibly unbounded; not mutable \\
+\code{<table>} & a hash table from any keys to any elements \\
+\code{<array>} & a multi-dimensional array \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent \code{<vector>}, \code{<string>} and \code{<array>} are
+instantiable too, but \code{make} of them answers an instance of a
+concrete subclass: \code{(make <vector> size: 3)} is a
+\code{<simple-object-vector>}, \code{(make <string>)} a
+\code{<byte-string>}, and an \code{<array>} of one dimension is a
+\code{<simple-object-vector>}.
+
+\section{Keys, elements and size}\label{sec:collections-keys}
+
+\index{element}\index{key}
+Every collection is a mapping from keys to elements. The keys of a
+sequence are the integers from 0 up to its size; the keys of a table are
+whatever objects were stored in it; the keys of an array are sequences
+of indices. \code{element} answers the element under a key, and
+\code{(setter element)} replaces it:
+
+\begin{dylan}
+(element '(a b c) 1)                       ; => b
+(element "abc" 0)                          ; => #\a
+(element #(a b c) 5 default: 'none)        ; => none
+(define v (vector 1 2 3))
+(set! (element v 0) 'first)
+v                                          ; => #(first 2 3)
+\end{dylan}
+
+\noindent Asking for a key the collection does not have is an error,
+unless a \code{default:} is given, which is then the answer. Setting the
+element of a key a collection does not have is an error too, except for
+a table, which adds the key.
+
+\index{size}\index{empty?}\index{key-sequence}
+\code{size} answers the number of elements, or \code{\#f} for a
+collection of unbounded size; \code{empty?} answers whether there are
+none; and \code{key-sequence} answers a sequence of the keys:
+
+\begin{dylan}
+(size '(1 2 3))           ; => 3
+(size "abc")              ; => 3
+(size (range from: 1))    ; => #f
+(empty? '())              ; => #t
+(empty? #(1))             ; => #f
+(key-sequence "ab")       ; => a sequence of 0 and 1
+\end{dylan}
+
+\noindent The key sequence of a sequence holds the integers from 0 up to
+its size (a range, except that the Common Lisp implementation answers a
+list for a vector or a string); that of a table is a list of its keys, in
+no particular order.
+
+\index{class-for-copy}
+\code{class-for-copy} answers the class used when a function such as
+\code{map} or \code{reverse} makes a new collection like an existing
+one. For most collections it is the collection's own class; a range,
+which is not mutable, answers \code{<list>}, and a string answers
+\code{<byte-string>}. A collection class that is not mutable must define
+a method for it (section~\ref{sec:collections-own}).
+
+\section{The iteration protocol}\label{sec:collections-iteration}
+
+\index{iteration protocol}
+All iteration over collections, by \code{for-each}, \code{map},
+\code{reduce} and every other function in this chapter, is done with
+four generic functions. A collection chooses its own representation for
+an \term{iteration state}, an object recording where an iteration has
+got to; for every collection, the state \code{\#f} means that the
+iteration is finished.
+
+\begin{description}
+\item[\code{(initial-state \meta{collection})}]\index{initial-state}
+  answers the state for the first element, or \code{\#f} if the
+  collection is empty.
+\item[\code{(next-state \meta{collection} \meta{state})}]\index{next-state}
+  answers the state for the next element, or \code{\#f} if there is
+  none. It may change the state it is given, which must not be used
+  again.
+\item[\code{(current-element \meta{collection} \meta{state})}]\index{current-element}
+  answers the element at a state.
+\item[\code{(copy-state \meta{collection} \meta{state})}]\index{copy-state}
+  answers a state that \code{next-state} will not change, for a program
+  that wants to return to a place in an iteration.
+\end{description}
+
+\noindent Explicit-key collections add one more, and mutable collections
+another:
+
+\begin{description}
+\item[\code{(current-key \meta{collection} \meta{state})}]\index{current-key}
+  answers the key of the element at a state.
+\item[\code{((setter current-element) \meta{collection} \meta{state} \meta{value})}]
+  \index{current-element!setter}
+  replaces the element at a state; it is written
+  \code{(set! (current-element \meta{c} \meta{s}) \meta{value})}.
+\end{description}
+
+\noindent And collections that can be walked backward, the vectors, the
+strings, the deques and the bounded ranges, also have:
+
+\begin{description}
+\item[\code{(final-state \meta{collection})}]\index{final-state}
+  answers the state for the last element, or \code{\#f} if the
+  collection is empty.
+\item[\code{(previous-state \meta{collection} \meta{state})}]\index{previous-state}
+  answers the state for the element before, or \code{\#f}.
+\end{description}
+
+Here is the protocol used directly. A sequence's keys are counted
+alongside its states, since a sequence is walked in key order:
+
+\begin{dylan}
+(define v (vector 10 20 30))
+(for ((state (initial-state v) (next-state v state))
+      (key 0 (+ key 1)))
+     ((not state))
+  (print (list key (current-element v state))))
+; prints (0 10), (1 20), (2 30)
+
+(for ((state (final-state v) (previous-state v state)))
+     ((not state))
+  (print (current-element v state)))
+; prints 30, 20, 10
+\end{dylan}
+
+\noindent A table supplies its keys through \code{current-key}, and any
+mutable collection can be changed in place as it is walked:
+
+\begin{dylan}
+(define t (make <table>))
+(set! (element t 'a) 1)
+(for ((state (initial-state t) (next-state t state)))
+     ((not state))
+  (print (list (current-key t state) (current-element t state))))
+; prints (a 1)
+
+(define l (list 1 2 3))
+(for ((state (initial-state l) (next-state l state)))
+     ((not state))
+  (set! (current-element l state) (* 10 (current-element l state))))
+l    ; => (10 20 30)
+\end{dylan}
+
+\noindent \code{copy-state} keeps a place while the iteration goes on:
+
+\begin{dylan}
+(bind ((s (initial-state l)))
+  (bind ((saved (copy-state l s)))
+    (set! s (next-state l s))
+    (list (current-element l s) (current-element l saved))))
+; => (20 10)
+\end{dylan}
+
+\noindent The protocol assumes that a collection does not change while it
+is iterated over, except through \code{(setter current-element)}. A
+\term{sequence} must also be \term{stable}: every iteration visits its
+elements in the same order, the order of their keys, which is its
+\term{natural order}. A table need not be: two iterations over the same
+table may visit its elements in different orders.
+
+\begin{notebox}
+A 1994 design note, number~26, later replaced this protocol with two
+functions, \code{forward-iteration-protocol} and
+\code{backward-iteration-protocol}. Both implementations follow the 1992 manual: the protocol is the one
+described here, and the newer functions do not exist.
+\end{notebox}
+
+Most programs never call these functions; they use \code{for-each} and
+the other loops of chapter~\ref{ch:control}, or the functions in the
+rest of this chapter, all of which are built on them.
+
+\section{Defining your own collection}\label{sec:collections-own}
+
+\index{collection!defining}
+To make a new kind of collection, define a subclass of one of the
+abstract classes of section~\ref{sec:collections-classes}: a sequence
+class for a collection keyed by position, an explicit-key class for one
+with keys of its own. Then give it methods for the iteration protocol:
+
+\begin{itemize}
+\item every collection: \code{initial-state}, \code{next-state},
+  \code{current-element} and \code{copy-state};
+\item an explicit-key collection: also \code{current-key};
+\item a mutable collection: also \code{(setter current-element)};
+\item a collection that is not mutable: also \code{class-for-copy},
+  naming a mutable class for copies.
+\end{itemize}
+
+\noindent Nothing else is required: \code{element}, \code{size},
+\code{map}, \code{reduce}, \code{sort} and the rest all have default
+methods that work through the protocol. They may be slow (the default
+\code{element} on a sequence walks from the start), so a class that can
+do better should also define methods for \code{element},
+\code{(setter element)}, \code{size} or \code{member?}.
+
+\subsection{A sequence}
+
+This class is an immutable sequence of the first \meta{count} squares,
+computed when asked for. Its iteration state is simply the index:
+
+\begin{dylan}
+(define-class <squares> (<sequence>)
+  (count init-keyword: count: init-value: 0))
+
+(define-method initial-state ((s <squares>))
+  (if (> (count s) 0) 0 #f))
+
+(define-method next-state ((s <squares>) (state <integer>))
+  (bind ((next (+ state 1)))
+    (if (< next (count s)) next #f)))
+
+(define-method current-element ((s <squares>) (state <integer>))
+  (* state state))
+
+(define-method copy-state ((s <squares>) (state <integer>))
+  state)
+
+(define-method class-for-copy ((s <squares>)) <list>)
+\end{dylan}
+
+\noindent With only these, it is a full collection:
+
+\begin{dylan}
+(define sq (make <squares> count: 6))
+(size sq)                          ; => 6
+(element sq 4)                     ; => 16
+(map (method (x) (+ x 1)) sq)      ; => (1 2 5 10 17 26)
+(reduce + 0 sq)                    ; => 55
+(member? 9 sq)                     ; => #t
+(choose odd? sq)                   ; => (1 9 25)
+(reverse sq)                       ; => (25 16 9 4 1 0)
+(as <vector> sq)                   ; => #(0 1 4 9 16 25)
+(= sq '(0 1 4 9 16 25))            ; => #t
+(for-each ((x sq)) ()
+  (display x) (display " "))       ; prints 0 1 4 9 16 25
+\end{dylan}
+
+\noindent \code{map}, \code{choose} and \code{reverse} answer lists,
+because \code{class-for-copy} says so.
+
+\subsection{A mutable explicit-key collection}
+
+This class keeps its keys and elements in an association list, a list
+of pairs. Its iteration state is the rest of that list, from the current
+pair on; it supplies \code{current-key}, and, being mutable,
+\code{(setter current-element)}:
+
+\begin{dylan}
+(define-class <alist> (<mutable-explicit-key-collection>)
+  (entries init-value: '()))
+
+(define-method initial-state ((a <alist>))
+  (if (empty? (entries a)) #f (entries a)))
+(define-method next-state ((a <alist>) (state <pair>))
+  (if (empty? (cdr state)) #f (cdr state)))
+(define-method current-element ((a <alist>) (state <pair>))
+  (cdr (car state)))
+(define-method current-key ((a <alist>) (state <pair>))
+  (car (car state)))
+(define-method (setter current-element) ((a <alist>) (state <pair>) value)
+  (set! (cdr (car state)) value))
+\end{dylan}
+
+\noindent The default \code{element} and \code{(setter element)} find a
+key by comparing with \code{=}; \code{key-sequence}, \code{size},
+\code{do} and the others work as for any collection:
+
+\begin{dylan}
+(define a (make <alist>))
+(set! (entries a) (list (cons 'red 1) (cons 'green 2) (cons 'blue 3)))
+(element a 'green)                ; => 2
+(element a 'pink default: 0)      ; => 0
+(set! (element a 'blue) 30)
+(element a 'blue)                 ; => 30
+(size a)                          ; => 3
+(reduce + 0 a)                    ; => 33
+(any? (method (v) (> v 10)) a)    ; => #t
+(do print a)                      ; prints 1, 2 and 30
+\end{dylan}
+
+\noindent (The class need not define \code{copy-state}: the default
+method answers the state itself, which is right for a state that
+\code{next-state} never changes, as here.)
+
+\section{Functions on all collections}\label{sec:collections-functions}
+
+\index{collection functions}
+The functions in this section work on every collection. Those that take
+several collections process corresponding elements together: elements
+with the same key. For sequences that means elements at the same
+position, and processing stops at the end of the shortest. Other
+collections are \term{aligned}: only the keys all of them have are
+processed (\dylanbook{chapter 12}, ``Collection Alignment'').
+
+\subsection{do, map, map-as and map-into}
+
+\index{do}
+\code{(do \meta{function} \meta{collection} ...)} calls the function on
+each group of corresponding elements, for effect, and answers
+\code{\#f}:
+
+\begin{dylan}
+(do (method (a b) (print (+ a b)))
+    '(100 100 200 200)
+    '(1 2 3 4))
+; prints 101, 102, 203 and 204, then answers #f
+\end{dylan}
+
+\index{map}\index{map-as}
+\code{map} answers a new collection of the results, of the
+\code{class-for-copy} of the first collection; \code{map-as} takes the
+class of the result as its first argument:
+
+\begin{dylan}
+(map + '(100 100 200 200) '(1 2 3 4))              ; => (101 102 203 204)
+(map + '(1 2 3) #(10 20))                          ; => (11 22)
+(map + (range from: 1) '(10 20 30))                ; => (11 22 33)
+(map as-uppercase "abc")                           ; => "ABC"
+(map-as <vector> + '(100 100 200 200) '(1 2 3 4))  ; => #(101 102 203 204)
+\end{dylan}
+
+\noindent Mapping over a table makes a table with the same keys:
+
+\begin{dylan}
+(define prices (make <table>))
+(set! (element prices 'tea) 3)
+(set! (element prices 'cake) 5)
+(define doubled (map (curry * 2) prices))
+(element doubled 'cake)                            ; => 10
+\end{dylan}
+
+\noindent The class of the result decides what it can hold. \code{map}
+over a string makes a string, so a function that answers something other
+than a character is an error there; ask for another class with
+\code{map-as}:
+
+\begin{dylan}
+(map-as <list> (method (c) 1) "ab")                ; => (1 1)
+(map (method (c) 'x) "ab")                         ; => error
+\end{dylan}
+
+\noindent The compiler to C reports the error as \code{a <byte-string>
+holds only 8-bit characters: x}; the Common Lisp implementation as
+\code{as -{}- not specialized for this class type}. (The Common Lisp
+implementation turns an integer result into the character with that code
+instead, so \code{(map (method (c) 1) "ab")} answers a string of two
+characters there and is an error in the compiler to C.)
+
+\index{map-into}
+\code{(map-into \meta{target} \meta{function} \meta{collection} ...)}
+stores the results into the mutable collection \meta{target}, replacing
+its elements, and answers it. The target may be one of the sources.
+
+\begin{dylan}
+(define x (list 100 100 200 200))
+(map-into x + '(1 2 3 4) '(10 20 30 40))   ; => (11 22 33 44)
+x                                          ; => (11 22 33 44)
+(map-into x - x)                           ; => (-11 -22 -33 -44)
+\end{dylan}
+
+\noindent The function receives only the elements of the source
+collections. The 1992 manual's own example,
+\code{(map-into x + '(1 2 3 4))} answering \code{(101 102 203 204)},
+also passes the target's elements, contrary to its prose; in both
+implementations it answers \code{(1 2 3 4)} (appendix~\ref{app:differences}).
+Mapping into a table stores each result under its key, adding keys the
+table lacks.
+
+\subsection{any?, every?, reduce and reduce1}
+
+\index{any?}\index{every?}
+\code{any?} answers the first true value the function returns for a
+group of elements, or \code{\#f}; \code{every?} answers \code{\#t} if the
+function is true for every group and \code{\#f} otherwise. Both stop as
+soon as the answer is known.
+
+\begin{dylan}
+(any? > '(1 2 3 4) '(5 4 3 2))       ; => #t
+(any? even? '(1 3 5 7))              ; => #f
+(any? (method (x) (and (even? x) (* x 10))) '(1 2 3))   ; => 20
+(every? > '(1 2 3 4) '(5 4 3 2))     ; => #f
+(every? odd? '(1 3 5 7))             ; => #t
+\end{dylan}
+
+\index{reduce}\index{reduce1}
+\code{(reduce \meta{function} \meta{initial} \meta{collection})}
+combines the elements from the first to the last: it calls the function
+on the initial value and the first element, then on that result and the
+second element, and so on, and answers the last result, or the initial
+value if the collection is empty. \code{reduce1} uses the first element
+as the initial value; it is an error on an empty collection.
+
+\begin{dylan}
+(reduce max 10 '(3 1 4 1 5 9))    ; => 10
+(reduce max 10 '(3 12 9 8 8 6))   ; => 12
+(reduce - 0 '(1 2 3))             ; => -6      ((0 - 1) - 2) - 3
+(reduce + 0 '())                  ; => 0
+(reduce1 + '(1 2 3 4 5))          ; => 15
+\end{dylan}
+
+\subsection{member? and find-key}
+
+\index{member?}
+\code{(member? \meta{value} \meta{collection} test: \meta{test})}
+answers whether the collection has an element that matches the value.
+The test defaults to \code{id?} and is called with the value first and
+an element second.
+
+\begin{dylan}
+(define flavors #(chocolate pistachio pumpkin))
+(member? 'chocolate flavors)         ; => #t
+(member? 'banana flavors)            ; => #f
+(member? 2.0 #(1 2 3))               ; => #f      not id? to 2
+(member? 2.0 #(1 2 3) test: =)       ; => #t
+\end{dylan}
+
+\noindent On a list, as the 1992 manual says, the true value is the rest
+of the list from the matching element on: \code{(member? 2 '(1 2 3))}
+answers \code{(2 3)}. (A 1993 design note made it a boolean; neither
+implementation follows that.)
+
+\index{find-key}
+\code{(find-key \meta{collection} \meta{predicate})} answers the key of
+the first element for which the predicate is true, or the
+\code{failure:} value (default \code{\#f}). \code{skip:} \meta{n} skips
+the first \meta{n} matches.
+
+\begin{dylan}
+(find-key flavors (method (f) (id? f 'pistachio)))   ; => 1
+(find-key '(1 2 3 4) even?)                          ; => 1
+(find-key '(1 2 3 4) even? skip: 1)                  ; => 3
+(find-key '(1 2 3 4) even? skip: 2)                  ; => #f
+(find-key '(1 3) even? failure: 'none)               ; => none
+\end{dylan}
+
+\subsection{replace-elements! and fill!}
+
+\index{replace-elements"!}
+\code{(replace-elements! \meta{collection} \meta{predicate}
+\meta{new-value-function})} replaces each element for which the
+predicate is true by the result of calling the function on it, at most
+\code{count:} of them if that is given, and answers the collection:
+
+\begin{dylan}
+(replace-elements! (list 10 13 16 19) odd? (method (x) (* 2 x)))
+; => (10 26 16 38)
+(replace-elements! (list 1 3 5 7) odd? (method (x) 0) count: 2)
+; => (0 0 5 7)
+\end{dylan}
+
+\index{fill"!}
+\code{(fill! \meta{collection} \meta{value})} stores the value under
+every key. For a sequence, \code{start:} (inclusive, default 0) and
+\code{end:} (exclusive, default the size) limit it to a part:
+
+\begin{dylan}
+(fill! (list 'a 'b 'c 'd 'e 'f) 3 start: 2)      ; => (a b 3 3 3 3)
+(fill! (vector 1 2 3 4 5) 0 start: 1 end: 3)     ; => #(1 0 0 4 5)
+\end{dylan}
+
+\section{Functions on sequences}\label{sec:collections-sequences}
+
+\index{sequence functions}
+These functions work on any sequence. Unless a description says
+otherwise, a function that answers a new sequence answers one of the
+\code{class-for-copy} of its (first) argument and leaves the argument
+unchanged; a function whose name ends in \code{!} may change its argument
+and reuse its storage, and its result may or may not be the argument
+itself, so always use the result. Functions that take a \code{test:}
+default it to \code{id?}.
+
+\subsection{Adding and removing}
+
+\index{add}\index{add"!}\index{add-new}\index{add-new"!}
+\code{(add \meta{sequence} \meta{element})} answers a new sequence with
+the element added; \code{add!} may add it to the sequence itself. Where
+the element goes depends on the class: at the front of a list, a vector,
+a string and a deque. \code{add!} on a stretchy vector adds at the end;
+\code{add} on one adds at the end in the compiler to C and at the front
+in the Common Lisp implementation.
+\code{add-new} and \code{add-new!} add the element only if the sequence
+does not already have it (by \code{test:}).
+
+\begin{dylan}
+(define numbers '(3 4 5))
+(add numbers 1)             ; => (1 3 4 5)
+numbers                     ; => (3 4 5)
+(add #(3 4 5) 1)            ; => #(1 3 4 5)
+(add "bc" #\a)              ; => "abc"
+(add! (list 3 4 5) 1)       ; => (1 3 4 5)
+(add-new '(3 4 5) 1)        ; => (1 3 4 5)
+(add-new '(3 4 5) 4)        ; => (3 4 5)
+\end{dylan}
+
+\index{remove}\index{remove"!}\index{choose}\index{choose-by}
+\code{(remove \meta{sequence} \meta{value})} answers the sequence
+without the elements that match the value, or without the first
+\code{count:} of them; \code{remove!} may change the sequence.
+\code{choose} keeps the elements for which a predicate is true, and
+\code{choose-by} keeps the elements of one sequence whose partners in
+another satisfy a predicate.
+
+\begin{dylan}
+(remove '(3 1 4 1 5 9) 1)                 ; => (3 4 5 9)
+(remove '(3 1 4 1 5 9) 1 count: 1)        ; => (3 4 1 5 9)
+(remove "banana" #\a)                     ; => "bnn"
+(remove! (list 3 1 4 1 5 9) 1)            ; => (3 4 5 9)
+(choose even? '(3 1 4 1 5 9))             ; => (4)
+(choose even? #(1 2 3 4))                 ; => #(2 4)
+(choose-by even? (range from: 1) '(a b c d e f g h i))
+; => (b d f h)
+\end{dylan}
+
+\subsection{Sets}
+
+\index{intersection}\index{union}\index{remove-duplicates}
+\index{remove-duplicates"!}
+\code{intersection} answers the elements of the first sequence that are
+also in the second; \code{union} answers the elements of both, those of
+the second only if the first lacks them; \code{remove-duplicates}
+answers a sequence without repeated elements, keeping the first of each.
+The test of \code{intersection} and \code{union} is called with an
+element of the first sequence and one of the second.
+
+\begin{dylan}
+(intersection '(john paul george ringo)
+              '(richard george edward charles john))
+; => (john george)
+(union '(butter flour sugar salt eggs)
+       '(eggs butter mushrooms onions salt))
+; => (butter flour sugar salt eggs mushrooms onions)
+(remove-duplicates '(spam eggs spam sausage spam spam spam))
+; => (spam eggs sausage)
+(remove-duplicates '(1 1.0 2) test: =)   ; => (1 2)
+\end{dylan}
+
+\subsection{Copying and joining}
+
+\index{copy-sequence}\index{concatenate}\index{concatenate-as}
+\index{replace-subsequence"!}
+\code{copy-sequence} answers a new sequence of the elements from
+\code{start:} (default 0) up to \code{end:} (default the size).
+\code{concatenate} joins sequences into a new one of the first one's
+\code{class-for-copy}; \code{concatenate-as} takes the class.
+\code{replace-subsequence!} overwrites the elements of a sequence from
+\code{start:} on with those of another, which must fit.
+
+\begin{dylan}
+(define hamlet '(to be or not to be))
+(id? hamlet (copy-sequence hamlet))          ; => #f
+(copy-sequence hamlet start: 2 end: 4)       ; => (or not)
+(copy-sequence "hello" start: 1)             ; => "ello"
+(concatenate "low-" "calorie")               ; => "low-calorie"
+(concatenate '(0 1 2) '(3 4 5) '(6 7 8))     ; => (0 1 2 3 4 5 6 7 8)
+(concatenate #(1) '(2))                      ; => #(1 2)
+(concatenate-as <string> '(#\n #\o #\n) '(#\f #\a #\t))   ; => "nonfat"
+(concatenate-as <vector> '(0 1 2) '(3 4 5))  ; => #(0 1 2 3 4 5)
+(define phrase (copy-sequence "I hate oatmeal."))
+(replace-subsequence! phrase "like" start: 2)  ; => "I like oatmeal."
+\end{dylan}
+
+\noindent (\code{phrase} is a copy because a string literal is a
+constant; see section~\ref{sec:collections-strings}.)
+
+\subsection{Reversing and sorting}
+
+\index{reverse}\index{reverse"!}\index{sort}\index{sort"!}
+\code{reverse} answers the elements in the opposite order and
+\code{reverse!} may reuse the sequence's storage. \code{sort} answers the
+elements in ascending order by \code{test:}, which defaults to \code{<};
+\code{sort!} may reuse the storage. Both sorts are stable, keeping equal
+elements in their original order, whether or not \code{stable:} is given.
+
+\begin{dylan}
+(define x '(bim bam boom))
+(reverse x)                  ; => (boom bam bim)
+x                            ; => (bim bam boom)
+(reverse "abc")              ; => "cba"
+(reverse! (list 1 2 3))      ; => (3 2 1)
+(define nums '(3 1 4 1 5 9))
+(sort nums)                  ; => (1 1 3 4 5 9)
+nums                         ; => (3 1 4 1 5 9)
+(sort nums test: >)          ; => (9 5 4 3 1 1)
+(sort #(3 1 2))              ; => #(1 2 3)
+(sort "hello")               ; => "ehllo"
+(sort '("pear" "apple" "fig"))           ; => ("apple" "fig" "pear")
+(sort '((b . 2) (a . 1) (c . 2) (d . 1))
+      test: (method (x y) (< (cdr x) (cdr y))))
+; => ((a . 1) (d . 1) (b . 2) (c . 2))
+\end{dylan}
+
+\subsection{Particular elements and searching}
+
+\index{first}\index{second}\index{third}\index{last}
+\code{first}, \code{second}, \code{third} and \code{last} answer those
+elements, and with \code{set!} replace them. Asking for an element that
+is not there is an error.
+
+\begin{dylan}
+(first '(a b c))              ; => a
+(third '(a b c))              ; => c
+(last '(emperor of china))    ; => china
+(last #(1 2 3))               ; => 3
+(define l (list 1 2 3))
+(set! (first l) 'one)
+(set! (last l) 'three)
+l                             ; => (one 2 three)
+\end{dylan}
+
+\index{subsequence-position}
+\code{(subsequence-position \meta{big} \meta{pattern})} answers the index
+at which \meta{pattern} first occurs in \meta{big}, or the
+\code{count:}th occurrence, or \code{\#f}:
+
+\begin{dylan}
+(subsequence-position "Ralph Waldo Emerson" "Waldo")   ; => 6
+(subsequence-position "banana" "an" count: 2)          ; => 3
+(subsequence-position "banana" "x")                    ; => #f
+(subsequence-position '(a b c b c) '(b c))             ; => 1
+\end{dylan}
+
+\section{Lists and pairs}\label{sec:collections-lists}
+
+\index{<list>}\index{<pair>}\index{<empty-list>}\index{list}
+A list is either the empty list, \code{'()}, the only instance of
+\code{<empty-list>}, or a \code{<pair>}, whose \term{car} is an element
+and whose \term{cdr} is the rest of the list. The classes are sealed. The
+empty list is not \code{\#f}: it is a true value.
+
+\index{cons}\index{list*}\index{car}\index{cdr}
+\begin{dylan}
+(cons 1 2)                  ; => (1 . 2)
+(cons 1 '(2 3))             ; => (1 2 3)
+(list 1 2 3)                ; => (1 2 3)
+(list* 1 2 3 '(4 5 6))      ; => (1 2 3 4 5 6)      the last argument is the tail
+(list* 1 2)                 ; => (1 . 2)
+(car '(4 5 6))              ; => 4
+(cdr '(4 5 6))              ; => (5 6)
+(car '())                   ; => ()
+(cdr '())                   ; => ()
+(object-class '())          ; => <empty-list>
+(object-class '(1))         ; => <pair>
+\end{dylan}
+
+\noindent \code{(setter car)} and \code{(setter cdr)} change a pair. The
+twelve functions \code{caar} through \code{cdddr} compose \code{car} and
+\code{cdr} as their names spell (\code{(caddr x)} is
+\code{(car (cdr (cdr x)))}), and each has a setter:
+
+\begin{dylan}
+(define x (list 4 5 6))
+(set! (car x) 9)
+(set! (cdr (cdr x)) '(a b))
+x                          ; => (9 5 a b)
+(cadr '(1 2 3))            ; => 2
+(caddr '(1 2 3))           ; => 3
+(cddr '(1 2 3))            ; => (3)
+(define y (list 1 2 3))
+(set! (cadr y) 'two)
+y                          ; => (1 two 3)
+\end{dylan}
+
+\index{append}\index{find-pair}
+\code{append} joins lists; its result shares the last list.
+\code{(find-pair \meta{item} \meta{list})} finds the first element of a
+list of pairs whose car is the item (by \code{test:}):
+
+\begin{dylan}
+(append '(1 2) '(3) '(4 5))               ; => (1 2 3 4 5)
+(find-pair 'b '((a . 1) (b . 2)))         ; => (b . 2)
+(find-pair 'z '((a . 1)))                 ; => #f
+\end{dylan}
+
+\noindent \code{(make <list> size: \meta{n} fill: \meta{x})} makes a list
+of \meta{n} copies of \meta{x} (default \code{\#f}). \code{add!} on a list
+is \code{cons} and \code{remove!} may splice the list. The \code{size}
+of a circular list is \code{\#f}:
+
+\begin{dylan}
+(define circle (list 1 2 3))
+(set! (cdr (cddr circle)) circle)
+(size circle)    ; => #f
+\end{dylan}
+
+\begin{warnbox}
+Do not let the Common Lisp implementation's read-eval-print loop print a
+circular list, as it would by showing the value of the \code{set!} above
+typed on its own: it prints forever. Wrap such a form in
+\code{(begin ... \#f)}.
+\end{warnbox}
+
+\noindent The 1993 design note that renamed \code{cons}, \code{car} and
+\code{cdr} to \code{pair}, \code{head} and \code{tail} and removed
+\code{list*}, \code{append} and the \code{c...r} functions is not
+followed: both implementations have the 1992 names only.
+
+\section{Vectors and arrays}\label{sec:collections-vectors}
+
+\index{<vector>}\index{<simple-object-vector>}\index{vector}
+A vector is a one-dimensional array with constant-time access by index.
+\code{\#(...)} writes a constant vector, \code{vector} makes one of its
+arguments, and \code{make} makes one of a given size:
+
+\begin{dylan}
+(vector 1 2 3)                                   ; => #(1 2 3)
+(make <vector> size: 3)                          ; => #(#f #f #f)
+(make <simple-object-vector> size: 2 fill: 'x)   ; => #(x x)
+(as <vector> '(1 2))                             ; => #(1 2)
+(as <list> #(1 2))                               ; => (1 2)
+\end{dylan}
+
+\noindent A \code{<simple-object-vector>} holds any objects and cannot
+change size. Its elements are read and set by \code{element}, or by the
+functions of arrays below.
+
+\index{<array>}\index{aref}\index{dimensions}
+An \code{<array>} has any number of dimensions; its keys are sequences
+of indices. \code{make} takes \code{dimensions:} (required) and
+\code{fill:} (default \code{\#f}). \code{aref} reads the element at
+indices given as separate arguments, \code{(setter aref)} sets it, and
+\code{dimensions} answers the dimensions as a list. A vector is an array
+of one dimension.
+
+\begin{dylan}
+(define a (make <array> dimensions: '(2 3) fill: 0))
+(set! (aref a 1 2) 'x)
+(aref a 1 2)            ; => x
+(element a '(1 2))      ; => x
+(dimensions a)          ; => (2 3)
+(size a)                ; => 6
+(aref #(7 8 9) 1)       ; => 8
+(dimensions #(1 2 3))   ; => (3)
+(define vv (vector 7 8 9))
+(set! (aref vv 1) 5)
+vv                      ; => #(7 5 9)
+\end{dylan}
+
+\noindent An array is iterated over in row-major order. A wrong number of
+indices, or an index out of bounds, is an error. \code{map} over an
+array answers an array with the same dimensions:
+
+\begin{dylan}
+(define b (map list a))
+(dimensions b)          ; => (2 3)
+(aref b 1 2)            ; => (x)
+\end{dylan}
+
+\section{Strings}\label{sec:collections-strings}
+
+\index{<string>}\index{<byte-string>}\index{<unicode-string>}\index{string}
+A string is a mutable sequence of characters. A \code{<byte-string>}
+holds characters with codes below 256, a \code{<unicode-string>} any
+characters. \code{"..."} writes a constant string; \code{make} of
+\code{<string>} or \code{<byte-string>} takes \code{size:} and
+\code{fill:} (default \code{\#\textbackslash{}space}).
+
+\begin{dylan}
+(make <string> size: 3 fill: #\z)   ; => "zzz"
+(object-class "abc")                ; => <byte-string>
+(as <list> "abc")                   ; => (#\a #\b #\c)
+(as <string> '(#\h #\i))            ; => "hi"
+(size "abc")                        ; => 3
+\end{dylan}
+
+\noindent The implementations differ on Unicode. In the compiler to C a
+string literal with a character above code 255 is a
+\code{<unicode-string>}, and a byte string cannot hold such a character
+(storing one is an error). In the Common Lisp implementation every string
+is a \code{<byte-string>} that holds any character, and \code{make} of
+\code{<unicode-string>} is an error.
+
+\begin{warnbox}
+A string literal is a constant, and the compiler to C may share one
+literal among all its occurrences, so \code{(id? "abc" "abc")} can be
+\code{\#t} there (it is \code{\#f} in the Common Lisp implementation).
+Do not change a literal: copy it first with \code{copy-sequence}.
+\end{warnbox}
+
+\index{as-uppercase}\index{as-lowercase}\index{as-uppercase"!}
+\index{as-lowercase"!}
+Strings compare lexicographically by their characters, a prefix being
+less than the longer string; \code{=} compares their characters. The
+case functions of characters extend to strings: \code{as-uppercase} and
+\code{as-lowercase} answer new strings, and \code{as-uppercase!} and
+\code{as-lowercase!} change the string they are given.
+
+\begin{dylan}
+(< "apple" "banana")       ; => #t
+(< "app" "apple")          ; => #t
+(< "Zebra" "apple")        ; => #t      Z (90) is less than a (97)
+(= "abc" "abc")            ; => #t
+(as-uppercase "Van Gogh")  ; => "VAN GOGH"
+(as-lowercase "Van Gogh")  ; => "van gogh"
+(define s (copy-sequence "Van Gogh"))
+(as-uppercase! s)
+s                          ; => "VAN GOGH"
+(sort '("pear" "Apple" "fig")
+      test: (method (a b) (< (as-lowercase a) (as-lowercase b))))
+; => ("Apple" "fig" "pear")
+\end{dylan}
+
+\section{Stretchy vectors}\label{sec:collections-stretchy}
+
+\index{<stretchy-vector>}
+A \code{<stretchy-vector>} is a vector that grows and shrinks.
+\code{add!} adds an element at its end and answers the same vector;
+\code{remove!} removes elements from the vector itself. Its size can be
+set: a larger size adds \code{\#f} elements and a smaller one drops
+elements from the end.
+
+\begin{dylan}
+(define sv (make <stretchy-vector>))
+(add! sv 'a)
+(add! sv 'b)
+(add! sv 'c)
+(size sv)           ; => 3
+(element sv 1)      ; => b
+(set! (size sv) 5)
+(as <list> sv)      ; => (a b c #f #f)
+(set! (size sv) 2)
+(as <list> sv)      ; => (a b)
+(remove! sv 'a)
+(as <list> sv)      ; => (b)
+\end{dylan}
+
+\noindent \code{make} takes \code{size:} and \code{fill:}. Setting an
+element beyond the end is an error in both implementations; use
+\code{add!}, or set the size first.
+
+\section{Deques}\label{sec:collections-deques}
+
+\index{<deque>}\index{push}\index{pop}\index{push-last}\index{pop-last}
+A \code{<deque>}, a double-ended queue, adds and removes elements at
+either end in constant time. \code{push} adds at the front and
+\code{push-last} at the back, each answering the deque; \code{pop} and
+\code{pop-last} remove and answer the first or the last element, and it
+is an error to pop an empty deque. \code{add!} is \code{push}, and
+\code{remove!} removes from the deque itself.
+
+\begin{dylan}
+(define d (make <deque>))
+(push d 2)
+(push d 1)
+(push-last d 3)
+(add! d 0)
+(as <list> d)       ; => (0 1 2 3)
+(pop d)             ; => 0
+(pop-last d)        ; => 3
+(as <list> d)       ; => (1 2)
+(remove! d 2)
+(as <list> d)       ; => (1)
+\end{dylan}
+
+\noindent The compiler to C prints a deque as \code{\{<deque> 0 1 2 3\}};
+the Common Lisp implementation prints only \code{\#[instance-of <deque>]}.
+\code{make} takes \code{size:} and \code{fill:}. The Common Lisp
+implementation can also set a deque's size; the compiler to C cannot.
+
+\section{Ranges}\label{sec:collections-ranges}
+
+\index{<range>}\index{range}
+A \code{<range>} is an arithmetic progression, computed rather than
+stored, and possibly unbounded. \code{range} makes one from keywords:
+\code{from:} (default 0) is the first value and \code{by:} (default 1)
+the step; \code{up-to:} is an exclusive bound, \code{through:} an
+inclusive one, and \code{size:} a number of elements. With none of the
+last three the range is unbounded. A negative \code{by:} makes a range
+that runs downward, with the bounds below it. \code{make} of
+\code{<range>} takes the same keywords.
+
+\begin{dylan}
+(as <list> (range from: 1 up-to: 4))              ; => (1 2 3)
+(as <list> (range from: 1 through: 4))            ; => (1 2 3 4)
+(as <list> (range from: 10 through: 1 by: -3))    ; => (10 7 4 1)
+(as <list> (range from: 0 by: 1/2 up-to: 2))      ; => (0 1/2 1 3/2)
+(as <list> (make <range> from: 2 size: 3))        ; => (2 3 4)
+(size (range from: 1))                            ; => #f
+(element (range from: 10 by: 5) 100)              ; => 510
+\end{dylan}
+
+\noindent Several functions treat ranges specially so that they finish
+even on an unbounded one. \code{member?} computes its answer;
+\code{copy-sequence} and \code{reverse} answer ranges (an unbounded range
+cannot be reversed); \code{intersection} of two ranges is a range; and
+\code{=} compares two ranges by their values:
+
+\begin{dylan}
+(member? 1000000 (range))                     ; => #t
+(member? 6 (range from: 1 by: 2))             ; => #f
+(as <list> (copy-sequence (range from: 5) start: 2 end: 5))  ; => (7 8 9)
+(as <list> (intersection (range from: 0 by: 2)
+                         (range from: 0 by: 3 up-to: 20)))   ; => (0 6 12 18)
+(= (range from: 1 up-to: 4) (range from: 1 through: 3))      ; => #t
+(= (range from: 1 up-to: 4) '(1 2 3))                        ; => #t
+\end{dylan}
+
+\noindent A range is not mutable; its \code{class-for-copy} is
+\code{<list>}, so \code{map} and \code{choose} over a range answer lists:
+
+\begin{dylan}
+(map (curry * 2) (range from: 1 through: 3))   ; => (2 4 6)
+(choose odd? (range from: 1 through: 6))       ; => (1 3 5)
+\end{dylan}
+
+\noindent The compiler to C prints a range as
+\code{\{range 1 by 1 size 3\}}, the Common Lisp implementation as
+\code{\#[instance-of <range>]}.
+
+\section{Tables}\label{sec:collections-tables}
+
+\index{<table>}\index{table}\index{remove-key"!}
+A \code{<table>} maps keys of any kind to elements. Keys are compared
+with \code{=} and hashed with \code{=hash}, so two strings with the same
+characters are the same key, and so are \code{1} and \code{1.0}. Setting
+the element of a new key adds it; \code{remove-key!} removes one (and
+does nothing if the key is absent).
+
+\begin{dylan}
+(define t (make <table>))
+(set! (element t 'one) 1)
+(set! (element t "two") 2)
+(element t 'one)                     ; => 1
+(element t (copy-sequence "two"))    ; => 2
+(element t 'three default: 0)        ; => 0
+(size t)                             ; => 2
+(remove-key! t 'one)
+(key-sequence t)                     ; => ("two")
+\end{dylan}
+
+\noindent Asking for a missing key without a \code{default:} is an
+error. A table is unstable under iteration: its elements come in an
+order of the implementation's choosing, which may change as it grows.
+The compiler to C prints a table as \code{\{table "two" => 2\}}, the
+Common Lisp implementation as \code{\#[instance-of <table>]}.
+
+\section{Equality: = and id?}\label{sec:collections-equality}
+
+\index{=}\index{id?}\index{equality}
+Dylan has two equalities. \code{id?} answers whether two objects are the
+same object, indistinguishable by any program; \code{=} answers whether
+they are equal in value, by the generic function
+\code{binary=}\index{binary=}:
+
+\begin{itemize}
+\item numbers are \code{=} when they have the same mathematical value
+  (chapter~\ref{ch:numbers});
+\item collections are \code{=} when they have the same keys and the
+  elements under each key are \code{=}; for sequences, the same elements
+  in the same positions, whatever the classes of the sequences;
+\item pairs, including those of dotted lists, are \code{=} when their
+  cars and their cdrs are;
+\item anything else is \code{=} only when it is \code{id?}.
+\end{itemize}
+
+\begin{dylan}
+(= '(1 2) (list 1 2))                 ; => #t
+(id? '(1 2) (list 1 2))               ; => #f
+(= #(1 2) '(1 2))                     ; => #t
+(= "abc" #(#\a #\b #\c))              ; => #t
+(= (list 1 (vector 2)) (list 1.0 (vector 2.0)))   ; => #t
+(id? 'a 'a)                           ; => #t
+(id? #\a #\a)                         ; => #t
+\end{dylan}
+
+\noindent The functions that search take a \code{test:} defaulting to
+\code{id?}, so pass \code{test: =} to find a value equal to another but
+not the same object.
+
+\index{=hash}
+To give a class of your own a notion of equality, add a method to
+\code{binary=}. If its instances are to be table keys, also add one to
+\code{=hash}, which must answer the same integer for any two objects
+that are \code{=}:
+
+\begin{dylan}
+(define-class <point> (<object>)
+  (x init-keyword: x:)
+  (y init-keyword: y:))
+
+(define-method binary= ((a <point>) (b <point>))
+  (and (= (x a) (x b)) (= (y a) (y b))))
+
+(define-method =hash ((p <point>))
+  (+ (* 31 (=hash (x p))) (=hash (y p))))
+
+(define p1 (make <point> x: 1 y: 2))
+(define p2 (make <point> x: 1 y: 2))
+(id? p1 p2)                           ; => #f
+(= p1 p2)                             ; => #t
+(member? p2 (list p1))                ; => #f
+(member? p2 (list p1) test: =)        ; => a list holding p1, a true value
+(define names (make <table>))
+(set! (element names p1) "home")
+(element names p2)                    ; => "home"
+\end{dylan}

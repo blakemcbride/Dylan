@@ -1,0 +1,453 @@
+\chapter{Getting Started}\label{ch:start}
+
+This chapter takes you from an empty directory to running Dylan in both
+implementations. It lists what you need to install, shows how to get the
+source, walks through a first session with the interactive
+implementation, and compiles a first program with \cmd{dylanc}. By the
+end of it you will have everything you need for the tutorial in
+Chapter~\ref{ch:tutorial}.
+
+\section{Requirements}\label{sec:start-requirements}
+
+\index{requirements}
+Both implementations are written in Common Lisp and need \textbf{SBCL},
+Steel Bank Common Lisp. The system was developed on SBCL~2.6.3, and any
+recent release should work. The interactive implementation needs nothing
+else.
+
+The compiler to C needs three more things:
+
+\begin{itemize}
+\item \textbf{A C compiler that supports the \code{musttail}
+  attribute}, which guarantees that a call in tail position is compiled as
+  a jump. That means \textbf{GCC 15 or later} or \textbf{Clang 13 or
+  later}. Any other C11 compiler can be used with the \cmd{-{}-trampoline}
+  option, which implements tail calls with trampolines instead, at some
+  cost in speed. \cmd{dylanc} uses the compiler named by the \code{CC}
+  environment variable, or \cmd{cc} if \code{CC} is not set; the
+  \cmd{-{}-cc} option names one explicitly.
+\item \textbf{The Boehm-Demers-Weiser garbage collector}, \file{libgc},
+  \emph{built with thread support}, together with its header files. The
+  runtime defines \code{GC\_THREADS} and links with \cmd{-lgc -lm
+  -lpthread}.
+\item \textbf{\cmd{make}} and a POSIX shell. \cmd{bin/dylanc} is a shell
+  script, and it builds the C runtime library with \cmd{make} the first
+  time it is needed.
+\end{itemize}
+
+\paragraph{Checking what you have.} These commands report the versions
+installed:
+
+\begin{shell}
+$ sbcl --version
+SBCL 2.6.3
+$ gcc --version | head -1
+gcc (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+$ clang --version | head -1
+clang version 22.1.8 (Fedora 22.1.8-4.fc44)
+$ pkg-config --modversion bdw-gc
+8.2.6
+$ ls /usr/include/gc.h
+/usr/include/gc.h
+\end{shell}
+
+Your version numbers will differ; what matters is that SBCL runs, that
+one of the C compilers is new enough (or that you plan to use
+\cmd{-{}-trampoline}), and that the collector's header \file{gc.h} is
+present. On Fedora and related systems the collector's development
+package is called \file{gc-devel}; on Debian and Ubuntu it is
+\file{libgc-dev}. The packaged collectors on these systems are normally built
+with thread support. If you build the collector yourself, configure it with
+threads enabled.
+
+\begin{notebox}
+The C compiler is needed only to \emph{build} programs. An executable made
+by \cmd{dylanc} needs only the C library and the shared \file{libgc} at
+run time; it does not need SBCL.
+\end{notebox}
+
+\section{Getting the source}\label{sec:start-source}
+
+The project lives at \url{https://github.com/blakemcbride/Dylan}. Clone
+it with Git:
+
+\begin{shell}
+$ git clone https://github.com/blakemcbride/Dylan.git
+$ cd Dylan
+\end{shell}
+
+There is nothing to configure and nothing to install. Every command in
+this book is run from the top directory of the clone unless the text says
+otherwise. The directories you will meet first are these:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\file{src/} & the interactive implementation, in Common Lisp \\
+\file{bin/dylanc} & the command that runs the compiler to C \\
+\file{compiler/} & the compiler to C, in Common Lisp \\
+\file{runtime/} & the compiler's runtime: \file{runtime/c} in C,
+  \file{runtime/dylan} in Dylan \\
+\file{manual/Dylan-1992/} & the annotated 1992 Dylan manual (the DIRM) \\
+\file{dylan-examples.dyl} & the examples from the 1992 manual \\
+\file{tests/}, \file{bench/} & test suites and benchmarks \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+You can run \cmd{dylanc} from anywhere by putting \file{bin} on your
+\code{PATH}, or by making a symbolic link to \file{bin/dylanc} in a
+directory that is already on it. The script finds the rest of the system
+relative to its own real location, so a link works.
+
+\section{The interactive implementation}\label{sec:start-rep}
+
+\index{read-eval-print loop}\index{dylan:rep}
+Start SBCL in the top directory of the clone and load
+\file{src/load-dylan.lisp}:
+
+\begin{repl}
+$ sbcl
+* (load "src/load-dylan.lisp")
+
+Call DYLAN:REP to start a Dylan read-eval-print loop.
+;Dylan loaded.  (dylan:rep) starts a read-eval-print loop.
+T
+\end{repl}
+
+\index{fasl files}
+The first time you do this, SBCL compiles every Lisp file of the
+implementation and writes the compiled files (\emph{fasl} files) into a
+directory under \file{src/fasl/} named for the Lisp and its version, such
+as \file{src/fasl/SBCL-2-6-3/}. This takes a little while. Later loads
+use the compiled files and take well under a second. If you change a
+source file, the next load recompiles that file and every file loaded
+after it, since later files may depend on its macros; you never need to
+delete the fasl directory by hand. Because the fasl files are kept apart
+for each Lisp version, upgrading SBCL simply makes a new directory.
+
+\paragraph{Starting the loop.} The function \code{dylan:rep} starts a
+read-eval-print loop that reads Dylan rather than Lisp. Its prompt is a
+question mark:
+
+\begin{repl}
+* (dylan:rep)
+
+Entering Dylan read-eval-print-loop.
+Exit by typing "dylan:done"
+
+? (define greeting "Hello")
+
+;Value: greeting
+
+? (concatenate greeting ", world")
+
+;Value: "Hello, world"
+\end{repl}
+
+Type a form and press Enter. The loop reads the form, compiles it into
+Lisp, runs it, and prints its value after \code{;Value:}. A form may
+span several lines; the loop keeps reading until the parentheses balance.
+A definition such as \code{define} answers the name it defined. A form
+that returns several values shows each one on its own line, numbered:
+
+\begin{repl}
+? (truncate/ 17 5)
+
+;Value[1]: 3
+;Value[2]: 2
+\end{repl}
+
+\begin{notebox}
+In a real terminal the loop prints an extra blank line after each form you
+type. The transcripts in this book leave it out.
+\end{notebox}
+
+\paragraph{Leaving the loop.} Type \code{dylan:done} to return to the
+Lisp prompt. What you defined is not lost: if you call \code{(dylan:rep)}
+again, the variables, classes and methods you defined earlier are still
+there. To leave SBCL altogether, type \code{(sb-ext:exit)} at the Lisp
+prompt.
+
+\paragraph{When something goes wrong.} An error that your Dylan code does
+not handle stops the loop and enters SBCL's debugger. The debugger
+offers restarts that return you to the Dylan prompt; choose one by typing
+its number:
+
+\begin{repl}
+? (error "Account ~a is overdrawn" 42)
+
+debugger invoked on a DYLAN::DYLAN-CONDITION in thread
+#<THREAD tid=701926 "main thread" RUNNING {1200030003}>:
+  Error: Account 42 is overdrawn
+
+Type HELP for debugger help, or (SB-EXT:EXIT) to exit from SBCL.
+
+restarts (invokable by number or by possibly-abbreviated name):
+  0: [DYLAN-RESTART] Return to the read-eval-print loop.
+  1: [DYLAN-REP    ] Return to the Dylan read-eval-print loop.
+  2: [ABORT        ] Exit debugger, returning to top level.
+...
+0] 0
+;Aborted
+
+? (+ 3 4)
+
+;Value: 7
+\end{repl}
+
+\begin{notebox}
+A few errors are detected by Common Lisp itself rather than by Dylan; for
+example, \code{(car 5)} is reported as a Lisp \code{TYPE-ERROR}. For such
+an error the debugger still offers \code{DYLAN-REP}, ``Return to the Dylan
+read-eval-print loop'', which gives you a new \code{?} prompt. Dylan's own
+handlers see these errors as instances of \code{<error>}, so
+\code{handler-case} catches them normally. If you ever do leave the loop
+for the Lisp \code{*} prompt, nothing you defined is lost; type
+\code{(dylan:rep)} to carry on.
+\end{notebox}
+
+\paragraph{Running a file at the loop.} The loop reads from standard
+input, so you can feed it a whole file of Dylan from the shell. This runs
+every form in \file{program.dyl} and then leaves:
+
+\begin{shell}
+$ (cat program.dyl; echo dylan:done) | \
+    sbcl --non-interactive --eval '(load "src/load-dylan.lisp")' \
+         --eval '(dylan:rep)'
+\end{shell}
+
+Each form's value is printed after \code{;Value:}, as if you had typed it.
+With \cmd{-{}-non-interactive}, an unhandled error prints a backtrace and
+ends SBCL rather than waiting in the debugger.
+
+\section{Compiling a file to Lisp}\label{sec:start-compile-file}
+
+\index{dylan:compile-file}
+The interactive implementation can also compile a whole file of Dylan
+into a file of Common Lisp, which can then be loaded and run without
+reading or compiling any Dylan. Suppose \file{greet.dyl} contains this:
+
+\begin{dylan}
+(define-method greet ((name <string>))
+  (display "Hello, ")
+  (display name)
+  (display "!")
+  (newline))
+
+(greet "world")
+\end{dylan}
+
+Load \file{src/load-compiler.lisp} and call \code{dylan:compile-file}
+with the names of the input and output files:
+
+\begin{shell}
+$ sbcl --non-interactive --eval '(load "src/load-compiler.lisp")' \
+       --eval '(dylan:compile-file "greet.dyl" "greet.lisp")'
+\end{shell}
+
+Compiling does not run the program; it only writes \file{greet.lisp}.
+That file is ordinary Common Lisp. To run it, load
+\file{src/load-runtime.lisp} and then load the compiled file:
+
+\begin{shell}
+$ sbcl --non-interactive --eval '(load "src/load-runtime.lisp")' \
+       --eval '(load "greet.lisp")'
+...
+Hello, world!
+\end{shell}
+
+You can also load a compiled file into a session and then start the
+loop; the file's definitions are then available at the \code{?} prompt,
+and you can call them, redefine them, or add methods to them.
+
+\begin{notebox}
+In this version, \file{load-compiler.lisp} and \file{load-runtime.lisp}
+both load the whole system, exactly as \file{load-dylan.lisp} does; they
+are separate entry points so that a program can say what it needs.
+Chapter~\ref{ch:lisp} describes \code{dylan:compile-file},
+\code{dylan:compile-to-file} and modules in detail.
+\end{notebox}
+
+\section{A first program with dylanc}\label{sec:start-dylanc}
+
+\index{dylanc!first program}
+The compiler to C takes one or more files of Dylan and produces a native
+executable. Write this into \file{hello.dyl}:
+
+\begin{dylan}
+(define-method greet ((name <string>))
+  (format #t "Hello, ~a!~%" name))
+
+(greet "world")
+\end{dylan}
+
+Then compile it and run the result:
+
+\begin{shell}
+$ bin/dylanc hello.dyl
+$ ./hello
+Hello, world!
+\end{shell}
+
+A program is simply a sequence of top-level forms, run in order from the
+top of the file when the executable starts. There is no \code{main}
+function; here the last form calls \code{greet}.
+
+\begin{notebox}
+\code{format} is part of the compiler's streams extension
+(Chapter~\ref{ch:extensions}). The 1992 manual uses it in examples but does
+not define it, and the interactive implementation does not have it. To
+write output that works in both implementations, use \code{display},
+\code{print}, \code{write-line} and \code{newline}, as the tutorial does.
+\end{notebox}
+
+\paragraph{The first build takes longer.} The first time you run
+\cmd{dylanc}, it compiles the compiler itself into fasl files, builds the
+C runtime library with \cmd{make}, and compiles the Dylan library's C
+code, all inside the clone (under \file{compiler/fasl/} and
+\file{runtime/build/}). Each of these is kept and reused, so later
+builds of a small program take only a second or two. The clone therefore
+needs to be writable by the user who runs \cmd{dylanc}.
+
+\paragraph{The executable's name.} By default the executable is named
+after the first file, without the \file{.dyl}. The \cmd{-o} option names it
+yourself:
+
+\begin{shell}
+$ bin/dylanc -o greeter hello.dyl
+$ ./greeter
+Hello, world!
+\end{shell}
+
+\paragraph{Several files.} A program can be split across several files.
+Name them all on the command line; they are compiled, in the order given,
+into one program, exactly as if they were one long file. Put definitions
+before the code that uses them at top level. With \file{shapes.dyl}
+
+\begin{dylan}
+(define-class <square> (<object>)
+  (side init-keyword: side:))
+
+(define-method area ((s <square>))
+  (* (side s) (side s)))
+\end{dylan}
+
+\noindent and \file{main.dyl}
+
+\begin{dylan}
+(print (area (make <square> side: 7)))
+\end{dylan}
+
+\noindent the program is built and run like this:
+
+\begin{shell}
+$ bin/dylanc -o app shapes.dyl main.dyl
+$ ./app
+49
+\end{shell}
+
+\paragraph{What files appear.} Normally the only file \cmd{dylanc} leaves
+behind is the executable. The C it generates is written beside the
+executable and deleted once the C compiler has finished with it. The \cmd{-k} (\cmd{-{}-keep-c}) option keeps it:
+
+\begin{shell}
+$ bin/dylanc -k hello.dyl
+$ ls
+hello  hello.c  hello.dyl  hello-dylan.c  hello-dylan-user.c  hello.h
+\end{shell}
+
+\file{hello.c} holds the program's data, its generic-function dispatch
+and the C \code{main} function; \file{hello.h} is a header the other files
+share; and there is one file for each module's functions:
+\file{hello-dylan-user.c} for your code, which is in the module
+\code{dylan-user}, and \file{hello-dylan.c} for the library's module
+\code{dylan}. The generated C contains \code{\#line} directives that point
+back to your Dylan source, so a C debugger or a C compiler's message
+names the line of Dylan it came from. Reading this C is a good way to see
+what the compiler did with your program; Chapter~\ref{ch:internals}
+explains it.
+
+\paragraph{Errors when compiling.} A syntax error stops the compilation
+with a message giving the file, line and column, and a non-zero exit
+status:
+
+\begin{shell}
+$ bin/dylanc bad.dyl
+bad.dyl:1:15: error: End of file inside a Dylan list.
+\end{shell}
+
+A name that is used but never defined is only a warning; the program is
+still built, and the error comes
+when the program runs and reaches that name:
+
+\begin{shell}
+$ bin/dylanc -o bad main.dyl
+main.dyl:1:8: warning: area is not defined (module dylan-user)
+main.dyl:1:14: warning: <square> is not defined (module dylan-user)
+$ ./bad
+Dylan error: the variable area@dylan-user has no value
+\end{shell}
+
+Take these warnings seriously: they almost always mean a misspelling or a
+missing file on the command line. A program that ends with an unhandled
+error prints \code{Dylan error:} and a message to standard error and exits
+with status~1.
+
+\paragraph{Other options.} \cmd{bin/dylanc -h} lists every option. The
+ones you are most likely to want soon are \cmd{-O0} to \cmd{-O3} (how hard
+the C compiler optimizes; the default is \cmd{-O2}), \cmd{-Os} for a small
+executable, \cmd{-g} for a debugging build that checks every inline
+operation, and \cmd{-{}-trampoline} and \cmd{-{}-cc} for other C
+compilers. Chapter~\ref{ch:dylanc} describes them all.
+
+\section{The examples and the test suites}\label{sec:start-tests}
+
+The repository includes the examples from the 1992 manual and a large
+set of tests. You do not need to run any of them to use the system, but
+they are a useful check that an installation works, and the examples are
+good reading.
+
+The interactive implementation runs the manual's examples, in
+\file{dylan-examples.dyl}, and compares the results with the transcripts
+in \file{src/reference/}. It must be run from the \file{src} directory:
+
+\begin{shell}
+$ cd src
+$ sbcl --eval '(load "load-dylan.lisp")' \
+       --eval '(load "full-test.lisp")' \
+       --eval '(dylan:test-examples)'
+\end{shell}
+
+The compiler to C has its own suites, among them the manual's examples
+chapter by chapter, tests of the code generator, stress tests, tests of
+the \cmd{dylanc} command, and tests of the C runtime:
+
+\begin{shell}
+$ sbcl --script tests/conformance/run.lisp
+$ sbcl --script tests/codegen/run.lisp
+$ sbcl --script tests/stress/run.lisp
+$ sh tests/driver/run.sh
+$ make -C runtime test
+\end{shell}
+
+\begin{warnbox}
+By default each \file{run.lisp} builds every test with both GCC and Clang,
+with \code{musttail} and with trampolines, which takes a long time. Give
+the mode \cmd{quick} as an argument, as in
+\cmd{sbcl -{}-script tests/conformance/run.lisp quick}, for a faster run
+with one configuration. Appendix~\ref{app:testing} describes the modes and
+the benchmarks.
+\end{warnbox}
+
+\section{Where to go next}\label{sec:start-next}
+
+Chapter~\ref{ch:tutorial} is a hands-on tour of the language. Start the
+interactive loop, keep this book open beside it, and type the examples as
+you read; at the end of the tutorial you will build a small program and
+compile it with \cmd{dylanc}.
+
+If you already know Lisp or Scheme and want the details first, the
+language reference begins with Chapter~\ref{ch:syntax}. The interactive
+implementation is described fully in Chapter~\ref{ch:lisp}, and the
+compiler in Chapter~\ref{ch:dylanc}.

@@ -1,0 +1,704 @@
+\chapter{The Interactive Implementation}\label{ch:lisp}
+
+\index{interactive implementation}
+The interactive implementation runs Dylan inside a Common Lisp system,
+SBCL. You type a Dylan expression, it is compiled to Common Lisp at once,
+the Lisp compiles that to machine code and runs it, and the value is
+printed. Nothing about the program is fixed in advance: classes can gain
+slots, generic functions can gain and lose methods, and definitions can
+be replaced while the program runs, all as the 1992 manual describes.
+That makes it the natural place to learn the language, to try out an
+idea, and to follow the DIRM's examples.
+
+This chapter describes how the implementation is built, how to load and
+use it, how Dylan values look to Lisp and how to call Lisp from Dylan,
+how it is made fast, and how it differs from the compiler to C.
+
+\section{How it works}\label{sec:lisp-architecture}
+
+\index{interactive implementation!architecture}
+The implementation began in 1992 as Thomas, a Dylan system written in
+Scheme at Digital Equipment Corporation's Cambridge Research Laboratory.
+This project translated it into Common Lisp and has since corrected it
+against the manual and rebuilt much of it for speed. Every source file in
+\file{src/} still names the Thomas file it grew from.
+
+An expression goes through four stages.
+
+\begin{enumerate}
+\item \textbf{Reading.} Common Lisp's reader cannot read Dylan: a colon
+  is a package marker to it, and it knows nothing of \code{\#t} and
+  \code{\#f}. A small reader of Dylan's own (in \file{compat.lisp}) turns
+  text into lists, symbols, numbers and strings. A Dylan symbol becomes a
+  Lisp symbol in the \code{DYLAN} package; a keyword \code{foo:} becomes
+  the Lisp keyword \code{:FOO}.
+\item \textbf{Compiling to Lisp.} The compiler (\file{compiler.lisp}
+  and the \file{comp-*.lisp} files) turns each Dylan form into a Lisp
+  form: \code{begin} into \code{progn}, \code{set!} into \code{setq}, a
+  method into a \code{lambda}, a call into a call through the runtime's
+  dispatcher. Each module variable becomes a Lisp special variable
+  with a name of its own, \code{!MODULE/X/} for a variable \code{x} of
+  \code{dylan-user} and \code{!MODULE/X@M/} for one owned by module
+  \code{m}.
+\item \textbf{Compiling to machine code.} The Lisp form is handed to
+  SBCL's own compiler, which turns it into native code.
+\item \textbf{Running.} The code runs against the runtime library, the
+  \file{runtime-*.lisp} files, which implement classes, generic
+  dispatch, collections, numbers and conditions.
+\end{enumerate}
+
+\noindent
+The files of \file{src/}, in the order they are loaded, do these jobs:
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.34\textwidth}>{\raggedright\arraybackslash}p{0.6\textwidth}@{}}
+\toprule
+File & Role \\
+\midrule
+\endhead
+\file{package.lisp} & the \code{DYLAN} package and its exported entry points \\
+\file{globals.lisp} & declares the runtime's global variables, which nearly every file refers to before the file that defines them is loaded \\
+\file{compat.lisp} & the Dylan reader and printer, weak tables, escapes, sorting and the interface to Common Lisp's condition system \\
+\file{support.lisp} & small utilities shared by the compiler and runtime \\
+\file{comp-util.lisp} & the compiler's utilities: names, variables, parameter lists \\
+\file{comp-module.lisp} & modules, \code{define-module} and the \code{module:} file header (Chapter~\ref{ch:modules}) \\
+\file{compiler.lisp} & the heart of the compiler, the table of special forms, the predefined names, \code{compile-file} and \code{compile-to-file} \\
+\file{comp-method.lisp} & \code{method}, \code{define-method}, \code{define-generic-function} \\
+\file{comp-class.lisp} & \code{define-class} and \code{define-slot} \\
+\file{comp-sf.lisp} & the other special forms: \code{bind}, \code{for}, \code{select} and the rest \\
+\file{comp-exc.lisp} & \code{handler-bind}, \code{handler-case}, \code{bind-exit}, \code{unwind-protect} \\
+\file{class.lisp} & classes, slots, instances and \code{make} \\
+\file{generic.lisp} & generic functions and method dispatch, with its caches \\
+\file{class-structure.lisp} & the predefined class heterarchy \\
+\file{runtime-top.lisp}, \file{runtime-internal.lisp} & common parameter lists and the procedures compiled code calls \\
+\file{runtime-methods.lisp}, \file{runtime-functions.lisp} & the predefined methods and functions \\
+\file{runtime-extensions.lisp} & \code{pp}, \code{lisp-variable}, \code{lisp-procedure} \\
+\file{runtime-bitstrings.lisp} & \code{logand} and the other bit operations \\
+\file{runtime-collections*.lisp} & collections: the iteration protocol, the generic operations, and one file for each kind (lists, vectors, strings, deques, ranges, tables, arrays) \\
+\file{runtime-exceptions.lisp} & conditions, handlers and restarts \\
+\file{runtime-fast-paths.lisp} & turns on the guarded fast paths (Section~\ref{sec:lisp-performance}) \\
+\file{rep.lisp} & the read-eval-print loop \\
+\file{load-dylan.lisp}, \file{load-compiler.lisp}, \file{load-runtime.lisp} & loaders \\
+\file{full-test.lisp} & the regression test driver \\
+\bottomrule
+\end{longtable}
+
+\noindent
+\file{src/README} describes the translation from Scheme in more detail.
+
+\section{Loading it}\label{sec:lisp-loading}
+
+\index{load-dylan.lisp@\file{load-dylan.lisp}}
+Start SBCL in the repository's top directory and load the system:
+
+\begin{shell}
+$ sbcl
+* (load "src/load-dylan.lisp")
+;Dylan loaded.  (dylan:rep) starts a read-eval-print loop.
+\end{shell}
+
+\index{fasl cache}
+The first time, this compiles every source file into a \term{fasl}
+(Lisp's compiled-file format), which takes a little while. The fasls are
+kept in \file{src/fasl/\meta{lisp}-\meta{version}/}, for example
+\file{src/fasl/SBCL-2-6-3/}, one directory for each Lisp and version
+since their fasls are incompatible. Later loads use them directly. When a
+source file changes, it is recompiled together with every file loaded
+after it, since those may depend on its macros and inline functions.
+
+Three loaders exist, for the three ways of using the system that Thomas
+offered:
+
+\begin{description}
+\item[\file{load-dylan.lisp}] the interactive environment: the
+  read-eval-print loop.
+\item[\file{load-compiler.lisp}] the compiler to Lisp:
+  \code{dylan:compile-file} and \code{dylan:compile-to-file}.
+\item[\file{load-runtime.lisp}] what compiled programs need to run.
+\end{description}
+
+\noindent
+In this version the three load the same thing, the whole system;
+\file{load-compiler.lisp} and \file{load-runtime.lisp} simply load
+\file{load-dylan.lisp}. Use whichever names your purpose. A loader can
+be given on the command line as well:
+
+\begin{shell}
+$ sbcl --eval '(load "src/load-dylan.lisp")' --eval '(dylan:rep)'
+\end{shell}
+
+\section{The read-eval-print loop}\label{sec:lisp-rep}
+
+\index{read-eval-print loop}\index{rep@\code{dylan:rep}}
+\code{(dylan:rep)} starts the loop. It prompts with \code{?}, reads one
+Dylan form, compiles and runs it, and prints the value after
+\code{;Value:}. A form may span several lines; the loop reads until the
+form is complete.
+
+\begin{repl}
+* (dylan:rep)
+
+Entering Dylan read-eval-print-loop.
+Exit by typing "dylan:done"
+
+? (define-method double ((n <number>)) (+ n n))
+
+;Value: double
+
+? (double 21)
+
+;Value: 42
+
+? (values 1 2 3)
+
+;Value[1]: 1
+;Value[2]: 2
+;Value[3]: 3
+
+? (values)
+
+
+? dylan:done
+DYLAN::|DYLAN:DONE|
+*
+\end{repl}
+
+\noindent
+A form that returns several values shows each on its own
+\code{;Value[\meta{n}]:} line; one that returns none shows nothing.
+Values are printed as \code{print} prints them (Chapter~\ref{ch:printing}),
+and output the form itself writes appears before the \code{;Value:} line.
+A definition answers the name it defined.
+
+Typing \code{dylan:done} leaves the loop and returns to Lisp's \code{*}
+prompt; the Lisp prints the symbol the loop returned. Everything the
+loop defined remains: call \code{(dylan:rep)} again and carry on where
+you left off. Typing \code{(dylan:in-module \meta{name})} at the
+\code{?} prompt changes the module later input is compiled in
+(Section~\ref{sec:modules-lisp}).
+
+Redefining things is normal at the loop. A second \code{define} of a
+variable replaces its value with a warning, a second \code{define-method}
+with the same specializers replaces the method, and a second
+\code{define-class} redefines the class in place:
+
+\begin{repl}
+? (define v 1)
+;Value: v
+
+? (define v 2)
+WARNING: redefining variable v
+;Value: v
+
+? (define-method describe ((x <integer>)) "an integer")
+;Value: describe
+
+? (define-method describe ((x <integer>)) "a whole number")
+;Value: describe
+
+? (describe 3)
+;Value: "a whole number"
+\end{repl}
+
+\index{empty-environment"!@\code{dylan:empty-environment"!}}
+From Lisp, \code{(dylan:empty-environment!)} makes the loop forget the
+module variables it has defined, and their values: a variable defined
+earlier is unbound afterwards, and using it is an error. It is rarely
+needed.
+
+\subsection{Errors and the Lisp debugger}\label{sec:lisp-errors}
+
+\index{debugger}\index{restart}
+An error that the Dylan program does not handle itself reaches SBCL's
+debugger. The debugger lists the \term{restarts} available, and the Dylan
+restarts in effect appear among them. For an error Dylan signals, the
+loop provides ``Return to the read-eval-print loop'', which abandons the
+form, prints \code{;Aborted} and gives you a new \code{?} prompt; for
+every error, whatever signalled it, it also provides \code{DYLAN-REP},
+``Return to the Dylan read-eval-print loop'', which does the same
+without the \code{;Aborted}:
+
+\begin{repl}
+? (define x 10)
+;Value: x
+
+? (error "Oops: ~a" x)
+
+debugger invoked on a DYLAN::DYLAN-CONDITION in thread
+#<THREAD tid=690943 "main thread" RUNNING {1200030003}>:
+  Error: Oops: 10
+
+Type HELP for debugger help, or (SB-EXT:EXIT) to exit from SBCL.
+
+restarts (invokable by number or by possibly-abbreviated name):
+  0: [DYLAN-RESTART] Return to the read-eval-print loop.
+  1: [DYLAN-REP    ] Return to the Dylan read-eval-print loop.
+  2: [ABORT        ] Exit debugger, returning to top level.
+
+((LAMBDA NIL :IN DYLAN::IMPLEMENTATION-SPECIFIC/INDUCE-ERROR))
+0] 0
+;Aborted
+
+? x
+;Value: 10
+\end{repl}
+
+\noindent
+While in the debugger you can use all of SBCL's debugger commands, such
+as \code{backtrace}; the frames show the Lisp the Dylan was compiled to.
+
+A restart the program itself establishes is offered too. \code{cerror}
+makes one whose description is its first argument; choosing it makes
+\code{cerror} return \code{\#f} and the program carry on:
+
+\begin{repl}
+? (cerror "Use 0 instead" "bad value ~a" 7)
+
+debugger invoked on a DYLAN::DYLAN-CONDITION ...
+  Error: bad value 7
+...
+restarts (invokable by number or by possibly-abbreviated name):
+  0: [DYLAN-RESTART] Use 0 instead
+  1:                 Return to the read-eval-print loop.
+  2: [DYLAN-REP    ] Return to the Dylan read-eval-print loop.
+  3: [ABORT        ] Exit debugger, returning to top level.
+\end{repl}
+
+\noindent
+Calling \code{(abort)} from Dylan, or signaling any \code{<abort>},
+returns straight to the prompt with \code{;Aborted}, as
+\dylanbook{chapter 13} describes. \code{(break "look at \textasciitilde a" 42)} enters the
+debugger with the message \code{Dylan breakpoint: look at 42}; its
+\code{CONTINUE} restart makes \code{break} return \code{\#f}.
+
+\begin{notebox}
+Some errors are detected by Common Lisp itself rather than by the
+Dylan runtime, for example \code{(car 5)}, which reaches Lisp's
+\code{car} with a non-list. Such an error arrives in the debugger as a
+Lisp \code{TYPE-ERROR}, and the restarts offered are \code{DYLAN-REP}
+and Lisp's own:
+\begin{repl}
+restarts (invokable by number or by possibly-abbreviated name):
+  0: [DYLAN-REP] Return to the Dylan read-eval-print loop.
+  1: [ABORT    ] Exit debugger, returning to top level.
+\end{repl}
+\noindent Choose \code{DYLAN-REP} to carry on at the \code{?} prompt.
+(Should you choose \code{ABORT} and land at the Lisp \code{*} prompt,
+nothing is lost: type \code{(dylan:rep)} to go back in.) A Dylan
+handler still catches these errors as instances of \code{<error>}:
+\code{(handler-case (car 5) ((<error>) 'caught))} answers \code{caught}.
+\end{notebox}
+
+\subsection{Running a file at the loop}\label{sec:lisp-test-file}
+
+\index{test@\code{dylan:test}}
+The loop reads from the terminal; it has no command to load a file of
+Dylan. The regression test driver can do it: \code{dylan:test} reads a
+file form by form, echoes each form, runs it, and prints its value, or
+the message of an error, and goes on to the next form.
+
+\begin{shell}
+$ cd src
+$ sbcl --eval '(load "load-dylan.lisp")' --eval '(load "full-test.lisp")' \
+       --eval '(dylan:test "/path/to/fact.dyl")'
+\end{shell}
+
+\begin{repl}
+(define-method fact ((n <integer>))
+ (if (= n 0)
+     1
+     (* n (fact (- n 1)))))
+;Value: fact
+
+(print (fact 30))
+265252859812191058636308480000000
+;Value: 265252859812191058636308480000000
+
+(car 3)
+;Error: Lisp condition:  The value
+                   3
+                 is not of type
+                   LIST
+\end{repl}
+
+\noindent
+The definitions remain afterwards, so \code{(dylan:rep)} can follow in
+the same session. Note that \file{full-test.lisp} must be loaded after
+\file{load-dylan.lisp}.
+
+\section{Compiling Dylan to Lisp files}\label{sec:lisp-compile-file}
+
+\index{compile-file@\code{dylan:compile-file}}\index{compile-to-file@\code{dylan:compile-to-file}}
+The compiler can also write its output to a file of Lisp instead of
+running it, so that a program can be compiled once and loaded later
+without being compiled again.
+
+\begin{description}
+\item[\code{(dylan:compile-file \meta{input} \meta{output})}] compiles
+  the file of Dylan \meta{input} into the file of Lisp \meta{output}, in
+  the module the input's \code{module:} header names, or
+  \code{dylan-user}.
+\item[\code{(dylan:compile-to-file \meta{output} \meta{form} ...)}]
+  compiles Dylan forms, already read, into \meta{output}.
+\end{description}
+
+\noindent
+\code{dylan:compile-file} shadows Common Lisp's function of the same
+name: inside the \code{DYLAN} package, \code{compile-file} compiles
+Dylan. The forms given to \code{dylan:compile-to-file} must be Dylan
+forms whose symbols are in the \code{DYLAN} package, which is what the
+Dylan reader \code{dylan::dylan-read} produces; Lisp forms typed at the
+\code{*} prompt would have their symbols in the wrong package.
+
+Here is a complete round trip. The program:
+
+\begin{dylan}
+;;; hello.dyl
+(define-method greet ((name <string>))
+  (display "Hello, ")
+  (display name)
+  (display "!")
+  (newline))
+(greet "world")
+\end{dylan}
+
+\noindent
+is compiled in one Lisp session and run in another:
+
+\begin{shell}
+$ sbcl --non-interactive --eval '(load "src/load-compiler.lisp")' \
+       --eval '(dylan:compile-file "hello.dyl" "hello.lisp")'
+$ sbcl --non-interactive --eval '(load "src/load-runtime.lisp")' \
+       --eval '(load "hello.lisp")'
+Hello, world!
+\end{shell}
+
+\noindent
+The output file is ordinary Common Lisp. It begins with the Dylan it
+came from, as comments, and then the compiled forms:
+
+\begin{lisp}
+(in-package #:dylan)
+
+(defvar !module/greet/ '<<the-unassigned-value>>)
+...
+(dylan%catch-all-conditions
+ (lambda ()
+   (progn
+    (progn
+     (cond
+      ((dylan%eq? !module/greet/ '<<the-unassigned-value>>)
+       (setq !module/greet/ (dylan%create-generic-function 'greet 1 nil nil)))
+      ...)
+     (dylan%add-method !module/greet/ ...)
+     'greet)
+    (dylan%call nil (dylan%free-variable-ref !module/greet/ 'greet) "world"))))
+\end{lisp}
+
+\noindent
+\code{compile-to-file} is the way to compile forms you build in Lisp:
+
+\begin{lisp}
+(dylan:compile-to-file "two.lisp"
+  (dylan::dylan-read (make-string-input-stream "(define x 41)"))
+  (dylan::dylan-read (make-string-input-stream "(print (+ x 1))")))
+\end{lisp}
+
+\noindent
+Loading \file{two.lisp} prints \code{42}. A program of several files
+is compiled file by file in one session and loaded in the same order
+(Section~\ref{sec:modules-lisp}).
+
+\section{Dylan values as Lisp objects}\label{sec:lisp-representation}
+
+\index{interactive implementation!representation}
+Most Dylan values are the corresponding Lisp values, which is what makes
+calling between the two languages easy.
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.34\textwidth}>{\raggedright\arraybackslash}p{0.6\textwidth}@{}}
+\toprule
+Dylan & Common Lisp \\
+\midrule
+\endhead
+integers & integers, fixnums or bignums: there is no limit on size \\
+ratios & ratios \\
+floats & \code{double-float}s \\
+complex numbers & complex numbers; \code{(sqrt -4)} is \code{\#c(0.0 2.0)} \\
+characters & characters \\
+strings & Lisp strings \\
+\code{<simple-object-vector>} & simple vectors \\
+lists & lists; the empty list is \code{NIL} \\
+\code{\#t} & \code{T} \\
+\code{\#f} & a distinct object of its own, the value of \code{DYLAN::DYLAN\%FALSE} \\
+symbols & symbols in the \code{DYLAN} package \\
+keywords & Lisp keywords: \code{foo:} is \code{:FOO} \\
+functions & Lisp functions, which take two hidden leading arguments \\
+classes, instances & structures of the runtime's own \\
+tables, stretchy vectors, ranges, deques & Dylan instances \\
+\bottomrule
+\end{longtable}
+
+\paragraph{\code{\#f} and \code{NIL}.}\index{false@\code{\#f}}
+Thomas ran on a Scheme in which false and the empty list were the same
+object. The 1992 manual makes them different: \code{\#f} is the only
+false value, and the empty list is true \dylanbook{chapters 3 and 8}. This
+implementation follows the manual. The empty list is Lisp's \code{NIL},
+because Dylan lists are Lisp lists, so \code{\#f} has to be something
+else, an object created for the purpose. \code{\#t} is Lisp's \code{T}.
+The consequence for Lisp code is that a Lisp ``false'' (\code{NIL}) is a
+Dylan empty list and therefore \emph{true} in Dylan, and Dylan's
+\code{\#f} is a non-\code{NIL} object and therefore \emph{true} in Lisp.
+
+\paragraph{Symbols.} The Dylan reader interns each name in the
+\code{DYLAN} package, folded to upper case as Lisp's reader would, so
+Dylan's \code{foo} is the Lisp symbol \code{DYLAN::FOO}. (The names
+\code{t} and \code{nil} are kept in lower case, so as not to be Lisp's
+\code{T} and \code{NIL}.) Because the \code{DYLAN} package uses
+\code{COMMON-LISP}, a Dylan symbol whose name is that of a Common Lisp
+function or variable \emph{is} the Common Lisp symbol: Dylan's
+\code{'expt} is \code{CL:EXPT}. The exceptions are the few names the
+package shadows: \code{add-method}, \code{adjoin}, \code{compile-file},
+\code{find-method}, \code{last}, \code{reduce}, \code{set-difference} and
+\code{union}. The spelling a symbol was first typed in is remembered for
+printing.
+
+\section{Calling Common Lisp from Dylan}\label{sec:lisp-interop}
+
+\index{lisp-variable}\index{lisp-procedure}
+Two functions, extensions carried over from Thomas, reach into the
+host Lisp.
+
+\begin{description}
+\item[\code{(lisp-variable \meta{symbol})}] answers the value of the
+  Lisp global variable named by \meta{symbol}.
+\item[\code{(lisp-procedure \meta{symbol})}] answers a Dylan function
+  that calls the Lisp function named by \meta{symbol} (or, if the symbol
+  has no function, the function that is the symbol's value). The Dylan
+  function accepts any number of arguments; the Lisp function reports
+  the wrong number.
+\end{description}
+
+\begin{repl}
+? (lisp-variable 'most-positive-fixnum)
+;Value: 4611686018427387903
+
+? (lisp-variable 'pi)
+;Value: 3.141592653589793
+
+? ((lisp-procedure 'expt) 2 100)
+;Value: 1267650600228229401496703205376
+
+? ((lisp-procedure 'string-upcase) "hello")
+;Value: "HELLO"
+
+? (define cl-sort (lisp-procedure 'sort))
+;Value: cl-sort
+
+? (cl-sort (list 3 1 2) '<)
+;Value: (1 2 3)
+\end{repl}
+
+\noindent
+Functions of your own written in Lisp can be called the same way. Define
+them in the \code{DYLAN} package, so that the Dylan symbol names them:
+
+\begin{shell}
+$ sbcl --eval '(load "src/load-dylan.lisp")' \
+       --eval '(defun dylan::square (x) (* x x))' --eval '(dylan:rep)'
+\end{shell}
+
+\begin{repl}
+? (define square (lisp-procedure 'square))
+;Value: square
+
+? (square 12)
+;Value: 144
+
+? (square 1 2)
+
+debugger invoked on a DYLAN::DYLAN-CONDITION ...
+  Error: invalid number of arguments: 2
+\end{repl}
+
+\noindent
+Keep these rules in mind:
+
+\begin{itemize}
+\item \textbf{Lisp's false is Dylan's true.} A Lisp predicate answers
+  \code{NIL} for false, which Dylan sees as the empty list, a true
+  value:
+\begin{dylan}
+(if ((lisp-procedure 'evenp) 3) 'yes 'no)    ; => yes
+\end{dylan}
+  Test the result against the empty list instead:
+\begin{dylan}
+(define lisp-true? (method (x) (not (id? x '()))))
+(lisp-true? ((lisp-procedure 'evenp) 3))      ; => #f
+\end{dylan}
+  Likewise, do not pass \code{\#f} to a Lisp function that expects
+  \code{NIL}; pass \code{'()}.
+\item \textbf{Dylan functions cannot be passed to Lisp.} A Dylan
+  function, including one made by \code{lisp-procedure}, expects two
+  hidden arguments that Lisp does not supply, so handing one to a Lisp
+  function such as \code{mapcar} fails with ``invalid number of
+  arguments''. Pass a symbol naming a Lisp function, as with \code{'<}
+  above.
+\item \textbf{Lisp values print as Dylan sees them.} A Lisp value that
+  has no Dylan meaning, such as a package or a hash table, prints in
+  Lisp's notation.
+\end{itemize}
+
+\section{How it is made fast}\label{sec:lisp-performance}
+
+\index{interactive implementation!performance}
+Thomas's authors did not aim at speed, and a direct translation of it
+was slow. The Common Lisp implementation has since been rebuilt around a
+few techniques, all of which keep the language's full dynamism.
+
+\begin{itemize}
+\item \textbf{Dispatch caches.} Each generic function caches, for each
+  combination of argument classes it has seen, the sorted list of
+  applicable methods, along with the keyword checks those methods need.
+  Adding or removing a method, or changing a class's superclasses,
+  invalidates the cache. A generic function of one, two or three
+  required arguments calls the cached method directly without building
+  an argument list, and calls with several applicable methods
+  (\code{next-method} chains) and with keyword arguments go through the
+  cache too. Singleton specializers are found through a hash table.
+\item \textbf{Direct calls.} A call compiles to a direct call of the
+  function, without wrapping each argument in a closure as Thomas did. A
+  method whose specializers are all \code{<object>} is called as its
+  compiled body, without an argument-checking wrapper.
+\item \textbf{Guarded fast paths.} Calls of \code{+}, \code{-},
+  \code{*}, \code{<}, \code{>}, \code{<=}, \code{>=}, \code{=},
+  \code{modulo}, \code{remainder}, \code{element} and
+  \code{(setter element)} compile inline when the arguments are Lisp
+  numbers or characters, or a simple vector or string and an index.
+  \code{for-each}, \code{map}, \code{reduce} and their kin walk lists,
+  simple vectors and ranges directly. Each fast path is guarded by a
+  flag that is true only while no method a program has added could apply
+  to those arguments; add a method to \code{binary+} that could apply to
+  integers, and the inline path for \code{+} turns itself off, so the
+  language's meaning never changes.
+\item \textbf{Direct slot access.} Slots the runtime's own classes keep
+  privately are read straight from the instance, and each class caches
+  its slots' required init keywords for \code{make}.
+\end{itemize}
+
+\noindent
+\file{generic.lisp} holds the dispatcher and its caches;
+\file{runtime-fast-paths.lisp} turns the fast paths on once every
+predefined method exists. \file{bench/run.lisp} measures the
+implementation against the same programs written in plain Common Lisp;
+Chapter~\ref{ch:performance} gives the results.
+
+\section{The book's examples and the regression test}\label{sec:lisp-examples}
+
+\index{regression test}\index{dylan-examples.dyl@\file{dylan-examples.dyl}}
+The file \file{dylan-examples.dyl} at the top of the repository holds the
+examples of the 1992 manual, extracted and edited into runnable form.
+\code{dylan:test-examples} runs it with \code{dylan:test}
+(Section~\ref{sec:lisp-test-file}):
+
+\begin{shell}
+$ cd src
+$ sbcl --eval '(load "load-dylan.lisp")' \
+       --eval '(load "full-test.lisp")' \
+       --eval '(dylan:test-examples)'
+\end{shell}
+
+\noindent
+The transcript it prints is compared with \file{src/reference/MIT.output},
+the transcript Thomas produced from the same file on MIT Scheme in 1992
+(the transcripts from Gambit and Scheme->C are kept beside it). The two
+agree on every value except a handful of places where the manual and
+Thomas disagree and the manual is followed: \code{\#f} and \code{()} are
+different objects, floats print as \code{9.0} rather than \code{9.},
+\code{(sqrt 25)} is \code{5.0}, \code{make} given a keyword that
+nothing accepts is an error (the book's \code{<displaced-view>} example
+does this, so it and the forms after it fail), and \code{map-into}
+passes only the source elements. \file{src/README} and
+Appendix~\ref{app:testing} list them.
+
+\section{Differences from the compiler to C}\label{sec:lisp-vs-dylanc}
+
+\index{interactive implementation!versus compiler to C}
+The two implementations accept the same language, but each goes beyond
+the other in places.
+
+\paragraph{What only the interactive implementation does.} It is fully
+dynamic, as the 1992 manual allows:
+
+\begin{itemize}
+\item \code{add-method}, \code{remove-method}, \code{add-slot},
+  \code{remove-slot} and \code{freeze-methods} work. A program can add a
+  slot to a class that already has instances:
+\begin{repl}
+? (define-class <sq> (<object>) (side init-keyword: side:))
+;Value: <sq>
+
+? (define s (make <sq> side: 2))
+;Value: s
+
+? (define-generic-function color (object))
+;Value: color
+
+? (add-slot <sq> getter: color init-value: 'red)
+;Value: #[dylan-slot *the-unnamed-slot*]
+
+? (color s)
+;Value: red
+\end{repl}
+\item New code can be compiled and run at any time, and any definition
+  can be replaced (Section~\ref{sec:lisp-rep}).
+\item Integers have no limit on size, and complex numbers exist:
+  \code{(* 99999999999 99999999999)} is \code{9999999999800000000001},
+  and \code{(sqrt -4)} is \code{\#c(0.0 2.0)}. The compiler to C has
+  63-bit integers, where overflow is an error, and no complex numbers.
+\item \code{lisp-variable} and \code{lisp-procedure} reach the host
+  Lisp.
+\end{itemize}
+
+\paragraph{What only the compiler to C does.} Its extensions are
+absent here:
+
+\begin{itemize}
+\item no threads, locks, condition variables, atomic integers, thread
+  variables or \code{dynamic-bind};
+\item no macros: \code{define-macro} and \code{define-for-macros} are
+  not special forms here;
+\item no streams, \code{format}, \code{write} or \code{print-object}
+  (Chapter~\ref{ch:printing});
+\item no \code{current-milliseconds}.
+\end{itemize}
+
+\noindent
+Appendix~\ref{app:library} marks every name that only one
+implementation provides.
+
+\paragraph{What behaves differently.}
+
+\begin{itemize}
+\item \code{print} and \code{write-line} write the newline before the
+  object here, after it in the compiler to C.
+\item Many objects print differently: \code{\#[dylan-class <point>]}
+  here, \code{\{the class <point>\}} there (Section~\ref{sec:printing-classes}).
+\item Modules must be declared before they are used, in order; the
+  compiler to C sees the whole program first (Chapter~\ref{ch:modules}).
+\item Errors are reported when the code runs; the compiler to C reports
+  many of them, such as an assignment to a read-only variable, when it
+  compiles.
+\end{itemize}
+
+\section{Limitations}\label{sec:lisp-limitations}
+
+\begin{itemize}
+\item There is no way to load a file of Dylan source at the
+  read-eval-print loop itself; use \code{dylan:test} or compile the file
+  with \code{dylan:compile-file} and load the result.
+\item \code{(as <unicode-string> "abc")} is not implemented: it signals
+  \code{as -{}- not specialized for this class type}.
+\item The way a class's instances print cannot be changed.
+\item Thomas's MIT Scheme restart example, written against MIT Scheme's
+  condition system, has no counterpart; it would have to be rewritten
+  against Common Lisp's.
+\end{itemize}

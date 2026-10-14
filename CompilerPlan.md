@@ -15,6 +15,17 @@ The targets are the language's original ones: **small and fast**.
   against the runtime (excluding libc and libgc), through whole-program
   dead-code elimination.
 
+Where they stand (`sbcl --script bench/run-c.lisp`, gcc -O2): tak 1.3×
+the C, float 1.5×, table 1.9×, sort 2.4×, next-method 2.5×, deque 3×,
+string 3.3×, and exit faster than the C (a jump, against `setjmp`);
+range, stretchy and condition run in a few milliseconds where the C takes
+under one. Hello world built `-Os` is about 215 KB (text and data) beyond
+libc and libgc, more than the goal: the shaking is by name and class
+(Phase 9), so a call of a generic function such as `print-object`,
+`make` or `as` keeps every method that could apply to a class with
+instances, and those reach much of the library. Getting further needs an
+analysis of which classes flow to which calls.
+
 The standard is the 1992 manual (`manual/Dylan-1992/book.annotated`). The
 existing Common Lisp implementation is a testbed and a source of ideas,
 not an oracle.
@@ -679,8 +690,11 @@ so nothing has to be retrofitted.
   Pointers held only in the per-thread argument area must be visible to the
   collector (it lives in thread-local storage Boehm scans, or is
   registered as a root).
-- **`setjmp`/`longjmp` cost** on non-local exits that can't be localized;
-  measure on the `bind-exit` and condition benchmarks.
+- **`setjmp`/`longjmp` cost** on non-local exits that can't be localized.
+  Measured: an exit taken through a closure (a frame, `_setjmp`,
+  `_longjmp`, and the closure made) costs about 80 ns against 11 ns for
+  one that is a jump; an error signalled and handled by `handler-case`
+  about 260 ns.
 - **Integer width.** 63-bit integers with an error on overflow is a
   deviation from the manual's unbounded integers; bignums can be added
   later behind the same overflow checks.

@@ -700,6 +700,9 @@ slot SD in the object VAR."
                  (declare-object "DyFunction ~a;" name))))))
 
 (defun emit-method-objects ()
+  "Emit each method's object.  Its specializers and its arguments are for
+the reflective functions, which can get at a method of a generic function
+only when *REFLECTIVE-METHODS*; otherwise they are dropped."
   (loop for g being the hash-values of *gfuns*
         do (dolist (m (gfun-methods g))
              (unless (eq (gmethod-kind m) :default)
@@ -708,8 +711,8 @@ slot SD in the object VAR."
                             (if (and (eq (gmethod-kind m) :ir) *reflective-methods*)
                                 (format nil "~a_direct" (gmethod-entry-c m))
                                 (gmethod-entry-c m))
-                            (spec-vector-c (gmethod-specs m))
-                            (method-info-c m))))))
+                            (if *reflective-methods* (spec-vector-c (gmethod-specs m)) "DY_FALSE")
+                            (if *reflective-methods* (method-info-c m) "DY_FALSE"))))))
 
 (defparameter *method-reflection-functions*
   '("generic-function-methods" "find-method" "sorted-applicable-methods"))

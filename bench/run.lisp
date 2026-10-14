@@ -3,7 +3,10 @@
 ;;;;
 ;;;;     $ sbcl --script bench/run.lisp [name ...]
 ;;;;
-;;;; With names (table, sort, ...), only those run.  For each it prints the
+;;;; With names (table, sort, ...), only those run.  The environment
+;;;; variable BENCH_SCALE, if set, multiplies every size (as it does in
+;;;; run-c.lisp and reference.c), for times long enough to compare.  For
+;;;; each it prints the
 ;;;; best of three times for Dylan and for Lisp, their ratio, and whether
 ;;;; the two answered the same.  The compiled benchmarks go in bench/build/.
 
@@ -23,6 +26,12 @@
     ("next-method" 300000)
     ("tak" 300)
     ("float" 300)))
+
+(defparameter *scale*
+  (let ((s (sb-ext:posix-getenv "BENCH_SCALE")))
+    (or (and s (ignore-errors (parse-integer s))) 1)))
+
+(setf *benchmarks* (mapcar (lambda (b) (list (first b) (* (second b) *scale*))) *benchmarks*))
 
 (defun bench-file (name)
   (merge-pathnames name *bench-directory*))

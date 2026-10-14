@@ -410,12 +410,19 @@ static long current_milliseconds(void)
     return (long) ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+/* BENCH_SCALE, if set, multiplies every size (see run.lisp). */
+static long scale(void)
+{
+    const char *s = getenv("BENCH_SCALE");
+    return s && atol(s) > 0 ? atol(s) : 1;
+}
+
 static void run(int k)
 {
     long best = -1, value = 0;
     for (int i = 0; i < 3; i++) {
         long start = current_milliseconds();
-        value = benchmarks[k].f(benchmarks[k].size);
+        value = benchmarks[k].f(benchmarks[k].size * scale());
         long elapsed = current_milliseconds() - start;
         if (best < 0 || elapsed < best) best = elapsed;
     }

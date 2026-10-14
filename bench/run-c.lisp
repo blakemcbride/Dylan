@@ -10,7 +10,8 @@
 ;;;; way here.  Each line gives the three times, the ratios of the Dylan->C
 ;;;; time to the C and Lisp times ("-" when the other time is under a
 ;;;; millisecond), and MISMATCH if the three answered differently.  The
-;;;; builds go in bench/build/.
+;;;; builds go in bench/build/.  The environment variable BENCH_SCALE, if
+;;;; set, multiplies every size, here and in reference.c.
 
 (defparameter *bench-directory*
   (make-pathname :name nil :type nil :defaults *load-truename*))
@@ -19,6 +20,12 @@
   '(("table" 200000) ("sort" 100000) ("string" 200000) ("deque" 300000)
     ("stretchy" 300000) ("range" 1000000) ("exit" 300000) ("condition" 30000)
     ("next-method" 300000) ("tak" 300) ("float" 300)))
+
+(defparameter *scale*
+  (let ((s (sb-ext:posix-getenv "BENCH_SCALE")))
+    (or (and s (ignore-errors (parse-integer s))) 1)))
+
+(setf *benchmarks* (mapcar (lambda (b) (list (first b) (* (second b) *scale*))) *benchmarks*))
 
 (defun bench-file (name) (merge-pathnames name *bench-directory*))
 

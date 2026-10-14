@@ -92,6 +92,15 @@ reflection, and call it?  If not, methods need no direct entries.")
 (defun declare-object (control &rest arguments)
   (push (apply #'format nil control arguments) *object-decls*))
 
+(defun var-c-name (prefix var)
+  "A C name for the module variable VAR, from its name and module, not the
+order variables are met (CONTENT-NAME)."
+  (let ((name (module-var-name var)))
+    (format nil "~a~a~:[~;_setter~]_~a" prefix
+            (c-identifier (dylan-string (if (consp name) (cadr name) name)))
+            (consp name)
+            (subseq (content-hash (module-var-string var)) 0 8))))
+
 (defun c-name-string (string)
   (c-string-literal (map 'list #'char-code string)))
 
@@ -581,7 +590,7 @@ slot SD in the object VAR."
 (defun gfun-for (var)
   (or (gethash var *gfuns*)
       (setf (gethash var *gfuns*)
-            (make-gfun :var var :c-name (format nil "dy_gf~d" (hash-table-count *gfuns*))))))
+            (make-gfun :var var :c-name (var-c-name "dy_gf_" var)))))
 
 (defun method-shape (m)
   "Number of required parameters, and whether more arguments may follow."

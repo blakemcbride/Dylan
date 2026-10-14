@@ -164,6 +164,10 @@ make it an ordinary call.  NIL for a uniform entry.")
     (:only (error "Internal error: a tail call in a specialized entry."))
     (:copy t)))
 
+(defvar *debug* nil
+  "Compile for debugging: trust no type found when compiling, so that every
+inline operation tests its arguments when run.")
+
 (defvar *cfuns* nil "IR-FN -> CFUN, for every fn that is a C function.")
 (defvar *cfun* nil "The CFUN being generated.")
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
@@ -294,7 +298,7 @@ for a thread variable, the thread's slot for it."
                   (setf (gethash var *thread-variables*)
                         (hash-table-count *thread-variables*))))
       (or (gethash var *globals*)
-          (setf (gethash var *globals*) (format nil "dyg~d" (hash-table-count *globals*))))))
+          (setf (gethash var *globals*) (var-c-name "dyg_" var)))))
 
 (defun unsupported (node what)
   (let ((*location* (or (and (ir-node-p node) (ir-node-location node)) *location*)))
@@ -816,6 +820,8 @@ position?  (If so, a call may have changed the count of values.)"
   "The uniform entry of CFUN, whose only body is its specialized entry."
   (let* ((fn (cfun-fn cfun))
          (*cfun* (make-cfun fn (cfun-c-name cfun)))
+         (*label-counter* 0)
+         (*temp-counter* 0)
          (*emit-lines* nil)
          (*lines* '())
          (*indent* 1)
@@ -857,7 +863,8 @@ position?  (If so, a call may have changed the count of values.)"
 (defun spec-callees (fns)
   "The fns that some call not in tail position may call through a
 specialized entry."
-  (let ((found (make-hash-table :test #'eq)))
+  (let ((found (make-hash-table :test #'eq))
+        (library-caller nil))
     (labels ((walk (e)
                (typecase e
                  (ir-call (unless (ir-call-tail-p e)
@@ -865,7 +872,11 @@ specialized entry."
                                           (multiple-value-bind (kind what) (call-callee e)
                                             (let ((m (and (eq kind :generic) (spec-method what))))
                                               (and m (gmethod-fn m)))))))
-                              (when fn (setf (gethash fn found) t)))))
+                              ;; A library function compiled apart has
+                              ;; the entries the library's calls want.
+                              (when (and fn (or library-caller (not *separate-library*)
+                                                (not (ir-fn-library-p fn))))
+                                (setf (gethash fn found) t)))))
                  (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
                  (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
@@ -874,6 +885,7 @@ specialized entry."
                  (ir-bind-exit (walk (ir-bind-exit-body e)))
                  (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
       (dolist (fn fns)
+        (setf library-caller (ir-fn-library-p fn))
         (when (listp (ir-fn-keys fn))
           (dolist (k (ir-fn-keys fn)) (walk (ir-key-default k))))
         (walk (ir-fn-body fn))))
@@ -904,6 +916,10 @@ specialized entry, made with *SPEC* SPEC."
   (let* ((fn (cfun-fn cfun))
          (*spec* spec)
          (*cfun* cfun)
+         ;; Numbered in each function, so that one function's C does not
+         ;; depend on the others'.
+         (*label-counter* 0)
+         (*temp-counter* 0)
          (*line-location* nil)
          (*lines* '())
          (*indent* 1)
@@ -911,7 +927,8 @@ specialized entry, made with *SPEC* SPEC."
          (required (ir-fn-required fn))
          (r (length required))
          (keys (ir-fn-keys fn)))
-    (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn))
+    (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn)
+          (cfun-extra-locals cfun) '())
     ;; Arguments
     (cond (spec
            (loop for var in required
@@ -1088,10 +1105,6 @@ define-generic-function, whose work the compiler has done?"
                     ((or ir-define-method ir-define-generic) t))))
          (inert (ir-fn-body fn)))))
 
-(defvar *debug* nil
-  "Compile for debugging: trust no type found when compiling, so that every
-inline operation tests its arguments when run.")
-
 (defun fn-module-name (fn units)
   "The name of the module FN's code was written in, a string."
   (let* ((top (loop for f = fn then (ir-fn-parent f)
@@ -1102,6 +1115,23 @@ inline operation tests its arguments when run.")
     (if unit
         (string-downcase (dylan::dylan-symbol->string (dylan-module-name (unit-module unit))))
         "dylan-user")))
+
+(defun number-thread-variables (ir)
+  "Give each thread variable IR defines its index, in the order of the
+definitions: the library's first, so that theirs do not depend on the
+program."
+  (labels ((walk (e)
+             (typecase e
+               (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
+               (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+               (ir-seq (mapc #'walk (ir-seq-forms e)))
+               (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+               (ir-define-variable
+                (let ((var (ir-define-variable-var e)))
+                  (when (module-var-thread-local-p var)
+                    (global-c-name var)))))))
+    (dolist (top (ir-program-toplevels ir))
+      (walk (ir-fn-body top)))))
 
 (defun generate-c (ir stream)
   "Write the C program for IR to STREAM.  Answer a table: the C name of
@@ -1143,6 +1173,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*temp-counter* 0)
         (fns (ir-fns ir)))
     (setf *reflective-methods* (uses-method-reflection-p ir))
+    (number-thread-variables ir)
     (prepare-object-system ir)
     (dolist (fn fns)
       (dolist (letrec (letrecs-in (ir-fn-body fn)))

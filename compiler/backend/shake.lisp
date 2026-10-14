@@ -1,8 +1,8 @@
 ;;;; Copyright 2026 Blake McBride.  See ../../LICENSE.
 ;;;;
-;;;; Tree shaking (CompilerPlan.md, Phase 9, done early): every program is
-;;;; compiled with the whole library, but keeps only the library's
-;;;; definitions it can reach.
+;;;; Tree shaking (CompilerPlan.md, Phase 9, done early): a program
+;;;; compiled with the library, not apart from it (*SEPARATE-LIBRARY*),
+;;;; keeps only the library's definitions it can reach.
 ;;;;
 ;;;; The program's own top-level forms are all kept.  So is every top-level
 ;;;; form of the library that is not a definition, and every define-class
@@ -14,10 +14,22 @@
 
 (in-package #:dylan-compiler)
 
-(defun library-form-p (top)
-  (let ((location (ir-fn-location top)))
-    (and location
-         (search "/runtime/dylan/" (source-file-name (location-file location))))))
+(defvar *separate-library* t
+  "Compile the library apart from the program (CompilerPlan.md, Phase 9)?
+Then nothing of the library is dropped, and nothing about how a library
+function is compiled depends on the program: the program may call any
+function the library exports, with any arguments.  So the library's C is
+the same for every program, and the driver compiles it once.")
+
+(defun library-form-p (top) (ir-fn-library-p top))
+
+(defun open-library-var-p (var)
+  "Must the code generator suppose the program calls the function in the
+library's module variable VAR from anywhere, as the library is compiled
+apart?  A program sees what the dylan module exports, and its expansions
+other names the compiler knows (DYLAN-VAR)."
+  (and *separate-library*
+       (module-var-predefined-p var)))
 
 (defun defined-variable (top)
   "The module variable the top-level form TOP defines, if defining it is all

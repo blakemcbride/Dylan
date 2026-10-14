@@ -152,7 +152,7 @@ used only to call them, and the sole methods of generic functions used so."
                    calls
                    :unknown)))
         (loop for var being the hash-keys of *global-functions* using (hash-value fn)
-              unless (gethash var escapes)
+              unless (or (gethash var escapes) (open-library-var-p var))
                 do (setf (gethash fn callers)
                          (arg-lists (loop for ivar being the hash-keys of binders
                                             using (hash-value v)
@@ -165,6 +165,7 @@ used only to call them, and the sole methods of generic functions used so."
                 for m = (sole-method g)
                 when (and m (gmethod-fn m)
                           (not (gethash (gfun-var g) escapes))
+                          (not (open-library-var-p (gfun-var g)))
                           (not (eq (gfun-var g) (dylan-var "initialize")))
                           (not (eq (gethash g generic-calls) :unknown)))
                   do (setf (gethash (gmethod-fn m) callers)

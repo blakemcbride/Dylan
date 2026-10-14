@@ -491,7 +491,26 @@ against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
 - Constants propagate through `let`s; integer arithmetic on constants is
   done when compiling; `if` on a constant, or on a value of a class `#f`
   is not an instance of, keeps one branch; unused pure `let`s are dropped.
-- Tree shaking as before (shake.lisp); `(build … :size t)` builds with
+- Separate compilation of the library (`shake.lisp`, `*separate-library*`,
+  the default): nothing about how a library function is compiled depends
+  on the program. Every function the dylan module exports, or the
+  compiler's expansions name, may be called from anywhere, with anything,
+  so no argument types and no specialized entries come from the program's
+  calls; nothing of the library is dropped; and the C names of constants,
+  module variables and generic functions come from what they are, not
+  the order they are met (C temporaries and labels are numbered in each
+  function, and what lowering makes in the library's forms is numbered
+  after the library). `NAME-dylan.c` declares only what it refers to, so
+  for most programs it is the same text; the driver keeps its object in
+  `runtime/build/library/`, named for a digest of the text, `dylan.h`,
+  the C compiler and its options, and compiles it only when no object
+  matches. A program that changes the library's C — a method replacing
+  one of the library's, say — just compiles it. All 320 test programs
+  share one. A build takes about half the time (hello world: 3.3 s to
+  1.6 s), and the benchmarks run as fast. `dylanc --whole` (`:whole t`),
+  and size builds, compile the library with the program.
+- Tree shaking as before (shake.lisp), when the library is compiled with
+  the program; `(build … :size t)` builds with
   `-Os`, function and data sections and `--gc-sections` (the runtime
   library is always compiled in sections). `dylanc --lto` (`:lto t`)
   optimizes the program and the runtime library together when linking,
@@ -516,8 +535,6 @@ In order of expected payoff:
    metadata; for size builds add `-Os`, `-ffunction-sections
    -fdata-sections -Wl,--gc-sections` and LTO.
 
-Later: separate compilation of the library (compiled once, with a summary
-file of what callers may assume).
 
 ## Phase 10 — C output and build
 

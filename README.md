@@ -160,12 +160,16 @@ built for threads (`libgc`).
 ```console
 $ bin/dylanc hello.dyl          # makes ./hello
 $ bin/dylanc -o app a.dyl b.dyl # several files, in order, one program
-$ bin/dylanc -h                 # the options: -O0..-O3, -Os, --lto, -g, -k, -C, ...
+$ bin/dylanc -h                 # the options: -O0..-O3, -Os, --lto, --whole, -g, -k, -C, ...
 ```
 
 The generated C is `NAME.c` (data and `main`), `NAME-MODULE.c` for each
 module's functions, and `NAME.h`; `-k` keeps it, and its `#line`
-directives point to the Dylan source. The benchmarks: `sbcl --script
+directives point to the Dylan source. The library's functions,
+`NAME-dylan.c`, are the same for most programs, so they are compiled
+once for each C compiler and set of options and kept in
+`runtime/build/library/`; `-Os` and `--whole` compile the library with
+the program instead. The benchmarks: `sbcl --script
 bench/run-c.lisp`, which times them against the hand-written C of
 `bench/reference.c` and the Lisp of `reference.lisp`.
 

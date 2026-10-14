@@ -5,10 +5,11 @@
 ;;;;
 ;;;; A CDATA collects definitions as constants are asked for; C-CONSTANT
 ;;;; answers a C expression of type D for a Dylan constant, defining static
-;;;; objects for it as needed.  Strings with the same contents are shared;
-;;;; a symbol (or keyword) is defined once whatever the case it is written
-;;;; in, with the spelling it first had, and every one is listed in
-;;;; dy_static_symbols for the runtime to intern when it starts.
+;;;; objects for it as needed.  Equal constants are one object, named for
+;;;; what it holds (CONTENT-NAME); a symbol (or keyword) is defined once
+;;;; whatever the case it is written in, with the spelling it first had,
+;;;; and every one is listed in dy_static_symbols for the runtime to intern
+;;;; when it starts.
 ;;;;
 ;;;; EMIT-PROGRAM-DATA writes the whole: the definitions, then a wrapper and
 ;;;; a class object for every class, then the tables the runtime reads.
@@ -20,6 +21,8 @@
 (defstruct (cdata (:constructor make-cdata ()))
   (counter 0)
   (definitions '())                     ; C text, newest first
+  (named (make-hash-table :test #'equal)) ; C name -> the contents it was
+                                        ; made for (CONTENT-NAME)
   (strings (make-hash-table :test #'equal))
   (symbols (make-hash-table :test #'equal))   ; folded name -> C name
   (symbol-list '())                     ; C names, newest first
@@ -27,6 +30,27 @@
 
 (defun cdata-name (data prefix)
   (format nil "~a~d" prefix (incf (cdata-counter data))))
+
+(defun content-hash (string)
+  "A hash of STRING that is the same in every run of the compiler: 64-bit
+FNV-1a over its character codes, as 16 hex digits."
+  (let ((h #xcbf29ce484222325))
+    (loop for ch across string
+          do (setf h (ldb (byte 64 0) (* (logxor h (char-code ch)) #x100000001b3))))
+    (format nil "~(~16,'0x~)" h)))
+
+(defun content-name (data prefix content)
+  "The C name of the object PREFIX names for CONTENT, a string saying all
+that the object holds; and whether it is already defined.  The name comes
+from CONTENT alone, not the order constants are met, so that the library's
+C is the same whatever program it is compiled with (Phase 9, separate
+compilation)."
+  (let* ((name (concatenate 'string prefix (content-hash content)))
+         (old (gethash name (cdata-named data))))
+    (when (and old (string/= old content))
+      (error "Internal error: two constants hash to ~a." name))
+    (setf (gethash name (cdata-named data)) content)
+    (values name (and old t))))
 
 (defun define-c (data control &rest arguments)
   (push (apply #'format nil control arguments) (cdata-definitions data)))
@@ -72,19 +96,25 @@
         ((vectorp value) (address (c-vector data (map 'list (lambda (x) (c-constant data x))
                                                       value))))
         ((typep value 'ratio)
-         (let ((name (cdata-name data "dy_ratio_")))
-           (define-c data "static DyRatio ~a = { &dy_wrapper_ratio, DY_INT(~d), DY_INT(~d) };"
-                     name (numerator value) (denominator value))
+         (multiple-value-bind (name old)
+             (content-name data "dy_ratio_" (format nil "~d/~d" (numerator value) (denominator value)))
+           (unless old
+             (define-c data "static DyRatio ~a = { &dy_wrapper_ratio, DY_INT(~d), DY_INT(~d) };"
+                       name (numerator value) (denominator value)))
            (address name)))
         ((typep value 'single-float)
-         (let ((name (cdata-name data "dy_float_")))
-           (define-c data "static DySingleFloat ~a = { &dy_wrapper_single_float, ~a };"
-                     name (c-float-literal value))
+         (multiple-value-bind (name old)
+             (content-name data "dy_float_" (c-float-literal value))
+           (unless old
+             (define-c data "static DySingleFloat ~a = { &dy_wrapper_single_float, ~a };"
+                       name (c-float-literal value)))
            (address name)))
         ((typep value 'double-float)
-         (let ((name (cdata-name data "dy_float_")))
-           (define-c data "static DyDoubleFloat ~a = { &dy_wrapper_double_float, ~a };"
-                     name (c-float-literal value))
+         (multiple-value-bind (name old)
+             (content-name data "dy_double_" (c-float-literal value))
+           (unless old
+             (define-c data "static DyDoubleFloat ~a = { &dy_wrapper_double_float, ~a };"
+                       name (c-float-literal value)))
            (address name)))
         (t (error "No C representation for the constant ~s." value))))
 
@@ -93,8 +123,8 @@
 if every character fits in a byte, else a <unicode-string>."
   (or (gethash string (cdata-strings data))
       (setf (gethash string (cdata-strings data))
-            (let ((name (cdata-name data "dy_string_"))
-                  (codes (map 'list #'char-code string)))
+            (let* ((codes (map 'list #'char-code string))
+                   (name (content-name data "dy_string_" (format nil "~{~d~^ ~}" codes))))
               (if (every (lambda (c) (< c 256)) codes)
                   (define-c data "static struct { DyWrapper *wrapper; D size; char data[~d]; } ~a =~%  { &dy_wrapper_byte_string, DY_INT(~d), ~a };"
                             (1+ (length codes)) name (length codes)
@@ -111,25 +141,30 @@ named SPELLING."
     (or (gethash key table)
         (setf (gethash key table)
               (let ((string (c-string data spelling))
-                    (name (cdata-name data (if (eq kind :keyword) "dy_keyword_" "dy_symbol_"))))
+                    (name (content-name data (if (eq kind :keyword) "dy_keyword_" "dy_symbol_")
+                                        key)))
                 (define-c data "DySymbol ~a = { &dy_wrapper_~(~a~), ~a, 0 };"
                           name kind (address string))
                 (push name (cdata-symbol-list data))
                 name)))))
 
 (defun c-pair (data list)
+  "The C name of a static pair holding LIST.  Equal literal lists are one
+object."
   (let ((head (c-constant data (car list)))
-        (tail (c-constant data (cdr list)))
-        (name (cdata-name data "dy_pair_")))
-    (define-c data "static DyPair ~a = { &dy_wrapper_pair, ~a, ~a };" name head tail)
-    name))
+        (tail (c-constant data (cdr list))))
+    (multiple-value-bind (name old) (content-name data "dy_pair_" (format nil "~a ~a" head tail))
+      (unless old
+        (define-c data "static DyPair ~a = { &dy_wrapper_pair, ~a, ~a };" name head tail))
+      name)))
 
 (defun c-vector (data elements)
   "The C name of a static <simple-object-vector> of ELEMENTS, C
-expressions."
-  (let ((name (cdata-name data "dy_vector_")))
-    (define-c data "static struct { DyWrapper *wrapper; D size; D data[~d]; } ~a =~%  { &dy_wrapper_simple_object_vector, DY_INT(~d), { ~{~a~^, ~} } };"
-              (max 1 (length elements)) name (length elements) elements)
+expressions.  Equal ones are one object."
+  (multiple-value-bind (name old) (content-name data "dy_vector_" (format nil "~{~a~^ ~}" elements))
+    (unless old
+      (define-c data "static struct { DyWrapper *wrapper; D size; D data[~d]; } ~a =~%  { &dy_wrapper_simple_object_vector, DY_INT(~d), { ~{~a~^, ~} } };"
+                (max 1 (length elements)) name (length elements) elements))
     name))
 
 ;;; Classes

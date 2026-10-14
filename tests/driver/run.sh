@@ -93,11 +93,16 @@ for c in gcc clang; do
     check "--lto --cc $c" "$dylanc" --lto --cc $c -o lto greet.dyl main.dyl
     check "--lto --cc $c runs" output_is "$expected" ./lto
 done
+check "--whole" "$dylanc" --whole -o whole greet.dyl main.dyl
+check "--whole runs" output_is "$expected" ./whole
+check "the library's object kept" sh -c "ls '$here/../../runtime/build/library/'*.o"
 check "CC" env CC=clang "$dylanc" -o withcc greet.dyl main.dyl
 check "CC runs" output_is "$expected" ./withcc
 check "modules" "$dylanc" -k -o mods module.dyl counting.dyl use.dyl app.dyl
 check "modules run" output_is 5 ./mods
 check "a file per module" test -f mods-counting.c -a -f mods-app.c
+check "the library's C the same for two programs" \
+      sh -c 'sed s/kept-dylan/X/ kept-dylan.c > k.txt; sed s/mods-dylan/X/ mods-dylan.c > m.txt; cmp k.txt m.txt'
 check "a macro exported from its module" "$dylanc" -o macs macmods.dyl macdef.dyl macuse.dyl
 check "the macro runs" output_is "$(printf 'hi\nhi\nhi')" ./macs
 check "-E" sh -c "'$dylanc' -E macmods.dyl macdef.dyl macuse.dyl > expanded.txt"

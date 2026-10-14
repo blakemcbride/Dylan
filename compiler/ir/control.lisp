@@ -104,10 +104,12 @@ replacement or NIL."
 
 (defun lower-everywhere (ir transform)
   (dolist (f (ir-fns ir))
-    (when (listp (ir-fn-keys f))
-      (dolist (k (ir-fn-keys f))
-        (setf (ir-key-default k) (lower-in (ir-key-default k) f transform))))
-    (setf (ir-fn-body f) (lower-in (ir-fn-body f) f transform))))
+    (call-with-counters
+     f (lambda ()
+         (when (listp (ir-fn-keys f))
+           (dolist (k (ir-fn-keys f))
+             (setf (ir-key-default k) (lower-in (ir-key-default k) f transform))))
+         (setf (ir-fn-body f) (lower-in (ir-fn-body f) f transform))))))
 
 (defun lower-unwind-protect (e fn)
   (when (ir-unwind-p e)
@@ -128,12 +130,32 @@ replacement or NIL."
       (make-ir-let temp (make-ir-lambda body)
                    (make-ir-prim :call-with-exit (list temp))))))
 
+(defvar *library-counters* nil
+  "(ivar-counter . fn-counter) for what lowering the library's forms makes,
+or NIL to number everything after the program's.")
+
 (defun lower-control (ir)
   "Lower IR's cleanups and escaping exits; answer IR, analyzed afresh."
   (let ((*ivar-counter* (reduce #'max (ir-bound-vars ir) :key #'ivar-id :initial-value 0))
-        (*fn-counter* (reduce #'max (ir-fns ir) :key #'ir-fn-id :initial-value 0)))
+        (*fn-counter* (reduce #'max (ir-fns ir) :key #'ir-fn-id :initial-value 0))
+        (*library-counters* (let ((c (ir-program-library-counters ir)))
+                              (and c (cons (car c) (cdr c))))))
     (lower-everywhere ir #'lower-unwind-protect)
     (reanalyze-program ir)
     (lower-everywhere ir #'lower-escaping-exit)
     (reanalyze-program ir)
+    (let ((c (ir-program-library-counters ir)))
+      (when (and c (or (>= (car *library-counters*) (+ (car c) +library-id-gap+))
+                       (>= (cdr *library-counters*) (+ (cdr c) +library-id-gap+))))
+        (error "Internal error: lowering the library made too many ids.")))
     ir))
+
+(defun call-with-counters (fn thunk)
+  "Call THUNK, numbering what it makes for FN: after the library's, if it
+is the library's (*LIBRARY-COUNTERS*)."
+  (if (and *library-counters* (ir-fn-library-p fn))
+      (let ((*ivar-counter* (car *library-counters*))
+            (*fn-counter* (cdr *library-counters*)))
+        (multiple-value-prog1 (funcall thunk)
+          (setf *library-counters* (cons *ivar-counter* *fn-counter*))))
+      (funcall thunk)))

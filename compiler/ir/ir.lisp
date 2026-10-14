@@ -221,9 +221,24 @@ keywords (NIL, :ANY, or a list)."
 
 ;;; Programs
 
-(defstruct (ir-program (:constructor make-ir-program (toplevels source)))
+(defstruct (ir-program (:constructor make-ir-program (toplevels source library-counters)))
   toplevels                             ; IR-FNs of kind :TOPLEVEL, in order
-  source)                               ; the PROGRAM they came from
+  source                                ; the PROGRAM they came from
+  library-counters)                     ; (ivar-counter . fn-counter) after
+                                        ; the library's forms, or NIL
+
+(defparameter +library-id-gap+ 100000
+  "How many variable and fn ids the program's start after the library's,
+left for those lowering the library makes (LOWER-CONTROL): so the library's
+are the same whatever the program, and the library's C too (Phase 9,
+separate compilation).")
+
+(defun ir-fn-library-p (fn)
+  "Is FN in one of the library's top-level forms?"
+  (loop while (ir-fn-parent fn)
+        do (setf fn (ir-fn-parent fn)))
+  (let ((location (ir-fn-location fn)))
+    (and location (library-source-file-p (location-file location)))))
 
 ;;; Printing, for people and for the tests.  Calls in tail position print
 ;;; as (tail-call f ...), calls of an exit procedure as (exit-to x ...).

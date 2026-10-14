@@ -44,6 +44,12 @@
   (sort (directory (merge-pathnames "../runtime/dylan/*.dyl" cl-user::*dylanc-directory*))
         #'string< :key #'namestring))
 
+(defun library-source-file-p (file)
+  "Is the SOURCE-FILE FILE one of the library's?"
+  (and file (stringp (source-file-name file))
+       (search "/runtime/dylan/" (source-file-name file))
+       t))
+
 (defun front-end (pathnames &key library)
   "Read and convert the Dylan source files PATHNAMES, a whole program --
 after the library's, if LIBRARY.  Answer a PROGRAM; its diagnostics say

@@ -25,6 +25,9 @@ Options:
   -o FILE          the executable (default: the first file's name, less .dyl)
   -O0 -O1 -O2 -O3  how much the C compiler optimizes (default -O2)
   -Os              a small executable: optimized for size, unused code dropped
+                   (the library compiled with the program, as --whole)
+  --whole          compile the library with the program, not apart (the
+                   library's C, compiled apart, is compiled once and kept)
   --lto            optimize the program and the runtime library together when
                    linking (link-time optimization)
   -g, --debug      for debugging: no optimization, debugging information, and
@@ -69,6 +72,7 @@ Options:
                        ((member a '("-E" "--expand") :test #'string=) (setf (getf options :expand) t))
                        ((string= a "--trampoline") (setf (getf options :trampoline) t))
                        ((string= a "--lto") (setf (getf options :lto) t))
+                       ((string= a "--whole") (setf (getf options :whole) t))
                        ((string= a "--cc") (setf (getf options :cc) (value)))
                        ((string= a "--no-lines") (setf (getf options :no-lines) t))
                        ((string= a "--gc-stress") (setf (getf options :variant) :gc-stress))
@@ -105,6 +109,7 @@ Options:
          (c-file (concatenate 'string output ".c"))
          (variant (progn (when (getf options :expand) (expand-only files))
                          (getf options :variant)))
+         (*separate-library* (separate-library-p (getf options :size) (getf options :whole)))
          (c-files (let ((*debug* (or (getf options :debug) (member variant '(:address :thread))))
                         (*emit-lines* (not (getf options :no-lines))))
                     (compile-files files c-file))))

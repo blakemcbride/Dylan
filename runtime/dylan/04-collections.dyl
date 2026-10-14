@@ -168,7 +168,10 @@ module: dylan
     ;; A vector is a sequence, though also (as an array) an explicit-key
     ;; collection: sequences first.
     (if (not (subclass? class <sequence>))
-        (bind ((result (make class)))
+        (bind ((result (if (and (subclass? class <array>) (instance? c <array>))
+                           ;; An array is made with its dimensions
+                           (make <array> dimensions: (dimensions c))
+                           (make class))))
           (for-each ((key (%common-keys collections)))
                     ()
             (set! (element result key)

@@ -490,6 +490,9 @@ C expressions for a0..a3 and the count."
                           (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
                                   (cfun-c-name direct) fexpr as n)
                           (format nil "DY_CALL(~a, ~{~a, ~}~d)" fexpr as n))))
+           (when (and (or tail (eq (dest-kind dest) :return)) (cfun-needs-mv-reset *cfun*))
+             ;; As in EMIT-CALL
+             (emit "dy_thread->mv_count = 1;"))
            (cond ((and tail (not (demote-tail-call-p)))
                   (emit "~a;" (if direct
                                   (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"

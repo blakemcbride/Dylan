@@ -52,7 +52,11 @@
 (defvar rep-module-variables '())
 
 (defun empty-environment! ()
-  "Forget the module variables created by previous DYLAN:REP interactions."
+  "Forget the module variables created by previous DYLAN:REP interactions,
+and their values."
+  (dolist (name rep-module-variables)
+    (unless (member name dylan%predefined-variables)
+      (makunbound (name->module-variable name))))
   (setf rep-module-variables '()))
 
 (defun print-rep-result (result multiple-values)
@@ -127,11 +131,14 @@
              (compile-expression
               input '!multiple-values rep-module-variables
               (lambda (new-vars preamble compiled-output)
-                (with-abort-handler
-                  (lambda ()
-                    (implementation-specific/eval
-                     (append preamble
-                             (list (make-result-form compiled-output))))))
+                ;; Any error, Dylan's or one only Lisp knows of, can
+                ;; return to the loop from the debugger.
+                (with-simple-restart (dylan-rep "Return to the Dylan read-eval-print loop.")
+                  (with-abort-handler
+                    (lambda ()
+                      (implementation-specific/eval
+                       (append preamble
+                               (list (make-result-form compiled-output)))))))
                 (setf rep-module-variables
                       (append new-vars rep-module-variables)))))))))))
 

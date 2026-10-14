@@ -253,6 +253,10 @@ there only if the method takes them all, which is all G would check.)"
 (defun emit-call (dest tail call tail-call)
   "Give DEST the values of the C call CALL; TAIL-CALL is the statement that
 makes it a tail call, used when TAIL."
+  (when (and (or tail (eq (dest-kind dest) :return)) (cfun-needs-mv-reset *cfun*))
+    ;; The values of an earlier call may still be counted, and a function
+    ;; written in C with one value does not reset the count.
+    (emit "dy_thread->mv_count = 1;"))
   (cond ((and tail (not (demote-tail-call-p))) (emit "~a;" tail-call))
         ((eq (dest-kind dest) :return) (emit "return ~a;" call))
         ((eq (dest-kind dest) :mv)

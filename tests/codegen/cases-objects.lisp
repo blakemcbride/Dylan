@@ -364,4 +364,41 @@ not-a-singleton
   "(define-slot (singleton 1) z init-keyword: z:)"
   ""
   :compile-error "the slot of a singleton takes no init-keyword")
+
+ (found-by-the-book
+  ;; Values of an earlier call not taken for those of a function written
+  ;; in C; each-subclass slots start uninitialized; map of an array keeps
+  ;; its dimensions.
+  "(define-method g () (list (values 1 2) 3))
+   (bind ((a b (g))) (print (list a b)))
+   (define-method h () (values 1 2) (identity 5))
+   (bind ((a b (h))) (print (list a b)))
+   (define-class <e> (<object>) (s allocation: each-subclass))
+   (define e (make <e>))
+   (print (slot-initialized? e s))
+   (set! (s e) 4)
+   (print (list (slot-initialized? e s) (s e)))
+   (define a (make <array> dimensions: '(2 3) fill: 1))
+   (set! (aref a 1 2) 5)
+   (define b (map (method (x) (+ x 1)) a))
+   (print (list (dimensions b) (aref b 0 0) (aref b 1 2)))
+   (define-class <f> (<e>))
+   (s (make <f>))
+   (print 'not-reached)"
+  "((1 3) #f)
+(5 #f)
+#f
+(#t 4)
+((2 3) 2 6)
+"
+  :error "")
+ (local-method-message
+  ;; A define-method that refers to local variables is reported, at the
+  ;; right line though the file has a header.
+  "module: dylan-user
+
+(bind ((k 1))
+  (define-method f ((x <integer>)) (+ x k)))"
+  ""
+  :compile-error ":4:3: error: define-method: the method refers to local variables (k)")
 )

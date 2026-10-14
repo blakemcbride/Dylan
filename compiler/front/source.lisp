@@ -179,7 +179,9 @@ of (form . location), one for each top-level form.  A reader error is reported a
 reader had reached."
   (let ((file (make-source-file name text)))
     (multiple-value-bind (module start) (parse-header text)
-      (let ((stream (make-string-input-stream text start))
+      ;; Positioned after the header, so that positions count from the
+      ;; start of the text
+      (let ((stream (let ((s (make-string-input-stream text))) (file-position s start) s))
             (eof (list nil))
             (forms '()))
         (let ((dylan::*dylan-source-positions* (source-file-positions file)))

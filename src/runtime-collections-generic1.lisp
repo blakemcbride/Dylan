@@ -207,12 +207,12 @@ first argument, ends."
                (cdr key-sequences)
                :initial-value (car key-sequences))))
 
-(defun map-aligned-by-keys (proc first collections)
+(defun map-aligned-by-keys (proc first collections
+                            &optional (class (dylan-call dylan/class-for-copy first)))
   "MAP over collections that are not all sequences: apply PROC to the
 elements at each common key, and store the results under those keys in a
-new instance of FIRST's class-for-copy."
-  (let ((keys (iterate->list #'identity (aligned-keys collections)))
-        (class (dylan-call dylan/class-for-copy first)))
+new instance of CLASS, by default FIRST's class-for-copy."
+  (let ((keys (iterate->list #'identity (aligned-keys collections))))
     (when (sequence? first)
       (setf keys (sort keys #'<)))
     (flet ((value-at (key)
@@ -231,20 +231,21 @@ new instance of FIRST's class-for-copy."
             (dolist (key keys result)
               (dylan-call dylan/setter/element/ result key (value-at key))))))))
 
-(defparameter dylan/map
-  (dylan%generic-fn
-   'map procedure-and-at-least-one-collection
-   (lambda (proc li &rest rest)
+(defun map-to-class (class proc li rest)
+  "The results of PROC on the elements of LI and the REST of the
+collections, in a new instance of CLASS (by default LI's class-for-copy)."
      (let ((all-lists (cons li rest)))
        (if (not (every #'sequence? all-lists))
-           (map-aligned-by-keys proc li all-lists)
+           (if class
+               (map-aligned-by-keys proc li all-lists class)
+               (map-aligned-by-keys proc li all-lists))
            (loop with result = '()
                  with next-states = (mapcar (lambda (li)
                                               (initial-state li))
                                             all-lists)
                  do (if (any? #'not next-states)
                         (return (dylan-call dylan/as
-                                            (dylan-call dylan/class-for-copy li)
+                                            (or class (dylan-call dylan/class-for-copy li))
                                             (reverse result)))
                         (let ((next-value
                                 (dylan-call dylan/apply
@@ -257,7 +258,13 @@ new instance of FIRST's class-for-copy."
                           (setf next-states
                                 (mapcar (lambda (li st)
                                           (next-state li st))
-                                        all-lists next-states))))))))))
+                                        all-lists next-states))))))))
+
+(defparameter dylan/map
+  (dylan%generic-fn
+   'map procedure-and-at-least-one-collection
+   (lambda (proc li &rest rest)
+     (map-to-class nil proc li rest))))
 
 (defparameter dylan/map-as
   (dylan%generic-fn
@@ -266,9 +273,7 @@ new instance of FIRST's class-for-copy."
                       (collection ,<collection>))
                     nil t nil)
    (lambda (class proc collection &rest rest)
-     (let ((result (dylan-call dylan/apply dylan/map
-                               (cons proc (cons collection rest)))))
-       (dylan-call dylan/as class result)))))
+     (map-to-class class proc collection rest))))
 
 (defparameter dylan/map-into
   (dylan%generic-fn

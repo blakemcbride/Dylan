@@ -136,8 +136,10 @@ in the module its `module:` header names (design note 33), or in
 `dylan-user`.
 
 **Runtime only.** Load `src/load-runtime.lisp`, then `load` the Lisp files
-the compiler produced. They are ordinary Common Lisp and need no compiler
-present.
+the compiler produced. They are ordinary Common Lisp that calls only the
+runtime. (`load-runtime.lisp` and `load-compiler.lisp` are kept for
+Thomas's three ways in, but each loads the whole system, as
+`load-dylan.lisp` does.)
 
 ```console
 $ sbcl --eval '(load "src/load-compiler.lisp")' \

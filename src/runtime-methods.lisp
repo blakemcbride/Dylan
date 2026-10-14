@@ -290,9 +290,34 @@ same."
                           (initialize-slot! slot rest instance-data
                                             '(instance)))))
       (let ((result (make-dylan-instance class nil instance-data)))
+        (check-make-keywords class result rest)
         (add-new-to-population! (class.instances class) result)
         (dylan-apply dylan/initialize result rest)
         result))))
+
+(defun check-make-keywords (class instance arguments)
+  "Chapters 6 and 11: it is an error to pass MAKE a keyword that neither
+an init-keyword of CLASS's slots nor an applicable INITIALIZE method other
+than the default accepts."
+  (let ((handled (let ((methods
+                   ;; Not the default, on <object>, which takes any keywords
+                   (remove-if (lambda (m)
+                               (and (eq (car (method.specializers m)) <object>)
+                                    (not (param-list.rest? (method.param-list m)))
+                                    (not (consp (param-list.keys (method.param-list m))))))
+                             (sorted-applicable-methods
+                              (generic-function.methods dylan/initialize)
+                              (list instance)))))
+                   (and methods (handled-keywords methods)))))
+    (unless (member handled '(:any t))
+      (loop for (key nil) on arguments by #'cddr
+            unless (or (member key handled)
+                       (some (lambda (slot)
+                               (and slot
+                                    (or (eq key (slot.init-keyword slot))
+                                        (eq key (slot.required-init-keyword slot)))))
+                             (coerce (class.slots class) 'list)))
+              do (dylan-call dylan/error "make -- illegal keyword argument" key)))))
 
 (defparameter dylan/make
   (dylan%generic-fn 'make

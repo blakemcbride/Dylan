@@ -151,6 +151,12 @@ path."
                                  (lambda ,lambda-list ,expansion)))))
        ',operator)))
 
+(declaim (inline dylan%function))
+(defun dylan%function (f)
+  "F, which a call calls: an error unless it is a function.  (FUNCALL
+would call a symbol's Lisp function.)"
+  (if (functionp f) f (dylan%error "not a function" f)))
+
 (defmacro dylan%call (multiple-values? operator &rest operands)
   (let* ((vars (loop repeat (length operands) collect (gensym "ARG")))
          (nargs (length operands))
@@ -164,7 +170,7 @@ path."
                                               (and (eq (first entry) operator)
                                                    (eq (second entry) :n-ary)))
                                             *fast-paths*)))))
-         (general `(funcall ,operator ,multiple-values?
+         (general `(funcall (dylan%function ,operator) ,multiple-values?
                             next-method/not-generic ,@vars)))
     (flet ((call (entry fn)
              (if (eq (second entry) :n-ary)

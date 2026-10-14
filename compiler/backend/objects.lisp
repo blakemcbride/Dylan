@@ -460,7 +460,8 @@ in layout order."
       (:instance (when (null (sdef-class sd))
                    (declare-object "static D ~a = DY_UNBOUND;" (sdef-c sd "cell"))))
       (:each-subclass
-       (declare-object "static D ~a[~d];" (sdef-c sd "cells") (length *classes*))))))
+       (declare-object "static D ~a[~d] = { ~{~a~^, ~} };" (sdef-c sd "cells") (length *classes*)
+                       (make-list (length *classes*) :initial-element "DY_UNBOUND"))))))
 
 (defun gen-slot-initialization (sd)
   "Code, for the define-class form, storing the slot definition's values."
@@ -623,8 +624,10 @@ slot SD in the object VAR."
              (compile-error "methods cannot be added to ~a (it is not yet a generic function in the runtime)"
                             (name-string (module-var-name var))))
            (when (ir-fn-free-vars fn)
-             (compile-error "define-method: the method refers to local variables (~{~a~^, ~})"
-                            (mapcar (lambda (v) (name-string (ivar-name v))) (ir-fn-free-vars fn))))
+             (compile-error "define-method: the method refers to local variables (~a)"
+                            (format nil "~{~a~^, ~}"
+                                    (mapcar (lambda (v) (name-string (ivar-name v)))
+                                            (ir-fn-free-vars fn)))))
            (let ((m (make-gmethod
                      :specs (mapcar #'resolve-specializer (ir-fn-specializers fn))
                      :kind :ir :fn fn

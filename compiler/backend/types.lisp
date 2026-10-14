@@ -5,11 +5,17 @@
 ;;;; A variable's type is a class all its values are instances of, or NIL
 ;;;; for none known.  The types come from what binds and assigns the
 ;;;; variable: constants; the inline methods of calls.lisp, whose result
-;;;; classes are known once their arguments' are; the specializers of a
-;;;; method defined by define-method, which dispatch has checked; and, for
-;;;; the parameters of a function whose every call is known (a loop, most
-;;;; often), the arguments of those calls.  They are found together, from
-;;;; nothing up, until none changes.
+;;;; classes are known once their arguments' are; make of a class it calls
+;;;; the maker of; the getters of slots of a known type; the type a bind
+;;;; declares; the specializers of a method defined by define-method, which
+;;;; dispatch has checked; and, for the parameters of a function whose every
+;;;; call is known (a loop, most often), the arguments of those calls.
+;;;; They are found together, from nothing up, until none changes.
+;;;;
+;;;; They are also flow-sensitive where a test proves more: in the branch
+;;;; of an if that (instance? x C) chose -- (not (instance? x C)) too -- x
+;;;; is known to be a C (*REFINEMENTS*), for the code generated there and
+;;;; for the types of what is bound there.
 ;;;;
 ;;;; The types let calls.lisp drop the tests of its inline cases.  A
 ;;;; <double-float> variable that no closure holds, and whose every use
@@ -17,12 +23,46 @@
 
 (in-package #:dylan-compiler)
 
+(defun narrower (type refined)
+  "The more specific of the classes TYPE and REFINED (either may be NIL).
+If neither is a subclass of the other, the code is never run; TYPE."
+  (cond ((null type) refined)
+        ((null refined) type)
+        ((subclass-info-p refined type) refined)
+        (t type)))
+
 (defun atom-type (a)
   "The class of the atom A's value, if known."
   (etypecase a
     (const (ignore-errors (constant-class (const-value a))))
-    (ivar (let ((type (ivar-type a))) (and (class-info-p type) type)))
+    (ivar (let ((type (ivar-type a)))
+            (narrower (and (class-info-p type) type) (cdr (assoc a *refinements*)))))
     (c-atom (c-atom-type a))))
+
+(defun type-test (atom &optional negated)
+  "If the atom ATOM is the value of (instance? x C), x a variable never
+assigned and C a class known when compiling -- or of not of such a value
+-- answer x, C, and whether it was negated."
+  (when (and (ivar-p atom) (not (ivar-assigned-p atom)) *let-values*)
+    (let ((v (gethash atom *let-values*)))
+      (when (ir-call-p v)
+        (multiple-value-bind (kind what) (call-callee v)
+          (when (eq kind :primitive)
+            (let ((args (ir-call-arguments v)))
+              (cond ((and (string= what "instance_p") (= (length args) 2)
+                          (ivar-p (first args)) (not (ivar-assigned-p (first args)))
+                          (known-class (second args)))
+                     (values (first args) (known-class (second args)) negated))
+                    ((and (string= what "not") (= (length args) 1))
+                     (type-test (first args) (not negated)))))))))))
+
+(defun if-refinements (e)
+  "The refinements the test of the if E gives its then branch and its else
+branch: two alists."
+  (multiple-value-bind (var class negated) (type-test (ir-if-test e))
+    (cond ((null var) (values '() '()))
+          (negated (values '() (list (cons var class))))
+          (t (values (list (cons var class)) '())))))
 
 (defun double-class () (find-class-info "<double-float>" *classes*))
 
@@ -162,8 +202,12 @@ used only to call them, and the sole methods of generic functions used so."
   (let ((sources (make-hash-table :test #'eq))   ; ivar -> list of sources
         (types (make-hash-table :test #'eq))     ; ivar -> type during the search
         (results (make-hash-table :test #'eq))   ; ir-fn -> type of its value
+        (declared (make-hash-table :test #'eq))  ; ivar -> the class a bind declares
         (callers (analyze-calls fns)))
-    (labels ((source (var s) (push s (gethash var sources)))
+    (labels ((source (var s)
+               ;; An expression is evaluated with the refinements where it is.
+               (push (if (or (eq s :unknown) (class-info-p s)) s (cons s *refinements*))
+                     (gethash var sources)))
              (unknown (var) (source var :unknown))
              (walk-fn (fn)
                (let ((method (gethash fn *method-of-fn*))
@@ -185,17 +229,27 @@ used only to call them, and the sole methods of generic functions used so."
                    (dolist (k (ir-fn-keys fn))
                      (unknown (ir-key-var k))
                      (walk (ir-key-default k))))
-                 (walk (ir-fn-body fn))))
+                 (let ((*refinements* '()))
+                   (walk (ir-fn-body fn)))))
              (walk (e)
                (typecase e
                  (ir-let (source (ir-let-var e) (ir-let-value e))
                          (walk (ir-let-value e)) (walk (ir-let-body e)))
+                 (ir-prim
+                  ;; A bind's declared type, checked before its body
+                  (let ((args (ir-prim-arguments e)))
+                    (when (and (eq (ir-prim-name e) :check-type)
+                               (ivar-p (first args)) (not (ivar-assigned-p (first args)))
+                               (known-class (second args)))
+                      (setf (gethash (first args) declared) (known-class (second args))))))
                  (ir-mv-let (dolist (v (ir-mv-let-vars e)) (unknown v))
                             (when (ir-mv-let-rest e) (unknown (ir-mv-let-rest e)))
                             (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
                  (ir-set (source (ir-set-var e) (ir-set-value e)))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
-                 (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-if (multiple-value-bind (then else) (if-refinements e)
+                          (with-refinements (then) (walk (ir-if-then e)))
+                          (with-refinements (else) (walk (ir-if-else e)))))
                  (ir-letrec (mapc #'unknown (ir-letrec-vars e))
                             (walk (ir-letrec-body e)))
                  (ir-bind-exit (unknown (ir-bind-exit-var e))
@@ -205,7 +259,12 @@ used only to call them, and the sole methods of generic functions used so."
                (multiple-value-bind (type found) (gethash var types)
                  (if found type nil)))
              (atom-type* (a)
-               (if (ivar-p a) (var-type a) (atom-type a)))
+               (if (ivar-p a)
+                   (let ((type (var-type a)))
+                     (if (eq type :none)
+                         :none
+                         (narrower type (cdr (assoc a *refinements*)))))
+                   (atom-type a)))
              (expr-type (e)
                (typecase e
                  ((or const ivar) (atom-type* e))
@@ -213,7 +272,9 @@ used only to call them, and the sole methods of generic functions used so."
                  (ir-mv-let (expr-type (ir-mv-let-body e)))
                  (ir-letrec (expr-type (ir-letrec-body e)))
                  (ir-seq (expr-type (car (last (ir-seq-forms e)))))
-                 (ir-if (join-types (expr-type (ir-if-then e)) (expr-type (ir-if-else e))))
+                 (ir-if (multiple-value-bind (then else) (if-refinements e)
+                          (join-types (with-refinements (then) (expr-type (ir-if-then e)))
+                                      (with-refinements (else) (expr-type (ir-if-else e))))))
                  (ir-set (atom-type* (ir-set-value e)))
                  (ir-global-set (atom-type* (ir-global-set-value e)))
                  (ir-prim (and (eq (ir-prim-name e) :pair) (find-class-info "<pair>" *classes*)))
@@ -226,7 +287,9 @@ used only to call them, and the sole methods of generic functions used so."
                      (let* ((args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e)))
                             (type
                               (case kind
-                                (:generic (step-type what (mapcar #'atom-type* args)))
+                                (:generic (or (step-type what (mapcar #'atom-type* args))
+                                              (resolved-make-class what args)
+                                              (slot-getter-type what args)))
                                 (:fold (reduce (lambda (acc a)
                                                  (step-type what (list acc (atom-type* a))))
                                                (rest args)
@@ -250,16 +313,25 @@ used only to call them, and the sole methods of generic functions used so."
       (mapc #'walk-fn fns)
       (loop for var being the hash-keys of sources do (setf (gethash var types) :none))
       (dolist (fn fns) (setf (gethash fn results) :none))
-      (loop
+      (loop for round from 1 do
         (let ((changed nil))
+          (when (> round 1000)
+            ;; Narrowing makes the search not plainly monotone; should it
+            ;; not settle, nothing is known.
+            (clrhash types)
+            (return))
           (loop for var being the hash-keys of sources using (hash-value srcs)
                 do (let ((type (reduce #'join-types
                                        (mapcar (lambda (s)
                                                  (cond ((eq s :unknown) nil)
                                                        ((class-info-p s) s)
-                                                       (t (expr-type s))))
+                                                       (t (let ((*refinements* (cdr s)))
+                                                            (expr-type (car s))))))
                                                srcs)
-                                       :initial-value :none)))
+                                       :initial-value :none))
+                         (declared-type (gethash var declared)))
+                     (when (and declared-type (not (eq type :none)))
+                       (setf type (narrower type declared-type)))
                      (unless (eq type (gethash var types))
                        (setf (gethash var types) type changed t))))
           (dolist (fn fns)
@@ -333,7 +405,10 @@ code for the call uses it only as a C double."
                  (ir-define-variable (note (ir-define-variable-value e) nil))
                  (ir-prim (dolist (a (ir-prim-arguments e)) (note a nil)))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
-                 (ir-if (note (ir-if-test e) nil) (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-if (note (ir-if-test e) nil)
+                        (multiple-value-bind (then else) (if-refinements e)
+                          (with-refinements (then) (walk (ir-if-then e)))
+                          (with-refinements (else) (walk (ir-if-else e)))))
                  (ir-letrec (walk (ir-letrec-body e)))
                  (ir-bind-exit (walk (ir-bind-exit-body e)))
                  (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e)))
@@ -408,7 +483,9 @@ holds."
                  (ir-prim (dolist (a (ir-prim-arguments e)) (use a :other)))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
                  (ir-if (use (ir-if-test e) :test)
-                        (walk (ir-if-then e)) (walk (ir-if-else e)))
+                        (multiple-value-bind (then else) (if-refinements e)
+                          (with-refinements (then) (walk (ir-if-then e)))
+                          (with-refinements (else) (walk (ir-if-else e)))))
                  (ir-letrec (walk (ir-letrec-body e)))
                  (ir-bind-exit (walk (ir-bind-exit-body e)))
                  (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e)))
@@ -468,3 +545,184 @@ holds."
         (let ((rest (ir-fn-rest fn)))
           (when (and rest (not (escapes-p rest)))
             (setf (gethash rest *stack-rests*) t)))))))
+
+;;; Escape analysis: closures and instances on the stack
+;;;
+;;; A closure, or an instance made by make of a class whose maker the call
+;;; resolves to, may be on the stack of the C function that makes it if
+;;; nothing can reach it once that function returns -- or makes a tail
+;;; call, which ends its frame.  Its variable, and those it is bound to
+;;; (never assigned ones only: the object of one pass of a loop must be
+;;; gone by the next), may only be tested, called (a closure, not in tail
+;;; position, with the number of arguments it takes), given to a slot's
+;;; getter or setter that is sure to apply (an instance), or passed, not
+;;; in tail position, to a function known when compiling whose parameter
+;;; does the same.  A parameter may also be passed or called in tail
+;;; position: the frame that holds the object is below.  Nothing that could
+;;; signal an error holding the object -- dispatch, a type check, a
+;;; primitive -- is allowed, since a handler could keep the condition.
+
+(defun stack-object-p (var) (and *stack-objects* (gethash var *stack-objects*)))
+
+(defun find-stack-objects (fns)
+  "Find the closures and instances of FNS that may be on the stack."
+  (setf *stack-objects* (make-hash-table :test #'eq))
+  (let ((uses (make-hash-table :test #'eq))      ; ivar -> (kind . data)
+        (candidates '())                         ; (var :closure fn) or (var :instance class)
+        (params (make-hash-table :test #'eq)))   ; fn -> vector of (escapes . arities)
+    (labels ((use (a kind &optional data)
+               (when (ivar-p a) (push (cons kind data) (gethash a uses))))
+             (walk-fn (fn)
+               (when (listp (ir-fn-keys fn))
+                 (dolist (k (ir-fn-keys fn)) (walk (ir-key-default k))))
+               (walk (ir-fn-body fn)))
+             (walk (e)
+               (typecase e
+                 (ivar (use e :other))
+                 (ir-let
+                  (let ((var (ir-let-var e)) (v (ir-let-value e)))
+                    (typecase v
+                      (ivar (use v :let var))
+                      (ir-lambda (push (list var :closure (ir-lambda-fn v)) candidates))
+                      (ir-call (multiple-value-bind (kind what) (call-callee v)
+                                 (let ((class (and (eq kind :generic)
+                                                   (resolved-make-class what (ir-call-arguments v)))))
+                                   (when class (push (list var :instance class) candidates))))
+                               (walk v))
+                      (t (walk v)))
+                    (walk (ir-let-body e))))
+                 (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+                 (ir-set (use (ir-set-value e) :other))
+                 (ir-global-set (use (ir-global-set-value e) :other))
+                 (ir-define-variable (use (ir-define-variable-value e) :other))
+                 (ir-prim (dolist (a (ir-prim-arguments e)) (use a :other)))
+                 (ir-seq (mapc #'walk (ir-seq-forms e)))
+                 (ir-if (use (ir-if-test e) :test) (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-letrec (loop for var in (ir-letrec-vars e)
+                                  for fn in (ir-letrec-fns e)
+                                  unless (gethash fn *groups*)
+                                    do (push (list var :closure fn) candidates))
+                            (walk (ir-letrec-body e)))
+                 (ir-bind-exit (walk (ir-bind-exit-body e)))
+                 (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e)))
+                 (ir-call (use (ir-call-function e) :callee e)
+                          (loop for a in (ir-call-arguments e) for i from 0
+                                do (use a :call (cons e i))))
+                 (ir-define-class (dolist (a (ir-define-class-superclasses e)) (use a :other)))))
+             (parameter (fn i)
+               ;; Is the argument for FN's required parameter I safe there:
+               ;; (values ok arities)?  (Past them, it goes in FN's #rest
+               ;; list or keywords.  Too few or too many arguments are an
+               ;; error about FN, not them.)
+               (let ((entries (gethash fn params)))
+                 (cond ((or (null entries) (>= i (length entries))) nil)
+                       ((car (aref entries i)) nil)
+                       (t (values t (cdr (aref entries i)))))))
+             (slot-accessor-p (g i n type)
+               ;; Is argument I of N to G that of a slot's getter or setter
+               ;; one of whose methods surely applies to an object of TYPE?
+               (let ((methods (gfun-methods g)))
+                 (and (= i 0) type methods
+                      (every (lambda (m)
+                               (and (member (gmethod-kind m) '(:getter :setter))
+                                    (= n (if (eq (gmethod-kind m) :getter) 1 2))))
+                             methods)
+                      (some (lambda (m)
+                              (let ((sd (gmethod-sdef m)))
+                                (and (sdef-class sd) (subclass-info-p type (sdef-class sd)))))
+                            methods))))
+             (argument (call i mode type)
+               ;; Is the object safe as argument I of CALL: (values ok arities)?
+               (let* ((target (call-target call))
+                      (n (length (ir-call-arguments call))))
+                 (cond
+                   ((and (eq mode :host) (ir-call-tail-p call)) nil)
+                   ((eq (ir-call-kind call) :exit) nil)
+                   ((and target (gethash target *groups*)) nil) ; into a loop's variables
+                   ((and target (gethash target *cfuns*)) (parameter target i))
+                   ((global-callee call) (parameter (global-callee call) i))
+                   (t
+                    (multiple-value-bind (kind what swap) (call-callee call)
+                      (case kind
+                        (:primitive
+                         (and (or (member what '("id" "not" "pair_p") :test #'string=)
+                                  (and (string= what "instance_p") (= i 0)))
+                              (values t nil)))
+                        (:generic
+                         (let ((i (if swap (- n 1 i) i))
+                               (args (if swap (reverse (ir-call-arguments call))
+                                         (ir-call-arguments call))))
+                           (cond ((resolved-make-class what args) nil)
+                                 ((slot-accessor-p what i n type) (values t nil))
+                                 ((sole-method what)
+                                  (parameter (gmethod-fn (sole-method what)) i)))))))))))
+             (check (var mode type)
+               ;; Does the object VAR holds escape: (values escapes arities)?
+               (let ((work (list var)) (seen (list var)) (arities '()))
+                 (loop while work
+                       do (let ((v (pop work)))
+                            (when (or (gethash v *closed-over*) (ivar-assigned-p v)
+                                      (/= (length (gethash v uses)) (ivar-ref-count v)))
+                              (return-from check t))
+                            (dolist (u (gethash v uses))
+                              (unless
+                                  (ecase (car u)
+                                    (:test t)
+                                    (:other nil)
+                                    (:let (let ((v2 (cdr u)))
+                                            (unless (member v2 seen)
+                                              (push v2 seen) (push v2 work))
+                                            t))
+                                    (:callee (let ((call (cdr u)))
+                                               (and (not (and (eq mode :host) (ir-call-tail-p call)))
+                                                    (not (eq (ir-call-kind call) :exit))
+                                                    (progn (pushnew (length (ir-call-arguments call))
+                                                                    arities)
+                                                           t))))
+                                    (:call (multiple-value-bind (ok more)
+                                               (argument (cadr u) (cddr u) mode type)
+                                             (when ok
+                                               (dolist (a more) (pushnew a arities))
+                                               t))))
+                                (return-from check t)))))
+                 (values nil arities))))
+      (mapc #'walk-fn fns)
+      ;; The parameters, from all safe down
+      (dolist (fn fns)
+        (when (gethash fn *cfuns*)
+          (setf (gethash fn params)
+                (let ((v (make-array (length (ir-fn-required fn)))))
+                  (dotimes (i (length v) v) (setf (aref v i) (cons nil nil)))))))
+      (loop
+        (let ((changed nil))
+          (loop for fn being the hash-keys of params using (hash-value entries)
+                do (loop for p in (ir-fn-required fn)
+                         for spec in (ir-fn-specializers fn)
+                         for i from 0
+                         do (multiple-value-bind (escapes arities)
+                                (if (or (and spec (not (gethash fn *method-of-fn*))) ; checked
+                                        (unboxed-p p)
+                                        (and (ir-fn-next fn) (gethash fn *method-of-fn*)
+                                             (needs-captured-next-p (ir-fn-next fn) fn)))
+                                    t
+                                    (check p :param (atom-type p)))
+                              (let ((old (aref entries i)))
+                                (unless (and (eq (car old) escapes)
+                                             (null (set-exclusive-or (cdr old) arities)))
+                                  (setf (aref entries i) (cons escapes arities) changed t))))))
+          (unless changed (return))))
+      ;; The objects
+      (loop for (var kind what) in candidates
+            do (multiple-value-bind (escapes arities)
+                   (check var :host (and (eq kind :instance) what))
+                 (when (and (not escapes)
+                            (ecase kind
+                              (:closure
+                               (let ((cfun (gethash what *cfuns*)))
+                                 (and cfun (cfun-env cfun)
+                                      (simple-fn-p what)
+                                      (every (lambda (a) (= a (length (ir-fn-required what))))
+                                             arities))))
+                              (:instance
+                               (and (null arities) (null (initialize-methods what))))))
+                   (setf (gethash var *stack-objects*) kind)))))))

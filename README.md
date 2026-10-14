@@ -160,7 +160,7 @@ built for threads (`libgc`).
 ```console
 $ bin/dylanc hello.dyl          # makes ./hello
 $ bin/dylanc -o app a.dyl b.dyl # several files, in order, one program
-$ bin/dylanc -h                 # the options: -O0..-O3, -Os, -g, -k, -C, ...
+$ bin/dylanc -h                 # the options: -O0..-O3, -Os, --lto, -g, -k, -C, ...
 ```
 
 The generated C is `NAME.c` (data and `main`), `NAME-MODULE.c` for each
@@ -206,10 +206,11 @@ What a static program cannot do, which the 1992 manual allows:
   `remove-method`, `add-slot`, `remove-slot` and `freeze-methods` are
   reported when compiling. A `<generic-function>` made by `make` has no
   methods.
-- **Specializers and `define-slot` owners known only when running:** each
-  must be a class or singleton the compiler can find — a literal, a
-  constant variable, `(singleton x)` or `(make <singleton> object: x)` of a
-  constant. So `define-slot` on a singleton is not supported.
+- **Specializers known only when running:** each must be a class or
+  singleton the compiler can find — a literal, a constant variable,
+  `(singleton x)` or `(make <singleton> object: x)` of a constant. A
+  `define-slot` owner may be any singleton, but a class owner must be known
+  when compiling.
 - **Bignums and complex numbers:** integers are 63 bits (overflow is an
   error), and `<complex>` has no instances.
 

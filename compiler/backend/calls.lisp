@@ -20,6 +20,8 @@
 ;;;;     goes to the generic function.
 ;;;;   - The getter or setter of an untyped instance slot with no other
 ;;;;     methods reads or writes the slot inline.
+;;;;   - make of a class the program defines, which only the library's
+;;;;     method on <class> makes, calls the class's maker.
 ;;;;   - A generic function with one method, on <object> for every
 ;;;;     argument, is not dispatched: its method is called.
 ;;;;   - Any other generic function's dispatch function is called directly.
@@ -354,22 +356,27 @@ CLASS-NAMES?"
     (every (lambda (m)
              (or (library-method-p m)
                  (notevery (lambda (spec class)
-                             (if (eq (spec-kind spec) :class)
-                                 (subclass-info-p class (spec-class spec))
-                                 (eq (constant-class (spec-value spec)) class)))
+                             (cond ((eq (spec-kind spec) :class)
+                                    (subclass-info-p class (spec-class spec)))
+                                   ;; Any object, for all the compiler knows
+                                   ((runtime-spec-p spec) t)
+                                   (t (eq (constant-class (spec-value spec)) class))))
                            (gmethod-specs m) classes)))
            (gfun-methods g))))
 
 (defun instance-slot-number (g kind)
-  "If every method of G is the KIND (:getter or :setter) of an untyped
-instance slot, the program's number for that slot."
+  "If every method of G is the KIND (:getter or :setter) of an instance
+slot -- untyped, for a setter, which would check the type -- the program's
+number for that slot."
   (let* ((methods (gfun-methods g))
          (sd (and methods (gmethod-sdef (first methods)))))
     (and sd
          (every (lambda (m)
                   (and (eq (gmethod-kind m) kind)
                        (eq (sdef-allocation (gmethod-sdef m)) :instance)
-                       (not (slot-spec-type (sdef-spec (gmethod-sdef m))))))
+                       (sdef-class (gmethod-sdef m))
+                       (or (eq kind :getter)
+                           (not (slot-spec-type (sdef-spec (gmethod-sdef m)))))))
                 methods)
          (gethash (sdef-getter sd) *instance-slot-numbers*))))
 
@@ -446,7 +453,60 @@ known not to be (:NO), or neither (:MAYBE)?"
         (deliver-double dest expr)
         (deliver-pure dest expr))))
 
+(defun resolved-make-class (g args)
+  "If the call of G on ARGS is a make of a class the program defines, and
+no method of make but the library's on <class> -- which calls the class's
+maker -- applies to it, that class."
+  (when (and (eq (gfun-var g) (dylan-var "make")) args)
+    (let* ((class (known-class (first args)))
+           (metaclass (find-class-info "<class>" *classes*)))
+      (when (and class (class-gclass class)
+                 (every (lambda (m)
+                          (let ((spec (first (gmethod-specs m))))
+                            (cond ((runtime-spec-p spec) nil)
+                                  ((eq (spec-kind spec) :singleton)
+                                   (not (eq (spec-value spec) class)))
+                                  ((subclass-info-p metaclass (spec-class spec))
+                                   (and (library-method-p m) (eq (spec-class spec) metaclass)))
+                                  (t t))))
+                        (gfun-methods g)))
+        class))))
+
+(defun slot-getter-type (g args)
+  "If every method of G is the getter of a slot whose type is a class
+known when compiling, the same for all, that class: the class of the value
+of a call of G on ARGS."
+  (let ((methods (gfun-methods g)))
+    (and (= (length args) 1) methods
+         (let ((types (mapcar (lambda (m)
+                                (and (eq (gmethod-kind m) :getter)
+                                     (slot-spec-type (sdef-spec (gmethod-sdef m)))
+                                     (known-class (slot-spec-type (sdef-spec (gmethod-sdef m))))))
+                              methods)))
+           (and (first types)
+                (every (lambda (type) (eq type (first types))) types)
+                (first types))))))
+
 (defun gen-generic-call (g args dest tail)
+  (let ((class (resolved-make-class g args)))
+    (when class
+      ;; Straight to the maker
+      (multiple-value-bind (as count) (call-arguments-c args)
+        (let ((maker (format nil "dy_maker_~a" (class-info-c-name class)))
+              (self (atom-c (first args))))
+          (if (and (eq (dest-kind dest) :bind) (stack-object-p (dest-var dest)))
+              ;; On the stack (types.lisp), filled as the maker would
+              (emit-call dest nil
+                         (format nil "dy_fill_~a(dy_init_instance(~a, &~a), ~a, ~{~a, ~}~d)"
+                                 (class-info-c-name class)
+                                 (stack-buffer "DyInstance" (class-info-size class))
+                                 (wrapper-c-name class) self as count)
+                         nil)
+              (emit-call dest tail
+                         (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)" maker self as count)
+                         (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
+                                 maker self as count)))))
+      (return-from gen-generic-call)))
   (when (gen-slot-call g args dest tail)
     (return-from gen-generic-call))
   (let ((cases (inline-cases g args)))

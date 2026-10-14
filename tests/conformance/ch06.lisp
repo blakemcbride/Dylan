@@ -771,9 +771,7 @@ w
 ")
 
  ;; 6.x Defining individual slots: define-slot on a singleton gives only
- ;; that object the slot (specification).  A static program's slots are
- ;; fixed when it is compiled, on classes (README.md, "Differences from
- ;; the 1992 manual"), so the compiler reports it.
+ ;; that object the slot (specification).
  (ch06-define-slot-singleton
   "(define-class <pt> (<object>) x)
    (define special (make <pt>))
@@ -781,6 +779,7 @@ w
    (define-slot (singleton special) tag init-value: 'special)
    (print (tag special))
    (print (handler-case (tag ordinary) ((<error>) 'error)))"
-  ""
-  :compile-error "define-slot's owner must be a class")
+  "special
+error
+")
 )

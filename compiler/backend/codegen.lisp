@@ -177,6 +177,15 @@ its value.")
 (defvar *stack-rests* nil
   "#rest IVAR -> T, for the lists that never escape (types.lisp).")
 (defvar *unboxed* nil "IVAR -> T, for the variables that are C doubles (types.lisp).")
+(defvar *stack-objects* nil
+  "IVAR -> :CLOSURE or :INSTANCE, for the variables whose object is made on
+the stack (types.lisp).")
+(defvar *refinements* '()
+  "IVAR -> a class its value is known to be an instance of in the code at
+hand, a branch of an if that tested it (types.lisp).")
+
+(defmacro with-refinements ((refinements) &body body)
+  `(let ((*refinements* (append ,refinements *refinements*))) ,@body))
 (defvar *lines* nil "The lines of the function being generated, newest first.")
 (defvar *indent* 1)
 (defvar *label-counter* 0)
@@ -185,7 +194,7 @@ its value.")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 11 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 12 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -366,11 +375,11 @@ dropped unevaluated?"
             ;; Known to be of a class #f is not an instance of
             (gen (ir-if-then e) dest))
            (t
-             (progn
+             (multiple-value-bind (then else) (if *debug* (values '() '()) (if-refinements e))
                (emit "if (~a != DY_FALSE) {" (atom-c test))
-               (indented (gen (ir-if-then e) dest))
+               (with-refinements (then) (indented (gen (ir-if-then e) dest)))
                (emit "} else {")
-               (indented (gen (ir-if-else e) dest))
+               (with-refinements (else) (indented (gen (ir-if-else e) dest)))
                (emit "}"))))))
       (ir-seq
        (loop for (f . more) on (ir-seq-forms e)
@@ -383,7 +392,9 @@ dropped unevaluated?"
       (ir-mv-let (gen-mv-let e dest))
       (ir-call (gen-call e dest))
       (ir-letrec (gen-letrec e dest))
-      (ir-lambda (deliver dest (closure-c (ir-lambda-fn e))))
+      (ir-lambda (deliver dest (closure-c (ir-lambda-fn e)
+                                          (and (eq (dest-kind dest) :bind)
+                                               (stack-object-p (dest-var dest))))))
       (ir-define-variable
        (let ((var (ir-define-variable-var e)))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-define-variable-value e)))
@@ -636,14 +647,30 @@ with constant keywords it takes."
   (function-info-c (length (ir-fn-required fn)) (ir-fn-rest fn)
                    (let ((k (ir-fn-keys fn))) (if (listp k) (mapcar #'ir-key-keyword k) k))))
 
-(defun closure-c (fn)
-  "A C expression for a closure of FN made now."
+(defun stack-buffer (header n)
+  "A new C local of the function being generated, aligned, to hold an
+object of the C type HEADER followed by N Ds: its name."
+  (let ((name (format nil "s~d" (incf *temp-counter*))))
+    (push (cons (format nil "~a[sizeof(~a) + ~d * sizeof(D)]" name header n)
+                "_Alignas(16) unsigned char")
+          (cfun-extra-locals *cfun*))
+    name))
+
+(defun make-closure-c (cfun stack)
+  "A C expression making a closure of CFUN's function, on the stack if
+STACK, with its environment yet to fill."
+  (if stack
+      (format nil "dy_init_closure(~a, ~a)"
+              (stack-buffer "DyFunction" (length (cfun-env cfun))) (cfun-c-name cfun))
+      (format nil "dy_make_closure(~a, ~d)" (cfun-c-name cfun) (length (cfun-env cfun)))))
+
+(defun closure-c (fn &optional stack)
+  "A C expression for a closure of FN made now, on the stack if STACK."
   (let ((cfun (gethash fn *cfuns*)))
     (if (null (cfun-env cfun))
         (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun))
         (let ((temp (new-temp)))
-          (emit "~a = dy_make_closure(~a, ~d);" temp (cfun-c-name cfun)
-                (length (cfun-env cfun)))
+          (emit "~a = ~a;" temp (make-closure-c cfun stack))
           (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" temp (fn-info-c fn))
           (fill-env temp cfun)
           (record-specializers temp fn)
@@ -683,8 +710,7 @@ applicable-method?)."
                    (if (null (cfun-env cfun))
                        (emit-bind var (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun)))
                        (progn
-                         (emit-bind var (format nil "dy_make_closure(~a, ~d)"
-                                                (cfun-c-name cfun) (length (cfun-env cfun))))
+                         (emit-bind var (make-closure-c cfun (stack-object-p var)))
                          (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" (var-read var) (fn-info-c fn))
                          (push (cons var cfun) pending)))))
       (loop for (var . cfun) in (reverse pending)
@@ -1092,6 +1118,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*absorbed-uses* nil)
         (*unboxed* nil)
         (*stack-rests* nil)
+        (*stack-objects* nil)
         (*global-functions* (make-hash-table :test #'eq))
         (*dylan-modules* (program-modules (ir-program-source ir)))
         (dylan::*symbol-spellings* (or (program-spellings (ir-program-source ir))
@@ -1104,6 +1131,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*method-of-fn* (make-hash-table :test #'eq))
         (*constant-globals* (make-hash-table :test #'eq))
         (*sdef-of-node* (make-hash-table :test #'eq))
+        (*singleton-sdefs* '())
         (*instance-slot-numbers* (make-hash-table :test #'eq))
         (*object-text* '())
         (*object-decls* '())
@@ -1148,6 +1176,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (infer-types fns)
         (choose-unboxed fns))
       (find-stack-rests fns)
+      (find-stack-objects fns)
       (choose-spec-entries cfuns fns)
       (let ((texts (mapcar #'gen-function cfuns))
             (closure-lines

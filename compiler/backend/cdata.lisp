@@ -191,7 +191,8 @@ declare."
       (format stream "extern DyClass ~a;~%extern DyWrapper ~a;~%"
               (class-c-name c) (wrapper-c-name c))
       (when (class-info-maker c)
-        (format stream "D ~a(D, D, D, D, D, intptr_t);~%" (class-info-maker c))))
+        (format stream "D ~a(D, D, D, D, D, intptr_t);~%" (class-info-maker c))
+        (format stream "D dy_fill_~a(D, D, D, D, D, D, intptr_t);~%" (class-info-c-name c))))
     (terpri stream)
     (dolist (line prelude) (format stream "~a~%" line))
     (terpri stream)

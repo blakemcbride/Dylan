@@ -256,4 +256,88 @@ caught
      (print count))"
   "(done done pong)
 1000000
+")
+
+ ;; make of a class the program defines calls its maker; slot types, typed
+ ;; binds and instance? tests give types (the last only in their branch).
+ (types-make-slots-tests
+  "(define-class <point> (<object>) (x type: <integer> init-value: 0 init-keyword: x:) (y init-keyword: y:))
+   (define sum-x
+     (method (n) (for ((i 0 (+ i 1)) (acc 0 (+ acc (x (make <point> x: i y: 'b))))) ((= i n) acc))))
+   (print (sum-x 1000))
+   (define twice
+     (method (v)
+       (if (instance? v <integer>)
+           (+ v v)
+           (if (not (instance? v <double-float>)) 'other (* v 2.0)))))
+   (print (list (twice 3) (twice 1.5) (twice 'a)))
+   (define f (method (z) (bind (((k <integer>) (* z 2))) (+ k 1))))
+   (print (f 5))
+   (print (handler-case (f 'a) ((<error>) 'not-a-number)))
+   (print (handler-case (make <point> x: 'no) ((<error>) 'bad-type)))
+   (define-class <special> (<object>))
+   (define-method make ((c (singleton <special>)) #rest args) 'made-specially)
+   (print (make <special>))"
+  "499500
+(6 3.0 other)
+11
+not-a-number
+bad-type
+made-specially
+")
+
+ ;; Closures and instances that cannot outlive the function making them are
+ ;; on its stack; any that might -- kept, signalled, in a loop's variables,
+ ;; passed in a tail call -- are not.
+ (stack-objects
+  "(define-class <box> (<object>) (v init-keyword: v:))
+   (define store #f)
+   (define keeper (method (b) (set! store b) 'kept))
+   (define peek (method (b) (v b)))
+   (define pass-on (method (b) (peek b)))
+   (define tail-pass (method (b) (pass-on b)))
+   (define run
+     (method ()
+       (bind ((a (make <box> v: 1)) (b (make <box> v: 2)) (c (make <box> v: 3)))
+         (keeper a)
+         (list (peek b) (tail-pass c)))))
+   (print (run))
+   (print (v store))
+   (define closures
+     (method (n)
+       (bind ((fs '()))
+         (for ((i 0 (+ i 1))) ((= i n) (map (method (f) (f)) fs))
+           (bind ((f (method () (* i 10))))
+             (set! fs (cons f fs)))))))
+   (print (closures 3))
+   (define local-calls
+     (method (n)
+       (for ((i 0 (+ i 1))
+             (acc 0 (bind ((g (method (x) (+ x i)))) (+ acc (g 1) (g 2)))))
+            ((= i n) acc))))
+   (print (local-calls 100))
+   (define caught
+     (method ()
+       (bind ((b (make <box> v: 9)))
+         (handler-case (begin (peek b) (error \"oops ~a\" b))
+           ((<error> condition: c) c)))))
+   (print (instance? (caught) <error>))
+   (define same (method (x y) (id? x y)))
+   (define ids (method () (bind ((b (make <box>))) (list (same b b) (same b 1)))))
+   (print (ids))
+   (define apply-twice (method (f v) (f (f v))))
+   (define adder
+     (method (k) (bind ((add (method (v) (+ v k)))) (list (apply-twice add 1) (add 10)))))
+   (print (adder 5))
+   (define keep #f)
+   (define leak (method (k) (bind ((c (method () k))) (set! keep c) (c))))
+   (print (list (leak 1) (keep)))"
+  "(2 3)
+1
+(20 10 0)
+10200
+#t
+(#t #f)
+(11 15)
+(1 1)
 "))

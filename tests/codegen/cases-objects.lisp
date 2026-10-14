@@ -311,4 +311,57 @@ pong
   "(define-class <z> (<object>)) (set! <z> 3)"
   ""
   :compile-error "cannot be assigned")
+
+ ;; define-slot on a singleton gives the one object a slot (chapter 6):
+ ;; instance or constant, initialized when the define-slot runs, more
+ ;; specific than its class's slot of the same getter.
+ (define-slot-singleton
+  "(define-class <point> (<object>) (x init-value: 0 init-keyword: x:))
+   (define p (make <point> x: 1))
+   (define q (make <point> x: 2))
+   (define-slot (singleton p) color init-value: 'red)
+   (print (color p))
+   (set! (color p) 'blue)
+   (print (color p))
+   (print (handler-case (color q) ((<error>) 'no-color-for-q)))
+   (define-slot (singleton q) weight type: <integer> init-function: (method () 42))
+   (print (weight q))
+   (print (handler-case (begin (set! (weight q) 'heavy) 'set) ((<error>) 'type-error)))
+   (define-slot (singleton p) kind allocation: constant: init-value: 'special)
+   (print (kind p))
+   (define-slot (singleton 7) seven-name init-value: \"seven\")
+   (print (seven-name 7))
+   (define-slot (singleton p) label)
+   (print (list (slot-initialized? p label) (slot-initialized? p color)))
+   (set! (label p) \"P\")
+   (print (list (label p) (slot-initialized? p label)))
+   (define give-p-x (method () (define-slot (singleton p) x init-value: 99)))
+   (print (list (x p) (x q)))
+   (give-p-x)
+   (set! (x q) 3)
+   (print (list (x p) (x q)))
+   (print (handler-case (define-slot p y) ((<error>) 'not-a-singleton)))"
+  "red
+blue
+no-color-for-q
+42
+type-error
+special
+\"seven\"
+(#f #t)
+(\"P\" #t)
+(1 2)
+(99 3)
+not-a-singleton
+")
+
+ (define-slot-singleton-class-allocation
+  "(define-slot (singleton 1) z allocation: class:)"
+  ""
+  :compile-error "the slot of a singleton must be instance, constant or virtual")
+
+ (define-slot-singleton-init-keyword
+  "(define-slot (singleton 1) z init-keyword: z:)"
+  ""
+  :compile-error "the slot of a singleton takes no init-keyword")
 )

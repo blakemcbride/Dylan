@@ -8,7 +8,7 @@
 
 CC      ?= gcc
 CFLAGS  ?= -O2 -g
-ALL_CFLAGS = $(CFLAGS) -std=gnu11 -Wall -Wextra -pthread -ffunction-sections -fdata-sections -Ic
+ALL_CFLAGS = $(CFLAGS) -std=c11 -Wall -Wextra -pthread -ffunction-sections -fdata-sections -Ic
 LDLIBS  = -lgc -lm -lpthread
 
 SOURCES = c/object.c c/number.c c/string.c c/function.c c/objects.c c/control.c c/thread.c c/library.c c/primitives.c
@@ -26,10 +26,10 @@ build/trampoline/%.o: c/%.c c/dylan.h c/primitive.h | build/trampoline
 	$(CC) $(ALL_CFLAGS) -DDY_TRAMPOLINE -c $< -o $@
 
 build/libdylan.a: $(OBJECTS)
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 
 build/libdylan-trampoline.a: $(TRAMPOLINE_OBJECTS)
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 
 build build/trampoline:
 	mkdir -p $@
@@ -42,7 +42,7 @@ $(VDIR)/%.o: c/%.c c/dylan.h c/primitive.h | $(VDIR)
 	$(CC) $(ALL_CFLAGS) $(VFLAGS) -c $< -o $@
 
 $(VDIR)/libdylan.a: $(SOURCES:c/%.c=$(VDIR)/%.o)
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 
 $(VDIR):
 	mkdir -p $@

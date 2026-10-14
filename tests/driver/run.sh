@@ -89,6 +89,10 @@ for o in -O0 -O1 -O3 -Os -g; do
 done
 check "--trampoline --cc clang" "$dylanc" --trampoline --cc clang -o tramp greet.dyl main.dyl
 check "--trampoline runs" output_is "$expected" ./tramp
+for c in gcc clang; do
+    check "--lto --cc $c" "$dylanc" --lto --cc $c -o lto greet.dyl main.dyl
+    check "--lto --cc $c runs" output_is "$expected" ./lto
+done
 check "CC" env CC=clang "$dylanc" -o withcc greet.dyl main.dyl
 check "CC runs" output_is "$expected" ./withcc
 check "modules" "$dylanc" -k -o mods module.dyl counting.dyl use.dyl app.dyl

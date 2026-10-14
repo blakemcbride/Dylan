@@ -25,16 +25,23 @@
  * the collector does not scan them.  This file must be included before
  * <pthread.h> so that threads are created through the collector.
  *
- * C11.  The extensions of GCC and Clang it uses are behind the macros of
- * "Compilers" below, which fall back on standard C where they can; the
- * runtime library itself (number.c) also needs __int128, and static data
- * initialized with pointers converted to D, which both compilers accept.
+ * C11 and POSIX (threads, open_memstream).  The extensions of GCC and
+ * Clang it uses are behind the macros of "Compilers" below, which fall
+ * back on standard C where they can; musttail, which C has no substitute
+ * for, is needed unless DY_TRAMPOLINE is defined.  Beyond C11, static data
+ * is initialized with pointers converted to D, which C allows compilers to
+ * accept and the usual ones do.
  * Define DY_DEBUG to check the representation of each value the
  * compiler's inline code takes apart (CompilerPlan.md, Phase 10).
  */
 
 #ifndef DYLAN_H
 #define DYLAN_H
+
+/* POSIX, which -std=c11 hides */
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
+#endif
 
 #define GC_THREADS 1
 #include <gc.h>
@@ -70,7 +77,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 11
+#define DY_ABI_VERSION 12
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -660,6 +667,26 @@ static inline DyEntry dy_entry(D f) {
 }
 
 D dy_make_closure(DyEntry entry, size_t env_size);
+
+/* Closures and instances on the stack of the function that makes them,
+ * which the compiler has found do not outlive it (CompilerPlan.md, Phase
+ * 9).  BUFFER is suitably aligned and large enough; the collector scans
+ * the stack, so what they hold stays alive. */
+static inline D dy_init_closure(void *buffer, DyEntry entry) {
+    DyFunction *f = buffer;
+    f->wrapper = &dy_wrapper_method;
+    f->entry = entry;
+    f->specializers = DY_FALSE;
+    f->info = DY_FALSE;
+    return DY_OBJ(f);
+}
+
+static inline D dy_init_instance(void *buffer, DyWrapper *wrapper) {
+    DyInstance *x = buffer;
+    x->wrapper = wrapper;
+    for (uint32_t i = 0; i < wrapper->size; i++) x->slots[i] = DY_UNBOUND;
+    return DY_OBJ(x);
+}
 
 /* A cell holds a variable that is both captured and assigned. */
 static inline D dy_make_cell(D value) {

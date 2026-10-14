@@ -25,6 +25,8 @@ Options:
   -o FILE          the executable (default: the first file's name, less .dyl)
   -O0 -O1 -O2 -O3  how much the C compiler optimizes (default -O2)
   -Os              a small executable: optimized for size, unused code dropped
+  --lto            optimize the program and the runtime library together when
+                   linking (link-time optimization)
   -g, --debug      for debugging: no optimization, debugging information, and
                    every inline operation checking its arguments when run
   -k, --keep-c     keep the C: FILE.c, FILE-MODULE.c for each module, FILE.h
@@ -66,6 +68,7 @@ Options:
                        ((member a '("-C" "--c-only") :test #'string=) (setf (getf options :c-only) t))
                        ((member a '("-E" "--expand") :test #'string=) (setf (getf options :expand) t))
                        ((string= a "--trampoline") (setf (getf options :trampoline) t))
+                       ((string= a "--lto") (setf (getf options :lto) t))
                        ((string= a "--cc") (setf (getf options :cc) (value)))
                        ((string= a "--no-lines") (setf (getf options :no-lines) t))
                        ((string= a "--gc-stress") (setf (getf options :variant) :gc-stress))
@@ -113,7 +116,8 @@ Options:
                          :optimize (getf options :optimize)
                          :size (getf options :size)
                          :debug (getf options :debug)
-                         :variant variant)))
+                         :variant variant
+                         :lto (getf options :lto))))
         (unless (getf options :keep)
           (dolist (f (cons (make-pathname :type "h" :defaults (pathname c-file)) c-files))
             (when (probe-file f) (delete-file f))))

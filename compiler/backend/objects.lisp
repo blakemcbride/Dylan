@@ -37,6 +37,8 @@
 (defvar *method-of-fn* nil "IR-FN -> GMETHOD, for define-method fns.")
 (defvar *constant-globals* nil "MODULE-VAR -> C expression of its value.")
 (defvar *sdef-of-node* nil "definition node -> its SDEFs.")
+(defvar *singleton-sdefs* '()
+  "The slots define-slot gives single objects: SDEFs with no class.")
 (defvar *object-text* nil "C text for the object system, newest first.")
 (defvar *object-decls* nil "C declarations it needs early, newest first.")
 (defvar *instance-slot-numbers* nil "getter MODULE-VAR -> number.")
@@ -49,7 +51,9 @@ reflection, and call it?  If not, methods need no direct entries.")
 (defstruct gclass var info sdefs location ready-c)
 
 (defstruct sdef
-  class                                 ; CLASS-INFO
+  class                                 ; CLASS-INFO, or NIL for a slot of
+                                        ; one object (define-slot on a
+                                        ; singleton)
   getter setter                         ; MODULE-VARs (setter may be NIL)
   allocation
   spec                                  ; the IR's SLOT-SPEC
@@ -220,6 +224,17 @@ expression that evaluates to a class or singleton, chapter 6.)"
                    (t (compile-error "a singleton specializer must be of a constant or a class")))))
           (t (compile-error "a specializer must be a class or a singleton known at compile time"))))))
 
+(defun runtime-spec-p (spec)
+  "Is SPEC the singleton of an object known only when the program runs:
+the owner of a define-slot on a singleton?  Its value is that slot's SDEF,
+its C the object, which the define-slot stores."
+  (sdef-p (spec-value spec)))
+
+(defun owner-c (sd) (format nil "dy_owner~d" (sdef-id sd)))
+
+(defun owner-spec (sd)
+  (make-spec :singleton nil sd (format nil "~a.object" (owner-c sd))))
+
 (defun same-spec-p (a b)
   (and (eq (spec-kind a) (spec-kind b))
        (if (eq (spec-kind a) :class)
@@ -228,12 +243,15 @@ expression that evaluates to a class or singleton, chapter 6.)"
 
 (defun spec-object-c (spec)
   "A C expression for SPEC as a Dylan object, for reflection."
-  (if (eq (spec-kind spec) :class)
-      (address (class-c-name (spec-class spec)))
+  (cond
+    ((eq (spec-kind spec) :class)
+     (address (class-c-name (spec-class spec))))
+    ((runtime-spec-p spec) (address (owner-c (spec-value spec))))
+    (t
       (let ((name (cdata-name *cdata* "dy_singleton_")))
         (define-c *cdata* "static DySingleton ~a = { &dy_wrapper_singleton, ~a };"
                   name (spec-c spec))
-        (address name))))
+        (address name)))))
 
 (defun spec-vector-c (specs)
   (address (c-vector *cdata* (mapcar #'spec-object-c specs))))
@@ -345,14 +363,28 @@ expression that evaluates to a class or singleton, chapter 6.)"
            (setf (gclass-sdefs g) (gethash d *sdef-of-node*)))))
       (ir-define-slot
        (at-node (d)
-         (let* ((class (resolve-class (ir-define-slot-owner d) "define-slot's owner"))
-                (g (find class (loop for g being the hash-values of *gclasses* collect g)
-                         :key #'gclass-info)))
-           (unless g
-             (compile-error "define-slot: slots can be added only to classes the program defines"))
-           (let ((sd (make-slot-definition class (ir-define-slot-slot d) *location*)))
-             (setf (gethash d *sdef-of-node*) (list sd))
-             (setf (gclass-sdefs g) (append (gclass-sdefs g) (list sd)))))))))
+         (let* ((v (static-value (ir-define-slot-owner d)))
+                (class (and (eq (car v) :global) (global-class (second v)))))
+           (if class
+               (let ((g (find class (loop for g being the hash-values of *gclasses* collect g)
+                              :key #'gclass-info)))
+                 (unless g
+                   (compile-error "define-slot: slots can be added only to classes the program defines"))
+                 (let ((sd (make-slot-definition class (ir-define-slot-slot d) *location*)))
+                   (setf (gethash d *sdef-of-node*) (list sd))
+                   (setf (gclass-sdefs g) (append (gclass-sdefs g) (list sd)))))
+               ;; Any other owner must be a singleton when the define-slot
+               ;; runs: the slot is the one object's (chapter 6).
+               (let* ((spec (ir-define-slot-slot d))
+                      (name (name-string (module-var-name (slot-spec-getter spec)))))
+                 (unless (member (slot-spec-allocation spec) '(:instance :constant :virtual))
+                   (compile-error "slot ~a: the slot of a singleton must be instance, constant or virtual"
+                                  name))
+                 (when (or (slot-spec-init-keyword spec) (slot-spec-required-init-keyword spec))
+                   (compile-error "slot ~a: the slot of a singleton takes no init-keyword" name))
+                 (let ((sd (make-slot-definition nil spec *location*)))
+                   (setf (gethash d *sdef-of-node*) (list sd))
+                   (push sd *singleton-sdefs*)))))))))
   ;; Number the instance slots, and lay out each class's instances.
   (let ((count 0))
     (loop for g being the hash-values of *gclasses*
@@ -411,8 +443,13 @@ in layout order."
       (declare-object "static D ~a = DY_UNBOUND;" (sdef-c sd "init")))
     (when (slot-spec-init-function spec)
       (declare-object "static D ~a = DY_UNBOUND;" (sdef-c sd "initfn")))
+    (when (null (sdef-class sd))
+      (declare-object "static DySingleton ~a = { &dy_wrapper_singleton, DY_UNBOUND };"
+                      (owner-c sd)))
     (case (sdef-allocation sd)
       ((:class :constant) (declare-object "static D ~a = DY_UNBOUND;" (sdef-c sd "cell")))
+      (:instance (when (null (sdef-class sd))
+                   (declare-object "static D ~a = DY_UNBOUND;" (sdef-c sd "cell"))))
       (:each-subclass
        (declare-object "static D ~a[~d];" (sdef-c sd "cells") (length *classes*))))))
 
@@ -424,22 +461,30 @@ in layout order."
     (when (slot-spec-init-value spec)
       (let ((v (atom-c (slot-spec-init-value spec))))
         (emit "~a = ~a;" (sdef-c sd "init") v)
-        (when (and (slot-spec-type spec) (member (sdef-allocation sd) '(:class :each-subclass :constant)))
+        (when (and (slot-spec-type spec)
+                   (or (member (sdef-allocation sd) '(:class :each-subclass :constant))
+                       (null (sdef-class sd))))
           (emit "dy_check_type(~a, ~a);" v (sdef-c sd "type")))
         (case (sdef-allocation sd)
           ((:class :constant) (emit "~a = ~a;" (sdef-c sd "cell") v))
+          (:instance (when (null (sdef-class sd)) (emit "~a = ~a;" (sdef-c sd "cell") v)))
           (:each-subclass
            (dolist (c *classes*)
              (when (subclass-info-p c (sdef-class sd))
                (emit "~a[~d] = ~a;" (sdef-c sd "cells") (class-info-id c) v)))))))
     (when (slot-spec-init-function spec)
-      (emit "~a = ~a;" (sdef-c sd "initfn") (atom-c (slot-spec-init-function spec))))
-    ;; The slot descriptor's copies
-    (when (slot-spec-type spec)
+      (emit "~a = ~a;" (sdef-c sd "initfn") (atom-c (slot-spec-init-function spec)))
+      (when (null (sdef-class sd))
+        ;; The one object's slot, initialized now
+        (emit "~a = DY_CALL(~a, 0, 0, 0, 0, 0);" (sdef-c sd "cell") (sdef-c sd "initfn"))
+        (when (slot-spec-type spec)
+          (emit "dy_check_type(~a, ~a);" (sdef-c sd "cell") (sdef-c sd "type")))))
+    ;; The slot descriptor's copies (a singleton's slot has none)
+    (when (and (slot-spec-type spec) (sdef-class sd))
       (emit "~a.type = ~a;" (sdef-descriptor-c sd) (sdef-c sd "type")))
-    (when (slot-spec-init-value spec)
+    (when (and (slot-spec-init-value spec) (sdef-class sd))
       (emit "~a.init_value = ~a;" (sdef-descriptor-c sd) (sdef-c sd "init")))
-    (when (slot-spec-init-function spec)
+    (when (and (slot-spec-init-function spec) (sdef-class sd))
       (emit "~a.init_function = ~a;" (sdef-descriptor-c sd) (sdef-c sd "initfn")))))
 
 (defun sdef-descriptor-c (sd) (format nil "dy_sd~d" (sdef-id sd)))
@@ -447,6 +492,12 @@ in layout order."
 (defun gen-class-definition (node)
   "Code for a define-class or define-slot form, run where it appears."
   (dolist (sd (gethash node *sdef-of-node*))
+    (when (null (sdef-class sd))
+      ;; The owner: its object is the one with the slot from now on.
+      (let ((owner (atom-c (ir-define-slot-owner node))))
+        (emit "if (!dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error(\"define-slot: the owner must be a singleton, or a class known when compiling\", ~a);"
+              owner owner)
+        (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)))
     (gen-slot-initialization sd))
   (when (ir-define-class-p node)
     (emit "~a = 1;" (gclass-ready-c (gethash (ir-define-class-var node) *gclasses*)))))
@@ -462,7 +513,10 @@ in layout order."
 (defun emit-storage-ref (sd var)
   "Emit code setting the C variable `place' to point at the storage of the
 slot SD in the object VAR."
-  (ecase (sdef-allocation sd)
+  (ecase (if (sdef-class sd) (sdef-allocation sd) :one-object)
+    (:one-object
+     ;; Dispatch has found the object.
+     (emit-object "    D *place = &~a;" (sdef-c sd "cell")))
     (:instance
      (emit-object "    const int32_t *o = dy_wrapper_of(~a)->slot_offsets;" var)
      (emit-object "    int32_t i = DY_IS_POINTER(~a) && o ? o[~d] : -1;" var
@@ -476,6 +530,9 @@ slot SD in the object VAR."
      (emit-instance-check sd var)
      (emit-object "    D *place = &~a[dy_wrapper_of(~a)->id];" (sdef-c sd "cells") var))))
 
+(defun owner-or-class-spec (sd)
+  (if (sdef-class sd) (make-spec :class (sdef-class sd)) (owner-spec sd)))
+
 (defun gen-accessors (sd)
   "The getter and setter methods of the slot definition SD."
   (let ((methods '())
@@ -487,7 +544,7 @@ slot SD in the object VAR."
     (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
     (emit-storage-ref sd "a0")
     (let ((spec (sdef-spec sd)))
-      (when (and (eq (sdef-allocation sd) :instance)
+      (when (and (eq (sdef-allocation sd) :instance) (sdef-class sd)
                  (or (slot-spec-init-value spec) (slot-spec-init-function spec)))
         ;; An instance made before define-slot added the slot takes its
         ;; initial value now (chapter 6).
@@ -499,7 +556,7 @@ slot SD in the object VAR."
                          (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))))
     (emit-object "    if (DY_UNLIKELY(*place == DY_UNBOUND)) dy_unbound_slot(~a);" (slot-name-c sd))
     (emit-object "    return *place;~%}")
-    (push (make-gmethod :specs (list (make-spec :class (sdef-class sd)))
+    (push (make-gmethod :specs (list (owner-or-class-spec sd))
                         :kind :getter :sdef sd :entry-c getter
                         :location (sdef-location sd) :order (sdef-order sd))
           methods)
@@ -513,7 +570,7 @@ slot SD in the object VAR."
         (emit-object "    if (~a != DY_UNBOUND) dy_check_type(a1, ~a);"
                      (sdef-c sd "type") (sdef-c sd "type")))
       (emit-object "    *place = a1;~%    return a1;~%}")
-      (push (make-gmethod :specs (list (make-spec :class (sdef-class sd)) (object-spec))
+      (push (make-gmethod :specs (list (owner-or-class-spec sd) (object-spec))
                           :kind :setter :sdef sd :entry-c setter
                           :location (sdef-location sd) :order (sdef-order sd))
             methods))
@@ -569,8 +626,9 @@ slot SD in the object VAR."
              (setf (gethash fn *method-of-fn*) m)
              (push m (gfun-methods (gfun-for var)))))))))
   ;; Slot accessors
-  (loop for g being the hash-values of *gclasses*
-        do (dolist (sd (gclass-sdefs g))
+  (loop for sds in (cons *singleton-sdefs*
+                         (loop for g being the hash-values of *gclasses* collect (gclass-sdefs g)))
+        do (dolist (sd sds)
              (declare-slot-storage sd)
              (unless (eq (sdef-allocation sd) :virtual)
                (dolist (m (gen-accessors sd))
@@ -730,7 +788,7 @@ it does not apply."
 
 (defun singleton-test-c (spec arg)
   (let ((value (spec-value spec)))
-    (if (or (typep value '(or ratio float)))
+    (if (or (typep value '(or ratio float)) (runtime-spec-p spec))
         (format nil "dy_identical(~a, ~a)" arg (spec-c spec))
         (format nil "~a == ~a" arg (spec-c spec)))))
 
@@ -768,59 +826,67 @@ it does not apply."
                                  when (eq (spec-kind s) :singleton) collect s)
                            :test #'same-spec-p))
               (first t))
-         (flet ((narrow (class singleton)
-                  ;; The candidates applicable to an argument of CLASS (that
-                  ;; is SINGLETON's object, if it is not NIL), with their rank.
-                  (loop for c in candidates
-                        for s = (nth pos (gmethod-specs (car c)))
-                        for rank = (if (eq (spec-kind s) :singleton)
-                                       (and singleton (same-spec-p s singleton) -1)
-                                       (spec-rank s class))
-                        when rank collect (cons (car c) (cons rank (cdr c))))))
+         (labels ((narrow (class singleton)
+                    ;; The candidates applicable to an argument of CLASS (that
+                    ;; is SINGLETON's object, if it is not NIL), with their rank.
+                    (loop for c in candidates
+                          for s = (nth pos (gmethod-specs (car c)))
+                          for rank = (if (eq (spec-kind s) :singleton)
+                                         (and singleton (same-spec-p s singleton) -1)
+                                         (spec-rank s class))
+                          when rank collect (cons (car c) (cons rank (cdr c)))))
+                  (class-switch (singleton indent)
+                    ;; A switch on the argument's class (that is SINGLETON's
+                    ;; object, if it is not NIL)
+                    (let ((pad (make-string (* 4 indent) :initial-element #\Space))
+                          (groups '())    ; (narrowed . ids)
+                          (cases '()))    ; (code . ids): groups whose code is
+                                          ; the same share their case
+                      (dolist (class *classes*)
+                        (let* ((narrowed (narrow class singleton))
+                               (key (mapcar (lambda (c) (cons (car c) (cadr c))) narrowed))
+                               (group (assoc key groups :test #'equal)))
+                          (if group
+                              (push (class-info-id class) (cddr group))
+                              (push (list* key narrowed (list (class-info-id class))) groups))))
+                      (dolist (group (reverse groups))
+                        (destructuring-bind (key narrowed &rest ids) group
+                          (declare (ignore key))
+                          (let* ((code (let ((*object-text* '()))
+                                         (gen-dispatch-tree g (1+ pos) narrowed (1+ indent))
+                                         (reverse *object-text*)))
+                                 (same (assoc code cases :test #'equal)))
+                            (if same
+                                (setf (cdr same) (append (cdr same) ids))
+                                (push (cons code ids) cases)))))
+                      (emit-object "~aswitch (dy_wrapper_of(~a)->id) {" pad arg)
+                      (dolist (c (reverse (remove-if (lambda (c)
+                                                       ;; The default does that.
+                                                       (and (= (length (car c)) 1)
+                                                            (search "goto no_method;" (first (car c)))))
+                                                     cases)))
+                        (emit-object "~a~{~a~^ ~}" pad
+                                     (mapcar (lambda (r)
+                                               ;; Standard C has no case ranges
+                                               (format nil "~{case ~d:~^ ~}"
+                                                       (loop for id from (car r) to (cdr r)
+                                                             collect id)))
+                                             (id-ranges (cdr c))))
+                        (dolist (line (car c)) (emit-object "~a" line)))
+                      (emit-object "~adefault: goto no_method;" pad)
+                      (emit-object "~a}" pad))))
            (dolist (s singletons)
              (emit-object "~a~:[} else ~;~]if (~a) {" pad first (singleton-test-c s arg))
              (setf first nil)
-             (gen-dispatch-tree g (1+ pos) (narrow (spec-class s) s) (1+ indent)))
-           (unless first (emit-object "~a} else {" pad))
-           (let ((groups '()))           ; (narrowed . ids)
-             (dolist (class *classes*)
-               (let* ((narrowed (narrow class nil))
-                      (key (mapcar (lambda (c) (cons (car c) (cadr c))) narrowed))
-                      (group (assoc key groups :test #'equal)))
-                 (if group
-                     (push (class-info-id class) (cddr group))
-                     (push (list* key narrowed (list (class-info-id class))) groups))))
-             (let ((pad2 (if first pad (concatenate 'string pad "    ")))
-                   (cases '()))         ; (code . ids): groups whose code is
-                                        ; the same share their case
-               (dolist (group (reverse groups))
-                 (destructuring-bind (key narrowed &rest ids) group
-                   (declare (ignore key))
-                   (let* ((code (let ((*object-text* '()))
-                                  (gen-dispatch-tree g (1+ pos) narrowed
-                                                     (+ indent (if first 1 2)))
-                                  (reverse *object-text*)))
-                          (same (assoc code cases :test #'equal)))
-                     (if same
-                         (setf (cdr same) (append (cdr same) ids))
-                         (push (cons code ids) cases)))))
-               (emit-object "~aswitch (dy_wrapper_of(~a)->id) {" pad2 arg)
-               (dolist (c (reverse (remove-if (lambda (c)
-                                                ;; The default does that.
-                                                (and (= (length (car c)) 1)
-                                                     (search "goto no_method;" (first (car c)))))
-                                              cases)))
-                 (emit-object "~a~{~a~^ ~}" pad2
-                              (mapcar (lambda (r)
-                                        ;; Standard C has no case ranges
-                                        (format nil "~{case ~d:~^ ~}"
-                                                (loop for id from (car r) to (cdr r)
-                                                      collect id)))
-                                      (id-ranges (cdr c))))
-                 (dolist (line (car c)) (emit-object "~a" line)))
-               (emit-object "~adefault: goto no_method;" pad2)
-               (emit-object "~a}" pad2)))
-           (unless first (emit-object "~a}" pad))))))))
+             (if (spec-class s)
+                 (gen-dispatch-tree g (1+ pos) (narrow (spec-class s) s) (1+ indent))
+                 ;; An object known only when running: its class is not.
+                 (class-switch s (1+ indent))))
+           (if first
+               (class-switch nil indent)
+               (progn (emit-object "~a} else {" pad)
+                      (class-switch nil (1+ indent))
+                      (emit-object "~a}" pad)))))))))
 
 (defun leaf-keyword-check (g methods)
   "C code checking the keyword arguments for a call whose applicable
@@ -904,19 +970,28 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
 
 ;;; make
 
+(defun initialize-methods (info)
+  "The program's methods of initialize for instances of the class INFO."
+  (let ((init (gethash (dylan-var "initialize") *gfuns*)))
+    (and init
+         (remove-if-not
+          (lambda (m)
+            (and (not (eq (gmethod-kind m) :default))
+                 (let ((s (first (gmethod-specs m))))
+                   (and (eq (spec-kind s) :class)
+                        (subclass-info-p info (spec-class s))))))
+          (gfun-methods init)))))
+
 (defun emit-maker (g)
+  "The class's maker, which make calls, and its filler, which initializes
+an instance already allocated -- on the heap by the maker, or on the stack
+by code that the compiler has found does not let it escape."
   (let* ((info (gclass-info g))
          (name (format nil "dy_maker_~a" (class-info-c-name info)))
+         (filler (format nil "dy_fill_~a" (class-info-c-name info)))
          (slots (effective-slots info))
          (init (gethash (dylan-var "initialize") *gfuns*))
-         (init-methods (and init
-                            (remove-if-not
-                             (lambda (m)
-                               (and (not (eq (gmethod-kind m) :default))
-                                    (let ((s (first (gmethod-specs m))))
-                                      (and (eq (spec-kind s) :class)
-                                           (subclass-info-p info (spec-class s))))))
-                             (gfun-methods init))))
+         (init-methods (initialize-methods info))
          (any (some #'gmethod-rest-p init-methods))
          (keywords (remove-duplicates
                     (append (loop for sd in slots
@@ -929,6 +1004,9 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
                                   when (consp k) append k)))))
     (setf (class-info-maker info) name)
     (emit-object "D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" name)
+    (emit-object "    return ~a(dy_make_instance(&~a), self, a0, a1, a2, a3, argc);~%}"
+                 filler (wrapper-c-name info))
+    (emit-object "D ~a(D x, D self, D a0, D a1, D a2, D a3, intptr_t argc) {" filler)
     (emit-object "    (void)self;")
     (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, ~:[~a, ~d~;NULL, 0~*~]);"
                  any (keyword-array keywords) (length keywords))
@@ -938,7 +1016,6 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
                          when cg collect (gclass-ready-c cg))))
       (emit-object "    if (!(~{~a~^ && ~})) dy_error(\"make: the class's define-class has not run yet\", a0);"
                    readies))
-    (emit-object "    D x = dy_make_instance(&~a);" (wrapper-c-name info))
     (emit-object "    DyInstance *object = DY_PTR(x);")
     (dolist (sd slots)
       (when (eq (sdef-allocation sd) :instance)
@@ -1012,6 +1089,15 @@ objects, makers."
   (emit-object "    (void)a2; (void)a3;")
   (emit-object "    if (DY_UNLIKELY(argc != 2)) dy_wrong_argument_count(self, argc);")
   (emit-object "    DyWrapper *w = dy_wrapper_of(a0); (void)w;")
+  ;; The slots of single objects, which are more specific
+  (dolist (sd *singleton-sdefs*)
+    (let ((getter (gethash (sdef-getter sd) *gfuns*)))
+      (when getter
+        (emit-object "    if (a1 == ~a && dy_identical(a0, ~a.object)) return ~a;"
+                     (address (gfun-c-name getter)) (owner-c sd)
+                     (if (eq (sdef-allocation sd) :virtual)
+                         "DY_TRUE"
+                         (format nil "DY_BOOL(~a != DY_UNBOUND)" (sdef-c sd "cell")))))))
   (loop for g being the hash-values of *gclasses*
         do (dolist (sd (gclass-sdefs g))
              (let ((getter (gethash (sdef-getter sd) *gfuns*)))

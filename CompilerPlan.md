@@ -277,9 +277,10 @@ checking, `next-method` (with or without arguments), generic keyword
 checking and the reflective functions of chapters 10 and 11 are in. Not
 yet: static resolution and inlining of calls (Phase 9, with type
 inference, now done); methods on `make` or on other `dylan`-module
-functions except `initialize` (Phase 8); `define-slot` on singletons; and
-`add-method`/`remove-method` (not possible in a static program). Slot
-descriptors came later (Phase 11). Tests: the
+functions except `initialize` (Phase 8); and `add-method`/`remove-method`
+(not possible in a static program). Slot descriptors came later (Phase
+11), and `define-slot` on singletons later still: the owner's object is
+recorded when the `define-slot` runs, and dispatch compares with it. Tests: the
 object-system programs in `tests/codegen/cases-objects.lisp`.
 
 **Classes.** The compiler builds the whole hierarchy: class precedence
@@ -449,19 +450,26 @@ loop with no state objects allocated.
 against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
 
 - `compiler/backend/types.lisp`: type inference over the whole program, a
-  fixpoint from constants, the inline methods' result classes,
-  define-method specializers, and — for local functions, global functions
-  and sole methods whose every call is known — the arguments of the calls
-  and the functions' results. Flow-insensitive: a variable has one type.
+  fixpoint from constants, the inline methods' result classes, `make` of
+  a class the call resolves to, the getters of typed slots, the types
+  `bind` declares, define-method specializers, and — for local functions,
+  global functions and sole methods whose every call is known — the
+  arguments of the calls and the functions' results. Flow-sensitive where
+  a test proves more: in the branch an `(instance? x C)` test (or its
+  `not`) chooses, `x` is a `C`, for the code there and for what is bound
+  there. Otherwise a variable has one type.
 - `compiler/backend/calls.lisp`: calls of known generic functions go to
-  their dispatch function, or their only method; primitives through their
-  C entry; global functions directly, a tail call of itself a loop.
+  their dispatch function, or their only method; `make` of a class the
+  program defines, when only the library's method on `<class>` applies,
+  its maker; primitives through their C entry; global functions directly,
+  a tail call of itself a loop.
   Calls of known functions other than in tail position go to their
   specialized entry (`codegen.lisp`): exact arity, `double` arguments
   where unboxed, and keywords matched when compiling — each keyword
   parameter an argument, `DY_UNSUPPLIED` if not passed.
   Done inline: `id?`, `not`, `car`, `cdr`, `instance?` of a known class,
-  untyped instance slot getters and setters, and the library's methods for
+  instance slot getters (typed or not) and untyped setters, and the
+  library's methods for
   integer and float arithmetic and comparison, `size`, `element` and the
   iteration protocol on lists, vectors and byte strings — when the static
   program shows no other method could apply. A test of the arguments
@@ -471,14 +479,23 @@ against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
   immediate.
 - Escape analysis: a `#rest` list only walked, through variables no closure
   holds, is on the stack (up to 8 pairs); keyword arguments are parsed
-  where they were passed, with no list. Closures are not stack-allocated:
-  contification already makes local loops none.
+  where they were passed, with no list. A closure, or an instance `make`
+  resolves to the maker of (with no `initialize` methods), is on the stack
+  of the function making it when nothing can reach it after that function
+  returns or tail-calls: it is only tested, called (not in tail position,
+  with the arguments it takes), given to a slot accessor sure to apply, or
+  passed (not in tail position) to a known function whose parameter is
+  used the same way, tail calls allowed there. Nothing that could signal
+  an error holding it, and no assigned variable or loop variable, may see
+  it.
 - Constants propagate through `let`s; integer arithmetic on constants is
   done when compiling; `if` on a constant, or on a value of a class `#f`
   is not an instance of, keeps one branch; unused pure `let`s are dropped.
 - Tree shaking as before (shake.lisp); `(build … :size t)` builds with
   `-Os`, function and data sections and `--gc-sections` (the runtime
-  library is always compiled in sections). No LTO.
+  library is always compiled in sections). `dylanc --lto` (`:lto t`)
+  optimizes the program and the runtime library together when linking,
+  with a build of the library for it.
 - The library concatenates vectors and strings directly and sorts its
   fresh list in place.
 
@@ -514,9 +531,10 @@ builtins and `__builtin_expect` behind macros, with standard fallbacks for
 the last two and an error telling to use `--trampoline` without the first.
 Dispatch uses no case ranges. `-g` builds for debugging: no types trusted,
 so every inline operation tests its arguments, and `-DDY_DEBUG` makes the
-runtime's accessors check what they take apart. The runtime library
-itself still needs GCC or Clang (`__int128`). Tests: `sh
-tests/driver/run.sh`.
+runtime's accessors check what they take apart. The runtime library is
+C11 and POSIX too (`-std=c11`); its 128-bit arithmetic uses `__int128`
+where the compiler has it and two 64-bit words otherwise
+(`-DDY_NO_INT128` forces them). Tests: `sh tests/driver/run.sh`.
 
 - Emit C11 (`_Thread_local`, `_Static_assert`), one `.c` per module plus a
   shared header; readable output with `#line` directives pointing to the

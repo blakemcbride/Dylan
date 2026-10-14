@@ -72,11 +72,16 @@ ThreadSanitizer.")
         while space
         do (setf start (1+ space))))
 
-(defun runtime-library (trampoline &key variant (cc "cc"))
+(defparameter *lto-flags* "-O2 -g -flto"
+  "The C flags of the runtime library for link-time optimization.")
+
+(defun runtime-library (trampoline &key variant (cc "cc") lto)
   "The runtime library's pathname, made if it does not exist or is out of
-date.  A VARIANT is made with the C compiler CC, which the program must be
-compiled with too."
-  (let* ((directory (and variant
+date.  A VARIANT, or the library for link-time optimization (LTO), is
+made with the C compiler CC, which the program must be compiled with
+too."
+  (let* ((variant (or variant (and lto :lto)))
+         (directory (and variant
                          (format nil "build/~(~a~)-~a~:[~;-trampoline~]"
                                  variant (file-namestring cc) trampoline)))
          (target (cond (directory (format nil "~a/libdylan.a" directory))
@@ -86,7 +91,10 @@ compiled with too."
                             (and directory
                                  (list (format nil "VDIR=~a" directory)
                                        (format nil "VFLAGS=~{~a~^ ~}~:[~; -DDY_TRAMPOLINE~]"
-                                               (variant-flags variant) trampoline)
+                                               (if (eq variant :lto)
+                                                   (split-words *lto-flags*)
+                                                   (variant-flags variant))
+                                               trampoline)
                                        (format nil "CC=~a" cc)))
                             (list target))))
     (unless (zerop (run "make" arguments))
@@ -94,22 +102,28 @@ compiled with too."
     (merge-pathnames target *runtime-directory*)))
 
 (defun build (files executable &key trampoline (cc "cc") (optimize "-O2") size debug variant
-                                   c-file)
+                                   lto c-file)
   "Compile FILES to the EXECUTABLE.  The C goes in C-FILE, or
 EXECUTABLE.c, and the files that go with it.  With :SIZE T the executable
 is made small: -Os, and the functions and data nothing uses dropped when
 linking.  With :DEBUG T it is made for debugging: no optimization, debugging
-information, and every inline operation checking its arguments.  VARIANT
-is one of *VARIANTS*, for testing."
+information, and every inline operation checking its arguments.  With
+:LTO T the C compiler optimizes the program and the runtime library
+together when linking.  VARIANT is one of *VARIANTS*, for testing."
   (let* ((c-file (or c-file (concatenate 'string (namestring executable) ".c")))
          (c-files (let ((*debug* (or debug (member variant '(:address :thread)))))
                     (compile-files files c-file))))
     (and c-files
          (build-c c-files executable :trampoline trampoline :cc cc :optimize optimize
                                      :size size :debug (or debug (member variant '(:address :thread)))
-                                     :variant variant))))
+                                     :variant variant :lto lto))))
 
-(defun c-compiler-options (&key trampoline (optimize "-O2") size debug variant)
+(defun lto-p (lto debug variant)
+  "Is the program to be linked with link-time optimization?  Not when
+built for debugging or testing."
+  (and lto (not debug) (not variant)))
+
+(defun c-compiler-options (&key trampoline (optimize "-O2") size debug variant lto)
   (append (cond (variant (variant-flags variant))
                 (debug (list "-O0" "-g" "-DDY_DEBUG"))
                 (size (list "-Os" "-ffunction-sections" "-fdata-sections"
@@ -119,16 +133,19 @@ is one of *VARIANTS*, for testing."
                 "-Wall" "-Wno-unused-variable" "-Wno-unused-but-set-variable"
                 "-Wno-unused-label"
                 (format nil "-I~a" (namestring (merge-pathnames "c/" *runtime-directory*))))
-          (and trampoline (list "-DDY_TRAMPOLINE"))))
+          (and trampoline (list "-DDY_TRAMPOLINE"))
+          (and (lto-p lto debug variant) (list "-flto=auto"))))
 
 (defun build-c (c-files executable &key trampoline (cc "cc") (optimize "-O2") size debug
-                                        variant)
+                                        variant lto)
   "Compile and link the C-FILES (a list, or one file) of a program into
 EXECUTABLE."
-  (let ((library (runtime-library trampoline :variant variant :cc cc))
+  (let ((library (runtime-library trampoline :variant variant :cc cc
+                                             :lto (lto-p lto debug variant)))
         (c-files (if (listp c-files) c-files (list c-files))))
     (zerop (run cc (append (c-compiler-options :trampoline trampoline :optimize optimize
-                                               :size size :debug debug :variant variant)
+                                               :size size :debug debug :variant variant
+                                               :lto lto)
                            (mapcar #'namestring c-files)
                            (list (namestring library)
                                  "-lgc" "-lm" "-lpthread" "-o" (namestring executable)))))))

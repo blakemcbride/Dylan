@@ -77,7 +77,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 12
+#define DY_ABI_VERSION 13
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -448,6 +448,12 @@ static inline D dy_int_negate(D a) {
 }
 
 static inline bool dy_int_less(D a, D b) { return (intptr_t)a < (intptr_t)b; }
+
+/* The remainder of floor division, of a divisor not 0: the sign of B. */
+static inline intptr_t dy_int_modulo(intptr_t a, intptr_t b) {
+    intptr_t r = a % b;
+    return r != 0 && ((r < 0) != (b < 0)) ? r + b : r;
+}
 
 /* Make an <integer> of a C integer, checking its range. */
 static inline D dy_make_int(intptr_t n) {

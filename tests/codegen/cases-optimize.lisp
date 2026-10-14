@@ -340,4 +340,99 @@ made-specially
 (#t #f)
 (11 15)
 (1 1)
-"))
+")
+ (float-contagion
+  ;; One argument a known double: the value is a double, unboxed, whatever
+  ;; the other argument turns out to be.
+  "(define scale (method (x n) (/ (* 3.0 x) n)))
+   (define f (method (n) (- (scale 2 n) 1.0)))
+   (print (list (f 2) (f 3/2) (f 4.0)))
+   (define g (method (y) (+ 1.5 y)))
+   (print (g 1))
+   (g 'a)"
+  "(2.0 3.0 0.5)
+2.5
+"
+  :error "")
+ (next-method-arguments
+  ;; (next-method) with the method's own arguments, captured or not
+  "(define-class <a> (<object>))
+   (define-class <b> (<a>))
+   (define-method w ((x <a>) y) (list 'a y))
+   (define-method w ((x <b>) y) (cons (next-method) (next-method x 2)))
+   (print (w (make <b>) 1))
+   (define-method v ((x <a>) #rest r) r)
+   (define-method v ((x <b>) #rest r) (list (next-method) (next-method x 9)))
+   (print (v (make <b>) 1 2))
+   (define-method u ((x <a>)) 'a)
+   (define-method u ((x <b>)) (bind ((n next-method)) (list (n) 'b)))
+   (print (u (make <b>)))"
+  "((a 1) a 2)
+((1 2) (9))
+(a b)
+")
+ (exit-from-loop
+  ;; An exit called in a local loop function is a jump
+  "(define find (method (l limit)
+     (bind-exit (return)
+       (for-each ((x l)) () (when (> x limit) (return x)))
+       #f)))
+   (print (list (find '(1 5 9 2) 4) (find '(1 2) 4)))
+   (define nested (method (l)
+     (bind-exit (outer)
+       (for-each ((x l)) ()
+         (bind-exit (inner)
+           (for-each ((y x)) ()
+             (when (= y 0) (inner 'zero))
+             (when (< y 0) (outer y)))))
+       'none)))
+   (print (list (nested '((1 0 2) (3))) (nested '((1 2) (3 -4 0)))))
+   (define cleanup (method (l)
+     (bind ((log '()))
+       (list (bind-exit (done)
+               (for-each ((x l)) ()
+                 (unwind-protect (when (= x 2) (done x))
+                   (set! log (cons x log)))))
+             log))))
+   (print (cleanup '(1 2 3)))"
+  "(5 #f)
+(none -4)
+(2 (2 1))
+")
+ (inline-integers
+  ;; modulo, remainder, =hash, the predicates and typed slot setters inline
+  "(print (list (modulo 7 3) (modulo -7 3) (modulo 7 -3) (modulo -7 -3)
+                (remainder 7 3) (remainder -7 3) (remainder 7 -3)))
+   (print (list (zero? 0) (zero? 0.0) (positive? -1) (negative? -1.5)
+                (even? 4) (odd? 4) (odd? -3)))
+   (print (= (=hash 5) (=hash 5)))
+   (define-class <c> (<object>) (n type: <integer> init-value: 0))
+   (define c (make <c>))
+   (set! (n c) 3)
+   (print (n c))
+   (define put (method (x) (set! (n c) x)))
+   (put 'a)"
+  "(1 2 -2 -1 1 -1 1)
+(#t #t #f #t #t #f #t)
+#t
+3
+"
+  :error "")
+ (sorting
+  ;; sort: stable, by <, by a test, of lists, vectors and strings
+  "(print (sort '(3 1 2 1.5 -4)))
+   (print (sort (vector 3 1 2) test: >))
+   (print (sort \"hello\"))
+   (print (sort '((b . 1) (a . 1) (c . 0)) test: (method (x y) (< (cdr x) (cdr y)))))
+   (print (sort '()))
+   (print (concatenate \"ab\" \"\" \"cd\"))
+   (print (concatenate \"ab\" '(#\\c)))"
+  "(-4 1 1.5 2 3)
+#(3 2 1)
+\"ehllo\"
+((c . 0) (b . 1) (a . 1))
+()
+\"abcd\"
+\"abc\"
+")
+)

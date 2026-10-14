@@ -9,7 +9,7 @@ module: dylan
 
 (define-class <%general-array> (<array>)
   (%dimensions init-keyword: dimensions:)
-  (%data init-keyword: data:))
+  (%data type: <simple-object-vector> init-keyword: data:))
 
 (define-method make ((class (singleton <array>)) #key dimensions (fill #f))
   (unless dimensions (error "make: <array> requires dimensions:"))

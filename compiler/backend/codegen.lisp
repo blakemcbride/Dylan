@@ -37,106 +37,6 @@
 
 (in-package #:dylan-compiler)
 
-;;; ------------------------------------------------------------ Contification
-
-(defstruct (group (:constructor make-group (letrec fns mode entry)))
-  letrec
-  fns                                   ; the contified IR-FNs
-  mode                                  ; :TAIL or :SINGLE
-  entry                                 ; :SINGLE: the one entering call
-  dest                                  ; where their values go
-  (labels (make-hash-table :test #'eq))) ; fn -> entry label
-
-(defvar *groups* nil "IR-FN -> its GROUP, for contified fns.")
-
-(defun direct-calls (e)
-  "The calls in E outside any function E contains, each as (call . tail-p),
-TAIL-P meaning in tail position with respect to E."
-  (let ((calls '()))
-    (labels ((walk (e tail)
-               (typecase e
-                 (ir-call (push (cons e tail) calls))
-                 (ir-let (walk (ir-let-value e) nil) (walk (ir-let-body e) tail))
-                 (ir-mv-let (walk (ir-mv-let-value e) nil) (walk (ir-mv-let-body e) tail))
-                 (ir-seq (loop for (f . more) on (ir-seq-forms e)
-                               do (walk f (and tail (null more)))))
-                 (ir-if (walk (ir-if-then e) tail) (walk (ir-if-else e) tail))
-                 (ir-letrec (walk (ir-letrec-body e) tail))
-                 (ir-bind-exit (walk (ir-bind-exit-body e) nil))
-                 (ir-unwind (walk (ir-unwind-protected e) nil)
-                            (walk (ir-unwind-cleanup e) nil)))))
-      (walk e t))
-    calls))
-
-(defun letrecs-in (e)
-  "The letrec forms in E outside any function E contains."
-  (let ((found '()))
-    (labels ((walk (e)
-               (typecase e
-                 (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
-                 (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
-                 (ir-seq (mapc #'walk (ir-seq-forms e)))
-                 (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
-                 (ir-letrec (push e found) (walk (ir-letrec-body e)))
-                 (ir-bind-exit (walk (ir-bind-exit-body e)))
-                 (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
-      (walk e))
-    found))
-
-(defun call-target (call)
-  (let ((f (ir-call-function call)))
-    (and (ivar-p f) (ivar-value-fn f))))
-
-(defun simple-fn-p (fn)
-  "Only required parameters, none specialized?"
-  (and (null (ir-fn-next fn)) (null (ir-fn-rest fn)) (null (ir-fn-keys fn))
-       (every #'null (ir-fn-specializers fn))))
-
-(defun decide-contification (letrec)
-  (let* ((arity-ok (lambda (fn)
-                     (every (lambda (c) (= (length (ir-call-arguments c))
-                                           (length (ir-fn-required fn))))
-                            (ir-fn-call-sites fn))))
-         (candidates (remove-if-not
-                      (lambda (fn)
-                        (and (not (ir-fn-escapes-p fn))
-                             (simple-fn-p fn)
-                             (funcall arity-ok fn)))
-                      (ir-letrec-fns letrec)))
-         (body-calls (make-hash-table :test #'eq))
-         (fn-calls (make-hash-table :test #'eq)))  ; call -> (fn . tail-p)
-    (loop for (c . tail) in (direct-calls (ir-letrec-body letrec))
-          do (setf (gethash c body-calls) tail))
-    (dolist (fn candidates)
-      (loop for (c . tail) in (direct-calls (ir-fn-body fn))
-            do (setf (gethash c fn-calls) (cons fn tail))))
-    ;; Keep only those every call of which is in the letrec's body or a
-    ;; tail call in a member's body.
-    (loop
-      (let ((before (length candidates)))
-        (setf candidates
-              (remove-if-not
-               (lambda (fn)
-                 (every (lambda (c)
-                          (or (nth-value 1 (gethash c body-calls))
-                              (let ((owner (gethash c fn-calls)))
-                                (and owner (member (car owner) candidates)
-                                     (cdr owner)))))
-                        (ir-fn-call-sites fn)))
-               candidates))
-        (when (= before (length candidates)) (return))))
-    (when candidates
-      (let ((entries (loop for c being the hash-keys of body-calls using (hash-value tail)
-                           when (member (call-target c) candidates)
-                             collect (cons c tail))))
-        (let ((group (cond ((every #'cdr entries)
-                            (make-group letrec candidates :tail nil))
-                           ((= (length entries) 1)
-                            (make-group letrec candidates :single (car (first entries)))))))
-          (when group
-            (dolist (fn candidates)
-              (setf (gethash fn *groups*) group))))))))
-
 ;;; ---------------------------------------------------------- C functions
 
 (defconstant +max-arguments+ 1024 "As DY_MAX_ARGUMENTS in dylan.h.")
@@ -150,6 +50,11 @@ TAIL-P meaning in tail position with respect to E."
   (self-tail-call nil)                  ; did it jump to its own top?
   (spec nil))                           ; its specialized entry: NIL,
                                         ; :ONLY (its only body) or :COPY
+
+(defvar *direct-next* nil
+  "In a method whose next method is only called, and with no arguments
+called with the method's own, the next method's variable and the C
+temporaries holding those arguments.")
 
 (defvar *spec* nil
   "What the specialized entry being generated does with a tail call:
@@ -198,7 +103,7 @@ hand, a branch of an if that tested it (types.lisp).")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 12 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 13 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -573,7 +478,12 @@ C expressions for a0..a3 and the count."
             (let ((call (spec-call-c target (atom-c f) (ir-call-arguments e))))
               (and call (progn (emit-call dest nil call nil) t)))))
       (t
-       (multiple-value-bind (as n) (call-arguments-c (ir-call-arguments e))
+       (multiple-value-bind (as n)
+           (if (and *direct-next* (eq f (car *direct-next*)) (null (ir-call-arguments e)))
+               ;; (next-method): with the method's arguments
+               (values (loop for i below 4 collect (or (nth i (cdr *direct-next*)) "0"))
+                       (length (cdr *direct-next*)))
+               (call-arguments-c (ir-call-arguments e)))
          (let* ((direct (and target (gethash target *cfuns*)))
                 (fexpr (atom-c f))
                 (call (if direct
@@ -653,9 +563,10 @@ with constant keywords it takes."
 
 (defun stack-buffer (header n)
   "A new C local of the function being generated, aligned, to hold an
-object of the C type HEADER followed by N Ds: its name."
+object of the C type HEADER followed by N Ds: its name.  It has room for
+one D at least, so C compilers see no loop over its Ds run past it."
   (let ((name (format nil "s~d" (incf *temp-counter*))))
-    (push (cons (format nil "~a[sizeof(~a) + ~d * sizeof(D)]" name header n)
+    (push (cons (format nil "~a[sizeof(~a) + ~d * sizeof(D)]" name header (max n 1))
                 "_Alignas(16) unsigned char")
           (cfun-extra-locals *cfun*))
     name))
@@ -910,6 +821,15 @@ specialized entry."
                 when (eq (host-fn f) fn)
                   do (setf (group-dest group) nil)))))))
 
+(defun direct-next-p (var fn)
+  "Can the next method VAR of the method FN be called with no arguments
+without capturing them: VAR only called, in FN itself, and FN's
+arguments its required ones, at most four, which can be kept?"
+  (and (= (ivar-ref-count var) (ivar-call-count var))
+       (not (ivar-captured-p var))
+       (null (ir-fn-rest fn)) (null (ir-fn-keys fn))
+       (<= (length (ir-fn-required fn)) 4)))
+
 (defun gen-function-entry (cfun spec)
   "The C text of CFUN's uniform entry with its body, or, if SPEC, its
 specialized entry, made with *SPEC* SPEC."
@@ -921,6 +841,7 @@ specialized entry, made with *SPEC* SPEC."
          (*label-counter* 0)
          (*temp-counter* 0)
          (*line-location* nil)
+         (*direct-next* nil)
          (*lines* '())
          (*indent* 1)
          (*location* (ir-fn-location fn))
@@ -965,8 +886,15 @@ specialized entry, made with *SPEC* SPEC."
            (let ((temp (new-temp)))
              (emit "~a = dy_thread->next_method;" temp)
              (when (needs-captured-next-p (ir-fn-next fn) fn)
-               (emit "if (~a != DY_FALSE) ~a = dy_capture_next(~a, argc, a0, a1, a2, a3);"
-                     temp temp temp))
+               (if (direct-next-p (ir-fn-next fn) fn)
+                   (setf *direct-next*
+                         (cons (ir-fn-next fn)
+                               (loop for i below r
+                                     collect (let ((a (new-temp)))
+                                               (emit "~a = a~d;" a i)
+                                               a))))
+                   (emit "if (~a != DY_FALSE) ~a = dy_capture_next(~a, argc, a0, a1, a2, a3);"
+                         temp temp temp)))
              (emit-bind (ir-fn-next fn) temp)))
           ((ir-fn-next fn)
            ;; Called directly, a method has no next method.

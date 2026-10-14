@@ -7,9 +7,9 @@ module: dylan
 ;;; buffer's size.  The iteration state is the index.
 
 (define-class <deque> (<mutable-sequence>)
-  (%data init-function: (method () (%make-vector 8 #f)))
-  (%first init-value: 0)
-  (%count init-value: 0))
+  (%data type: <simple-object-vector> init-function: (method () (%make-vector 8 #f)))
+  (%first type: <integer> init-value: 0)
+  (%count type: <integer> init-value: 0))
 
 (define-method make ((class (singleton <deque>)) #key (size 0) (fill #f))
   (bind ((d (%make <deque>)))

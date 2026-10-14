@@ -63,6 +63,7 @@
     ("%make-vector" . "make_vector") ("%make-byte-string" . "make_byte_string")
     ("%make-unicode-string" . "make_unicode_string")
     ("%replace-vector!" . "replace_vector")
+    ("%concatenate-byte-strings" . "concatenate_byte_strings")
     ("%set-car!" . "set_car") ("%set-cdr!" . "set_cdr") ("%pair?" . "pair_p")
     ("%intern-symbol" . "intern_symbol") ("%intern-keyword" . "intern_keyword")
     ("%symbol-name" . "symbol_name")

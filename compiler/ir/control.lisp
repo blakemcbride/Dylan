@@ -3,7 +3,8 @@
 ;;;; Lowering of exits and cleanups (CompilerPlan.md, Phase 6).
 ;;;;
 ;;;; A bind-exit whose exit procedure is only called directly in its own
-;;;; function stays: the code generator makes each call a jump.  Any other
+;;;; function -- or in a local function compiled into it (contify.lisp) --
+;;;; stays: the code generator makes each call a jump.  Any other
 ;;;; needs a frame in the thread's dynamic chain, and so does every
 ;;;; unwind-protect.  The runtime's functions that establish frames take
 ;;;; closures, so their forms are moved out into new functions:
@@ -130,6 +131,51 @@ replacement or NIL."
       (make-ir-let temp (make-ir-lambda body)
                    (make-ir-prim :call-with-exit (list temp))))))
 
+(defun localize-exits (ir)
+  "Mark as not escaping each exit only called directly, in the function
+that binds it or in local functions contified into that function (whose
+code the code generator puts there), and mark the calls in tail position
+again: a bind-exit's body may now have some."
+  (let ((*groups* (make-hash-table :test #'eq))
+        (local-calls (make-hash-table :test #'eq)) ; exit -> local calls of it
+        (changed nil))
+    (dolist (fn (ir-fns ir))
+      (dolist (letrec (letrecs-in (ir-fn-body fn)))
+        (decide-contification letrec)))
+    (dolist (fn (ir-fns ir))
+      (let ((host (loop for f = fn then (ir-fn-parent f)
+                        while (gethash f *groups*)
+                        finally (return f))))
+        (dolist (c (append (direct-calls (ir-fn-body fn))
+                           (and (listp (ir-fn-keys fn))
+                                (mapcan (lambda (k) (direct-calls (ir-key-default k)))
+                                        (ir-fn-keys fn)))))
+          (let ((f (ir-call-function (car c))))
+            (when (and (ivar-p f) (eq (ivar-kind f) :exit) (eq host (ivar-binder f)))
+              (incf (gethash f local-calls 0)))))))
+    (loop for exit being the hash-keys of local-calls using (hash-value n)
+          when (and (ivar-escapes-p exit) (= n (ivar-ref-count exit)))
+            do (setf (ivar-escapes-p exit) nil changed t))
+    (when changed
+      (dolist (top (ir-program-toplevels ir))
+        (mark-tail (ir-fn-body top) t)))))
+
+(defun escaping-exit-p (ir)
+  "Is there a bind-exit in IR whose exit escapes?"
+  (dolist (fn (ir-fns ir) nil)
+    (labels ((walk (e)
+               (typecase e
+                 (ir-bind-exit (when (ivar-escapes-p (ir-bind-exit-var e))
+                                 (return-from escaping-exit-p t))
+                               (walk (ir-bind-exit-body e)))
+                 (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
+                 (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+                 (ir-seq (mapc #'walk (ir-seq-forms e)))
+                 (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-letrec (walk (ir-letrec-body e)))
+                 (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
+      (walk (ir-fn-body fn)))))
+
 (defvar *library-counters* nil
   "(ivar-counter . fn-counter) for what lowering the library's forms makes,
 or NIL to number everything after the program's.")
@@ -142,8 +188,12 @@ or NIL to number everything after the program's.")
                               (and c (cons (car c) (cdr c))))))
     (lower-everywhere ir #'lower-unwind-protect)
     (reanalyze-program ir)
-    (lower-everywhere ir #'lower-escaping-exit)
-    (reanalyze-program ir)
+    ;; Outlining a bind-exit's body can move a call of another exit out of
+    ;; its function, so until none escapes
+    (loop (localize-exits ir)
+          (unless (escaping-exit-p ir) (return))
+          (lower-everywhere ir #'lower-escaping-exit)
+          (reanalyze-program ir))
     (let ((c (ir-program-library-counters ir)))
       (when (and c (or (>= (car *library-counters*) (+ (car c) +library-id-gap+))
                        (>= (cdr *library-counters*) (+ (cdr c) +library-id-gap+))))

@@ -51,7 +51,8 @@ module: dylan
 
 (define-method initial-state ((r <range>)) (if (%range-index? r 0) 0 #f))
 (define-method next-state ((r <range>) (i <integer>))
-  (bind ((j (binary+ i 1))) (if (%range-index? r j) j #f)))
+  (bind ((j (binary+ i 1)) (n (%size r)))
+    (if (or (not n) (binary< j n)) j #f)))
 (define-method current-element ((r <range>) (i <integer>)) (%range-element r i))
 (define-method final-state ((r <range>))
   (unless (%size r) (error "final-state: the range is unbounded"))

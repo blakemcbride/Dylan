@@ -13,6 +13,8 @@
 ;;;;   all        gcc and clang, each with musttail and with trampolines;
 ;;;;              only the first optimized
 ;;;;   quick      the first of those only
+;;;;   whole      as quick, with the library compiled with the program and
+;;;;              tree shaken (shake.lisp), not apart
 ;;;;   gc-stress  gcc, musttail and trampolines, a collection every 1000
 ;;;;              allocations (CompilerPlan.md, Phase 11)
 ;;;;   address    AddressSanitizer and UndefinedBehaviorSanitizer, gcc and
@@ -41,6 +43,7 @@
   '(("all" nil ("gcc" nil "-O2" nil) ("gcc" t "-O0" nil) ("clang" nil "-O0" nil)
      ("clang" t "-O0" nil))
     ("quick" nil ("gcc" nil "-O2" nil))
+    ("whole" nil ("gcc" nil "-O2" nil))
     ("gc-stress" nil ("gcc" nil "-O2" :gc-stress) ("gcc" t "-O2" :gc-stress))
     ("address" t ("gcc" nil "-O1" :address) ("clang" nil "-O1" :address))
     ("thread" t ("gcc" nil "-O1" :thread))))
@@ -126,8 +129,9 @@ line ARGUMENTS name, in the mode they name.  Exit with the status."
                                     (member (string-downcase (symbol-name (first c))) selected
                                             :test #'string=)))
                               (read-cases file))))
-         (failures (loop for case in cases
-                         append (run-case case (rest entry) (first entry) mode))))
+         (failures (let ((*separate-library* (string/= mode "whole")))
+                     (loop for case in cases
+                           append (run-case case (rest entry) (first entry) mode)))))
     (dolist (f failures) (format t "FAIL ~a~%" f))
     (format t "~d program~:p in ~d configuration~:p, ~d failure~:p~%"
             (length cases) (length (rest entry)) (length failures))

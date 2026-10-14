@@ -144,6 +144,12 @@ module: dylan
 (define-method concatenate ((s <sequence>) #rest more)
   (apply concatenate-as (class-for-copy s) s more))
 
+;;; Byte strings, most often, at once
+(define-method concatenate ((s <byte-string>) #rest more)
+  (bind ((class (class-for-copy s)))
+    (or (and (id? class <byte-string>) (%concatenate-byte-strings s more))
+        (apply concatenate-as class s more))))
+
 (define-generic-function replace-subsequence! (mutable-sequence insert-sequence #key start))
 (define-method replace-subsequence! ((target <mutable-sequence>) (insert <sequence>)
                                      #key (start 0))
@@ -166,33 +172,51 @@ module: dylan
 (define-generic-function reverse! (sequence))
 (define-method reverse! ((s <sequence>)) (reverse s))
 
-;;; A stable merge sort of a fresh list L, done in place: each half
-;;; sorted, then merged, an element of the first half going first when
-;;; neither is less.
-(define %merge-sort
-  (method (l test)
-    (bind-methods ((merge (a b)
-                     (bind ((head (cons #f '())) (tail head))
-                       (for () ((or (id? a '()) (id? b '())))
-                         (if (test (car b) (car a))
-                             (begin (%set-cdr! tail b) (set! tail b) (set! b (cdr b)))
-                             (begin (%set-cdr! tail a) (set! tail a) (set! a (cdr a)))))
-                       (%set-cdr! tail (if (id? a '()) b a))
-                       (cdr head)))
-                   (sort (l n)
-                     (if (binary< n 2)
-                         l
-                         (bind ((h (%ash n -1))
-                                (last (for ((p l (cdr p)) (i 1 (binary+ i 1)))
-                                           ((id? i h) p)))
-                                (rest (cdr last)))
-                           (%set-cdr! last '())
-                           (merge (sort l h) (sort rest (binary- n h)))))))
-      (sort l (%list-length l)))))
+;;; A stable merge sort of V, a fresh simple object vector: runs of
+;;; WIDTH merged into runs twice as long, from one vector to the other, an
+;;; element of the first run going first when neither is less.  Answers
+;;; the vector sorted.
+(define %sort-vector
+  (method (v test)
+    (bind ((n (size v)) (from v) (to (%make-vector n #f)) (less? (id? test binary<)))
+      (for ((width 1 (binary* width 2)))
+           ((not (binary< width n)) from)
+        (for ((low 0 (binary+ low (binary* 2 width))))
+             ((not (binary< low n)))
+          (bind ((middle (if (binary< (binary+ low width) n) (binary+ low width) n))
+                 (high (if (binary< (binary+ middle width) n) (binary+ middle width) n))
+                 (i low)
+                 (j middle))
+            (for ((k low (binary+ k 1)))
+                 ((id? k high))
+              (if (and (binary< j high)
+                       (or (not (binary< i middle))
+                           ;; binary< called directly is done inline on numbers
+                           (if less?
+                               (binary< (element from j) (element from i))
+                               (test (element from j) (element from i)))))
+                  (begin (set! (element to k) (element from j)) (set! j (binary+ j 1)))
+                  (begin (set! (element to k) (element from i)) (set! i (binary+ i 1)))))))
+        (bind ((t from)) (set! from to) (set! to t))))))
+
+;;; The elements of the sequence S in a fresh simple object vector
+(define %elements-vector
+  (method (s)
+    (bind ((l (%elements s))
+           (v (%make-vector (%list-length l) #f)))
+      (for ((l l (cdr l)) (i 0 (binary+ i 1)))
+           ((id? l '()) v)
+        (set! (element v i) (car l))))))
 
 (define-generic-function sort (sequence #key test stable))
 (define-method sort ((s <sequence>) #key (test <) stable)
-  (%copy-like s (%merge-sort (%elements s) (if (id? test <) binary< test))))
+  (bind ((v (%sort-vector (%elements-vector s) (if (id? test <) binary< test)))
+         (class (class-for-copy s)))
+    (if (id? class <simple-object-vector>)
+        v
+        (%from-list class (for ((i (binary- (size v) 1) (binary- i 1))
+                                (l '() (cons (element v i) l)))
+                               ((binary< i 0) l))))))
 
 (define-generic-function sort! (sequence #key test stable))
 (define-method sort! ((s <sequence>) #key (test <) stable)

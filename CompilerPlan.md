@@ -254,9 +254,12 @@ escape.
 **Multiple values.** The first value is the C return value; the count and
 extra values are in a **thread-local** values buffer.
 
-**`next-method`** is passed only to methods that use it. Since every
-method chain is known at compile time, `next-method` is almost always a
-direct call.
+**`next-method`** is passed only to methods that use it: the dispatch
+function (or the next method before) leaves it in the thread, a static
+object for each chain of methods, since every chain is known at compile
+time. A method whose `next-method` is only called, in the method itself,
+keeps its own arguments for a call with none, rather than capturing them
+in a closure.
 
 **Closures.** Flat closure conversion; assigned captured variables live in
 one-slot cells; closures with no free variables are static constants;
@@ -274,14 +277,14 @@ subclass of the other, the one earlier in the argument class's precedence
 list is more specific (as in CLOS — the manual leaves this open). Slot
 accessors, all five allocations, `make`/`initialize` with init-keyword
 checking, `next-method` (with or without arguments), generic keyword
-checking and the reflective functions of chapters 10 and 11 are in. Not
-yet: static resolution and inlining of calls (Phase 9, with type
-inference, now done); methods on `make` or on other `dylan`-module
-functions except `initialize` (Phase 8); and `add-method`/`remove-method`
-(not possible in a static program). Slot descriptors came later (Phase
-11), and `define-slot` on singletons later still: the owner's object is
-recorded when the `define-slot` runs, and dispatch compares with it. Tests: the
-object-system programs in `tests/codegen/cases-objects.lisp`.
+checking and the reflective functions of chapters 10 and 11 are in. Static
+resolution and inlining of calls came with Phase 9, and methods on `make`
+and the library's other generic functions with Phase 8; `add-method` and
+`remove-method` are not possible in a static program. Slot descriptors
+came later (Phase 11), and `define-slot` on singletons later still: the
+owner's object is recorded when the `define-slot` runs, and dispatch
+compares with it. Tests: the object-system programs in
+`tests/codegen/cases-objects.lisp`.
 
 **Classes.** The compiler builds the whole hierarchy: class precedence
 lists (algorithm from `src/class.lisp`), slot layouts, initialization
@@ -364,8 +367,8 @@ macro. A thread made after a thread variable's definition has run starts
 with its value. A serious condition a thread does not handle ends that
 thread and `join-thread` signals a `<thread-error>` holding it. The program
 ends when its top-level forms are done; it does not wait for other threads.
-Tests: `tests/codegen/cases-threads.lisp`. (ThreadSanitizer has not been
-tried yet.)
+Tests: `tests/codegen/cases-threads.lisp`, run under ThreadSanitizer too
+(Phase 11).
 
 The 1992 manual has no threads, so this is an extension, documented as
 such.
@@ -510,13 +513,36 @@ against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
   1.6 s), and the benchmarks run as fast. `dylanc --whole` (`:whole t`),
   and size builds, compile the library with the program.
 - Tree shaking as before (shake.lisp), when the library is compiled with
-  the program; `(build … :size t)` builds with
+  the program: of a generic function reached, a method of the library is
+  kept only when each class its specializers name could have instances —
+  one the runtime defines, or one the library or program defines that
+  what is kept uses as a value (makes, say, or answers), itself or a
+  subclass. `(build … :size t)` builds with
   `-Os`, function and data sections and `--gc-sections` (the runtime
   library is always compiled in sections). `dylanc --lto` (`:lto t`)
   optimizes the program and the runtime library together when linking,
   with a build of the library for it.
-- The library concatenates vectors and strings directly and sorts its
-  fresh list in place.
+- The library concatenates vectors and strings directly (byte strings in
+  one step, `%concatenate-byte-strings`), and sorts by a merge sort on a
+  fresh vector, comparing with `binary<` called directly when the test is
+  `<`.
+- Float contagion: `+`, `-`, `*` or `/` with one argument known to be a
+  `<double-float>` answers one, if anything (chapter 14), when only the
+  library's methods could apply; so its value is unboxed though the other
+  argument's class is not known, which is tested and converted inline,
+  or the generic function called.
+- `id?` of anything known not to be a boxed number (a constant other than
+  a float or ratio, an integer, an instance of a class no number is) is
+  `==`. Also inline: `cons`, `%set-car!`, `%set-cdr!` and the library's
+  vector primitives; the library's `modulo`, `remainder` and `=hash` on
+  integers, `zero?`, `positive?`, `negative?`, `even?` and `odd?`, and the
+  setter of `element` on simple object vectors; and the setters of slots
+  whose type is a class, testing the value unless its class is known (the
+  library's collections type their slots). The values of some of the
+  runtime's functions have known classes (`*primitive-result-classes*`).
+- An exit called only from its own function, or from local functions
+  contified into it (`compiler/ir/contify.lisp`, now decided before
+  exits are lowered too), is a jump.
 
 In order of expected payoff:
 
@@ -568,7 +594,8 @@ where the compiler has it and two 64-bit words otherwise
 
 **Status: done.** Each suite's `run.lisp` takes a mode
 (`tests/codegen/runner.lisp`): `all` (gcc and clang, `musttail` and
-trampolines), `quick`, `gc-stress` (a collection every 1000 allocations,
+trampolines), `quick`, `whole` (as `quick`, but the library compiled with
+each program and tree shaken), `gc-stress` (a collection every 1000 allocations,
 `-DDY_GC_STRESS`), `address` (AddressSanitizer and
 UndefinedBehaviorSanitizer, debug builds) and `thread` (ThreadSanitizer,
 debug builds); the variants of the runtime library are built on demand
@@ -657,8 +684,8 @@ so nothing has to be retrofitted.
 - **Integer width.** 63-bit integers with an error on overflow is a
   deviation from the manual's unbounded integers; bignums can be added
   later behind the same overflow checks.
-- **Macro evaluation at compile time.** Decide between reusing the Common
-  Lisp Dylan implementation and compiling macro bodies to Lisp (Phase 1).
+- **Macro evaluation at compile time.** Settled (M11): macro bodies run in
+  the Common Lisp Dylan implementation, loaded into the compiler.
 - **Compile-time evaluation** of class and generic definitions must agree
   with the manual's semantics for top-level form order and side effects in
   init expressions; definitions that depend on run-time values stay lazy.

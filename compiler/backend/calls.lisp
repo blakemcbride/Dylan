@@ -97,13 +97,37 @@
      (("<byte-string>" "<integer>") "<character>"
       "DY_CHAR((unsigned char)DY_STRING_DATA({0})[DY_INT_VALUE({1})])"
       :extra "(uintptr_t)DY_INT_VALUE({1}) < (uintptr_t)DY_STRING_SIZE({0})"))
+    ("modulo" 2
+     (("<integer>" "<integer>") "<integer>"
+      "DY_INT(dy_int_modulo(DY_INT_VALUE({0}), DY_INT_VALUE({1})))"
+      :extra "DY_INT_VALUE({1}) != 0"))
+    ("remainder" 2
+     (("<integer>" "<integer>") "<integer>" "DY_INT(DY_INT_VALUE({0}) % DY_INT_VALUE({1}))"
+      :extra "DY_INT_VALUE({1}) != 0"))
+    ("=hash" 1 (("<integer>") "<integer>" "DY_INT(DY_INT_VALUE({0}) & DY_INT_MAX)"))
+    ("zero?" 1
+     (("<integer>") "<boolean>" "DY_BOOL({0} == DY_INT(0))")
+     (("<double-float>") "<boolean>" "DY_BOOL({d0} == 0.0)"))
+    ("positive?" 1
+     (("<integer>") "<boolean>" "DY_BOOL((intptr_t)({0}) > (intptr_t)DY_INT(0))")
+     (("<double-float>") "<boolean>" "DY_BOOL({d0} > 0.0)"))
+    ("negative?" 1
+     (("<integer>") "<boolean>" "DY_BOOL((intptr_t)({0}) < (intptr_t)DY_INT(0))")
+     (("<double-float>") "<boolean>" "DY_BOOL({d0} < 0.0)"))
+    ("even?" 1 (("<integer>") "<boolean>" "DY_BOOL((DY_INT_VALUE({0}) & 1) == 0)"))
+    ("odd?" 1 (("<integer>") "<boolean>" "DY_BOOL((DY_INT_VALUE({0}) & 1) != 0)"))
+    ("element-setter" 3
+     (("<simple-object-vector>" "<integer>" "<object>") nil
+      "(DY_VECTOR_DATA({0})[DY_INT_VALUE({1})] = {2})"
+      :extra "(uintptr_t)DY_INT_VALUE({1}) < (uintptr_t)DY_VECTOR_SIZE({0})"))
     ("size" 1
      (("<simple-object-vector>") "<integer>" "DY_INT(DY_VECTOR_SIZE({0}))")
      (("<byte-string>") "<integer>" "DY_INT(DY_STRING_SIZE({0}))")))
   "Methods of the library's generic functions done inline: the generic
 function's name, its number of arguments, and cases, each (CLASSES
 RESULT-CLASS EXPRESSION &key EXTRA FOLD): the case is for arguments of the
-CLASSES, all sealed, which a test of their representation finds, and, if
+CLASSES, all sealed but <object>, for any argument, which a test of their
+representation finds, and, if
 given, for which the C condition EXTRA holds.  Its value is of the
 RESULT-CLASS, if known, and is the C EXPRESSION -- of type double for a
 <double-float>.  {i} stands for argument i, {di} for it as a double.
@@ -125,12 +149,21 @@ CLASS-NAME."
                    (substitute #\_ #\- (string-upcase (string-trim "<>" class-name)))))))
 
 ;;; Functions written in C that are done inline: name, arguments, the C
-;;; expression -- which may itself fall back to the function.
+;;; expression -- which may itself fall back to the function -- and
+;;; whether it may be used on constants other than integers, which it
+;;; does not test, so that a C compiler finds no test always true or false
+;;; to warn of: T, or :LAST for the last argument only.
 (defparameter *primitive-inlines*
   '(("id?" 2 "DY_BOOL((~a) == (~a) || (DY_IS_POINTER(~2:*~a) && DY_IS_POINTER(~a) && dy_identical(~2:*~a, ~a)))")
     ("not" 1 "DY_BOOL((~a) == DY_FALSE)")
     ("car" 1 "(dy_kind_p(~a, DY_KIND_PAIR) ? dy_head(~:*~a) : ~a)")
-    ("cdr" 1 "(dy_kind_p(~a, DY_KIND_PAIR) ? dy_tail(~:*~a) : ~a)")))
+    ("cdr" 1 "(dy_kind_p(~a, DY_KIND_PAIR) ? dy_tail(~:*~a) : ~a)")
+    ("cons" 2 "dy_pair(~a, ~a)" t)
+    ("%set-car!" 2 "(dy_kind_p(~a, DY_KIND_PAIR) ? (((DyPair *)DY_PTR(~:*~a))->head = ~a) : ~a)")
+    ("%set-cdr!" 2 "(dy_kind_p(~a, DY_KIND_PAIR) ? (((DyPair *)DY_PTR(~:*~a))->tail = ~a) : ~a)")
+    ("%vector-size" 1 "(dy_kind_p(~a, DY_KIND_SIMPLE_OBJECT_VECTOR) ? DY_INT(DY_VECTOR_SIZE(~:*~a)) : ~a)")
+    ("%vector-element" 2 "((dy_kind_p(~a, DY_KIND_SIMPLE_OBJECT_VECTOR) && DY_IS_INT(~a) && (uintptr_t)DY_INT_VALUE(~:*~a) < (uintptr_t)DY_VECTOR_SIZE(~2:*~a)) ? DY_VECTOR_DATA(~:*~a)[DY_INT_VALUE(~a)] : ~a)")
+    ("%vector-element-setter" 3 "((dy_kind_p(~a, DY_KIND_SIMPLE_OBJECT_VECTOR) && DY_IS_INT(~a) && (uintptr_t)DY_INT_VALUE(~:*~a) < (uintptr_t)DY_VECTOR_SIZE(~2:*~a)) ? (DY_VECTOR_DATA(~:*~a)[DY_INT_VALUE(~a)] = ~a) : ~a)" :last)))
 
 (defparameter *generated-primitives*
   '("slot_initialized_p" "slot_descriptor" "slot_descriptors")
@@ -268,6 +301,11 @@ makes it a tail call, used when TAIL."
                                "DY_TRUE"
                                (format nil "DY_BOOL(dy_instance_p(~a, &~a))"
                                        (atom-c (first args)) (wrapper-c-name class)))))))
+  (when (and (string= c-name "id") (= (length args) 2) (some #'never-number-p args))
+    ;; Only a number can be id? to another object it is not ==.
+    (return-from gen-primitive-call
+      (deliver-pure dest (format nil "DY_BOOL(~a == ~a)"
+                                 (atom-c (first args)) (atom-c (second args))))))
   (pushnew (format nil "dy_prim_~a" c-name) *used-primitives* :test #'string=)
   (let* ((n (length args))
          (inline (find-if (lambda (i) (and (eq (dylan-var (first i))
@@ -275,7 +313,8 @@ makes it a tail call, used when TAIL."
                                             (= (second i) n)))
                           *primitive-inlines*)))
     (if (and inline (not (member c-name *generated-primitives* :test #'string=))
-             (notany #'heap-constant-p args))
+             (or (eq (fourth inline) t)
+                 (notany #'heap-constant-p (if (fourth inline) (butlast args) args))))
         (deliver-pure dest (apply #'format nil (third inline)
                                   (append (mapcar #'atom-c args)
                                           ;; the fallback, for car and cdr
@@ -292,6 +331,19 @@ makes it a tail call, used when TAIL."
                              (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)" entry object as count)
                              (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
                                      entry object as count)))))))))
+
+(defun never-number-p (a)
+  "Is the atom A known not to be a boxed number: a constant other than a
+float or ratio, or of a class no boxed number is an instance of?"
+  (let ((c (if (const-p a) a (and (ivar-p a) (constant-atom a)))))
+    (if c
+        (not (and (numberp (const-value c)) (not (integerp (const-value c)))))
+        (let ((type (atom-type a))
+              (number (find-class-info "<number>" *classes*)))
+          (and type
+               (or (subclass-info-p type (find-class-info "<integer>" *classes*))
+                   (and (not (subclass-info-p type number))
+                        (not (subclass-info-p number type)))))))))
 
 (defun primitive-call-c (c-name args)
   "A C expression calling the primitive (of at most four arguments)."
@@ -356,7 +408,8 @@ CLASS-NAMES?"
     (every (lambda (m)
              (or (library-method-p m)
                  (notevery (lambda (spec class)
-                             (cond ((eq (spec-kind spec) :class)
+                             (cond ((string= (class-info-name class) "<object>") t)
+                                   ((eq (spec-kind spec) :class)
                                     (subclass-info-p class (spec-class spec)))
                                    ;; Any object, for all the compiler knows
                                    ((runtime-spec-p spec) t)
@@ -366,34 +419,57 @@ CLASS-NAMES?"
 
 (defun instance-slot-number (g kind)
   "If every method of G is the KIND (:getter or :setter) of an instance
-slot -- untyped, for a setter, which would check the type -- the program's
-number for that slot."
+slot -- for a setter, untyped, or of a type that is a class known when
+compiling -- the program's number for that slot, and for a setter the
+class of the type, if any."
   (let* ((methods (gfun-methods g))
-         (sd (and methods (gmethod-sdef (first methods)))))
+         (sd (and methods (gmethod-sdef (first methods))))
+         (type (and sd (slot-spec-type (sdef-spec sd)))))
     (and sd
+         (or (eq kind :getter) (null type) (known-class type))
          (every (lambda (m)
                   (and (eq (gmethod-kind m) kind)
                        (eq (sdef-allocation (gmethod-sdef m)) :instance)
                        (sdef-class (gmethod-sdef m))
                        (or (eq kind :getter)
-                           (not (slot-spec-type (sdef-spec (gmethod-sdef m)))))))
+                           (null type)
+                           (let ((other (slot-spec-type (sdef-spec (gmethod-sdef m)))))
+                             (and other (eq (known-class other) (known-class type)))))
+                       (or (eq kind :getter)
+                           type
+                           (null (slot-spec-type (sdef-spec (gmethod-sdef m)))))))
                 methods)
-         (gethash (sdef-getter sd) *instance-slot-numbers*))))
+         (values (gethash (sdef-getter sd) *instance-slot-numbers*)
+                 (and (eq kind :setter) type (known-class type))))))
 
 (defun gen-slot-call (g args dest tail)
   "Generate the call of G, a slot getter or setter, inline if it can be;
 answer whether it was."
-  (let* ((n (length args))
-         (k (and (notany #'heap-constant-p args)
-                 (instance-slot-number g (case n (1 :getter) (2 :setter))))))
-    (when k
+  (let ((n (length args)))
+    (multiple-value-bind (k type)
+        (and (notany #'heap-constant-p (if (= n 2) (butlast args) args))
+             (instance-slot-number g (case n (1 :getter) (2 :setter))))
+      (when k
+        (gen-inline-slot-call g args dest tail k type)
+        t))))
+
+(defun gen-inline-slot-call (g args dest tail k type)
+  "Generate the call of G on ARGS, which reads or writes the instance slot
+numbered K, whose type, for a setter, is the class TYPE, if any."
+  (let ((n (length args)))
+    (progn
       (let ((place (new-temp "D *"))
             (cs (mapcar #'atom-c args)))
         (emit "~a = dy_instance_slot(~a, ~d);" place (first cs) k)
         (if (= n 1)
             (progn (emit "if (~a && *~:*~a != DY_UNBOUND) {" place)
                    (indented (deliver-pure dest (format nil "*~a" place))))
-            (progn (emit "if (~a) {" place)
+            (progn (emit "if (~a~@[ && ~a~]) {" place
+                         (and type
+                              (not (and (atom-type (second args))
+                                        (subclass-info-p (atom-type (second args)) type)))
+                              (format nil "dy_instance_p(~a, &~a)" (second cs)
+                                      (wrapper-c-name type))))
                    (indented (emit "*~a = ~a;" place (second cs))
                              (deliver-pure dest (second cs)))))
         (emit "} else {")
@@ -402,7 +478,10 @@ answer whether it was."
         t))))
 
 (defun inline-entry (g n)
-  (let ((name (dylan::dylan-symbol->string (name-symbol (module-var-name (gfun-var g))))))
+  (let* ((var-name (module-var-name (gfun-var g)))
+         (name (format nil "~a~:[~;-setter~]"
+                       (dylan::dylan-symbol->string (name-symbol var-name))
+                       (setter-name-p var-name))))
     (and (eq (module-var-module (gfun-var g)) (dylan-module))
          (find-if (lambda (i) (and (string= (first i) name) (= (second i) n)))
                   *method-inlines*))))
@@ -412,7 +491,8 @@ answer whether it was."
 known not to be (:NO), or neither (:MAYBE)?"
   (let ((type (atom-type arg))
         (class (find-class-info class-name *classes*)))
-    (cond ((null type) :maybe)
+    (cond ((string= class-name "<object>") :yes)
+          ((null type) :maybe)
           ((subclass-info-p type class) :yes)
           ((subclass-info-p class type) :maybe)
           (t :no))))
@@ -423,8 +503,16 @@ known not to be (:NO), or neither (:MAYBE)?"
   (let ((entry (inline-entry g (length args))))
     (loop for c in (cddr entry)
           for fits = (mapcar #'argument-fit args (case-classes c))
-          when (and (not (member :no fits)) (library-only-for-p g (case-classes c)))
+          when (and (not (member :no fits)) (library-only-for-p g (case-classes c))
+                    ;; nor a divisor known to be 0, which C compilers warn of
+                    (not (and (search "!= 0" (or (case-extra c) ""))
+                              (let ((d (constant-atom* (second args))))
+                                (and d (eql (const-value d) 0))))))
             collect (cons c fits))))
+
+(defun constant-atom* (a)
+  (cond ((const-p a) a)
+        ((ivar-p a) (constant-atom a))))
 
 (defun certain-case-p (case-and-fits)
   (and (every (lambda (f) (eq f :yes)) (cdr case-and-fits))
@@ -433,10 +521,37 @@ known not to be (:NO), or neither (:MAYBE)?"
 (defun generic-call-type (g args)
   "The class of the value of the call of G on ARGS, if known."
   (let ((cases (inline-cases g args)))
-    (and cases
-         (every (lambda (f) (eq f :yes)) (cdr (first cases)))
-         (case-result (car (first cases)))
-         (find-class-info (case-result (car (first cases))) *classes*))))
+    (or (and cases
+             (every (lambda (f) (eq f :yes)) (cdr (first cases)))
+             (case-result (car (first cases)))
+             (find-class-info (case-result (car (first cases))) *classes*))
+        (and (double-contagion-p g args)
+             (find-class-info "<double-float>" *classes*)))))
+
+(defparameter *float-contagious* '("binary+" "binary-" "binary*" "binary/")
+  "The library's generic functions whose only methods, on two numbers,
+answer a float when either is one (chapter 14), or signal an error.")
+
+(defun may-apply-p (spec class)
+  "Might a method specialized by SPEC apply to an instance of CLASS?"
+  (or (runtime-spec-p spec)
+      (subclass-info-p class (spec-class spec))
+      (subclass-info-p (spec-class spec) class)))
+
+(defun double-contagion-p (g args)
+  "Is the call of G on ARGS sure to answer a <double-float>, if it answers
+at all: G one of *FLOAT-CONTAGIOUS*, one argument known to be a
+<double-float>, and no method but the library's able to apply to a
+<double-float> in its place?"
+  (let ((double (find-class-info "<double-float>" *classes*)))
+    (and (= (length args) 2)
+         (member (gfun-var g) (mapcar #'dylan-var *float-contagious*))
+         (loop for a in args for i from 0
+               thereis (and (eq (argument-fit a "<double-float>") :yes)
+                            (every (lambda (m)
+                                     (or (library-method-p m)
+                                         (not (may-apply-p (nth i (gmethod-specs m)) double))))
+                                   (gfun-methods g)))))))
 
 (defun fold-call (case args)
   "The constant value of CASE on ARGS, all integer constants, or NIL."

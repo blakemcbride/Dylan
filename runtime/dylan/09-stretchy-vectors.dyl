@@ -7,8 +7,8 @@ module: dylan
 ;;; replaced by a larger one as needed.
 
 (define-class <stretchy-vector> (<vector>)
-  (%data init-function: (method () (%make-vector 8 #f)))
-  (%count init-value: 0))
+  (%data type: <simple-object-vector> init-function: (method () (%make-vector 8 #f)))
+  (%count type: <integer> init-value: 0))
 
 (define-method make ((class (singleton <stretchy-vector>)) #key (size 0) (fill #f))
   (bind ((v (%make <stretchy-vector>)))

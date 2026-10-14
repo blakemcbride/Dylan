@@ -174,8 +174,9 @@ bench/run-c.lisp`, which times them against the hand-written C of
 `bench/reference.c` and the Lisp of `reference.lisp`.
 
 The tests (each `run.lisp` takes a mode: `quick`, the default `all` — gcc
-and clang, with `musttail` and with trampolines — `gc-stress`, `address`
-for AddressSanitizer and UndefinedBehaviorSanitizer, or `thread` for
+and clang, with `musttail` and with trampolines — `whole`, as `quick` but
+with the library compiled with each program, `gc-stress`, `address` for
+AddressSanitizer and UndefinedBehaviorSanitizer, or `thread` for
 ThreadSanitizer):
 
 ```console

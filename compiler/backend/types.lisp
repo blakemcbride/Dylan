@@ -66,6 +66,16 @@ branch: two alists."
 
 (defun double-class () (find-class-info "<double-float>" *classes*))
 
+(defparameter *primitive-result-classes*
+  '(("id" "<boolean>") ("not" "<boolean>") ("instance_p" "<boolean>")
+    ("pair_p" "<boolean>") ("character_p" "<boolean>")
+    ("cons" "<pair>") ("vector" "<simple-object-vector>")
+    ("make_vector" "<simple-object-vector>") ("make_byte_string" "<byte-string>")
+    ("vector_size" "<integer>") ("character_to_integer" "<integer>")
+    ("integer_to_character" "<character>"))
+  "The functions written in C whose values are always of a class: the C
+name of each and the class.")
+
 (defun unboxed-p (var) (and *unboxed* (gethash var *unboxed*)))
 
 (defun atom-double-c (a)
@@ -296,9 +306,9 @@ used only to call them, and the sole methods of generic functions used so."
                                                (rest args)
                                                :initial-value (atom-type* (first args))))
                                 (:primitive
-                                 (and (member what '("id" "not" "instance_p" "pair_p")
-                                              :test #'string=)
-                                      (find-class-info "<boolean>" *classes*)))
+                                 (let ((class (second (assoc what *primitive-result-classes*
+                                                             :test #'string=))))
+                                   (and class (find-class-info class *classes*))))
                                 (t nil)))
                             (callee (and (null type) (known-callee e))))
                        (if callee
@@ -359,7 +369,12 @@ code for the call uses it only as a C double."
         (let ((c (car (first cases))))
           (loop for a in args for i from 0
                 collect (raw-argument-p (case-expression c) i)))
-        (mapcar (constantly nil) args))))
+        ;; A double's own cases want it as one; the others, which call
+        ;; the generic function, box it there.
+        (mapcar (lambda (a)
+                  (and cases (double-contagion-p g args)
+                       (eq (argument-fit a "<double-float>") :yes)))
+                args))))
 
 (defun choose-unboxed (fns)
   "Decide which variables of FNS are C doubles."

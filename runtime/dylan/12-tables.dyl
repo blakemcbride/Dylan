@@ -8,8 +8,8 @@ module: dylan
 ;;; the bucket index, and the rest of that bucket from the current pair on.
 
 (define-class <table> (<mutable-explicit-key-collection>)
-  (%buckets init-function: (method () (%make-vector 16 '())))
-  (%count init-value: 0))
+  (%buckets type: <simple-object-vector> init-function: (method () (%make-vector 16 '())))
+  (%count type: <integer> init-value: 0))
 
 (define-method make ((class (singleton <table>)) #rest arguments) (%make <table>))
 

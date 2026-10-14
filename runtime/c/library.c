@@ -377,6 +377,32 @@ PRIMITIVE(replace_vector) {
     return a0;
 }
 
+/* (%concatenate-byte-strings string strings): a new byte string of STRING
+ * and then the elements of the list STRINGS, or #f if one is not a byte
+ * string. */
+PRIMITIVE(concatenate_byte_strings) {
+    need(self, argc, 2, 2);
+    if (!dy_kind_p(a0, DY_KIND_BYTE_STRING)) return DY_FALSE;
+    size_t n = DY_STRING_SIZE(a0);
+    for (D l = a1; l != DY_EMPTY; l = dy_tail(l)) {
+        if (!dy_kind_p(l, DY_KIND_PAIR) || !dy_kind_p(dy_head(l), DY_KIND_BYTE_STRING))
+            return DY_FALSE;
+        n += DY_STRING_SIZE(dy_head(l));
+    }
+    if (n > (size_t)DY_INT_MAX) dy_error("string too large", 0);
+    DyByteString *s = dy_alloc_atomic(&dy_wrapper_byte_string, sizeof(DyByteString) + n + 1);
+    s->size = DY_INT(n);
+    size_t at = DY_STRING_SIZE(a0);
+    memcpy(s->data, DY_STRING_DATA(a0), at);
+    for (D l = a1; l != DY_EMPTY; l = dy_tail(l)) {
+        size_t k = DY_STRING_SIZE(dy_head(l));
+        memcpy(s->data + at, DY_STRING_DATA(dy_head(l)), k);
+        at += k;
+    }
+    s->data[n] = '\0';
+    return DY_OBJ(s);
+}
+
 /* --------------------------------------------------------------- Pairs */
 
 PRIMITIVE(set_car) {

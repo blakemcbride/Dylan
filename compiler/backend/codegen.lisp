@@ -17,6 +17,18 @@
 ;;;; the closures share.  A function with no free variables is a static
 ;;;; object.
 ;;;;
+;;;; A function that known calls reach other than in tail position also
+;;;; gets a SPECIALIZED entry, fnN_spec: its required arguments as C
+;;;; arguments -- C doubles where unboxed -- and one more for each keyword,
+;;;; DY_UNSUPPLIED if not passed, so that such a call's keywords are
+;;;; matched when compiling.  Its prototype is not the uniform one, so it
+;;;; can make no musttail call.  If its body makes no tail call but jumps,
+;;;; it is the function's only body, and the uniform entry just passes it
+;;;; its arguments.  Otherwise, if it gains something (keywords or doubles),
+;;;; the body is written twice, and the specialized entry's tail calls are
+;;;; ordinary calls of uniform entries: it is entered only by calls that
+;;;; are not tail calls, so each such call holds at most one more frame.
+;;;;
 ;;;; The generator walks the A-normal form with a DEST saying what to do
 ;;;; with each value: return it, bind or set a variable with it, keep it as
 ;;;; the first of several values (:MV), or drop it.  A dest may also name a
@@ -135,7 +147,22 @@ TAIL-P meaning in tail position with respect to E."
   (env '())                             ; free variables, in env order
   (extra-locals '())                    ; C temporaries: (name . type)
   (needs-mv-reset nil)
-  (self-tail-call nil))                 ; did it jump to its own top?
+  (self-tail-call nil)                  ; did it jump to its own top?
+  (spec nil))                           ; its specialized entry: NIL,
+                                        ; :ONLY (its only body) or :COPY
+
+(defvar *spec* nil
+  "What the specialized entry being generated does with a tail call:
+:PROBE, give up (throw to SPEC-TAIL-CALL); :ONLY, none can happen; :COPY,
+make it an ordinary call.  NIL for a uniform entry.")
+
+(defun demote-tail-call-p ()
+  "Must a tail call about to be generated be made an ordinary call?"
+  (ecase *spec*
+    ((nil) nil)
+    (:probe (throw 'spec-tail-call nil))
+    (:only (error "Internal error: a tail call in a specialized entry."))
+    (:copy t)))
 
 (defvar *cfuns* nil "IR-FN -> CFUN, for every fn that is a C function.")
 (defvar *cfun* nil "The CFUN being generated.")
@@ -527,6 +554,9 @@ C expressions for a0..a3 and the count."
        (setf (cfun-self-tail-call *cfun*) t)
        (emit "goto top;"))
       ((gen-known-call e dest tail))
+      ((and (not tail) target
+            (let ((call (spec-call-c target (atom-c f) (ir-call-arguments e))))
+              (and call (progn (emit-call dest nil call nil) t)))))
       (t
        (multiple-value-bind (as n) (call-arguments-c (ir-call-arguments e))
          (let* ((direct (and target (gethash target *cfuns*)))
@@ -535,7 +565,7 @@ C expressions for a0..a3 and the count."
                           (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
                                   (cfun-c-name direct) fexpr as n)
                           (format nil "DY_CALL(~a, ~{~a, ~}~d)" fexpr as n))))
-           (cond (tail
+           (cond ((and tail (not (demote-tail-call-p)))
                   (emit "~a;" (if direct
                                   (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
                                           (cfun-c-name direct) fexpr as n)
@@ -550,6 +580,29 @@ C expressions for a0..a3 and the count."
                   (emit "(void)~a;" call)
                   (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
                  (t (deliver dest call)))))))))
+
+(defun spec-call-c (fn fexpr args)
+  "A C call of FN's specialized entry, with FEXPR as self, on ARGS, if it
+has one and they fit it: its required arguments, then keyword/value pairs
+with constant keywords it takes."
+  (let ((cfun (gethash fn *cfuns*)))
+    (when (and cfun (cfun-spec cfun))
+      (let* ((required (ir-fn-required fn))
+             (r (length required))
+             (keys (ir-fn-keys fn))
+             (n (length args)))
+        (when (and (>= n r) (evenp (- n r)) (or keys (= n r)))
+          (let ((values (make-list (length keys))))
+            (loop for (k v) on (nthcdr r args) by #'cddr
+                  do (let* ((c (and (not (c-atom-p k)) (constant-atom k)))
+                            (i (and c (position (const-value c) keys :key #'ir-key-keyword))))
+                       (unless i (return-from spec-call-c nil))
+                       ;; The leftmost of a keyword's values
+                       (unless (nth i values) (setf (nth i values) (atom-c v)))))
+            (format nil "~a_spec(~a~{, ~a~})" (cfun-c-name cfun) fexpr
+                    (append (loop for p in required for a in args
+                                  collect (if (unboxed-p p) (atom-double-c a) (atom-c a)))
+                            (substitute "DY_UNSUPPLIED" nil values)))))))))
 
 (defun gen-jump (params args)
   "Bind PARAMS to ARGS afresh, all at once."
@@ -715,8 +768,115 @@ position?  (If so, a call may have changed the count of values.)"
     (fn-walk fn)))
 
 (defun gen-function (cfun)
-  "The C text of CFUN's function."
+  "The C text of CFUN's functions."
+  (case (cfun-spec cfun)
+    (:only (concatenate 'string (gen-function-entry cfun :only) (gen-spec-wrapper cfun)))
+    (:copy (concatenate 'string (gen-function-entry cfun :copy)
+                        (gen-function-entry (copy-cfun cfun) nil)))
+    (t (gen-function-entry cfun nil))))
+
+(defun spec-parameters (fn)
+  "The C parameters of FN's specialized entry after self: (type . name)."
+  (append (loop for var in (ir-fn-required fn) for i from 0
+                collect (cons (if (unboxed-p var) "double" "D") (format nil "p~d" i)))
+          (loop for k in (ir-fn-keys fn) for i from 0
+                collect (cons "D" (format nil "k~d" i)))))
+
+(defun spec-prototype (cfun)
+  (format nil "static D ~a_spec(D~{, ~a~});" (cfun-c-name cfun)
+          (mapcar #'car (spec-parameters (cfun-fn cfun)))))
+
+(defun gen-spec-wrapper (cfun)
+  "The uniform entry of CFUN, whose only body is its specialized entry."
   (let* ((fn (cfun-fn cfun))
+         (*cfun* (make-cfun fn (cfun-c-name cfun)))
+         (*emit-lines* nil)
+         (*lines* '())
+         (*indent* 1)
+         (required (ir-fn-required fn))
+         (r (length required))
+         (keys (ir-fn-keys fn)))
+    (if keys
+        (progn
+          (when (> r 0)
+            (emit "if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r))
+          (gen-keyword-scan fn r))
+        (emit "if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
+    (emit "return ~a_spec(self~{, ~a~});" (cfun-c-name cfun)
+          (append (loop for var in required for i from 0
+                        for a = (if (< i 4) (format nil "a~d" i) (format nil "dy_thread->args[~d]" (- i 4)))
+                        collect (if (unboxed-p var) (format nil "DY_DOUBLE(~a)" a) a))
+                  (mapcar (lambda (k) (v-name (ir-key-var k))) keys)))
+    (with-output-to-string (out)
+      (format out "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {~%"
+              (cfun-c-name cfun))
+      (format out "    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;~%")
+      (when keys
+        (format out "    D ~{~a~^, ~};~%" (mapcar (lambda (k) (v-name (ir-key-var k))) keys)))
+      (dolist (local (reverse (cfun-extra-locals *cfun*)))
+        (format out "    ~a ~a;~%" (cdr local) (car local)))
+      (dolist (line (reverse *lines*))
+        (format out "~a~%" line))
+      (format out "}~%"))))
+
+(defun spec-candidate-p (cfun)
+  "Could CFUN's function have a specialized entry?"
+  (let ((fn (cfun-fn cfun)))
+    (and (not (eq (ir-fn-kind fn) :toplevel))
+         (null (ir-fn-rest fn))
+         (listp (ir-fn-keys fn))
+         (or (null (ir-fn-next fn)) (zerop (ivar-ref-count (ir-fn-next fn))))
+         (<= (+ (length (ir-fn-required fn)) (length (ir-fn-keys fn))) 64))))
+
+(defun spec-callees (fns)
+  "The fns that some call not in tail position may call through a
+specialized entry."
+  (let ((found (make-hash-table :test #'eq)))
+    (labels ((walk (e)
+               (typecase e
+                 (ir-call (unless (ir-call-tail-p e)
+                            (let ((fn (or (known-callee e)
+                                          (multiple-value-bind (kind what) (call-callee e)
+                                            (let ((m (and (eq kind :generic) (spec-method what))))
+                                              (and m (gmethod-fn m)))))))
+                              (when fn (setf (gethash fn found) t)))))
+                 (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
+                 (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
+                 (ir-seq (mapc #'walk (ir-seq-forms e)))
+                 (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
+                 (ir-letrec (walk (ir-letrec-body e)))
+                 (ir-bind-exit (walk (ir-bind-exit-body e)))
+                 (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
+      (dolist (fn fns)
+        (when (listp (ir-fn-keys fn))
+          (dolist (k (ir-fn-keys fn)) (walk (ir-key-default k))))
+        (walk (ir-fn-body fn))))
+    found))
+
+(defun choose-spec-entries (cfuns fns)
+  "Decide which of CFUNS have specialized entries, and of what kind."
+  (let ((callees (spec-callees fns)))
+    (dolist (cfun cfuns)
+      (let ((fn (cfun-fn cfun)))
+        (when (and (gethash fn callees) (spec-candidate-p cfun))
+          (setf (cfun-spec cfun)
+                (cond ((catch 'spec-tail-call
+                         (let ((*spec* :probe))
+                           (gen-function-entry (copy-cfun cfun) :probe))
+                         t)
+                       :only)
+                      ((or (ir-fn-keys fn) (some #'unboxed-p (ir-fn-required fn)))
+                       :copy)))
+          ;; The probe may have left its contified groups' destinations.
+          (loop for f being the hash-keys of *groups* using (hash-value group)
+                when (eq (host-fn f) fn)
+                  do (setf (group-dest group) nil)))))))
+
+(defun gen-function-entry (cfun spec)
+  "The C text of CFUN's uniform entry with its body, or, if SPEC, its
+specialized entry, made with *SPEC* SPEC."
+  (let* ((fn (cfun-fn cfun))
+         (*spec* spec)
          (*cfun* cfun)
          (*line-location* nil)
          (*lines* '())
@@ -727,17 +887,24 @@ position?  (If so, a call may have changed the count of values.)"
          (keys (ir-fn-keys fn)))
     (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn))
     ;; Arguments
-    (cond ((and (null (ir-fn-rest fn)) (null keys))
-           (emit "if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
-          ((> r 0)
-           (emit "if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r)))
-    (when (> r +max-arguments+) (compile-error "a method with more than ~d parameters"
-                                               +max-arguments+))
-    (loop for var in required
-          for i from 0
-          do (emit-bind var (if (< i 4)
-                                (format nil "a~d" i)
-                                (format nil "dy_thread->args[~d]" (- i 4)))))
+    (cond (spec
+           (loop for var in required
+                 for i from 0
+                 do (if (unboxed-p var)
+                        (emit "~a = p~d;" (v-name var) i)
+                        (emit-bind var (format nil "p~d" i)))))
+          (t
+           (cond ((and (null (ir-fn-rest fn)) (null keys))
+                  (emit "if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
+                 ((> r 0)
+                  (emit "if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r)))
+           (when (> r +max-arguments+) (compile-error "a method with more than ~d parameters"
+                                                      +max-arguments+))
+           (loop for var in required
+                 for i from 0
+                 do (emit-bind var (if (< i 4)
+                                       (format nil "a~d" i)
+                                       (format nil "dy_thread->args[~d]" (- i 4)))))))
     (loop for var in (cfun-env cfun)
           for i from 0
           do (emit "~a = ((DyFunction *)DY_PTR(self))->env[~d];" (v-name var) i))
@@ -771,9 +938,15 @@ position?  (If so, a call may have changed the count of values.)"
                               (format nil "argc - ~d <= DY_STACK_PAIRS ? dy_collect_arguments_into(~a_pairs, argc, ~d, a0, a1, a2, a3) : dy_collect_arguments(argc, ~d, a0, a1, a2, a3)"
                                       r (v-name rest) r r))
                             (format nil "dy_collect_arguments(argc, ~d, a0, a1, a2, a3)" r))))
-      (when keys
-        ;; The keyword arguments, read where they were passed
-        (gen-keyword-parsing fn r)))
+      (cond ((and keys spec)
+             ;; The keyword arguments, matched by the caller
+             (loop for k in keys for i from 0
+                   do (emit "~a = k~d;" (v-name (ir-key-var k)) i))
+             (gen-keyword-defaults fn))
+            (keys
+             ;; The keyword arguments, read where they were passed
+             (gen-keyword-scan fn r)
+             (gen-keyword-defaults fn))))
     (let ((top-index (length *lines*)))
       (gen (ir-fn-body fn) (make-dest :return))
       (when (cfun-self-tail-call cfun)
@@ -782,9 +955,14 @@ position?  (If so, a call may have changed the count of values.)"
               (head (subseq *lines* 0 (- (length *lines*) top-index))))
           (setf *lines* (append head (list "top:;") tail)))))
     (with-output-to-string (out)
-      (format out "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {~%"
-              (cfun-c-name cfun))
-      (format out "    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;~%")
+      (if spec
+          (format out "static D ~a_spec(D self~:{, ~a ~a~}) {~%    (void)self;~%"
+                  (cfun-c-name cfun)
+                  (mapcar (lambda (p) (list (car p) (cdr p))) (spec-parameters fn)))
+          (progn
+            (format out "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {~%"
+                    (cfun-c-name cfun))
+            (format out "    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;~%")))
       (let ((vars (sort (copy-list (append (owned-vars fn) (cfun-env cfun))) #'<
                         :key #'ivar-id)))
         (let ((boxed (remove-if #'unboxed-p vars))
@@ -827,7 +1005,7 @@ with the arguments FN was given?"
           (walk-fn fn))
         found)))
 
-(defun gen-keyword-parsing (fn start)
+(defun gen-keyword-scan (fn start)
   ;; Chapter 6: a method accepts the keywords it names, or any if it has
   ;; #rest; called through its generic function, it accepts what that
   ;; has checked.  The arguments from START on are keyword/value pairs.
@@ -857,9 +1035,12 @@ with the arguments FN was given?"
                   (t (emit "} else {")
                      (indented (emit "dy_unknown_keyword(self, ~a);" key))
                      (emit "}"))))))
-    (emit "}")
-    ;; Defaults, in order: each sees the parameters before it.
-    (dolist (k keys)
+    (emit "}")))
+
+(defun gen-keyword-defaults (fn)
+  ;; Defaults, in order: each sees the parameters before it.
+  (let ((keys (ir-fn-keys fn)))
+    (dolist (k (if (listp keys) keys '()))
       (let ((var (ir-key-var k)))
         (emit "if (~a == DY_UNSUPPLIED) {" (v-name var))
         (indented
@@ -967,6 +1148,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (infer-types fns)
         (choose-unboxed fns))
       (find-stack-rests fns)
+      (choose-spec-entries cfuns fns)
       (let ((texts (mapcar #'gen-function cfuns))
             (closure-lines
               (loop for cfun in cfuns
@@ -987,7 +1169,9 @@ each of its Dylan functions -> the name of the module it was written in."
         (dolist (p *used-primitive-entries*)
           (format stream "D ~a(D, D, D, D, D, intptr_t);~%" p))
         (dolist (cfun cfuns)
-          (format stream "static D ~a(D, D, D, D, D, intptr_t);~%" (cfun-c-name cfun)))
+          (format stream "static D ~a(D, D, D, D, D, intptr_t);~%" (cfun-c-name cfun))
+          (when (cfun-spec cfun)
+            (format stream "~a~%" (spec-prototype cfun))))
         (terpri stream)
         (dolist (line closure-lines) (format stream "~a~%" line))
         (terpri stream)
@@ -1007,5 +1191,8 @@ each of its Dylan functions -> the name of the module it was written in."
               (units (program-units (ir-program-source ir))))
           (dolist (cfun cfuns)
             (setf (gethash (cfun-c-name cfun) modules)
-                  (fn-module-name (cfun-fn cfun) units)))
+                  (fn-module-name (cfun-fn cfun) units))
+            (when (cfun-spec cfun)
+              (setf (gethash (format nil "~a_spec" (cfun-c-name cfun)) modules)
+                    (fn-module-name (cfun-fn cfun) units))))
           modules)))))

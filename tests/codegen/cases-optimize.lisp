@@ -49,7 +49,7 @@ caught
      (for ((y 0 (+ y 1))) ((= y 5))
        (for ((x 0 (+ x 1))) ((= x 5))
          (when (inside? (- (* x 0.5) 1.5) (- (* y 0.5) 1.0))
-           (set! count (+ count 1)))))
+           (set! count (+ count 1)) #f)))
      (print count))"
   "10
 ")
@@ -200,4 +200,60 @@ unbound
          z))
    (print (list (tak 18 12 6) (tak 3.0 2 1)))"
   "(7 2)
+")
+
+ ;; Calls not in tail position go to the specialized entry, their
+ ;; keywords matched when compiling: the leftmost of repeated ones, a
+ ;; default seeing the parameters before it, a captured, assigned keyword
+ ;; parameter.  Keywords not known when compiling, or not taken, go to the
+ ;; uniform entry.
+ (spec-keywords
+  "(define area (method (w #key (h w) (scale 1)) (* (* w h) scale)))
+   (print (list (area 3) (area 3 h: 5) (area 3 scale: 10 h: 4) (area 3 h: 1 h: 9)))
+   (define key h:)
+   (print (list (area 2 key 7) (apply area (list 2 scale: 3))))
+   (print (handler-case (area 2 depth: 1) ((<error>) 'caught)))
+   (print (handler-case (area 2 h:) ((<error>) 'caught)))
+   (define counter
+     (method (start #key (by 1))
+       (bind ((bump (method () (set! by (+ by 1)) by)))
+         (bump)
+         (list start by (bump)))))
+   (print (counter 10 by: 5))
+   (define-method label ((x <object>) #key (prefix \"#\")) (concatenate prefix (format #f \"~a\" x)))
+   (print (list (label 1) (label 2 prefix: \"n\")))
+   (print (handler-case (label 3 suffix: \"x\") ((<error>) 'caught)))"
+  "(9 15 120 3)
+(14 12)
+caught
+caught
+(10 6 7)
+(\"#1\" \"n2\")
+caught
+")
+
+ ;; Doubles passed to the specialized entry unboxed
+ (spec-doubles
+  "(define norm (method (x y) (sqrt (+ (* x x) (* y y)))))
+   (define sum-norms
+     (method (n) (for ((i 0 (+ i 1)) (acc 0.0 (+ acc (norm 3.0 4.0)))) ((= i n) acc))))
+   (print (sum-norms 1000))"
+  "5000.0
+")
+
+ ;; A specialized entry whose body makes tail calls has its own copy of
+ ;; the body, whose tail calls are ordinary calls of uniform entries:
+ ;; entered a million times, and starting a million tail calls, in a 256 KB
+ ;; stack.
+ (spec-tail-calls
+  "(define down (method (n #key (step 1)) (if (<= n 0) 'done (down (- n step) step: step))))
+   (define ping (method (n #key (tag 'ping)) (if (= n 0) tag (pong (- n 1) tag: 'pong))))
+   (define pong (method (n #key (tag 'pong)) (if (= n 0) tag (ping (- n 1) tag: 'ping))))
+   (print (list (down 1000000) (down 1000000 step: 3) (ping 1000001)))
+   (bind ((count 0))
+     (for ((i 0 (+ i 1))) ((= i 1000000))
+       (if (id? (down 2 step: 1) 'done) (set! count (+ count 1)) #f))
+     (print count))"
+  "(done done pong)
+1000000
 "))

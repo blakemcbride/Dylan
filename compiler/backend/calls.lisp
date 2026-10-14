@@ -203,12 +203,22 @@ any arguments and G takes no others."
          (every #'object-spec-p (gmethod-specs (first methods)))
          (first methods))))
 
+(defun spec-method (g)
+  "The method whose specialized entry G's calls may go straight to: G's
+only method, if it takes any arguments.  (A call with keywords goes
+there only if the method takes them all, which is all G would check.)"
+  (let ((methods (gfun-methods g)))
+    (and (= (length methods) 1)
+         (eq (gmethod-kind (first methods)) :ir)
+         (every #'object-spec-p (gmethod-specs (first methods)))
+         (first methods))))
+
 ;;; Emitting
 
 (defun emit-call (dest tail call tail-call)
   "Give DEST the values of the C call CALL; TAIL-CALL is the statement that
 makes it a tail call, used when TAIL."
-  (cond (tail (emit "~a;" tail-call))
+  (cond ((and tail (not (demote-tail-call-p))) (emit "~a;" tail-call))
         ((eq (dest-kind dest) :return) (emit "return ~a;" call))
         ((eq (dest-kind dest) :mv)
          (emit "dy_thread->mv_count = 1;")
@@ -469,21 +479,28 @@ known not to be (:NO), or neither (:MAYBE)?"
     (and next (plusp (ivar-ref-count next)))))
 
 (defun gen-dispatched-call (g args dest tail)
-  (multiple-value-bind (as count) (call-arguments-c args)
-    (let ((sole (sole-method g)))
-      (if sole
-          ;; Straight to the method, with no next method
-          (progn
-            (when (uses-next-method-p (gmethod-fn sole))
-              (emit "dy_thread->next_method = DY_FALSE;"))
-            (emit-call dest tail
-                       (format nil "DY_CALL_DIRECT(~a, DY_OBJ(&~a), ~{~a, ~}~d)"
-                               (gmethod-entry-c sole) (gmethod-object-c sole) as count)
-                       (format nil "DY_TAIL_CALL_DIRECT(~a, DY_OBJ(&~a), ~{~a, ~}~d)"
-                               (gmethod-entry-c sole) (gmethod-object-c sole) as count)))
-          (let ((dispatch (format nil "~a_dispatch" (gfun-c-name g)))
-                (object (address (gfun-c-name g))))
-            (emit-call dest tail
-                       (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)" dispatch object as count)
-                       (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
-                               dispatch object as count)))))))
+  (let* ((sole (sole-method g))
+         (m (spec-method g))
+         (spec (and m (not tail)
+                    (spec-call-c (gmethod-fn m) (format nil "DY_OBJ(&~a)" (gmethod-object-c m))
+                                 args))))
+    (if spec
+        ;; Straight to the method's specialized entry
+        (emit-call dest nil spec nil)
+        (multiple-value-bind (as count) (call-arguments-c args)
+          (if sole
+              ;; Straight to the method, with no next method
+              (progn
+                (when (uses-next-method-p (gmethod-fn sole))
+                  (emit "dy_thread->next_method = DY_FALSE;"))
+                (emit-call dest tail
+                           (format nil "DY_CALL_DIRECT(~a, DY_OBJ(&~a), ~{~a, ~}~d)"
+                                   (gmethod-entry-c sole) (gmethod-object-c sole) as count)
+                           (format nil "DY_TAIL_CALL_DIRECT(~a, DY_OBJ(&~a), ~{~a, ~}~d)"
+                                   (gmethod-entry-c sole) (gmethod-object-c sole) as count)))
+              (let ((dispatch (format nil "~a_dispatch" (gfun-c-name g)))
+                    (object (address (gfun-c-name g))))
+                (emit-call dest tail
+                           (format nil "DY_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)" dispatch object as count)
+                           (format nil "DY_TAIL_CALL_DIRECT(~a, ~a, ~{~a, ~}~d)"
+                                   dispatch object as count))))))))

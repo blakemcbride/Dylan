@@ -36,10 +36,12 @@ not an oracle.
 - Bignums (integers are fixed-size; overflow signals an error).
 - Complex numbers.
 - `eval`, a REPL, or loading code at run time.
-- Run-time changes to the program: `add-method`, `remove-method`, and
-  `make` of a `<class>` or `<generic-function>` are compile-time errors.
-  `seal` and `make-read-only` are accepted and do nothing (everything is
-  already sealed).
+- Run-time changes to the program: `add-method`, `remove-method`,
+  `add-slot`, `remove-slot` and `freeze-methods` are compile-time errors,
+  and `make` of a `<class>` is an error when run. `make` of a
+  `<generic-function>` answers one with no methods, which no method can
+  be added to. `seal` works as the manual says (a sealed class shows
+  no superclasses or slots), and `make-read-only` answers its argument.
 - Infix syntax.
 - Separate compilation of modules (see Phase 8).
 
@@ -203,9 +205,9 @@ a jump are *contified*: compiled as labelled blocks of their host function,
 their calls as `goto`. Programs can use only the provisional functions of
 `runtime/c/primitives.c` until the library exists (Phase 8), and functions
 are defined with `define` and `method` until generic functions exist
-(Phase 5); a method's `#next` is `#f` when it is called directly. Not done
-yet: specialized direct entries, compile-time `#key` parsing, and
-stack-allocated `#rest` lists (all optimizations, Phase 9). Tests:
+(Phase 5); a method's `#next` is `#f` when it is called directly. The
+optimizations — specialized entries, compile-time `#key` parsing and
+stack-allocated `#rest` lists — came with Phase 9. Tests:
 `sbcl --script tests/codegen/run.lisp` (gcc and clang, musttail and
 trampolines, each with a 256 KB stack).
 
@@ -233,8 +235,13 @@ does not guarantee them, so:
    to a dispatch loop). Slower, but correct and portable.
 
 Non-tail calls to known functions may also use a **direct entry** with a
-specialized prototype (exact arity, unboxed `intptr_t`/`double`
-parameters) when that helps; tail calls always use the uniform entry.
+specialized prototype (exact arity, unboxed `double` parameters, one
+parameter per keyword) when that helps; tail calls always use the uniform
+entry. Since the specialized prototype cannot make a `musttail` call, its
+body either makes no tail call (then it is the only body, and the uniform
+entry passes its arguments on) or has its own copy of the body whose tail
+calls are ordinary calls of uniform entries — safe, since only calls that
+are not tail calls enter it, each holding at most one more frame.
 
 Frames that a tail call must not jump out of — `unwind-protect`,
 `bind-exit` frames that escape, condition handlers — make the calls
@@ -269,9 +276,10 @@ accessors, all five allocations, `make`/`initialize` with init-keyword
 checking, `next-method` (with or without arguments), generic keyword
 checking and the reflective functions of chapters 10 and 11 are in. Not
 yet: static resolution and inlining of calls (Phase 9, with type
-inference); methods on `make` or on other `dylan`-module functions except
-`initialize` (Phase 8); slot descriptors; `define-slot` on singletons and
-`add-method`/`remove-method` (not possible in a static program). Tests: the
+inference, now done); methods on `make` or on other `dylan`-module
+functions except `initialize` (Phase 8); `define-slot` on singletons; and
+`add-method`/`remove-method` (not possible in a static program). Slot
+descriptors came later (Phase 11). Tests: the
 object-system programs in `tests/codegen/cases-objects.lisp`.
 
 **Classes.** The compiler builds the whole hierarchy: class precedence
@@ -448,6 +456,10 @@ against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
 - `compiler/backend/calls.lisp`: calls of known generic functions go to
   their dispatch function, or their only method; primitives through their
   C entry; global functions directly, a tail call of itself a loop.
+  Calls of known functions other than in tail position go to their
+  specialized entry (`codegen.lisp`): exact arity, `double` arguments
+  where unboxed, and keywords matched when compiling — each keyword
+  parameter an argument, `DY_UNSUPPLIED` if not passed.
   Done inline: `id?`, `not`, `car`, `cdr`, `instance?` of a known class,
   untyped instance slot getters and setters, and the library's methods for
   integer and float arithmetic and comparison, `size`, `element` and the
@@ -598,8 +610,8 @@ so nothing has to be retrofitted.
   the slower trampoline mode. Verify GCC's `musttail` on the uniform
   prototype early (M1), including with arguments in the per-thread area.
 - **Uniform entry cost.** Four register arguments plus a count is a little
-  slower than exact-arity C calls; direct entries for known non-tail calls
-  recover most of it. Measure in M1.
+  slower than exact-arity C calls; specialized entries for known non-tail
+  calls recover most of it (Phase 9).
 - **Conservative GC and tagged values.** Tagged integers and characters
   are safe for Boehm; strings and float boxes must be allocated atomic.
   Pointers held only in the per-thread argument area must be visible to the

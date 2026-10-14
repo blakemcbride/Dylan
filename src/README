@@ -2,24 +2,27 @@
 
               Dylan in Common Lisp
 
-This is a Common Lisp implementation of the language described in "Dylan(TM)
-an object-oriented dynamic language" (Apple Computer Eastern Research and
-Technology, April 1992).
+This is the Common Lisp implementation of the language described in
+"Dylan(TM) an object-oriented dynamic language" (Apple Computer Eastern
+Research and Technology, April 1992): Dylan compiled to Common Lisp as it
+is entered, at a read-eval-print loop or a file at a time.  (The other
+implementation in this tree, a compiler from Dylan to C, is in ../compiler
+and ../runtime; see ../README.md.)
 
-It is a translation of Thomas -- the Dylan(TM)-compatible compiler and
-runtime that Digital Equipment Corporation's Cambridge Research Lab wrote in
-Scheme against that book -- into Common Lisp.  The compiler now emits Common
-Lisp rather than Scheme, and the runtime is a Common Lisp program.  Every
-file says which file of Thomas it came from, and the correspondence is
-tabulated below.
+It began as a direct translation of Thomas -- the Dylan(TM)-compatible
+compiler and runtime that Digital Equipment Corporation's Cambridge
+Research Lab wrote in Scheme against that book -- into Common Lisp.  Since
+then it has been corrected against the manual, chapter by chapter, and
+rebuilt for speed: generic dispatch through caches (generic.lisp), direct
+calls, and inline arithmetic, element and iteration with guards
+(runtime-fast-paths.lisp).  Every file still says which file of Thomas it
+grew from, and the correspondence is tabulated below; the notes after it
+describe how the Scheme became Common Lisp, which still shapes the code.
 
-This directory replaced Thomas's own src/, portable/ and kits/ directories,
-which have been removed, and took the name src/ from the first of them.  The
-file correspondence below records where each file came from, and the three
-transcripts those kits produced are kept in reference/.  What is left outside
-this directory is the documentation (../README.md, ../README.thomas,
-../RELEASE, ../LICENSE) and the examples
-(../dylan-examples.dyl, ../examples-from-book.text).  ../README.thomas is
+This directory replaced Thomas's own src/, portable/ and kits/
+directories, which have been removed, and took the name src/ from the
+first of them.  The three transcripts those kits produced are kept in
+reference/, as the baseline of the regression test.  ../README.thomas is
 the 1992 Thomas README, and still describes the Scheme directory layout as
 it stood then.
 
@@ -82,7 +85,7 @@ transcript to compare against reference/MIT.output.  See reference/README.
                           FILE CORRESPONDENCE
 
 The names in the right-hand column are Thomas's Scheme files -- the ones
-this translation was made from.  They are paths within Thomas's own tree,
+each file was first translated from.  They are paths within Thomas's own tree,
 not within this one, and they no longer exist here.
 
   package.lisp             new -- the DYLAN package
@@ -260,7 +263,7 @@ One limitation is new:
                               COPYRIGHT
 
 The original Thomas system is Copyright 1992 Digital Equipment Corporation;
-this Common Lisp translation is Copyright 2026 Blake McBride and is a
+this Common Lisp implementation is Copyright 2026 Blake McBride and is a
 derivative work of it.  Digital's terms govern the whole, and its notice
 appears at the head of every file here, as it did on every file of the
 Scheme original.  The full text, together with a summary of what it permits

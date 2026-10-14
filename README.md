@@ -1,15 +1,23 @@
-# Dylan in Common Lisp
+# Dylan
 
-A Common Lisp implementation of the language described in *Dylan(TM): an
+Two implementations of the language described in *Dylan(TM): an
 object-oriented dynamic language* (Apple Computer Eastern Research and
 Technology, April 1992) — the original prefix-syntax Dylan, before the
-language moved to an infix syntax.
+language moved to an infix syntax:
 
-It is a translation of **Thomas**, the Scheme implementation that Matt
-Birkholz, Jim Miller and Ron Weiss wrote at Digital Equipment Corporation's
-Cambridge Research Laboratory in 1992. The compiler now emits Common Lisp
-rather than Scheme, and the runtime is a Common Lisp program. Every source
-file records which file of Thomas it came from.
+- **An interactive implementation in Common Lisp** (`src/`). Dylan is
+  compiled to Common Lisp as it is entered, at a read-eval-print loop or a
+  file at a time, and run by the Lisp. It is the whole language of the
+  manual, with classes and generic functions that change as the program
+  runs.
+- **A compiler from Dylan to C** (`compiler/`, `runtime/`, `bin/dylanc`).
+  A whole, static program becomes a native executable: proper tail calls,
+  generic dispatch compiled to decision trees, type inference, inlining
+  and unboxed floats, the Boehm-Demers-Weiser collector, and real threads.
+  It adds macros, threads and streams, which the manual lacks.
+
+The standard both follow is the 1992 manual itself; an annotated copy is in
+`manual/Dylan-1992/`.
 
 The home for this package is **<https://github.com/blakemcbride/Dylan>**.
 
@@ -17,7 +25,31 @@ The home for this package is **<https://github.com/blakemcbride/Dylan>**.
 > notice forbids sale or transfer for compensation. See
 > [License](#license) below.
 
+## Origins
+
+The project began as a direct translation into Common Lisp of **Thomas**,
+the Scheme implementation that Matt Birkholz, Jim Miller and Ron Weiss
+wrote at Digital Equipment Corporation's Cambridge Research Laboratory in
+1992. It has since gone far from that start:
+
+- The Common Lisp implementation was corrected against the manual, chapter
+  by chapter — `#f` and the empty list are distinct, modules (design notes
+  32 and 33), keyword checking, sealing, slot options and much else — and
+  rebuilt for speed: generic dispatch through caches, calls made directly,
+  arithmetic, `element` and iteration done inline, slots read directly.
+  Thomas's own goals explicitly did not include performing well.
+- The compiler to C is new, written for this project. It shares only the
+  reader with the Common Lisp implementation, which also runs its macros
+  while compiling.
+
+Thomas's sources are no longer here. Each file of `src/` still records
+which Thomas file it grew from (see [`src/README`](src/README)), and
+Thomas's 1992 README and release notes are kept as
+[`README.thomas`](README.thomas) and [`RELEASE`](RELEASE).
+
 ## Quick start
+
+The Common Lisp implementation:
 
 ```console
 $ sbcl
@@ -42,31 +74,53 @@ Exit by typing "dylan:done"
 
 ;Value: 5.0
 
-? (map (curry + 1) '(3 4 5))
-
-;Value: (4 5 6)
-
 ? dylan:done
 ```
 
-Note that `(sqrt 25)` answers the float `5.0`, not an exact `5`: the manual
-defines `sqrt`, `exp`, the trigonometric functions and their kin "as in
-Common Lisp", and its examples show them answering double-floats.
-Rationals are otherwise exact, as in Common Lisp.
+The compiler to C:
 
-## Using it
+```console
+$ cat hello.dyl
+(define-method greet ((name <string>))
+  (format #t "Hello, ~a!~%" name))
+(greet "world")
+$ bin/dylanc hello.dyl
+$ ./hello
+Hello, world!
+```
 
-There are three ways in, as in the original.
+`(sqrt 25)` answers the float `5.0`, not an exact `5`: the manual defines
+`sqrt`, `exp`, the trigonometric functions and their kin "as in Common
+Lisp", and its examples show them answering floats. Rationals are
+otherwise exact.
+
+## Requirements
+
+- **SBCL** for both (developed on 2.6.3). The Common Lisp implementation
+  uses nothing SBCL-specific but weak hash tables and weak pointers and one
+  query whether a symbol is special, all in `src/compat.lisp` with
+  portable fallbacks.
+- For the compiler to C, also a C compiler with `musttail` — GCC 15 or
+  later, or Clang 13 or later (any C11 compiler will do with
+  `--trampoline`) — and the Boehm-Demers-Weiser collector built for
+  threads (`libgc` and its headers).
+
+The first use compiles the Lisp sources into a `fasl/` directory beside
+them; later uses recompile only a changed file and those loaded after it.
+
+## The Common Lisp implementation
+
+There are three ways in.
 
 **Interactive.** Load `src/load-dylan.lisp`.
 
 | | |
 |---|---|
-| `(dylan:rep)` | start a read-eval-print loop that evaluates Dylan. Errors your Dylan code does not trap reach the Lisp debugger. |
+| `(dylan:rep)` | start a read-eval-print loop that evaluates Dylan. Errors your Dylan code does not trap reach the Lisp debugger, which offers Dylan's restarts. |
 | `(dylan:empty-environment!)` | forget the module variables earlier interactions created |
 | `(dylan:in-module name)` | compile later input in module `name` (also typed at the `?` prompt) |
 
-**Compiler.** Load `src/load-compiler.lisp`.
+**Compiler to Lisp.** Load `src/load-compiler.lisp`.
 
 | | |
 |---|---|
@@ -81,7 +135,18 @@ the `DYLAN` package; that is what `dylan::dylan-read` produces, and
 in the module its `module:` header names (design note 33), or in
 `dylan-user`.
 
-**Modules** follow design note 32, written in prefix form:
+**Runtime only.** Load `src/load-runtime.lisp`, then `load` the Lisp files
+the compiler produced. They are ordinary Common Lisp and need no compiler
+present.
+
+```console
+$ sbcl --eval '(load "src/load-compiler.lisp")' \
+       --eval '(dylan:compile-file "program.dyl" "program.lisp")'
+$ sbcl --eval '(load "src/load-runtime.lisp")' --eval '(load "program.lisp")'
+```
+
+**Modules**, in both implementations, follow design note 32, written in
+prefix form:
 
 ```lisp
 (define-module graphics (use dylan) (create draw-line erase-line))
@@ -95,96 +160,27 @@ A `use` clause takes `import:`, `exclude:`, `prefix:`, `rename:` and
 offers. `dylan` holds the predefined variables, and `dylan-user`, which
 uses it, is where code goes by default.
 
-**Runtime only.** Load `src/load-runtime.lisp`, then `load` the Lisp files
-the compiler produced. They are ordinary Common Lisp and need no compiler
-present.
-
-```console
-$ sbcl --eval '(load "src/load-compiler.lisp")' \
-       --eval '(dylan:compile-file "program.dyl" "program.lisp")'
-$ sbcl --eval '(load "src/load-runtime.lisp")' --eval '(load "program.lisp")'
-```
-
-## Requirements
-
-SBCL, which is what it is developed and tested on (currently 2.6.3).
-Nothing is SBCL-specific except weak hash tables and weak pointers
-(`SB-EXT`), used for class populations and the method tables, and one
-`SB-INT` query that the compiler uses to tell whether a symbol is a special
-variable. All of them are in `src/compat.lisp`, with portable fallbacks.
-
-The first load compiles the sources into `src/fasl/<lisp>-<version>/`;
-later loads use those compiled files, recompiling a source file that has
-changed and every file loaded after it.
-
-## Testing
-
-`dylan-examples.dyl` holds the examples from the Dylan book. To run them:
-
-```console
-$ cd src
-$ sbcl --eval '(load "load-dylan.lisp")' \
-       --eval '(load "full-test.lisp")' \
-       --eval '(dylan:test-examples)'
-```
-
-The expected results are in `src/reference/`, the transcripts Thomas
-produced from the same file in 1992. Where the two disagree, the manual
-decides; the few remaining differences are listed in
-[`src/README`](src/README).
-
-## Benchmarks
-
-`bench/benchmarks.dyl` holds small Dylan programs (tables, sorting,
-strings, deques, stretchy vectors, ranges, non-local exits, conditions,
-`next-method` chains, recursion, floating point), and
-`bench/reference.lisp` the same programs in plain Common Lisp. To compare
-them:
-
-```console
-$ sbcl --script bench/run.lisp            # all of them
-$ sbcl --script bench/run.lisp table tak  # just these
-```
-
-Each line gives the best of three runs for each, their ratio, and
-`MISMATCH` if the two answered differently.
-
-## Compiling to C
-
-`compiler/` is a second implementation, in progress: a compiler from Dylan
-to C, for whole, static programs (see `CompilerPlan.md`). It needs SBCL, a
-C compiler with `musttail` (GCC 15 or later, or Clang 13 or later — or any
-C11 compiler with `--trampoline`), and the Boehm-Demers-Weiser collector
-built for threads (`libgc`).
+## The compiler to C
 
 ```console
 $ bin/dylanc hello.dyl          # makes ./hello
 $ bin/dylanc -o app a.dyl b.dyl # several files, in order, one program
-$ bin/dylanc -h                 # the options: -O0..-O3, -Os, --lto, --whole, -g, -k, -C, ...
+$ bin/dylanc -h                 # the options: -O0..-O3, -Os, --lto, --whole, -g, -k, -C, -E, ...
 ```
 
-The generated C is `NAME.c` (data and `main`), `NAME-MODULE.c` for each
-module's functions, and `NAME.h`; `-k` keeps it, and its `#line`
-directives point to the Dylan source. The library's functions,
-`NAME-dylan.c`, are the same for most programs, so they are compiled
-once for each C compiler and set of options and kept in
-`runtime/build/library/`; `-Os` and `--whole` compile the library with
-the program instead. The benchmarks: `sbcl --script
-bench/run-c.lisp`, which times them against the hand-written C of
-`bench/reference.c` and the Lisp of `reference.lisp`.
+A program is compiled whole, together with the library (`runtime/dylan`,
+written in Dylan) and a small runtime in C (`runtime/c`). The generated C
+is `NAME.c` (data, dispatch and `main`), `NAME-MODULE.c` for each module's
+functions, and `NAME.h`; `-k` keeps it, and its `#line` directives point
+to the Dylan source. The library's functions, `NAME-dylan.c`, are the same
+for most programs, so they are compiled once for each C compiler and set
+of options and kept in `runtime/build/library/`; `-Os` and `--whole`
+compile the library with the program instead, keeping only what the
+program can reach. `-g` builds for debugging, with every inline operation
+checking its arguments.
 
-The tests (each `run.lisp` takes a mode: `quick`, the default `all` — gcc
-and clang, with `musttail` and with trampolines — `whole`, as `quick` but
-with the library compiled with each program, `gc-stress`, `address` for
-AddressSanitizer and UndefinedBehaviorSanitizer, or `thread` for
-ThreadSanitizer):
-
-```console
-$ sbcl --script tests/conformance/run.lisp  # the manual's examples, chapter by chapter
-$ sbcl --script tests/codegen/run.lisp      # the compiler's own
-$ sbcl --script tests/stress/run.lisp       # 10^8 tail calls; many threads
-$ sh tests/driver/run.sh                    # bin/dylanc
-```
+How it works, phase by phase, and how fast and small its programs are, is
+in [`CompilerPlan.md`](CompilerPlan.md).
 
 **Macros** (an extension; the 1992 manual has none) are Common Lisp's
 kind, expanded while compiling:
@@ -205,6 +201,18 @@ implementation of Dylan, with its library, `gensym`, and what
 `(define-for-macros form ...)` defines — forms run only while compiling.
 `dylanc -E` writes each use of a macro and its expansion.
 
+**Threads** (an extension): `make-thread` with a function of no arguments,
+`join-thread` (which answers its values), `current-thread` and
+`thread-yield`; `<lock>` and `<recursive-lock>` with `with-lock`;
+`<condition-variable>`; `<atomic-integer>`; `define-thread-variable` and
+`dynamic-bind`. A condition a thread does not handle ends it, and
+`join-thread` signals a `<thread-error>` holding it.
+
+**Streams** (an extension; the manual uses them but does not define
+them): `<stream>`, `*standard-output*`, `*standard-error*`,
+`<string-stream>` with `stream-contents`, and `format`; every printing
+function takes `stream:`.
+
 What a static program cannot do, which the 1992 manual allows:
 
 - **Change its classes or generic functions while running:** `add-method`,
@@ -218,11 +226,57 @@ What a static program cannot do, which the 1992 manual allows:
   when compiling.
 - **Bignums and complex numbers:** integers are 63 bits (overflow is an
   error), and `<complex>` has no instances.
+- **Evaluate or load code while running.**
+
+## Testing
+
+The Common Lisp implementation runs the examples from the Dylan book,
+`dylan-examples.dyl`:
+
+```console
+$ cd src
+$ sbcl --eval '(load "load-dylan.lisp")' \
+       --eval '(load "full-test.lisp")' \
+       --eval '(dylan:test-examples)'
+```
+
+The expected results are in `src/reference/`, the transcripts Thomas
+produced from the same file in 1992. Where they and the manual disagree,
+the manual decides; the few remaining differences are listed in
+[`src/README`](src/README).
+
+The compiler to C has its own suites. Each `run.lisp` takes a mode:
+`quick`; the default, `all` — gcc and clang, with `musttail` and with
+trampolines; `whole`, as `quick` but with the library compiled with each
+program; `gc-stress`; `address`, for AddressSanitizer and
+UndefinedBehaviorSanitizer; or `thread`, for ThreadSanitizer.
+
+```console
+$ sbcl --script tests/conformance/run.lisp  # the manual's examples, chapter by chapter
+$ sbcl --script tests/codegen/run.lisp      # the compiler's own
+$ sbcl --script tests/stress/run.lisp       # 10^8 tail calls; many threads
+$ sh tests/driver/run.sh                    # bin/dylanc
+$ make -C runtime test                      # the C runtime
+```
+
+## Benchmarks
+
+`bench/benchmarks.dyl` holds small Dylan programs (tables, sorting,
+strings, deques, stretchy vectors, ranges, non-local exits, conditions,
+`next-method` chains, recursion, floating point), `bench/reference.lisp`
+the same programs in plain Common Lisp, and `bench/reference.c` the same
+in plain C.
+
+```console
+$ sbcl --script bench/run.lisp            # the Common Lisp implementation against plain Lisp
+$ sbcl --script bench/run.lisp table tak  # just these
+$ sbcl --script bench/run-c.lisp          # the compiler to C against C and plain Lisp
+```
+
+Each line gives the best of three runs for each, their ratios, and
+`MISMATCH` if they answered differently.
 
 ## Differences from the 1992 manual
-
-The standard is the manual itself (an annotated copy is in
-`manual/Dylan-1992/`).
 
 **Different behavior**
 
@@ -244,31 +298,31 @@ The standard is the manual itself (an annotated copy is in
 
 **Additions**
 
-- `display`, `newline`, `print` and `write-line` (from Thomas).
-- `pp` pretty-prints a Dylan object.
-- `lisp-variable` and `lisp-procedure` reach Common Lisp values and
-  functions from Dylan. Lisp's `NIL` arrives as the empty list, not `#f`.
-
-How the Scheme was turned into Common Lisp — naming, the treatment of
-false and the empty list, the reader and printer — is described in
-[`src/README`](src/README).
+- `display`, `newline`, `print` and `write-line`, and `pp`, which
+  pretty-prints an object.
+- In the Common Lisp implementation, `lisp-variable` and `lisp-procedure`
+  reach Common Lisp values and functions from Dylan. Lisp's `NIL` arrives
+  as the empty list, not `#f`.
+- In the compiler to C: macros, threads and streams, above.
 
 ## Repository layout
 
 | | |
 |---|---|
-| `src/` | the implementation — 38 Lisp files, ~14,700 lines |
-| `src/README` | the translation notes, and which file came from which Thomas file |
-| `src/reference/` | Thomas's 1992 transcripts of the examples, the regression baseline |
-| `dylan-examples.dyl` | the examples from the Dylan book, as the test suite |
-| `bench/` | benchmarks against plain Common Lisp |
-| `compiler/` | the Dylan-to-C compiler, in progress (see `CompilerPlan.md`) |
+| `src/` | the Common Lisp implementation — 38 Lisp files, ~14,800 lines |
+| `src/README` | how it works, and which Thomas file each file grew from |
+| `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
+| `dylan-examples.dyl` | the examples from the Dylan book |
+| `compiler/` | the compiler to C, in Common Lisp — ~9,100 lines |
 | `bin/dylanc` | its command line |
-| `runtime/` | the compiler's runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
-| `tests/` | the compiler's tests |
-| `examples-from-book.text` | the raw extraction those were edited from |
+| `runtime/` | its runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
+| `tests/` | its tests |
+| `bench/` | benchmarks against plain Common Lisp and C |
+| `CompilerPlan.md` | the compiler's design, phase by phase, and where it stands |
+| `manual/Dylan-1992/` | the 1992 manual, annotated |
+| `examples-from-book.text` | the raw extraction the examples were edited from |
 | `README.thomas` | the original 1992 Thomas README |
-| `RELEASE` | the 1992 release notes |
+| `RELEASE` | Thomas's 1992 release notes |
 | `LICENSE` | Digital's notice, and what it permits |
 
 ## License
@@ -276,18 +330,19 @@ false and the empty list, the reader and printer — is described in
 **This is source-available software, not open source.**
 
 The original Thomas system is Copyright 1992 Digital Equipment Corporation;
-this Common Lisp translation is Copyright 2026 Blake McBride and is a
-derivative work of it. Digital's terms govern the whole. In brief, they
-allow use, modification, and redistribution at no charge to recipients who
-accept the same terms, but **not sale or transfer for compensation** — which
-is why the notice meets neither the Open Source Definition nor the Free
-Software Definition, and is incompatible with the GPL and with MIT, BSD and
-Apache.
+the Common Lisp implementation in `src/`, which began as a translation of
+it, is Copyright 2026 Blake McBride and is a derivative work of it.
+Digital's terms govern the whole. In brief, they allow use, modification,
+and redistribution at no charge to recipients who accept the same terms,
+but **not sale or transfer for compensation** — which is why the notice
+meets neither the Open Source Definition nor the Free Software Definition,
+and is incompatible with the GPL and with MIT, BSD and Apache. See
+[`LICENSE`](LICENSE).
 
 Digital's notice also requires that it appear in all copies, derivative
-works and modified versions, and any portion thereof. It does, at the head
-of every source file as well as in [`LICENSE`](LICENSE). Please keep it
-there.
+works and modified versions, and any portion thereof. It does, in
+[`LICENSE`](LICENSE) and at the head of every file that came from Thomas.
+Please keep it there.
 
 Putting any of this under a different license would need permission from the
 present owner of Digital's copyright, by way of the Compaq (1998) and
@@ -300,11 +355,11 @@ at Digital Equipment Corporation's Cambridge Research Laboratory, with
 contributions from Joel Bartlett, Marc Feeley, Guillermo Rozas and Ralph
 Swick. Their goals, in their own order of priority, were to learn about the
 language by implementing it from the book, to help others learn from
-readable source, and to write small programs in it — explicitly not to
-perform well. This translation inherits all three, and the last one too.
+readable source, and to write small programs in it. This project began
+from their work.
 
 The language is Apple's, from the 1992 book. The 1992 authors were careful
 to name their system Thomas rather than Dylan, noting in the original
 [`README.thomas`](README.thomas) that they had not received approval for
-the trademark;
-this translation uses the name Dylan for its package and entry points.
+the trademark; this project uses the name Dylan for its package and entry
+points.

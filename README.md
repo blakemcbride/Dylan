@@ -107,6 +107,9 @@ otherwise exact.
   `--trampoline`) — and the Boehm-Demers-Weiser collector built for
   threads (`libgc` and its headers).
 
+How to install these and build on each platform: [`BUILD.md`](BUILD.md)
+(Linux), [`macOS.md`](macOS.md), [`Windows.md`](Windows.md).
+
 The first use compiles the Lisp sources into a `fasl/` directory beside
 them; later uses recompile only a changed file and those loaded after it.
 
@@ -322,6 +325,7 @@ Each line gives the best of three runs for each, their ratios, and
 | `runtime/` | its runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
 | `tests/` | its tests |
 | `bench/` | benchmarks against plain Common Lisp and C |
+| `BUILD.md`, `macOS.md`, `Windows.md` | building and running on Linux, macOS and Windows |
 | `CompilerPlan.md` | the compiler's design, phase by phase, and where it stands |
 | `SpeedComparison.md` | the benchmarks in plain SBCL, the Common Lisp implementation and the compiler to C |
 | `manual/UserManual/` | the user manual — a tutorial, the language, both implementations (LaTeX; `make` builds the PDF) |

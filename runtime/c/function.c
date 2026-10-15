@@ -74,7 +74,7 @@ _Noreturn void dy_not_a_function(D f) { dy_error("not a function", f); }
 _Noreturn void dy_wrong_argument_count(D f, intptr_t argc) {
     (void)f;
     char message[80];
-    snprintf(message, sizeof message, "wrong number of arguments (%ld)", (long)argc);
+    snprintf(message, sizeof message, "wrong number of arguments (%" PRIdPTR ")", argc);
     dy_error(message, 0);
 }
 

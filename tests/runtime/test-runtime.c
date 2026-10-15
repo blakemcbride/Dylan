@@ -143,7 +143,7 @@ static void test_constants_print(void) {
 
 static void overflow_add(void) { dy_int_add(DY_INT(DY_INT_MAX), DY_INT(1)); }
 static void overflow_sub(void) { dy_int_sub(DY_INT(DY_INT_MIN), DY_INT(1)); }
-static void overflow_mul(void) { dy_int_mul(DY_INT(1L << 31), DY_INT(1L << 31)); }
+static void overflow_mul(void) { dy_int_mul(DY_INT((intptr_t)1 << 31), DY_INT((intptr_t)1 << 31)); }
 static void overflow_negate(void) { dy_int_negate(DY_INT(DY_INT_MIN)); }
 static void overflow_divide(void) { D r; dy_int_truncate(DY_INT(DY_INT_MIN), DY_INT(-1), &r); }
 static void divide_zero(void) { D r; dy_int_floor(DY_INT(1), DY_INT(0), &r); }
@@ -153,7 +153,7 @@ static void test_integers(void) {
     CHECK(dy_int_add(DY_INT(-2), DY_INT(-3)) == DY_INT(-5));
     CHECK(dy_int_sub(DY_INT(2), DY_INT(3)) == DY_INT(-1));
     CHECK(dy_int_mul(DY_INT(-6), DY_INT(7)) == DY_INT(-42));
-    CHECK(dy_int_mul(DY_INT(1L << 30), DY_INT(1L << 31)) == DY_INT(1L << 61));
+    CHECK(dy_int_mul(DY_INT((intptr_t)1 << 30), DY_INT((intptr_t)1 << 31)) == DY_INT((intptr_t)1 << 61));
     CHECK(dy_int_negate(DY_INT(DY_INT_MAX)) == DY_INT(-DY_INT_MAX));
     CHECK(dy_int_add(DY_INT(DY_INT_MAX), DY_INT(0)) == DY_INT(DY_INT_MAX));
     CHECK(dy_int_sub(DY_INT(DY_INT_MIN), DY_INT(0)) == DY_INT(DY_INT_MIN));
@@ -231,15 +231,15 @@ static void test_numbers(void) {
     CHECK(dy_compare(ratio(1, 3), dy_make_double_float(1.0 / 3.0)) == 1);
     /* 2^62 - 1 is below the double 2^62 it rounds to. */
     CHECK(dy_compare(DY_INT(DY_INT_MAX), dy_make_double_float(0x1p62)) == -1);
-    CHECK(dy_compare(DY_INT(9007199254740993L), dy_make_double_float(0x1p53)) == 1);
+    CHECK(dy_compare(DY_INT(INT64_C(9007199254740993)), dy_make_double_float(0x1p53)) == 1);
     CHECK(dy_compare(DY_INT(DY_INT_MIN), dy_make_double_float(-0x1p62)) == 0);
     CHECK(dy_compare(DY_INT(1), dy_make_double_float(1e300)) == -1);
     CHECK(dy_compare(DY_INT(-1), dy_make_double_float(-1e300)) == 1);
     CHECK(dy_compare(ratio(1, DY_INT_MAX), dy_make_double_float(1e-300)) == 1);
     CHECK(dy_compare(DY_INT(0), dy_make_double_float(-1e-300)) == 1);
-    CHECK(dy_compare(ratio(1, 1L << 61), dy_make_double_float(0x1p-61)) == 0);
-    CHECK(dy_compare(ratio(3, 1L << 61), dy_make_double_float(0x1.8p-60)) == 0);
-    CHECK(dy_compare(ratio(3, 1L << 61), dy_make_double_float(0x1.8000000000001p-60)) == -1);
+    CHECK(dy_compare(ratio(1, (intptr_t)1 << 61), dy_make_double_float(0x1p-61)) == 0);
+    CHECK(dy_compare(ratio(3, (intptr_t)1 << 61), dy_make_double_float(0x1.8p-60)) == 0);
+    CHECK(dy_compare(ratio(3, (intptr_t)1 << 61), dy_make_double_float(0x1.8000000000001p-60)) == -1);
     CHECK(dy_compare(dy_make_double_float(INFINITY), DY_INT(DY_INT_MAX)) == 1);
     CHECK(dy_compare(dy_make_double_float(NAN), DY_INT(1)) == 2);
     CHECK(!dy_number_less(dy_make_double_float(NAN), DY_INT(1)));
@@ -303,7 +303,7 @@ enum { THREADS = 8, PER_THREAD = 2000 };
 static D thread_results[THREADS][PER_THREAD];
 
 static void *thread_body(void *arg) {
-    long t = (long)arg;
+    intptr_t t = (intptr_t)arg;
     char name[32];
     D list = DY_EMPTY;
     for (int i = 0; i < PER_THREAD; i++) {
@@ -313,19 +313,19 @@ static void *thread_body(void *arg) {
         list = dy_pair(dy_make_double_float(i), list);
         if (i % 500 == 0) GC_gcollect();
     }
-    long count = 0;
+    intptr_t count = 0;
     for (D l = list; l != DY_EMPTY; l = ((DyPair *)DY_PTR(l))->tail) count++;
     return (void *)count;
 }
 
 static void test_threads(void) {
     pthread_t threads[THREADS];
-    for (long t = 0; t < THREADS; t++)
+    for (intptr_t t = 0; t < THREADS; t++)
         CHECK(pthread_create(&threads[t], NULL, thread_body, (void *)t) == 0);
-    for (long t = 0; t < THREADS; t++) {
+    for (intptr_t t = 0; t < THREADS; t++) {
         void *count;
         pthread_join(threads[t], &count);
-        CHECK((long)count == PER_THREAD);
+        CHECK((intptr_t)count == PER_THREAD);
     }
     long mismatches = 0;
     for (int i = 0; i < PER_THREAD; i++)

@@ -535,11 +535,11 @@ PRIMITIVE(number_to_string) {
 D dy_number_string(D a0) {
     char buffer[80];
     if (DY_IS_INT(a0)) {
-        snprintf(buffer, sizeof buffer, "%ld", (long)DY_INT_VALUE(a0));
+        snprintf(buffer, sizeof buffer, "%" PRIdPTR, DY_INT_VALUE(a0));
     } else if (dy_kind_p(a0, DY_KIND_RATIO)) {
         DyRatio *r = DY_PTR(a0);
-        snprintf(buffer, sizeof buffer, "%ld/%ld", (long)DY_INT_VALUE(r->numerator),
-                 (long)DY_INT_VALUE(r->denominator));
+        snprintf(buffer, sizeof buffer, "%" PRIdPTR "/%" PRIdPTR, DY_INT_VALUE(r->numerator),
+                 DY_INT_VALUE(r->denominator));
     } else if (float_p(a0)) {
         bool single = dy_kind_p(a0, DY_KIND_SINGLE_FLOAT);
         double x = dy_float_value(a0);

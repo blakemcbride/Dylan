@@ -63,6 +63,7 @@ void dy_gc_stress(void);
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 
 #if UINTPTR_MAX != 0xFFFFFFFFFFFFFFFFu

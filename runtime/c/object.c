@@ -82,7 +82,7 @@ static void write_number(FILE *out, D x) {
 
 void dy_debug_write(FILE *out, D x) {
     if (DY_IS_INT(x)) {
-        fprintf(out, "%ld", (long)DY_INT_VALUE(x));
+        fprintf(out, "%" PRIdPTR, DY_INT_VALUE(x));
         return;
     }
     if (DY_IS_CHAR(x)) {
@@ -161,8 +161,8 @@ void dy_debug_write(FILE *out, D x) {
     case DY_KIND_LOCK: fputs("{lock}", out); return;
     case DY_KIND_CONDITION_VARIABLE: fputs("{condition-variable}", out); return;
     case DY_KIND_ATOMIC_INTEGER:
-        fprintf(out, "{atomic-integer %ld}",
-                (long)atomic_load(&((DyAtomicInteger *)DY_PTR(x))->value));
+        fprintf(out, "{atomic-integer %" PRIdPTR "}",
+                (intptr_t)atomic_load(&((DyAtomicInteger *)DY_PTR(x))->value));
         return;
     case DY_KIND_GENERIC:
         fputs("{the generic function ", out);

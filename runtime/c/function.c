@@ -15,32 +15,70 @@ DyHeader dy_tail_call_object = { &dy_wrapper_object };
 
 void dy_init_thread(void) {
     if (dy_thread) return;
-    dy_thread = GC_MALLOC_UNCOLLECTABLE(sizeof(DyThread));
-    if (!dy_thread) dy_error("out of memory", 0);
+    dy_thread = dy_alloc_root(sizeof(DyThread));
     memset(dy_thread, 0, sizeof(DyThread));
     dy_thread->mv_count = 1;
+#ifdef DY_MPS
+    dy_mps_thread_start();
+#endif
     size_t n = dy_thread_variable_count;
-    dy_thread->thread_variables = GC_MALLOC_UNCOLLECTABLE((n ? n : 1) * sizeof(D));
-    if (!dy_thread->thread_variables) dy_error("out of memory", 0);
+    dy_thread->thread_variables = dy_alloc_root((n ? n : 1) * sizeof(D));
     for (size_t i = 0; i < n; i++)
         dy_thread->thread_variables[i] = dy_thread_variable_defaults[i];
 }
 
 void dy_end_thread(void) {
-    GC_FREE(dy_thread->thread_variables);
-    GC_FREE(dy_thread);
+#ifdef DY_MPS
+    dy_mps_thread_end();
+#endif
+    dy_free_root(dy_thread->thread_variables);
+    dy_free_root(dy_thread);
     dy_thread = NULL;
 }
 
 D dy_make_closure(DyEntry entry, size_t env_size) {
+#ifdef DY_MPS
+    DyFunction *f = dy_mps_alloc(DY_POOL_EXACT, &dy_wrapper_method,
+                                 sizeof(DyFunction) + env_size * sizeof(D),
+                                 offsetof(DyFunction, env_count), (D)env_size);
+#else
     DyFunction *f = dy_alloc(&dy_wrapper_method,
                              sizeof(DyFunction) + env_size * sizeof(D));
+#endif
     f->entry = entry;
     f->specializers = DY_FALSE;
     f->info = DY_FALSE;
     f->owner = DY_FALSE;
     f->name = NULL;
     return DY_OBJ(f);
+}
+
+#ifdef DY_MPS
+_Static_assert(offsetof(DyFunction, env) == 7 * sizeof(D), "DyFunction's layout");
+#else
+_Static_assert(offsetof(DyFunction, env) == 6 * sizeof(D), "DyFunction's layout");
+#endif
+
+D dy_make_closure_env(DyEntry entry, D info, size_t env_size, const D *env) {
+#ifdef DY_MPS
+    /* entry, specializers, info, owner, name, env_count, env */
+    size_t n = 6 + env_size;
+#else
+    size_t n = 5 + env_size;
+#endif
+    D fields[6 + 64];
+    D *f = n <= sizeof fields / sizeof fields[0] ? fields : dy_alloc_words(n);
+    f[0] = (D)entry;
+    f[1] = DY_FALSE;
+    f[2] = info;
+    f[3] = DY_FALSE;
+    f[4] = 0;
+#ifdef DY_MPS
+    f[5] = (D)env_size;
+#endif
+    for (size_t i = 0; i < env_size; i++) f[n - env_size + i] = env[i];
+    return DY_OBJ(dy_alloc_init(&dy_wrapper_method, sizeof(DyFunction) + env_size * sizeof(D),
+                                f, n, 0));
 }
 
 void dy_name_method(D f, const char *name) {

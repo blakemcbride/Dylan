@@ -10,21 +10,25 @@ GCC 15). For macOS see [`macOS.md`](macOS.md); for Windows,
 |---|---|---|
 | SBCL | yes | yes |
 | A C compiler with `musttail` (GCC 15+ or Clang 13+) | | yes |
-| The Boehm-Demers-Weiser collector, built for threads (`libgc` and headers) | | yes |
+| The Boehm-Demers-Weiser collector, built for threads (`libgc` and headers) | | only for `dylanc --gc boehm` |
 | `make` | to build `bin/dylan` | yes |
 
 Install them:
 
 ```console
 # Fedora
-$ sudo dnf install sbcl gcc make gc-devel
+$ sudo dnf install sbcl gcc make
 
 # Debian, Ubuntu
-$ sudo apt install sbcl gcc make libgc-dev
+$ sudo apt install sbcl gcc make
 
 # Arch
-$ sudo pacman -S sbcl gcc make gc
+$ sudo pacman -S sbcl gcc make
 ```
+
+The garbage collector is in the tree. To build programs with the
+Boehm-Demers-Weiser collector instead (`dylanc --gc boehm`), also install
+`gc-devel` (Fedora), `libgc-dev` (Debian, Ubuntu) or `gc` (Arch).
 
 Check the C compiler: `gcc --version`. If it is older than GCC 15 (Ubuntu
 24.04 ships GCC 13, Debian 12 GCC 12), install Clang 13 or later
@@ -146,7 +150,7 @@ $ make -C manual/UserManual
 
 | Message | Cause |
 |---|---|
-| `gc.h: No such file or directory` | the collector's headers are missing: install `gc-devel` / `libgc-dev` |
+| `gc.h: No such file or directory` | `--gc boehm` without the Boehm collector's headers: install `gc-devel` / `libgc-dev` |
 | `This C compiler cannot guarantee tail calls (musttail)` | the C compiler is too old: use Clang, GCC 15, or `--trampoline` |
 | `sbcl: not found` | SBCL is not installed or not on `PATH` |
 | `Could not make the runtime library.` | `make` is missing, or the runtime did not compile; run `make -C runtime` to see why |

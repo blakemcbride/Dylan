@@ -58,6 +58,15 @@ PROGRAM.  Answer the list of C files, or NIL after reporting why not."
                                          :output *standard-output*
                                          :error *error-output*)))
 
+(defvar *gc*
+  (if (equal (sb-ext:posix-getenv "DYLAN_GC") "boehm") :boehm :mps)
+  "The collector a program is built with: :MPS, the Memory Pool System
+(runtime/mps), or :BOEHM, the Boehm-Demers-Weiser collector, which must be
+installed.  dylanc --gc sets it; the environment variable DYLAN_GC=boehm
+makes :BOEHM the default, for running the tests with it.")
+
+(defun mps-p () (eq *gc* :mps))
+
 (defparameter *variants*
   '((:gc-stress "-O2 -g -DDY_GC_STRESS")
     (:address "-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -DDY_DEBUG")
@@ -86,23 +95,24 @@ ThreadSanitizer.")
 
 (defun runtime-library (trampoline &key variant (cc "cc") lto)
   "The runtime library's pathname, made if it does not exist or is out of
-date.  A VARIANT, or the library for link-time optimization (LTO), is
-made with the C compiler CC, which the program must be compiled with
-too."
+date.  A VARIANT, or the library for link-time optimization (LTO), or one
+with the Boehm collector, is made with the C compiler CC, which the
+program must be compiled with too."
   (let* ((variant (or variant (and lto :lto)))
-         (directory (and variant
-                         (format nil "build/~(~a~)-~a~:[~;-trampoline~]"
-                                 variant (file-namestring cc) trampoline)))
+         (directory (and (or variant (not (mps-p)))
+                         (format nil "build/~:[~;boehm-~]~@[~(~a~)-~]~a~:[~;-trampoline~]"
+                                 (not (mps-p)) variant (file-namestring cc) trampoline)))
          (target (cond (directory (format nil "~a/libdylan.a" directory))
                        (trampoline "build/libdylan-trampoline.a")
                        (t "build/libdylan.a")))
-         (arguments (append (list "-s" "-C" (namestring *runtime-directory*))
+         (arguments (append (list "-s" "-C" (namestring *runtime-directory*)
+                                  (format nil "GC=~(~a~)" *gc*))
                             (and directory
                                  (list (format nil "VDIR=~a" directory)
                                        (format nil "VFLAGS=~{~a~^ ~}~:[~; -DDY_TRAMPOLINE~]"
-                                               (if (eq variant :lto)
-                                                   (split-words *lto-flags*)
-                                                   (variant-flags variant))
+                                               (cond ((eq variant :lto) (split-words *lto-flags*))
+                                                     (variant (variant-flags variant))
+                                                     (t (list "-O2" "-g")))
                                                trampoline)
                                        (format nil "CC=~a" cc)))
                             (list target))))
@@ -111,7 +121,7 @@ too."
     (merge-pathnames target *runtime-directory*)))
 
 (defun build (files executable &key trampoline (cc "cc") (optimize "-O2") size debug variant
-                                   lto c-file whole)
+                                   lto c-file whole (gc *gc*))
   "Compile FILES to the EXECUTABLE.  The C goes in C-FILE, or
 EXECUTABLE.c, and the files that go with it.  With :SIZE T the executable
 is made small: -Os, the library compiled with the program, and the
@@ -120,8 +130,9 @@ debugging: no optimization, debugging information, and every inline
 operation checking its arguments.  With :LTO T the C compiler optimizes
 the program and the runtime library together when linking.  With :WHOLE
 T the library is compiled with the program, not apart.  VARIANT is one of
-*VARIANTS*, for testing."
-  (let* ((*separate-library* (separate-library-p size whole))
+*VARIANTS*, for testing.  GC is the collector, :BOEHM or :MPS (*GC*)."
+  (let* ((*gc* gc)
+         (*separate-library* (separate-library-p size whole))
          (c-file (or c-file (concatenate 'string (namestring executable) ".c")))
          (c-files (let ((*debug* (or debug (member variant '(:address :thread)))))
                     (compile-files files c-file))))
@@ -152,6 +163,9 @@ built for debugging or testing."
                 "-Wno-unused-label"
                 (format nil "-I~a" (namestring (merge-pathnames "c/" *runtime-directory*))))
           (and trampoline (list "-DDY_TRAMPOLINE"))
+          (and (mps-p)
+               (list "-DDY_MPS"
+                     (format nil "-I~a" (namestring (merge-pathnames "mps/code/" *runtime-directory*)))))
           (and (lto-p lto debug variant) (list "-flto=auto"))))
 
 (defun build-c (c-files executable &key trampoline (cc "cc") (optimize "-O2") size debug
@@ -173,8 +187,9 @@ is compiled once (LIBRARY-OBJECT)."
     (and (every #'identity objects)
          (zerop (run cc (append options
                                 (mapcar #'namestring objects)
-                                (list (namestring library)
-                                      "-lgc" "-lm" "-lpthread" "-o" (namestring executable))))))))
+                                (list (namestring library))
+                                (if (mps-p) '() (list "-lgc"))
+                                (list "-lm" "-lpthread" "-o" (namestring executable))))))))
 
 ;;; The library's object
 

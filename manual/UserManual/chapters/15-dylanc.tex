@@ -5,8 +5,9 @@ The second implementation in this system is a compiler. It reads a whole
 Dylan program, translates it into C, and runs a C compiler to make a
 native executable. The executable needs nothing from SBCL at run time: it
 is an ordinary program linked with a small runtime library written in C,
-with the Boehm-Demers-Weiser garbage collector, and with the system's
-thread library.
+with a garbage collector --- the Memory Pool System, or by choice the
+Boehm-Demers-Weiser collector (Section~\ref{sec:dylanc-gc}) --- and
+with the system's thread library.
 
 This chapter is about using the compiler: the \cmd{bin/dylanc} command
 and every one of its options, the files it writes, the cache it keeps,
@@ -107,6 +108,9 @@ Options:
   --sanitize KIND  for testing: a debug build with the sanitizers, KIND
                    address (AddressSanitizer and UndefinedBehaviorSanitizer)
                    or thread (ThreadSanitizer)
+  --gc NAME        the garbage collector: mps (the default), the Memory Pool
+                   System, generational and moving; or boehm, the installed
+                   Boehm-Demers-Weiser collector (libgc)
   --gc-stress      for testing: a collection every DYLAN_GC_STRESS (default
                    100) allocations
   -h, --help       this
@@ -207,6 +211,13 @@ described below, with the occasions for using it.
   and debuggers, then refer to the C files themselves. Use it when you
   want to step through the generated C rather than the Dylan.
 
+\item[\cmd{-{}-gc} \meta{name}] \index{garbage collection!choosing}
+  The garbage collector the program is built with: \cmd{mps}, the Memory
+  Pool System, the default, which collects by generations and moves
+  objects; or \cmd{boehm}, the Boehm-Demers-Weiser collector, which must
+  be installed. See Section~\ref{sec:dylanc-gc}. The environment variable
+  \code{DYLAN\_GC=boehm} makes \cmd{boehm} the default.
+
 \item[\cmd{-{}-sanitize} \meta{kind}]
   For testing the compiler and runtime: a debug build with
   \meta{kind} \cmd{address} (AddressSanitizer and
@@ -251,8 +262,10 @@ C files:
 \end{description}
 
 The C is linked with \file{runtime/build/libdylan.a}, the runtime library
-compiled from \file{runtime/c/}, and with \cmd{-lgc -lm -lpthread}. With
-\cmd{-k} the files stay after the build:
+compiled from \file{runtime/c/} with the collector in it, and with
+\cmd{-lm -lpthread} (with \cmd{-{}-gc boehm}, the library is
+\file{runtime/build/boehm-\meta{cc}/libdylan.a} and \cmd{-lgc} is
+linked too). With \cmd{-k} the files stay after the build:
 
 \begin{shell}
 $ bin/dylanc -k hello.dyl
@@ -286,9 +299,10 @@ directory:
 
 \begin{shell}
 $ bin/dylanc -C hello.dyl
-$ cc -O2 -std=c11 -pthread -I$DYLAN/runtime/c \
+$ cc -O2 -std=c11 -pthread -DDY_MPS \
+     -I$DYLAN/runtime/c -I$DYLAN/runtime/mps/code \
      hello.c hello-dylan.c hello-dylan-user.c \
-     $DYLAN/runtime/build/libdylan.a -lgc -lm -lpthread -o hello
+     $DYLAN/runtime/build/libdylan.a -lm -lpthread -o hello
 $ ./hello
 Hello, world!
 \end{shell}
@@ -297,7 +311,10 @@ Here \code{\$DYLAN} stands for the root of the source tree. The runtime
 library \file{libdylan.a} must exist; \cmd{make -C runtime} makes it, and
 any build with \cmd{dylanc} makes it too. Add \cmd{-DDY\_TRAMPOLINE} to
 the C compiler's options, and link \file{libdylan-trampoline.a} instead,
-if your C compiler lacks \code{musttail}. The C is C11 with POSIX
+if your C compiler lacks \code{musttail}. For the Boehm collector, leave
+out \cmd{-DDY\_MPS} and the MPS include directory, link
+\file{runtime/build/boehm-cc/libdylan.a} (made by any
+\cmd{dylanc -{}-gc boehm} build), and add \cmd{-lgc}. The C is C11 with POSIX
 threads; \file{runtime/c/dylan.h} checks what it assumes (64-bit
 pointers, arithmetic right shifts) with \code{\_Static\_assert}, and
 checks that the runtime it is compiled against is the version the
@@ -435,10 +452,80 @@ $ DYLAN_GC_STRESS=10 ./hgc
 Hello, world!
 \end{shell}
 
+One of AddressSanitizer's checks is turned off by the runtime itself: its
+detection of a frame used after its function returned, which keeps the
+frames of functions apart from the stack. The collector finds the
+references a program holds by scanning its stack, and would not see those
+frames; an object referred to only from one would be freed, or moved,
+while in use. The runtime supplies the option
+\code{detect\_stack\_use\_after\_return=0} as the sanitizer's default,
+so if you set \code{ASAN\_OPTIONS} yourself, leave that one off.
+
 The test suites use these builds (Appendix~\ref{app:testing}). An
 ordinary Dylan program has no need of them, but a program that misbehaves
 in a way you cannot explain is worth running under them: what they find
 is a bug to report.
+
+\section{The garbage collector}\label{sec:dylanc-gc}
+
+\index{garbage collection!choosing}\index{Memory Pool System}
+\index{Boehm collector}
+A compiled program's memory is managed by one of two collectors, chosen
+when it is built.
+
+\begin{description}
+\item[\cmd{-{}-gc mps}] (the default) The Memory Pool System (MPS),
+  Ravenbrook Limited's collector, written in the first place for
+  Harlequin's Dylan. Its source is in the tree (\file{runtime/mps/},
+  under its own BSD license) and is compiled into the runtime library;
+  nothing need be installed. It is \emph{generational} and
+  \emph{moving}: new objects go in a nursery, a collection of the nursery
+  copies the few that survive out of it and leaves the rest behind
+  without visiting them, and the older generations are collected rarely.
+  The stacks and the program's static data are scanned conservatively,
+  so an object they point to stays in place; the heap itself is scanned
+  exactly. Each thread allocates by bumping a pointer in its own region,
+  without locking.
+\item[\cmd{-{}-gc boehm}] The Boehm-Demers-Weiser collector,
+  \file{libgc}, which must be installed on the system
+  (Section~\ref{sec:start-requirements}). It is \emph{conservative}: it
+  treats any word that looks like a pointer as one, so it needs no
+  knowledge of the program's objects, and objects never move. It
+  collects by marking and sweeping the whole heap, in parallel on two
+  threads, and allocates from per-thread free lists. It runs on more
+  platforms than the MPS, and is the choice where the MPS has no port.
+\end{description}
+
+The MPS is the faster. A program that makes many short-lived objects
+--- lists built and discarded, boxed floats, strings, conditions ---
+gains most, two to three times on such programs, since a collection
+costs in proportion to what survives, not to what was allocated; a
+program that keeps a large heap alive gains from the old generations
+being collected rarely; and a program that allocates little sees no
+difference. The price is memory: a program that allocates heavily uses
+about twice as much under the MPS, whose nursery is 128~MB and whose
+heap may double between collections of everything, and
+Section~\ref{sec:perf-gc} tells how to trade that back. The two
+collectors are the same to the Dylan program, with one visible
+exception: under the MPS an object's identity hash is a number given it
+the first time it is hashed, not its address, since the address changes.
+
+Every object of a program must be built for the same collector, and the
+runtime library for each is kept apart: the MPS one is
+\file{runtime/build/libdylan.a}, and the Boehm one is in
+\file{runtime/build/boehm-\meta{cc}/}, with the variant and
+\cmd{-{}-trampoline} in the name as for testing builds
+(Section~\ref{sec:dylanc-testing-builds}). The testing builds work with
+either collector. Under the MPS, \cmd{-{}-gc-stress} forces a
+collection of every generation, and a ThreadSanitizer build uses the MPS
+without its memory barrier, whose signal handling and the sanitizer's
+would deadlock, so its collections there are not incremental. Setting
+the environment variable \code{DYLAN\_GC=boehm} makes the Boehm
+collector the default, which is how the test suites
+(Appendix~\ref{app:testing}) are run with it. The MPS's behavior can be
+tuned by environment variables, in Section~\ref{sec:perf-gc}. It has
+been built here on Linux on x86-64 and macOS on Apple silicon, and has
+ports to FreeBSD, to Windows with Visual C, and to Linux on ARM64.
 
 \section{Calling the compiler from Lisp}\label{sec:dylanc-lisp}
 
@@ -459,8 +546,9 @@ than its fasl; the package is \code{DYLAN-COMPILER}, nicknamed
   \code{:trampoline}~\code{t}, \code{:cc} (default \code{"cc"}; the
   \code{CC} environment variable is not consulted here),
   \code{:variant} (\code{:address}, \code{:thread} or
-  \code{:gc-stress}), and \code{:c-file}, the name of the main C file
-  (default \meta{executable}\code{.c}). It answers \code{T} if the
+  \code{:gc-stress}), \code{:gc} (\code{:mps} or \code{:boehm}), and
+  \code{:c-file}, the name of the main C file (default
+  \meta{executable}\code{.c}). It answers \code{T} if the
   executable was made and \code{NIL} if not. Diagnostics are written to
   \code{*error-output*}. Unlike \cmd{dylanc}, it leaves the C files in
   place.

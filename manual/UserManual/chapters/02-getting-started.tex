@@ -15,7 +15,7 @@ Steel Bank Common Lisp. The system was developed on SBCL~2.6.3, and any
 recent release should work. The interactive implementation needs nothing
 else but \cmd{make} to build it, and even that can be done without.
 
-The compiler to C needs three more things:
+The compiler to C needs two more things, and can use a third:
 
 \begin{itemize}
 \item \textbf{A C compiler that supports the \code{musttail}
@@ -26,13 +26,16 @@ The compiler to C needs three more things:
   cost in speed. \cmd{dylanc} uses the compiler named by the \code{CC}
   environment variable, or \cmd{cc} if \code{CC} is not set; the
   \cmd{-{}-cc} option names one explicitly.
-\item \textbf{The Boehm-Demers-Weiser garbage collector}, \file{libgc},
-  \emph{built with thread support}, together with its header files. The
-  runtime defines \code{GC\_THREADS} and links with \cmd{-lgc -lm
-  -lpthread}.
 \item \textbf{\cmd{make}} and a POSIX shell. \cmd{bin/dylanc} is a shell
   script, and it builds the C runtime library with \cmd{make} the first
   time it is needed.
+\item Optionally, \textbf{the Boehm-Demers-Weiser garbage collector},
+  \file{libgc}, \emph{built with thread support}, together with its
+  header files, for programs built with \cmd{-{}-gc boehm}
+  (Section~\ref{sec:dylanc-gc}); the runtime then defines
+  \code{GC\_THREADS} and links with \cmd{-lgc -lm -lpthread}. The
+  default collector, the Memory Pool System, is part of the source tree
+  and needs nothing installed.
 \end{itemize}
 
 \paragraph{Checking what you have.} These commands report the versions
@@ -45,25 +48,21 @@ $ gcc --version | head -1
 gcc (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
 $ clang --version | head -1
 clang version 22.1.8 (Fedora 22.1.8-4.fc44)
-$ pkg-config --modversion bdw-gc
-8.2.6
-$ ls /usr/include/gc.h
-/usr/include/gc.h
 \end{shell}
 
-Your version numbers will differ; what matters is that SBCL runs, that
+Your version numbers will differ; what matters is that SBCL runs and that
 one of the C compilers is new enough (or that you plan to use
-\cmd{-{}-trampoline}), and that the collector's header \file{gc.h} is
-present. On Fedora and related systems the collector's development
-package is called \file{gc-devel}; on Debian and Ubuntu it is
-\file{libgc-dev}. The packaged collectors on these systems are normally built
-with thread support. If you build the collector yourself, configure it with
-threads enabled.
+\cmd{-{}-trampoline}). For the Boehm collector, the header \file{gc.h}
+must be present too (\cmd{ls /usr/include/gc.h}). On Fedora and related
+systems its development package is called \file{gc-devel}; on Debian and
+Ubuntu it is \file{libgc-dev}. The packaged collectors on these systems
+are normally built with thread support. If you build the collector
+yourself, configure it with threads enabled.
 
 \begin{notebox}
 The C compiler is needed only to \emph{build} programs. An executable made
-by \cmd{dylanc} needs only the C library and the shared \file{libgc} at
-run time; it does not need SBCL.
+by \cmd{dylanc} needs only the C library at run time (and the shared
+\file{libgc}, if built with \cmd{-{}-gc boehm}); it does not need SBCL.
 \end{notebox}
 
 \section{Getting the source}\label{sec:start-source}

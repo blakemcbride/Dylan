@@ -24,6 +24,11 @@ Also in this tree, and covered by the same notice: dylan-examples.dyl,
 examples-from-book.text, README.thomas, RELEASE, and the three
 transcripts in src/reference/.
 
+One directory is another's work under another license: runtime/mps/ is
+the Memory Pool System, a garbage collector by Ravenbrook Limited, under
+the BSD 2-clause license in runtime/mps/license.txt.  See
+runtime/mps/README.md.
+
                             WHAT THIS MEANS
 
 The following is an informational summary.  It does not modify, qualify or

@@ -9,7 +9,8 @@ The same eleven small programs, run three ways:
   by the Common Lisp implementation (`src/`): compiled to Lisp by
   `dylan:compile-file`, then by SBCL.
 - **C Dylan** — the same Dylan programs compiled to C by `bin/dylanc`
-  (`compiler/`), then by gcc `-O2`.
+  (`compiler/`), then by gcc `-O2`, with the Memory Pool System, the
+  default collector.
 
 Hand-written C (`bench/reference.c`, gcc `-O2`) is shown too, as the
 floor.
@@ -23,47 +24,52 @@ SBCL.
 
 | Benchmark | SBCL | CL Dylan | C Dylan | C | CL Dylan ÷ SBCL | C Dylan ÷ SBCL |
 |---|---:|---:|---:|---:|---:|---:|
-| table — hash tables: insert, look up, update (2,000,000) | 108 | 1,585 | 120 | 118 | 14.7 | 1.1 |
-| sort — sorting with `<` and with a method (1,000,000) | 362 | 1,154 | 343 | 150 | 3.2 | 0.95 |
-| string — building strings (2,000,000) | 62 | 540 | 135 | 28 | 8.7 | 2.2 |
-| deque — a deque as a queue (3,000,000) | 20 | 348 | 58 | 22 | 17 | 2.9 |
-| stretchy — growing a stretchy vector (3,000,000) | 21 | 285 | 37 | 1 | 14 | 1.8 |
-| range — iterating over a range (10,000,000) | 22 | 469 | 51 | 2 | 21 | 2.3 |
-| exit — non-local exits (3,000,000) | 18 | 264 | 11 | 38 | 15 | 0.61 |
-| condition — signalling and handling errors (300,000) | 7 | 186 | 48 | 2 | 27 | 6.9 |
-| next-method — `next-method` chains (3,000,000) | 80 | 407 | 52 | 26 | 5.1 | 0.65 |
-| tak — recursion with three arguments (3,000) | 344 | 4,401 | 206 | 164 | 13 | 0.60 |
-| float — Mandelbrot set, floating point (3,000) | 5,443 | 8,930 | 333 | 225 | 1.6 | 0.06 |
+| table — hash tables: insert, look up, update (2,000,000) | 108 | 1,585 | 64 | 118 | 14.7 | 0.59 |
+| sort — sorting with `<` and with a method (1,000,000) | 362 | 1,154 | 285 | 150 | 3.2 | 0.79 |
+| string — building strings (2,000,000) | 62 | 540 | 85 | 28 | 8.7 | 1.4 |
+| deque — a deque as a queue (3,000,000) | 20 | 348 | 42 | 22 | 17 | 2.1 |
+| stretchy — growing a stretchy vector (3,000,000) | 21 | 285 | 18 | 1 | 14 | 0.86 |
+| range — iterating over a range (10,000,000) | 22 | 469 | 20 | 2 | 21 | 0.91 |
+| exit — non-local exits (3,000,000) | 18 | 264 | 10 | 38 | 15 | 0.56 |
+| condition — signalling and handling errors (300,000) | 7 | 186 | 27 | 2 | 27 | 3.9 |
+| next-method — `next-method` chains (3,000,000) | 80 | 407 | 58 | 26 | 5.1 | 0.73 |
+| tak — recursion with three arguments (3,000) | 344 | 4,401 | 137 | 164 | 13 | 0.40 |
+| float — Mandelbrot set, floating point (3,000) | 5,443 | 8,930 | 252 | 225 | 1.6 | 0.05 |
 
 The size each was run at is in parentheses. All three answered the same
 on every benchmark.
 
-**Totals:** SBCL 6.5 s, Common Lisp Dylan 18.6 s, C Dylan 1.4 s (and C
+**Totals:** SBCL 6.5 s, Common Lisp Dylan 18.6 s, C Dylan 1.0 s (and C
 0.78 s).
 
 ## What the numbers say
 
-**C Dylan is about as fast as plain SBCL, and on the numeric and calling
-benchmarks faster.** It beats SBCL on tak, next-method, exit, sort and,
-by a wide margin, float, and is within a factor of three of it on
-everything else except condition. Against hand-written C it is within a
-factor of 2.6 on all but the string, stretchy, range and condition
-benchmarks, and is faster on exit.
+**C Dylan is faster than plain SBCL on eight of the eleven benchmarks,
+and on the numeric and calling benchmarks much faster.** It beats SBCL
+on tak, next-method, exit, sort, table, stretchy, range and, by a wide
+margin, float; it is slower on string, deque and condition. Against
+hand-written C it is within a factor of 2.2 on all but the string,
+stretchy, range and condition benchmarks, and is faster on table, exit
+and tak.
 
-- *float* (16 times faster than SBCL): the compiler infers that the
+- *float* (22 times faster than SBCL): the compiler infers that the
   values are `<double-float>`s and keeps them in C `double` variables, with
   no allocation. The plain Lisp, with no declarations, has SBCL box every
   intermediate float.
 - *exit* (faster than SBCL and than C): an exit taken from the loop of the
   function that established it is compiled to a jump, as SBCL compiles its
   `return-from`, where the C uses `setjmp`/`longjmp`.
-- *tak*, *next-method*: generic functions with few methods are dispatched
-  by compiled decision trees or called directly, small integers are
-  unboxed words, and `next-method` is a direct call of the next method.
-- *condition* (7 times SBCL): signalling makes a condition object and
+- *tak*, *next-method*, *table*: generic functions with few methods are
+  dispatched by compiled decision trees or called directly, small
+  methods are inlined, small integers are unboxed words, and
+  `next-method` is a direct call of the next method.
+- *condition* (3.9 times SBCL): signalling makes a condition object and
   searches the handler chain, and the handler is reached by a non-local
   exit with `_setjmp`; SBCL's `handler-case` is cheaper here.
-- *stretchy*, *range*: the hand-written C and SBCL loops are a handful of
+- *string*, *deque*: each is a stream of small allocations the collector
+  handles well, but the library's `concatenate` and the deque's generic
+  functions do more than SBCL's specialized code.
+- *stretchy*, *range*: the hand-written C loops are a handful of
   instructions, which the C compiler sometimes reduces further; C Dylan
   still calls the library's generic functions for each element.
 
@@ -75,14 +81,20 @@ guards, and carries Dylan's multiple values and next-method arguments on
 every call. It is closest on float (1.6), where boxed floats dominate both, and
 on sort (3.2) and next-method (5.1).
 
-**C Dylan runs from 3.4 to 27 times faster than Common Lisp Dylan** (13
+**C Dylan runs from 4 to 35 times faster than Common Lisp Dylan** (19
 times overall), the price of the dynamic language: a static program lets
 the compiler know every class and method.
 
 ## The machine
 
 - Intel Core i9-14900KF, 32 hardware threads, Linux 7.2.9 (Fedora 44)
-- SBCL 2.6.3; gcc 16.2.1; the Boehm-Demers-Weiser collector 8.2.6
+- SBCL 2.6.3; gcc 16.2.1; the Memory Pool System 1.118.0 (`dylanc`'s
+  default collector). With the Boehm-Demers-Weiser collector 8.2.6
+  (`dylanc --gc boehm`) the same C Dylan programs took 89, 328, 129, 46,
+  26, 20, 10, 63, 58, 141 and 322 ms: the Memory Pool System is faster
+  on all but deque, range, exit and next-method, where the two are within
+  a few milliseconds, and uses about twice the memory on the programs
+  that allocate most.
 
 Times on another machine will differ, and benchmarks that take a few
 milliseconds vary by a millisecond or two between runs.

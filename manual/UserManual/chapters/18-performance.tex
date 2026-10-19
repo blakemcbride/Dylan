@@ -439,13 +439,50 @@ millisecond count, as the benchmark driver uses it.
 
 \section{Tuning the garbage collector}\label{sec:perf-gc}
 
-\index{garbage collection!tuning}
+\index{garbage collection!tuning}\index{Memory Pool System!tuning}
 The collector is configured by environment variables, which it reads
-when the program starts; nothing in Dylan needs to change. These were
-checked with this collector (version 8.2.6), with a program that builds
-and discards 200 lists of 100\,000 elements. \code{GC\_PRINT\_STATS=1}
-makes the collector report each collection on the standard error, which
-is how the counts below were made.
+when the program starts; nothing in Dylan needs to change. The Memory
+Pool System, the default collector (Section~\ref{sec:dylanc-gc}), reads
+these:
+
+\begin{description}
+\item[\code{DYLAN\_MPS\_NURSERY}] The nursery's size in kilobytes,
+  131\,072 (128~MB) by default. New objects go here, and it is collected
+  when full: a larger nursery collects less often, and more of what it
+  holds has died by then. A much smaller one collects too often, each
+  time protecting again the older objects the program is writing into
+  and taking a fault on each page it then writes; with 32~MB, programs
+  that build and keep writing into a large table or vector ran slower
+  than under the Boehm collector, and with 128~MB faster. The nursery is
+  also the floor of the memory a program that allocates heavily uses: a
+  program that must run in little memory can set, say, 32\,768.
+\item[\code{DYLAN\_MPS\_EXTEND}] How much memory, in bytes, a pool
+  takes from the system at a time: a megabyte by default. The
+  collector's own default, which is small, costs a system call for each.
+\item[\code{DYLAN\_MPS\_SPARE}] The fraction of the memory the
+  collector holds that it may keep unused rather than return to the
+  system, between 0 and 1; the default is 1, keeping everything. Memory
+  returned must be faulted in afresh when the nursery next fills, which
+  for an allocation-heavy program took longer than the collecting: with
+  0.75, the MPS's own default, the benchmarks of
+  Section~\ref{sec:perf-benchmarks} took 15 to 20 percent longer and used
+  a quarter to a half less memory. A program's memory under the MPS is otherwise
+  about twice what it is under the Boehm collector, since the collector
+  lets the heap double between collections of everything.
+\item[\code{DYLAN\_MPS\_PAUSE}] The longest the collector should
+  work at once, in seconds, before giving the program a turn; the
+  collector's default is 0.1. The MPS collects incrementally, protecting
+  the memory it has yet to scan; a shorter pause means more interruptions
+  and more protection faults.
+\end{description}
+
+\paragraph{The Boehm-Demers-Weiser collector.} \index{Boehm collector!tuning}
+A program built with \cmd{-{}-gc boehm} reads the Boehm collector's
+variables instead. These were checked with that collector (version
+8.2.6), with a program that builds and discards 200 lists of 100\,000
+elements. \code{GC\_PRINT\_STATS=1} makes the collector report each
+collection on the standard error, which is how the counts below were
+made.
 
 \begin{description}
 \item[\code{GC\_INITIAL\_HEAP\_SIZE}] The heap's starting size, in bytes
@@ -461,12 +498,9 @@ is how the counts below were made.
   more and collect less. With 1, the test program made 101 collections
   instead of 202 and used about 13~MB instead of 7~MB.
 \item[\code{GC\_MARKERS}] How many threads mark in parallel during a
-  collection. By default the collector uses one per processor, up to a
-  limit (on the 32-thread test machine it started 15 helper threads
-  besides the collecting one); \code{GC\_MARKERS=1}
-  turns parallel marking off. For a program with a small heap that
-  collects often, parallel marking can cost more than it saves; the test
-  program ran in 0.17~s with one marker and 0.18~s with the default.
+  collection. The runtime sets two, since more spend longer waiting on
+  each other than marking; \code{GC\_MARKERS=1} turns parallel marking
+  off, and a larger number is allowed.
 \item[\code{GC\_PRINT\_STATS}] Set to 1 to report each collection.
 \end{description}
 
@@ -478,7 +512,7 @@ $ GC_INITIAL_HEAP_SIZE=64M GC_PRINT_STATS=1 ./alloc 2>&1 |
 10
 \end{shell}
 
-The collector's own documentation lists further variables. As with the
+The collectors' own documentation lists further variables. As with the
 compiler's options, measure your program before and after: the right
 settings depend on how much it allocates and how much it keeps.
 

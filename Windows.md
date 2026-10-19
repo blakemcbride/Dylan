@@ -20,12 +20,13 @@ Then, in the Ubuntu shell:
 
 ```console
 $ sudo apt update
-$ sudo apt install sbcl clang make libgc-dev git
+$ sudo apt install sbcl clang make git
 $ export CC=clang
 ```
 
 (Clang, because Ubuntu 24.04's GCC 13 lacks `musttail`; add the `export`
-to `~/.bashrc`.) Clone the repository inside the Linux file system — not
+to `~/.bashrc`. The garbage collector is in the tree; for `dylanc --gc
+boehm`, the Boehm-Demers-Weiser collector, also install `libgc-dev`.) Clone the repository inside the Linux file system — not
 under `/mnt/c`, which is much slower — and follow [`BUILD.md`](BUILD.md):
 
 ```console

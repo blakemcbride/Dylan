@@ -181,11 +181,12 @@ all static C data emitted by the compiler, so a program does no work at
 startup to build its class hierarchy.
 
 \paragraph{Memory.}
-Objects are allocated by the Boehm-Demers-Weiser collector
-(Section~\ref{sec:internals-gc}): those that can hold pointers with
-\code{GC\_MALLOC}, and those that cannot --- strings, float boxes,
-ratios --- with \code{GC\_MALLOC\_ATOMIC}, so that the collector does
-not scan them.
+Objects are allocated by the garbage collector
+(Section~\ref{sec:internals-gc}), through the functions
+\code{dy\_alloc} and its kin in \file{dylan.h}, which hide which
+collector it is: those that can hold pointers apart from those that
+cannot --- strings, float boxes, ratios --- so that the collector does
+not scan the latter.
 
 \section{The calling convention}\label{sec:internals-calls-convention}
 
@@ -415,29 +416,62 @@ back into that Dylan code, so the error is an ordinary
 
 \section{The garbage collector}\label{sec:internals-gc}
 
-\index{garbage collection}\index{Boehm collector}
-Memory is managed by the Boehm-Demers-Weiser collector, \file{libgc},
-built for threads. It is a \emph{conservative} collector: it treats any
-word on a stack, in a register or in a scanned object that looks like a
-pointer into the heap as one. A tagged integer or character that
-happens to look like such a pointer can only keep an object alive longer
-than necessary; it can do no harm. Strings
-and float boxes are allocated atomic so that their contents are not
-mistaken for pointers. Each thread's state --- the values buffer, the
-argument area, the dynamic chain --- is allocated uncollectable, so the
-collector scans it and sees pointers held there.
+\index{garbage collection}\index{Memory Pool System}
+Memory is managed by the Memory Pool System in \file{runtime/mps/},
+compiled as one C file into the runtime library, which is built with
+\code{DY\_MPS}. It is a moving collector, so it must know every object's
+layout: \file{runtime/c/gc-mps.c} gives it an \emph{object format} ---
+for each kind of object, its size, the words of it that are references,
+and how to leave a forwarding pointer or padding where an object was ---
+and the \emph{roots}: the program's static data (found from the linker's
+symbols on Linux, and from the Mach-O segments on macOS) and each
+thread's stack and registers, scanned conservatively, and each thread's
+state and thread variables, allocated outside the heap and registered
+as a root. A tagged integer or character on a stack that happens to look
+like a pointer into the heap can only keep an object alive, and in
+place, longer than necessary; it can do no harm.
 
-The collector does mark-and-sweep collection, in parallel on several
-processors, and allocates small objects from thread-local free lists
-without locking. Its behavior can be tuned with environment variables
-(Chapter~\ref{ch:performance}).
+Objects go in five \emph{pools}: AMC, generational and moving, for
+objects that may hold references; AMCZ for those that do not (strings,
+floats, ratios), which the collector never scans; AMS, which does not
+move, for \code{<thread>} objects, since a thread's state points to its
+own; LO, which is neither moved nor protected, for objects holding a
+mutex or condition variable the kernel uses; and AWL, weak, for the
+table of identity hashes. Each thread has its own \emph{allocation
+points} in AMC and AMCZ, from which it allocates by bumping a pointer;
+the slow path, when the point's buffer is empty, enters the collector.
+An object's fields are filled in before it is committed to the
+collector, which may move it or ask for it to be allocated again.
+Because the collector moves objects, a Dylan object's identity hash
+cannot be its address: \code{\%object-hash} gives each object a number
+the first time it is asked, kept in a table with weak keys, rebuilt when
+the collector reports that keys have moved. The collector's behavior can
+be tuned with environment variables (Chapter~\ref{ch:performance}).
+
+\paragraph{The Boehm-Demers-Weiser collector.} \index{Boehm collector}
+With \cmd{dylanc -{}-gc boehm} (Section~\ref{sec:dylanc-gc}) the
+runtime is built without \code{DY\_MPS} and memory is managed instead by
+\file{libgc}, built for threads. It is a \emph{conservative} collector:
+it treats any word on a stack, in a register or in a scanned object that
+looks like a pointer into the heap as one, so it needs no object format.
+Strings and float boxes are allocated atomic so that their contents are
+not mistaken for pointers. Each thread's state --- the values buffer, the
+argument area, the dynamic chain --- is allocated uncollectable, so the
+collector scans it and sees pointers held there. The collector does
+mark-and-sweep collection, in parallel on two threads, and allocates
+small objects from thread-local free lists without locking.
+
+The functions \code{dy\_alloc} and \code{dy\_alloc\_init} in
+\file{dylan.h} allocate with either collector.
 
 \section{Threads}\label{sec:internals-threads}
 
 \index{threads!implementation}
+Each thread registers itself and its stack with the collector as it
+starts, and makes its allocation points (under the Boehm collector,
 \file{dylan.h} defines \code{GC\_THREADS} and includes \file{gc.h}
 before \file{pthread.h}, so \code{pthread\_create} goes through the
-collector, which registers each thread's stack. Each thread has one
+collector, which registers each thread's stack). Each thread has one
 \code{\_Thread\_local} pointer, \code{dy\_thread}, to its state: the
 values buffer, the argument area, the dynamic chain, its next method,
 its pending tail call in trampoline mode, its \code{<thread>} object,

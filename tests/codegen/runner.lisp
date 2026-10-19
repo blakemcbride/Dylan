@@ -59,8 +59,11 @@
             (get-output-stream-string err))))
 
 (defparameter *run-environment*
-  "ulimit -s 256; DYLAN_GC_STRESS=1000 ASAN_OPTIONS=detect_stack_use_after_return=0:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 TSAN_OPTIONS=halt_on_error=1"
-  "What each test program runs with.")
+  "ulimit -s 256; export DYLAN_GC_STRESS=1000 ASAN_OPTIONS=detect_stack_use_after_return=0:detect_leaks=0 UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 TSAN_OPTIONS=halt_on_error=1"
+  "What each test program runs with.  The variables are exported, since
+assignments on their own, before the semicolon, would stay the shell's.
+AddressSanitizer's fake stack would hide references from the collectors:
+the runtime turns it off itself (object.c), and this says so too.")
 
 (defun run-case (case configurations debug mode)
   "A list of failure descriptions for CASE, built for MODE."
@@ -95,7 +98,7 @@
                                                    :optimize optimize :variant variant))
                          (list (format nil "~a: the C compiler failed on ~a" config c-file))
                          (multiple-value-bind (status out err)
-                             (run-captured (format nil "~a; ~:[~;GC_MARKERS=1 ~]exec ~a" *run-environment*
+                             (run-captured (format nil "~a; ~:[~;export GC_MARKERS=1; ~]exec ~a" *run-environment*
                                                    ;; Parallel marking, collecting
                                                    ;; this often, only spins.
                                                    (eq variant :gc-stress) exe))

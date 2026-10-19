@@ -81,8 +81,12 @@ check "--no-lines" "$dylanc" -k --no-lines -o nolines greet.dyl main.dyl
 check "--no-lines writes none" sh -c '! grep -q "#line" nolines-dylan-user.c'
 check "-C" "$dylanc" -C -o conly greet.dyl main.dyl
 check "-C writes C only" test -f conly.c -a ! -e conly
-check "-C C compiles by hand" sh -c "cc -O2 -std=c11 -pthread -I'$here/../../runtime/c' conly.c conly-dylan.c conly-dylan-user.c '$here/../../runtime/build/libdylan.a' -lgc -lm -lpthread -o byhand"
+check "-C C compiles by hand" sh -c "cc -O2 -std=c11 -pthread -DDY_MPS -I'$here/../../runtime/c' -I'$here/../../runtime/mps/code' conly.c conly-dylan.c conly-dylan-user.c '$here/../../runtime/build/libdylan.a' -lm -lpthread -o byhand"
 check "-C C runs" output_is "$expected" ./byhand
+check "--gc mps" "$dylanc" --gc mps -o withmps greet.dyl main.dyl
+check "--gc mps runs" output_is "$expected" ./withmps
+check "--gc boehm" "$dylanc" --gc boehm -o withboehm greet.dyl main.dyl
+check "--gc boehm runs" output_is "$expected" ./withboehm
 for o in -O0 -O1 -O3 -Os -g; do
     check "$o" "$dylanc" $o -o opt greet.dyl main.dyl
     check "$o runs" output_is "$expected" ./opt

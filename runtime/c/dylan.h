@@ -20,10 +20,15 @@
  * runtime refers to the built-in classes it needs by the names declared
  * below.
  *
- * Memory is the Boehm-Demers-Weiser collector, built for threads; objects
- * that hold no pointers (strings, floats, ratios) are allocated atomic so
- * the collector does not scan them.  This file must be included before
- * <pthread.h> so that threads are created through the collector.
+ * Memory is the Memory Pool System (gc-mps.c) when DY_MPS is defined, as
+ * it is by default: a generational collector that moves objects, scanning
+ * the stacks conservatively and the heap exactly.  Otherwise (dylanc --gc
+ * boehm) it is the Boehm-Demers-Weiser collector, built for threads;
+ * objects that hold no pointers (strings, floats, ratios) are allocated
+ * atomic so the collector does not scan them, and this file must be
+ * included before <pthread.h> so that threads are created through the
+ * collector.  Everything allocates through the functions of "Allocation"
+ * below, which hide which.
  *
  * C11 and POSIX (threads, open_memstream).  The extensions of GCC and
  * Clang it uses are behind the macros of "Compilers" below, which fall
@@ -43,14 +48,20 @@
 #define _XOPEN_SOURCE 700
 #endif
 
+#ifdef DY_MPS
+#include "mps.h"
+#include <stdatomic.h>
+#include <string.h>
+#else
 #define GC_THREADS 1
 #include <gc.h>
+#endif
 
 /* With DY_GC_STRESS, a collection every DYLAN_GC_STRESS (an environment
  * variable, default 100) allocations, to find what the collector does not
  * see (CompilerPlan.md, Phase 11). */
+#if defined(DY_GC_STRESS) && !defined(DY_MPS)
 void dy_gc_stress(void);
-#ifdef DY_GC_STRESS
 #undef GC_MALLOC
 #undef GC_MALLOC_ATOMIC
 #undef GC_MALLOC_UNCOLLECTABLE
@@ -327,6 +338,164 @@ _Noreturn void dy_division_by_zero(void);
 
 /* ---------------------------------------------------------- Allocation */
 
+/*
+ * dy_alloc            an object that may hold pointers, cleared, of a kind
+ *                     whose size its wrapper and fixed fields give
+ * dy_alloc_sized      the same, with the size field (the second word, a
+ *                     D) set: vectors
+ * dy_alloc_atomic     an object holding no pointers to collected memory,
+ *                     which the collector does not clear: every byte must
+ *                     be set
+ * dy_alloc_atomic_sized   the same, with the size field set: strings
+ * dy_alloc_fixed      an object that may hold pointers and never moves
+ * dy_alloc_fixed_atomic   one that holds none, never moves, and is never
+ *                     protected, so that system calls may use its memory
+ * dy_alloc_words, dy_alloc_bytes   scratch memory, cleared or not, alive
+ *                     while the stack refers to it
+ * dy_alloc_root, dy_free_root      memory outside the heap that the
+ *                     collector scans, cleared
+ *
+ * With the MPS an object must be complete when it is committed, so the
+ * size of a variable-sized object is set here, not by the caller.
+ */
+#ifdef DY_MPS
+
+enum { DY_POOL_EXACT, DY_POOL_LEAF, DY_POOL_FIXED, DY_POOL_FIXED_LEAF };
+
+#define DY_ALIGN(n) (((n) + 7) & ~(size_t)7)
+
+/* mps_commit, with what the MPS's macro leaves out: compiler fences, so
+ * that the stores initializing the object come before it is declared
+ * committed (the object's words are D's, the allocation point's are
+ * pointers, and so the compiler may otherwise reorder them), and that
+ * declaring comes before the test of the trap.  Without the first, a
+ * barrier hit on one of those stores would have the MPS scan an object
+ * whose header is not there yet. */
+mps_res_t dy_mps_fill(mps_addr_t *p, mps_ap_t ap, size_t bytes);   /* gc-mps.c */
+
+/* mps_reserve, but in integers: the MPS's macro adds to ap->alloc, which
+ * is null while the point is empty, and that is undefined in C. */
+static inline bool dy_mps_reserve(mps_addr_t *p, mps_ap_t ap, size_t bytes) {
+    uintptr_t alloc = (uintptr_t)ap->alloc, next = alloc + bytes;
+    if (next > alloc && next <= (uintptr_t)ap->limit) {
+        ap->alloc = (mps_addr_t)next;
+        *p = ap->init;
+        return true;
+    }
+    return dy_mps_fill(p, ap, bytes) == MPS_RES_OK;
+}
+
+static inline bool dy_mps_commit(mps_ap_t ap, mps_addr_t p, size_t bytes) {
+    atomic_signal_fence(memory_order_seq_cst);
+    ap->init = ap->alloc;
+    atomic_signal_fence(memory_order_seq_cst);
+    return ap->limit != 0 || mps_ap_trip(ap, p, bytes);
+}
+
+/* gc-mps.c */
+extern _Thread_local mps_ap_t dy_mps_ap[2];   /* the thread's: EXACT, LEAF */
+void *dy_mps_alloc_shared(int pool, DyWrapper *wrapper, size_t bytes);
+_Noreturn void dy_mps_out_of_memory(void);
+void dy_mps_stress(void);
+void *dy_alloc_root(size_t bytes);
+void dy_free_root(void *p);
+
+/* BYTES in the thread's POOL, DY_POOL_EXACT (cleared) or DY_POOL_LEAF,
+ * with WRAPPER and VALUE at byte OFFSET, if that is not 0. */
+static inline void *dy_mps_alloc(int pool, DyWrapper *wrapper, size_t bytes,
+                                 size_t offset, D value) {
+#ifdef DY_GC_STRESS
+    dy_mps_stress();
+#endif
+    mps_ap_t ap = dy_mps_ap[pool];
+    bytes = DY_ALIGN(bytes);
+    mps_addr_t p;
+    do {
+        if (!dy_mps_reserve(&p, ap, bytes)) dy_mps_out_of_memory();
+        if (pool == DY_POOL_EXACT) memset(p, 0, bytes);
+        ((DyHeader *)p)->wrapper = wrapper;
+        if (offset) *(D *)((char *)p + offset) = value;
+    } while (!dy_mps_commit(ap, p, bytes));
+    return p;
+}
+
+static inline void *dy_alloc(DyWrapper *wrapper, size_t bytes) {
+    return dy_mps_alloc(DY_POOL_EXACT, wrapper, bytes, 0, 0);
+}
+
+/* An object of BYTES in DY_POOL_EXACT whose words after the header are
+ * FIELDS, then FILL: its references are in place before it is committed.
+ * The MPS can scan an object the moment it is committed and trust what
+ * it found while the thread is still allocating beside it, so writing
+ * references into a new object afterwards can go unseen; whatever a
+ * constructor knows, it stores here. */
+static inline void *dy_alloc_init(DyWrapper *wrapper, size_t bytes, const D *fields,
+                                  size_t nfields, D fill) {
+#ifdef DY_GC_STRESS
+    dy_mps_stress();
+#endif
+    mps_ap_t ap = dy_mps_ap[DY_POOL_EXACT];
+    bytes = DY_ALIGN(bytes);
+    size_t words = bytes / sizeof(D);
+    mps_addr_t p;
+    do {
+        if (!dy_mps_reserve(&p, ap, bytes)) dy_mps_out_of_memory();
+        D *w = p;
+        w[0] = (D)wrapper;
+        size_t i = 1;
+        for (; i <= nfields && i < words; i++) w[i] = fields[i - 1];
+        for (; i < words; i++) w[i] = fill;
+    } while (!dy_mps_commit(ap, p, bytes));
+    return p;
+}
+
+static inline void *dy_alloc_atomic(DyWrapper *wrapper, size_t bytes) {
+    return dy_mps_alloc(DY_POOL_LEAF, wrapper, bytes, 0, 0);
+}
+
+static inline void *dy_alloc_sized(DyWrapper *wrapper, size_t bytes, D size) {
+    return dy_mps_alloc(DY_POOL_EXACT, wrapper, bytes, sizeof(D), size);
+}
+
+static inline void *dy_alloc_atomic_sized(DyWrapper *wrapper, size_t bytes, D size) {
+    return dy_mps_alloc(DY_POOL_LEAF, wrapper, bytes, sizeof(D), size);
+}
+
+static inline void *dy_alloc_fixed(DyWrapper *wrapper, size_t bytes) {
+    return dy_mps_alloc_shared(DY_POOL_FIXED, wrapper, bytes);
+}
+
+static inline void *dy_alloc_fixed_atomic(DyWrapper *wrapper, size_t bytes) {
+    return dy_mps_alloc_shared(DY_POOL_FIXED_LEAF, wrapper, bytes);
+}
+
+/* In a vector or a byte string, which the stack's reference to their
+ * data keeps alive and in place. */
+static inline D *dy_alloc_words(size_t n) {
+    extern DyWrapper dy_wrapper_simple_object_vector;
+    D *v = dy_alloc_sized(&dy_wrapper_simple_object_vector, (2 + n) * sizeof(D), DY_INT(n));
+    return v + 2;
+}
+
+static inline char *dy_alloc_bytes(size_t n) {
+    extern DyWrapper dy_wrapper_byte_string;
+    char *s = dy_alloc_atomic_sized(&dy_wrapper_byte_string, 2 * sizeof(D) + n + 1, DY_INT(n));
+    return s + 2 * sizeof(D);
+}
+
+#else
+
+static inline void *dy_alloc_init(DyWrapper *wrapper, size_t bytes, const D *fields,
+                                  size_t nfields, D fill) {
+    D *w = GC_MALLOC(bytes);
+    if (!w) dy_error("out of memory", 0);
+    size_t words = bytes / sizeof(D), i = 1;
+    w[0] = (D)wrapper;
+    for (; i <= nfields && i < words; i++) w[i] = fields[i - 1];
+    for (; i < words; i++) w[i] = fill;
+    return w;
+}
+
 static inline void *dy_alloc(DyWrapper *wrapper, size_t bytes) {
     DyHeader *object = GC_MALLOC(bytes);
     if (!object) dy_error("out of memory", 0);
@@ -334,14 +503,49 @@ static inline void *dy_alloc(DyWrapper *wrapper, size_t bytes) {
     return object;
 }
 
-/* For objects holding no pointers to collected memory.  The collector
- * does not clear these, so every byte must be set. */
 static inline void *dy_alloc_atomic(DyWrapper *wrapper, size_t bytes) {
     DyHeader *object = GC_MALLOC_ATOMIC(bytes);
     if (!object) dy_error("out of memory", 0);
     object->wrapper = wrapper;
     return object;
 }
+
+static inline void *dy_alloc_sized(DyWrapper *wrapper, size_t bytes, D size) {
+    D *object = dy_alloc(wrapper, bytes);
+    object[1] = size;
+    return object;
+}
+
+static inline void *dy_alloc_atomic_sized(DyWrapper *wrapper, size_t bytes, D size) {
+    D *object = dy_alloc_atomic(wrapper, bytes);
+    object[1] = size;
+    return object;
+}
+
+#define dy_alloc_fixed dy_alloc
+#define dy_alloc_fixed_atomic dy_alloc_atomic
+
+static inline D *dy_alloc_words(size_t n) {
+    D *words = GC_MALLOC(n * sizeof(D));
+    if (!words) dy_error("out of memory", 0);
+    return words;
+}
+
+static inline char *dy_alloc_bytes(size_t n) {
+    char *bytes = GC_MALLOC_ATOMIC(n);
+    if (!bytes) dy_error("out of memory", 0);
+    return bytes;
+}
+
+static inline void *dy_alloc_root(size_t bytes) {
+    void *p = GC_MALLOC_UNCOLLECTABLE(bytes);
+    if (!p) dy_error("out of memory", 0);
+    return p;
+}
+
+static inline void dy_free_root(void *p) { GC_FREE(p); }
+
+#endif
 
 /* ------------------------------------------------- Classes of objects */
 
@@ -540,6 +744,10 @@ typedef struct DyFunction {        /* <method>                          */
                                       of; 0 or #f if none                */
     const char *name;              /* a predefined method's Dylan name,
                                       or NULL; how it prints (chapter 8) */
+#ifdef DY_MPS
+    intptr_t env_count;            /* how many ENV holds, for the
+                                      collector; 0 for a static method   */
+#endif
     D env[];                       /* a closure's free variables         */
 } DyFunction;
 
@@ -602,6 +810,10 @@ typedef struct DyThread {
                                       a thread other than the main one   */
     D *thread_variables;           /* its values of the program's thread
                                       variables                          */
+#ifdef DY_MPS
+    mps_thr_t mps_thread;
+    mps_root_t stack_root;
+#endif
 } DyThread;
 
 /* ------------------------------------------------------------- Control
@@ -643,6 +855,16 @@ extern _Thread_local DyThread *dy_thread;
 void dy_init_thread(void);
 void dy_end_thread(void);
 
+#ifdef DY_MPS
+/* gc-mps.c */
+void dy_gc_init(void);
+void dy_gc_collect(void);
+void dy_mps_thread_start(void);
+void dy_mps_thread_end(void);
+struct DyThreadSync *dy_mps_make_thread_sync(void);
+D dy_object_hash(D x);
+#endif
+
 /* Markers no Dylan program can see */
 extern DyHeader dy_unbound_object, dy_unsupplied_object, dy_tail_call_object;
 #define DY_UNBOUND     DY_OBJ(&dy_unbound_object)
@@ -679,6 +901,10 @@ static inline DyEntry dy_entry(D f) {
 
 D dy_make_closure(DyEntry entry, size_t env_size);
 
+/* A closure of ENTRY whose function-arguments info is INFO and whose
+ * environment is the ENV_SIZE values of ENV, complete when made. */
+D dy_make_closure_env(DyEntry entry, D info, size_t env_size, const D *env);
+
 /* Give the method F, the value of a predefined variable of the DYLAN
  * module, that variable's NAME, unless it has an owner or a name. */
 void dy_name_method(D f, const char *name);
@@ -706,6 +932,17 @@ static inline D dy_init_instance(void *buffer, DyWrapper *wrapper) {
 }
 
 /* A cell holds a variable that is both captured and assigned. */
+#ifdef DY_MPS
+typedef struct DyCell {
+    DyWrapper *wrapper;
+    D value;
+} DyCell;
+extern DyWrapper dy_wrapper_cell;
+static inline D dy_make_cell(D value) {
+    return DY_OBJ(dy_alloc_init(&dy_wrapper_cell, sizeof(DyCell), &value, 1, 0));
+}
+#define DY_CELL(c) (((DyCell *)(c))->value)
+#else
 static inline D dy_make_cell(D value) {
     D *cell = GC_MALLOC(sizeof(D));
     if (!cell) dy_error("out of memory", 0);
@@ -713,6 +950,7 @@ static inline D dy_make_cell(D value) {
     return (D)cell;
 }
 #define DY_CELL(c) (*(D *)(c))
+#endif
 
 /* The arguments from index START on, as a list. */
 D dy_collect_arguments(intptr_t argc, intptr_t start, D a0, D a1, D a2, D a3);
@@ -843,9 +1081,28 @@ typedef struct DyThreadObject {    /* <thread>                          */
     D condition;                   /* the condition that ended it, or #f  */
     int done;
     int main;
+#ifdef DY_MPS
+    /* Kept apart, in memory the collector never protects, since the
+       kernel cannot take a fault on a mutex in a system call. */
+    struct DyThreadSync *sync;
+#else
     pthread_mutex_t lock;          /* with ENDED, for join-thread: the    */
     pthread_cond_t ended;          /* thread is detached                  */
+#endif
 } DyThreadObject;
+
+#ifdef DY_MPS
+typedef struct DyThreadSync {
+    DyWrapper *wrapper;
+    pthread_mutex_t lock;
+    pthread_cond_t ended;
+} DyThreadSync;
+#define DY_THREAD_LOCK(t)  (&(t)->sync->lock)
+#define DY_THREAD_ENDED(t) (&(t)->sync->ended)
+#else
+#define DY_THREAD_LOCK(t)  (&(t)->lock)
+#define DY_THREAD_ENDED(t) (&(t)->ended)
+#endif
 
 typedef struct DyLock {            /* <lock> and <recursive-lock>       */
     DyWrapper *wrapper;

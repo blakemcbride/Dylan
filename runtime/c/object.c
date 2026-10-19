@@ -17,6 +17,19 @@ DyHeader dy_empty_list_object = { &dy_wrapper_empty_list };
 void dy_intern_static_symbols(void);    /* string.c */
 void dy_init_main_thread(void);         /* thread.c */
 
+/* Under AddressSanitizer, its fake stack -- frames kept apart from the
+ * stack to catch uses after return -- would hide the references in them
+ * from the collector, which scans the stack: an object referred to only
+ * from there would be freed, or moved, while in use.  Clang turns it on
+ * by default; this turns it off, unless ASAN_OPTIONS says otherwise. */
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+#if defined(__SANITIZE_ADDRESS__) || __has_feature(address_sanitizer)
+const char *__asan_default_options(void) { return "detect_stack_use_after_return=0"; }
+#endif
+
+#ifndef DY_MPS
 static long gc_stress_interval = 100;
 static long gc_stress_count;
 
@@ -24,9 +37,13 @@ void dy_gc_stress(void) {
     if (__atomic_add_fetch(&gc_stress_count, 1, __ATOMIC_RELAXED) % gc_stress_interval == 0)
         GC_gcollect();
 }
+#endif
 
 void dy_init(void) {
     setlocale(LC_CTYPE, "C.UTF-8");        /* for the case of characters */
+#ifdef DY_MPS
+    dy_gc_init();
+#else
     /* Two threads marking, not one for each processor: more spend longer
      * waiting on each other than marking, even for a large heap shared by
      * many threads.  GC_MARKERS, if set, says otherwise. */
@@ -37,6 +54,7 @@ void dy_init(void) {
     if (interval && atol(interval) > 0) gc_stress_interval = atol(interval);
 #endif
     GC_allow_register_threads();
+#endif
     dy_init_thread();
     dy_init_main_thread();
     dy_intern_static_symbols();
@@ -57,19 +75,15 @@ _Noreturn void dy_representation_error(const char *expected, D x) {
 }
 
 D dy_pair(D head, D tail) {
-    DyPair *p = dy_alloc(&dy_wrapper_pair, sizeof(DyPair));
-    p->head = head;
-    p->tail = tail;
-    return DY_OBJ(p);
+    D fields[2] = { head, tail };
+    return DY_OBJ(dy_alloc_init(&dy_wrapper_pair, sizeof(DyPair), fields, 2, 0));
 }
 
 D dy_make_vector(size_t size, D fill) {
     if (size > (size_t)DY_INT_MAX / sizeof(D)) dy_error("vector too large", 0);
-    DyVector *v = dy_alloc(&dy_wrapper_simple_object_vector,
-                           sizeof(DyVector) + size * sizeof(D));
-    v->size = DY_INT(size);
-    for (size_t i = 0; i < size; i++) v->data[i] = fill;
-    return DY_OBJ(v);
+    D length = DY_INT(size);
+    return DY_OBJ(dy_alloc_init(&dy_wrapper_simple_object_vector,
+                                sizeof(DyVector) + size * sizeof(D), &length, 1, fill));
 }
 
 /* ---------------------------------------------------------- Debugging */

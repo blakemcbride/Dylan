@@ -13,19 +13,23 @@ to expect. It applies to Apple Silicon and Intel Macs.
   ```
 
   Apple Clang has `musttail` from Xcode 13.3 on; check with `cc --version`.
-- **Homebrew** (<https://brew.sh>), for SBCL and the collector:
+- **Homebrew** (<https://brew.sh>), for SBCL:
 
   ```console
-  $ brew install sbcl bdw-gc
+  $ brew install sbcl
   ```
+
+  The garbage collector, the Memory Pool System, is in the tree and
+  supports Apple silicon. To build programs with the Boehm-Demers-Weiser
+  collector instead (`dylanc --gc boehm`), also `brew install bdw-gc`.
 
 - **macOS 13 (Ventura) or later.** `bin/dylanc` uses `readlink -f`, which
   older macOS lacks. On older systems, `brew install coreutils` and change
   `readlink` to `greadlink` in `bin/dylanc`.
 
-Homebrew's headers and libraries are not where Apple Clang looks
-(`/opt/homebrew` on Apple Silicon, `/usr/local` on Intel). Tell it, in
-`~/.zshrc`:
+If you installed `bdw-gc`: Homebrew's headers and libraries are not where
+Apple Clang looks (`/opt/homebrew` on Apple Silicon, `/usr/local` on
+Intel). Tell it, in `~/.zshrc`:
 
 ```sh
 export CPATH="$(brew --prefix)/include"
@@ -135,7 +139,7 @@ install MacTeX (`brew install --cask mactex-no-gui`) and run
 
 | Message | Cause |
 |---|---|
-| `'gc.h' file not found` / `library 'gc' not found` | `CPATH` and `LIBRARY_PATH` are not set to Homebrew's (above) |
+| `'gc.h' file not found` / `library 'gc' not found` | `--gc boehm` with `CPATH` and `LIBRARY_PATH` not set to Homebrew's (above) |
 | `readlink: illegal option -- f` | macOS older than 13; see above |
 | `unknown option: --gc-sections` | `-Os`; see above |
 | `This C compiler cannot guarantee tail calls (musttail)` | update Xcode, use Homebrew's Clang, or `--trampoline` |

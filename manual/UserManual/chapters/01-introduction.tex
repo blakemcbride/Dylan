@@ -125,8 +125,8 @@ executable. Its source is in \file{compiler/}, and its run-time support is
 in \file{runtime/}: a small runtime written in C and the Dylan library,
 itself written in Dylan. The compiled programs have proper tail calls,
 generic dispatch compiled to decision trees, type inference, inlining,
-unboxed floating-point arithmetic, the Boehm-Demers-Weiser garbage
-collector, and real operating-system threads. The compiler also adds
+unboxed floating-point arithmetic, a generational garbage collector,
+and real operating-system threads. The compiler also adds
 two things the 1992 language does not have: macros and threads.
 
 The price of this speed is that the compiler treats a program as

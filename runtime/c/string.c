@@ -15,9 +15,8 @@
 
 D dy_make_byte_string(const char *bytes, size_t size) {
     if (size > (size_t)DY_INT_MAX) dy_error("string too large", 0);
-    DyByteString *s = dy_alloc_atomic(&dy_wrapper_byte_string,
-                                      sizeof(DyByteString) + size + 1);
-    s->size = DY_INT(size);
+    DyByteString *s = dy_alloc_atomic_sized(&dy_wrapper_byte_string,
+                                            sizeof(DyByteString) + size + 1, DY_INT(size));
     memcpy(s->data, bytes, size);
     s->data[size] = '\0';
     return DY_OBJ(s);
@@ -27,9 +26,9 @@ D dy_make_c_string(const char *s) { return dy_make_byte_string(s, strlen(s)); }
 
 D dy_make_unicode_string(const uint32_t *chars, size_t size) {
     if (size > (size_t)DY_INT_MAX / 4) dy_error("string too large", 0);
-    DyUnicodeString *s = dy_alloc_atomic(&dy_wrapper_unicode_string,
-                                         sizeof(DyUnicodeString) + size * 4);
-    s->size = DY_INT(size);
+    DyUnicodeString *s = dy_alloc_atomic_sized(&dy_wrapper_unicode_string,
+                                               sizeof(DyUnicodeString) + size * 4,
+                                               DY_INT(size));
     memcpy(s->data, chars, size * 4);
     return DY_OBJ(s);
 }
@@ -81,14 +80,13 @@ static void table_grow(SymbolTable *t) {
     DySymbol **old = t->entries;
     size_t old_capacity = t->capacity;
     t->capacity = old_capacity ? old_capacity * 2 : 256;
-    /* Uncollectable: the table is a root that holds every symbol. */
-    t->entries = GC_MALLOC_UNCOLLECTABLE(t->capacity * sizeof(DySymbol *));
-    if (!t->entries) dy_error("out of memory", 0);
+    /* A root: the table holds every symbol. */
+    t->entries = dy_alloc_root(t->capacity * sizeof(DySymbol *));
     memset(t->entries, 0, t->capacity * sizeof(DySymbol *));
     t->count = 0;
     for (size_t i = 0; i < old_capacity; i++)
         if (old[i]) table_insert(t, old[i]);
-    if (old) GC_FREE(old);
+    if (old) dy_free_root(old);
 }
 
 /* The symbol named NAME in T, or NULL.  T must be locked. */

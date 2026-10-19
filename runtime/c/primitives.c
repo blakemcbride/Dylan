@@ -244,7 +244,7 @@ static D *arguments_after(intptr_t first, intptr_t argc, D a0, D a1, D a2, D a3,
                           intptr_t *n) {
     D in_registers[4] = { a0, a1, a2, a3 };
     *n = argc - first;
-    D *args = GC_MALLOC((*n + 1) * sizeof(D));
+    D *args = dy_alloc_words(*n + 1);
     for (intptr_t i = first; i < argc; i++)
         args[i - first] = i < 4 ? in_registers[i] : dy_thread->args[i - 4];
     return args;
@@ -286,7 +286,7 @@ PRIMITIVE(sorted_applicable_methods) {
     D *args = arguments_after(1, argc, a0, a1, a2, a3, &n);
     DyVector *methods = DY_PTR(as_generic(a0)->methods);
     intptr_t count = DY_INT_VALUE(methods->size), k = 0;
-    D *found = GC_MALLOC((count + 1) * sizeof(D));
+    D *found = dy_alloc_words(count + 1);
     for (intptr_t i = 0; i < count; i++)
         if (applicable(methods->data[i], args, n)) found[k++] = methods->data[i];
     /* Insertion sort: stable, most specific first. */

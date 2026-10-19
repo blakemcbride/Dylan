@@ -18,14 +18,17 @@
 #include <string.h>
 
 static DyThreadObject *new_thread_object(D function) {
-    DyThreadObject *t = dy_alloc(&dy_wrapper_thread, sizeof(DyThreadObject));
+    DyThreadObject *t = dy_alloc_fixed(&dy_wrapper_thread, sizeof(DyThreadObject));
     t->function = function;
     t->results = DY_EMPTY;
     t->condition = DY_FALSE;
     t->done = 0;
     t->main = 0;
-    pthread_mutex_init(&t->lock, NULL);
-    pthread_cond_init(&t->ended, NULL);
+#ifdef DY_MPS
+    t->sync = dy_mps_make_thread_sync();
+#endif
+    pthread_mutex_init(DY_THREAD_LOCK(t), NULL);
+    pthread_cond_init(DY_THREAD_ENDED(t), NULL);
     return t;
 }
 
@@ -56,10 +59,10 @@ static void *thread_main(void *arg) {
     }
     /* Otherwise an unhandled condition ended it; %unhandled kept it. */
     dy_thread->frames = NULL;
-    pthread_mutex_lock(&t->lock);
+    pthread_mutex_lock(DY_THREAD_LOCK(t));
     t->done = 1;
-    pthread_cond_broadcast(&t->ended);
-    pthread_mutex_unlock(&t->lock);
+    pthread_cond_broadcast(DY_THREAD_ENDED(t));
+    pthread_mutex_unlock(DY_THREAD_LOCK(t));
     dy_end_thread();
     return NULL;
 }
@@ -88,9 +91,9 @@ PRIMITIVE(join_thread) {
     DyThreadObject *t = as_thread(a0);
     if (t == dy_thread->self) dy_error("join-thread: a thread cannot join itself", a0);
     if (t->main) dy_error("join-thread: the main thread cannot be joined", a0);
-    pthread_mutex_lock(&t->lock);
-    while (!t->done) pthread_cond_wait(&t->ended, &t->lock);
-    pthread_mutex_unlock(&t->lock);
+    pthread_mutex_lock(DY_THREAD_LOCK(t));
+    while (!t->done) pthread_cond_wait(DY_THREAD_ENDED(t), DY_THREAD_LOCK(t));
+    pthread_mutex_unlock(DY_THREAD_LOCK(t));
     return t->results;
 }
 
@@ -138,7 +141,7 @@ PRIMITIVE(unhandled) {
 
 static D make_lock(D self, intptr_t argc, DyWrapper *wrapper, int type) {
     if (argc != 1) dy_error("make: a lock takes no init-keywords", self);
-    DyLock *l = dy_alloc_atomic(wrapper, sizeof(DyLock));
+    DyLock *l = dy_alloc_fixed_atomic(wrapper, sizeof(DyLock));
     pthread_mutexattr_t attributes;
     pthread_mutexattr_init(&attributes);
     pthread_mutexattr_settype(&attributes, type);
@@ -201,8 +204,8 @@ PRIMITIVE(release_lock) {
 D dy_make_condition_variable(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     (void)a0; (void)a1; (void)a2; (void)a3;
     if (argc != 1) dy_error("make: a condition variable takes no init-keywords", self);
-    DyConditionVariable *c = dy_alloc_atomic(&dy_wrapper_condition_variable,
-                                             sizeof(DyConditionVariable));
+    DyConditionVariable *c = dy_alloc_fixed_atomic(&dy_wrapper_condition_variable,
+                                                   sizeof(DyConditionVariable));
     pthread_cond_init(&c->condition, NULL);
     return DY_OBJ(c);
 }

@@ -330,7 +330,7 @@ PRIMITIVE(make_byte_string) {
     if (n < 0) dy_error("make: negative size", a0);
     if (!DY_IS_CHAR(a1) || DY_CHAR_CODE(a1) > 255)
         dy_error("make: a <byte-string> holds only 8-bit characters", a1);
-    char *bytes = GC_MALLOC_ATOMIC(n + 1);
+    char *bytes = dy_alloc_bytes(n + 1);
     memset(bytes, (int)DY_CHAR_CODE(a1), n);
     return dy_make_byte_string(bytes, n);
 }
@@ -340,7 +340,7 @@ PRIMITIVE(make_unicode_string) {
     intptr_t n = int_arg(a0);
     if (n < 0) dy_error("make: negative size", a0);
     if (!DY_IS_CHAR(a1)) dy_error("make: fill: must be a character", a1);
-    uint32_t *chars = GC_MALLOC_ATOMIC((n + 1) * 4);
+    uint32_t *chars = (uint32_t *)dy_alloc_bytes((n + 1) * 4);
     for (intptr_t i = 0; i < n; i++) chars[i] = DY_CHAR_CODE(a1);
     return dy_make_unicode_string(chars, n);
 }
@@ -390,8 +390,8 @@ PRIMITIVE(concatenate_byte_strings) {
         n += DY_STRING_SIZE(dy_head(l));
     }
     if (n > (size_t)DY_INT_MAX) dy_error("string too large", 0);
-    DyByteString *s = dy_alloc_atomic(&dy_wrapper_byte_string, sizeof(DyByteString) + n + 1);
-    s->size = DY_INT(n);
+    DyByteString *s = dy_alloc_atomic_sized(&dy_wrapper_byte_string,
+                                            sizeof(DyByteString) + n + 1, DY_INT(n));
     size_t at = DY_STRING_SIZE(a0);
     memcpy(s->data, DY_STRING_DATA(a0), at);
     for (D l = a1; l != DY_EMPTY; l = dy_tail(l)) {
@@ -453,12 +453,16 @@ PRIMITIVE(symbol_name) {
 
 /* ------------------------------------------------------------- Hashing */
 
-/* (%object-hash x): an identity hash.  The collector does not move
- * objects, so an address will do. */
+/* (%object-hash x): an identity hash.  Boehm's collector does not move
+ * objects, so an address will do; the MPS's does (gc-mps.c). */
 PRIMITIVE(object_hash) {
     need(self, argc, 1, 1);
+#ifdef DY_MPS
+    return dy_object_hash(a0);
+#else
     uint64_t h = (uint64_t)a0 * 0x9E3779B97F4A7C15u;
     return DY_INT((intptr_t)(h >> 4) & DY_INT_MAX);
+#endif
 }
 
 /* (%number-hash x): equal (=) numbers hash alike.  An integral float or

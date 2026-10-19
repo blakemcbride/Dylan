@@ -697,15 +697,20 @@ dynamic, as the 1992 manual allows:
   Lisp.
 \end{itemize}
 
-\paragraph{What only the compiler to C does.} Its extensions are
-absent here:
+\paragraph{What only the compiler to C has.}
+The compiler's extensions to the 1992 language
+(Chapter~\ref{ch:extensions}) do not exist in the Common Lisp
+implementation:
 
 \begin{itemize}
-\item no threads, locks, condition variables, atomic integers, thread
-  variables or \code{dynamic-bind};
-\item no macros: \code{define-macro} and \code{define-for-macros} are
-  not special forms here;
-\item no \code{current-milliseconds}.
+\item threads, locks, condition variables, atomic integers, thread
+  variables and \code{dynamic-bind};
+\item macros. The compiler expands a program's \code{define-macro}
+  definitions as it compiles, so a compiled program may use macros
+  freely; the Common Lisp implementation does not know
+  \code{define-macro} or \code{define-for-macros}, and treats them as
+  ordinary names;
+\item \code{current-milliseconds}.
 \end{itemize}
 
 \noindent

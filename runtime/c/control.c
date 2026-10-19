@@ -47,7 +47,7 @@ static Saved save_values(D primary) {
     DyThread *t = dy_thread;
     Saved s = { t->mv_count, primary, NULL };
     if (s.count != 1 && s.count > 0) {
-        s.values = GC_MALLOC(s.count * sizeof(D));
+        s.values = dy_alloc_words(s.count);
         memcpy(s.values, t->mv, s.count * sizeof(D));
     }
     return s;
@@ -235,7 +235,7 @@ _Noreturn void dy_error(const char *message, D irritant) {
     if (error_hook && t && t->error_depth < 4) {
         t->error_depth++;
         size_t n = strlen(message);
-        char *format = GC_MALLOC_ATOMIC(n + 5);
+        char *format = dy_alloc_bytes(n + 5);
         memcpy(format, message, n);
         strcpy(format + n, irritant ? ": ~s" : "");
         DY_CALL(error_hook, dy_make_c_string(format),

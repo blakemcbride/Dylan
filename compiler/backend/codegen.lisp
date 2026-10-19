@@ -595,14 +595,24 @@ STACK, with its environment yet to fill."
 (defun closure-c (fn &optional stack)
   "A C expression for a closure of FN made now, on the stack if STACK."
   (let ((cfun (gethash fn *cfuns*)))
-    (if (null (cfun-env cfun))
-        (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun))
-        (let ((temp (new-temp)))
-          (emit "~a = ~a;" temp (make-closure-c cfun stack))
-          (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" temp (fn-info-c fn))
-          (fill-env temp cfun)
-          (record-specializers temp fn)
-          temp))))
+    (cond ((null (cfun-env cfun))
+           (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun)))
+          (stack
+           (let ((temp (new-temp)))
+             (emit "~a = ~a;" temp (make-closure-c cfun stack))
+             (emit "((DyFunction *)DY_PTR(~a))->info = ~a;" temp (fn-info-c fn))
+             (fill-env temp cfun)
+             (record-specializers temp fn)
+             temp))
+          (t
+           ;; Made complete, its environment in it before it exists (the
+           ;; MPS collector wants that; see dy_alloc_init)
+           (let ((temp (new-temp)))
+             (emit "~a = dy_make_closure_env(~a, ~a, ~d, (const D[]){~{~a~^, ~}});"
+                   temp (cfun-c-name cfun) (fn-info-c fn) (length (cfun-env cfun))
+                   (mapcar #'v-name (cfun-env cfun)))
+             (record-specializers temp fn)
+             temp)))))
 
 (defun record-specializers (closure fn)
   "Give the closure CLOSURE of FN, a method made by method, the

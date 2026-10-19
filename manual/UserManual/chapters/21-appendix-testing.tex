@@ -191,6 +191,11 @@ Each program is compiled to C once and then built and run in each
 \item[\cmd{thread}] ThreadSanitizer, GCC, in a debug build.
 \end{description}
 
+Every mode builds with the default collector, the Memory Pool System.
+With the environment variable \code{DYLAN\_GC=boehm} set, it builds with
+the Boehm-Demers-Weiser collector instead (Section~\ref{sec:dylanc-gc});
+the compiler and runtime should pass every suite with either.
+
 \begin{shell}
 $ sbcl --script tests/codegen/run.lisp quick
 $ sbcl --script tests/conformance/run.lisp            # all

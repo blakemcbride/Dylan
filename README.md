@@ -13,8 +13,9 @@ language moved to an infix syntax:
 - **A compiler from Dylan to C** (`compiler/`, `runtime/`, `bin/dylanc`).
   A whole, static program becomes a native executable: proper tail calls,
   generic dispatch compiled to decision trees, type inference, inlining
-  and unboxed floats, the Boehm-Demers-Weiser collector, and real threads.
-  It adds macros and threads, which the manual lacks.
+  and unboxed floats, a generational garbage collector (the Memory Pool
+  System, or the Boehm-Demers-Weiser collector by choice), and real
+  threads. It adds macros and threads, which the manual lacks.
 
 The standard both follow is the 1992 manual itself; an annotated copy is in
 `manual/Dylan-1992/`. A user manual for this system — a tutorial, the
@@ -104,8 +105,10 @@ otherwise exact.
   portable fallbacks.
 - For the compiler to C, also a C compiler with `musttail` — GCC 15 or
   later, or Clang 13 or later (any C11 compiler will do with
-  `--trampoline`) — and the Boehm-Demers-Weiser collector built for
-  threads (`libgc` and its headers).
+  `--trampoline`). The garbage collector, the Memory Pool System, is in
+  the tree (`runtime/mps/`, under its own BSD license). Programs built
+  with `dylanc --gc boehm` use the Boehm-Demers-Weiser collector instead,
+  which must be installed, built for threads (`libgc` and its headers).
 
 How to install these and build on each platform: [`BUILD.md`](BUILD.md)
 (Linux), [`macOS.md`](macOS.md), [`Windows.md`](Windows.md).

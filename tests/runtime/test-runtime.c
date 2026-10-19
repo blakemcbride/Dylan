@@ -279,12 +279,18 @@ static void test_strings_and_symbols(void) {
 
 /* ------------------------------------------------------------------ GC */
 
+#ifdef DY_MPS
+#define collect() dy_gc_collect()
+#else
+#define collect() GC_gcollect()
+#endif
+
 static void test_gc(void) {
     /* A long list survives collections while it is reachable. */
     D list = DY_EMPTY;
     for (long i = 0; i < 200000; i++) list = dy_pair(DY_INT(i), list);
     for (int i = 0; i < 20; i++) dy_make_vector(10000, DY_FALSE);   /* garbage */
-    GC_gcollect();
+    collect();
     long expect = 199999, ok = 1;
     for (D l = list; l != DY_EMPTY; l = ((DyPair *)DY_PTR(l))->tail, expect--)
         if (((DyPair *)DY_PTR(l))->head != DY_INT(expect)) ok = 0;
@@ -293,7 +299,7 @@ static void test_gc(void) {
     D sym = dy_intern_symbol("kept-by-the-table", 17);
     uintptr_t hidden = ~(uintptr_t)sym;      /* not a pointer the GC sees */
     sym = 0;
-    GC_gcollect();
+    collect();
     CHECK(dy_intern_symbol("KEPT-BY-THE-TABLE", 17) == ~hidden);
 }
 
@@ -303,6 +309,7 @@ enum { THREADS = 8, PER_THREAD = 2000 };
 static D thread_results[THREADS][PER_THREAD];
 
 static void *thread_body(void *arg) {
+    dy_init_thread();                  /* as the runtime's threads do */
     intptr_t t = (intptr_t)arg;
     char name[32];
     D list = DY_EMPTY;
@@ -311,10 +318,11 @@ static void *thread_body(void *arg) {
         int n = snprintf(name, sizeof name, t % 2 ? "SHARED-%d" : "shared-%d", i);
         thread_results[t][i] = dy_intern_symbol(name, n);
         list = dy_pair(dy_make_double_float(i), list);
-        if (i % 500 == 0) GC_gcollect();
+        if (i % 500 == 0) collect();
     }
     intptr_t count = 0;
     for (D l = list; l != DY_EMPTY; l = ((DyPair *)DY_PTR(l))->tail) count++;
+    dy_end_thread();
     return (void *)count;
 }
 

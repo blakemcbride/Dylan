@@ -42,6 +42,9 @@ Options:
   --sanitize KIND  for testing: a debug build with the sanitizers, KIND
                    address (AddressSanitizer and UndefinedBehaviorSanitizer)
                    or thread (ThreadSanitizer)
+  --gc NAME        the garbage collector: mps (the default), the Memory Pool
+                   System, generational and moving; or boehm, the installed
+                   Boehm-Demers-Weiser collector (libgc)
   --gc-stress      for testing: a collection every DYLAN_GC_STRESS (default
                    100) allocations
   -h, --help       this
@@ -76,6 +79,12 @@ Options:
                        ((string= a "--cc") (setf (getf options :cc) (value)))
                        ((string= a "--no-lines") (setf (getf options :no-lines) t))
                        ((string= a "--gc-stress") (setf (getf options :variant) :gc-stress))
+                       ((string= a "--gc")
+                        (let ((name (value)))
+                          (setf (getf options :gc)
+                                (cond ((string= name "boehm") :boehm)
+                                      ((string= name "mps") :mps)
+                                      (t (usage-error "--gc takes boehm or mps."))))))
                        ((string= a "--sanitize")
                         (let ((kind (value)))
                           (setf (getf options :variant)
@@ -104,6 +113,7 @@ Options:
 
 (defun main (arguments)
   (let* ((options (parse-command-line arguments))
+         (*gc* (or (getf options :gc) *gc*))
          (files (getf options :files))
          (output (or (getf options :output) (default-output (first files))))
          (c-file (concatenate 'string output ".c"))

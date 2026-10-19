@@ -361,20 +361,16 @@
      (list->sequence-like seq-1
                           (mapcan #'sequence->list (cons seq-1 rest))))))
 
-;;; The subsequence from START to END is replaced by INSERT-SEQUENCE, whose
-;;; size may differ (design note 15).  END defaults as chapter 12 has it:
-;;; as many elements as are inserted are overwritten, as far as the
-;;; sequence goes.  (Design note 15 would default END to the size of the
-;;; sequence, which contradicts the chapter's own example.)  When the sizes
-;;; agree the sequence is changed in place; otherwise the result is a new
-;;; instance of its class-for-copy.
+;;; Chapter 12: the elements of INSERT-SEQUENCE overwrite those of the
+;;; sequence from START (default 0) on, in place; an error is signaled if
+;;; the sequence has not enough elements from START to hold them all.
 
 (defparameter dylan/replace-subsequence!
   (dylan%generic-fn
    'replace-subsequence!
    (make-param-list `((mutable-sequence ,<mutable-sequence>)
                       (insert-sequence ,<sequence>))
-                    nil nil '(:start :end))
+                    nil nil '(:start))
    nil))
 
 (add-method
@@ -382,32 +378,25 @@
  (dylan%dylan-callable->method
   (make-param-list `((mutable-sequence ,<mutable-sequence>)
                      (insert-sequence ,<sequence>))
-                   nil nil '(:start :end))
+                   nil nil '(:start))
   (lambda (multiple-values next-method mutable insert &rest rest)
     (declare (ignore multiple-values))
-    (dylan%keyword-validate next-method rest '(:start :end))
+    (dylan%keyword-validate next-method rest '(:start))
     (let* ((size (collection-size mutable))
            (inserted (sequence->list insert))
-           (start (dylan%find-keyword rest :start (lambda () 0)))
-           (end (dylan%find-keyword
-                 rest :end
-                 (lambda ()
-                   (and size (integerp start)
-                        (min size (+ start (length inserted))))))))
-      (unless (and (integerp start) (integerp end) size (<= 0 start end size))
+           (start (dylan%find-keyword rest :start (lambda () 0))))
+      (when (and inserted
+                 (not (and (integerp start) size (<= 0 start)
+                           (<= (+ start (length inserted)) size))))
         (dylan-call dylan/error
-                    "replace-subsequence! -- invalid start: or end:"
-                    mutable start end))
-      (if (= (length inserted) (- end start))
-          (let ((state (dylan-call dylan/get-state mutable start)))
-            (dolist (element inserted mutable)
-              (set-current-element mutable state element)
-              (setf state (next-state mutable state))))
-          (let ((elements (sequence->list mutable)))
-            (list->sequence-like mutable
-                                 (append (subseq elements 0 start)
-                                         inserted
-                                         (subseq elements end)))))))))
+                    "replace-subsequence! -- the sequence is too short"
+                    mutable start))
+      (when inserted
+        (let ((state (dylan-call dylan/get-state mutable start)))
+          (dolist (element inserted)
+            (set-current-element mutable state element)
+            (setf state (next-state mutable state)))))
+      mutable))))
 
 (defparameter dylan/reverse
   (dylan%generic-fn

@@ -240,8 +240,11 @@ would call a symbol's Lisp function.)"
         (< -1 ,i (length (the simple-vector ,v))))
   `(setf (svref ,v ,i) ,x))
 (define-fast-path dylan/setter/element/ *fast-string-setter-element* (s i c)
-  `(and (stringp ,s) (typep ,i 'fixnum) (< -1 ,i (length (the string ,s)))
-        (characterp ,c))
+  `(and (typep ,s '(array character (*))) (typep ,i 'fixnum)
+        (< -1 ,i (length (the string ,s)))
+        (characterp ,c)
+        ;; A <byte-string> holds only 8-bit characters.
+        (or (< (char-code ,c) 256) (not (simple-string-p ,s))))
   `(setf (char ,s ,i) ,c))
 
 (defun dylan%apply (multiple-values? operator-thunk &rest operand-thunks)

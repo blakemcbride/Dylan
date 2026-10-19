@@ -76,6 +76,7 @@ File & Role \\
 \file{runtime-collections*.lisp} & collections: the iteration protocol, the generic operations, and one file for each kind (lists, vectors, strings, deques, ranges, tables, arrays) \\
 \file{runtime-exceptions.lisp} & conditions, handlers and restarts \\
 \file{runtime-printing.lisp} & streams, \code{print-object}, \code{format} and the other printing functions (Chapter~\ref{ch:printing}) \\
+\file{runtime-extended-float.lisp} & \code{<extended-float>} arithmetic (Chapter~\ref{ch:numbers}) \\
 \file{runtime-fast-paths.lisp} & turns on the guarded fast paths (Section~\ref{sec:lisp-performance}) \\
 \file{rep.lisp} & the read-eval-print loop \\
 \file{load-dylan.lisp}, \file{load-compiler.lisp}, \file{load-runtime.lisp} & loaders \\
@@ -690,8 +691,6 @@ implementation provides.
 \item There is no way to load a file of Dylan source at the
   read-eval-print loop itself; use \code{dylan:test} or compile the file
   with \code{dylan:compile-file} and load the result.
-\item \code{(as <unicode-string> "abc")} is not implemented: it signals
-  \code{as -{}- not specialized for this class type}.
 \item Thomas's MIT Scheme restart example, written against MIT Scheme's
   condition system, has no counterpart; it would have to be rewritten
   against Common Lisp's.

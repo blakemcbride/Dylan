@@ -201,19 +201,23 @@
   (dylan%function->method
    only-rest-args
    (lambda (&rest args)
-     (if (and args (null (cdr args)))
-         (car args)
-         (reduce args (lambda (x value) (dylan-call dylan/binary-lcm value x))
-                 1)))))
+     ;; From the first argument, so that binary-lcm sees only arguments,
+     ;; whose classes a program's own methods may be for.
+     (if (null args)
+         1
+         (reduce (cdr args)
+                 (lambda (x value) (dylan-call dylan/binary-lcm value x))
+                 (car args))))))
 
 (defparameter dylan/gcd
   (dylan%function->method
    only-rest-args
    (lambda (&rest args)
-     (if (and args (null (cdr args)))
-         (car args)
-         (reduce args (lambda (x value) (dylan-call dylan/binary-gcd value x))
-                 0)))))
+     (if (null args)
+         0
+         (reduce (cdr args)
+                 (lambda (x value) (dylan-call dylan/binary-gcd value x))
+                 (car args))))))
 
 ;;; Special functions
 
@@ -859,7 +863,11 @@ irrational functions; an exact real stays exact."
                      class obj)))))
 
 (labels ((no-change (class object) (declare (ignore class)) object)
+         (unwrap (object)
+           ;; An <extended-float> as the double-float it holds
+           (if (extended-float? object) (extended-float-value object) object))
          (->exact (class object) (declare (ignore class))
+           (setf object (unwrap object))
            (if (realp object)
                (inexact->exact object)
                (dylan-call dylan/error "as -- not a real number" class object)))
@@ -877,12 +885,17 @@ irrational functions; an exact real stays exact."
                  exact)))
          (->float-of (format)
            (lambda (class object)
-             (if (realp object)
-                 (coerce object format)
-                 (dylan-call dylan/error "as -- not a real number"
-                             class object))))
+             (let ((x (unwrap object)))
+               (cond ((not (realp x))
+                      (dylan-call dylan/error "as -- not a real number"
+                                  class object))
+                     ((eq format 'extended)
+                      (if (extended-float? object)
+                          object
+                          (make-extended-float (coerce x 'double-float))))
+                     (t (coerce x format))))))
          (->inexact (class object) (declare (ignore class))
-           (exact->inexact object)))
+           (if (extended-float? object) object (exact->inexact object))))
   ;; integer <-> character
   (add-method dylan/as
               (dylan%function->method
@@ -950,7 +963,7 @@ irrational functions; an exact real stays exact."
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <extended-float>))
                                   (object ,<number>)) nil nil nil)
-               (->float-of 'long-float)))
+               (->float-of 'extended)))
   ;; symbols, strings, and keywords
   (add-method dylan/as
               (dylan%function->method

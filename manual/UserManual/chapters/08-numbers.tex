@@ -130,19 +130,18 @@ Class & Compiler to C & Common Lisp implementation \\
 \midrule
 \code{<single-float>} & C \code{float} (32 bits) & SBCL \code{single-float} \\
 \code{<double-float>} & C \code{double} (64 bits) & SBCL \code{double-float} \\
-\code{<extended-float>} & C \code{double}, a class of its own & no instances \\
+\code{<extended-float>} & C \code{double}, a class of its own & SBCL \code{double-float}, a class of its own \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent \code{<double-float>} is the default: a float literal without
-an exponent marker, or with \code{e} or \code{d}, is a double. In the
-compiler to C an \code{<extended-float>} is a separate class with a
-double's precision; the only way to make one is \code{as} (see
-section~\ref{sec:numbers-conversion}). In the Common Lisp implementation,
-SBCL's long float is its double float, so \code{<extended-float>} has no
-instances at all, and \code{(as <extended-float> 1)} answers the
-\code{<double-float>} \code{1.0}.
+an exponent marker, or with \code{e} or \code{d}, is a double. An
+\code{<extended-float>} is a separate class with a double's precision,
+the widest of the three for contagion; the only way to make one is
+\code{as} (see section~\ref{sec:numbers-conversion}).
+\code{(+ (as <extended-float> 1/8) 1)} is the \code{<extended-float>}
+\code{1.125l0}.
 
 \subsection{Complex numbers}
 
@@ -273,7 +272,7 @@ binary calls, the conversions happen from left to right.
 \begin{dylan}
 (+ 1 2.0)          ; => 3.0
 (+ 1/2 0.5)        ; => 1.0
-(* 2 0.5s0)        ; => 1.0s0 (C)   1.0f0 (Lisp)
+(* 2 0.5s0)        ; => 1.0s0
 (+ 1.0s0 1.0d0)    ; => 2.0         a <double-float>
 (* 1.5s0 1.5d0)    ; => 2.25        a <double-float>
 \end{dylan}
@@ -282,7 +281,7 @@ binary calls, the conversions happen from left to right.
 The compiler to C converts a rational to the float's format by way of a
 C \code{double}, so a single-float result can differ from the Common Lisp
 implementation's in the last place: \code{(+ 1/3 0.5s0)} is
-\code{0.8333333s0} in compiled code and \code{0.8333334f0} in the Common
+\code{0.8333333s0} in compiled code and \code{0.8333334s0} in the Common
 Lisp implementation.
 \end{notebox}
 
@@ -501,7 +500,7 @@ of the arguments, not converted:
 (max 3 1 2)       ; => 3
 (max 1/2 0.4)     ; => 1/2
 (max 1 2.0)       ; => 2.0
-(min 3 1.5s0)     ; => 1.5s0 (C)   1.5f0 (Lisp)
+(min 3 1.5s0)     ; => 1.5s0
 (min 2)           ; => 2
 \end{dylan}
 
@@ -546,7 +545,7 @@ answering floats, and so do both implementations.
 \begin{dylan}
 (sqrt 25)        ; => 5.0
 (sqrt 2)         ; => 1.4142135623730951
-(sqrt 2.0s0)     ; => 1.4142135s0 (C)   1.4142135f0 (Lisp)
+(sqrt 2.0s0)     ; => 1.4142135s0
 (exp 1)          ; => 2.718281828459045
 (log 1)          ; => 0.0
 (log 100)        ; => 4.605170185988092
@@ -697,20 +696,18 @@ negative one.
 \begin{dylan}
 (as <float> 1/2)           ; => 0.5        a <double-float>
 (as <double-float> 1)      ; => 1.0
-(as <single-float> 1/3)    ; => 0.33333334s0 (C)   0.33333334f0 (Lisp)
-(as <extended-float> 1)    ; => 1.0l0 (C)   1.0, a <double-float> (Lisp)
+(as <single-float> 1/3)    ; => 0.33333334s0
+(as <extended-float> 1)    ; => 1.0l0
 \end{dylan}
 
-\noindent To go from a float to an integer, round it with \code{floor},
-\code{ceiling}, \code{round} or \code{truncate}; to go to a rational,
-use \code{rationalize}, or \code{numerator} and \code{denominator}. The
-compiler to C accepts \code{as} only for these float conversions (and
-for a number already of the class asked for): \code{(as <integer> 3.0)}
-and \code{(as <rational> 0.5)} are errors there. The Common Lisp
-implementation also converts a float with an integer value to an
-integer, \code{(as <integer> 3.0)} answering \code{3}, and any float to
-its exact rational, \code{(as <rational> 0.5)} answering \code{1/2}; it
-signals an error for \code{(as <integer> 2.5)}.
+\noindent \code{as} also converts a float to the exact number it holds,
+as \dylanbook{chapter 11} has \code{as} answer an instance with the
+same contents: \code{(as <integer> 3.0)} is \code{3},
+\code{(as <rational> 0.5)} is \code{1/2} and \code{(as <ratio> 0.5)}
+is \code{1/2}, but \code{(as <integer> 2.5)} and \code{(as <ratio>
+2.0)} are errors. To go from any float to an integer, round it with
+\code{floor}, \code{ceiling}, \code{round} or \code{truncate}; to the
+simplest nearby rational, use \code{rationalize}.
 
 \section{How floats print}\label{sec:numbers-printing}
 
@@ -799,9 +796,8 @@ capital ASCII letter is less than every small one:
 \noindent \code{as-uppercase} and \code{as-lowercase} also work on whole
 strings (section~\ref{sec:collections-strings}), which is how to compare
 strings without regard to case. A string of characters that do not all
-fit in eight bits is a \code{<unicode-string>} in the compiler to C; in
-the Common Lisp implementation every string is a \code{<byte-string>},
-which holds any character.
+fit in eight bits is a \code{<unicode-string>}
+(section~\ref{sec:collections-strings}).
 
 \section{Symbols and keywords}\label{sec:symbols}
 

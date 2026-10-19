@@ -413,12 +413,13 @@ unbounded collection)."
  (dylan%function->method
   (make-param-list `((null ,<empty-list>) (state ,<sequence>)) nil nil nil)
   (lambda (emp-list state) (declare (ignore emp-list state)) nil)))
-(add-method
- dylan/current-element
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>) (state ,<sequence>))
-                   nil nil nil)
-  (lambda (string state) (char string (aref state 0)))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/current-element
+   (dylan%function->method
+    (make-param-list `((string ,class) (state ,<sequence>))
+                     nil nil nil)
+    (lambda (string state) (char string (aref state 0))))))
 (add-method
  dylan/current-element
  (dylan%function->method

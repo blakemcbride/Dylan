@@ -438,4 +438,19 @@ error
    (print (list (grams (min (w 5) (w 2) (w 9))) (grams (max (w 5) (w 2) (w 9)))))"
   "(2 9)
 ")
+
+ ;; Chapter 11, as: "Predefined methods allow coercion between numeric
+ ;; types", answering "a new instance of class that has the same contents
+ ;; as object": a float converts to the exact number it holds, so to an
+ ;; integer only when it is integral and to a ratio only when it is not.
+ ;; From the specification.
+ (ch14-as-exact
+  "(define try (method (c x) (handler-case (as c x) ((<error>) 'error))))
+   (print (list (try <integer> 3.0) (try <integer> -7.0s0) (try <integer> 2.5) (try <integer> 0.0)))
+   (print (list (try <rational> 0.5) (try <rational> 3.0) (try <rational> -0.25s0)))
+   (print (list (try <ratio> 0.5) (try <ratio> 2.0) (try <integer> (as <extended-float> 4))))"
+  "(3 -7 error 0)
+(1/2 3 -1/4)
+(1/2 error 4)
+")
 )

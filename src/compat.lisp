@@ -309,6 +309,23 @@ can vanish while a caller walks it."
 (defun scheme-sort! (sequence predicate)
   (stable-sort sequence predicate))
 
+;;;; Extended floats
+;;;
+;;; Chapter 14 has three float classes; Common Lisp, as SBCL has it, two
+;;; formats, its LONG-FLOAT being its DOUBLE-FLOAT.  So an <extended-float>
+;;; is a double-float in a structure of its own, as in the compiler to C
+;;; it is a C double with a class of its own.  The numeric generic
+;;; functions take it apart (runtime-extended-float.lisp).
+
+(defstruct (extended-float (:constructor make-extended-float (value))
+                           (:predicate extended-float?)
+                           (:copier nil))
+  (value 0d0 :type double-float))
+
+(defmethod make-load-form ((object extended-float) &optional environment)
+  (declare (ignore environment))
+  `(make-extended-float ,(extended-float-value object)))
+
 ;;;; The Dylan printer
 ;;;
 ;;; Thomas printed its values with the host Scheme's WRITE and DISPLAY.  In
@@ -467,7 +484,8 @@ shown as Dylan writes them."
              do (unless (zerop i) (write-char #\Space stream))
                 (rec (aref object i)))
        (write-char #\) stream))
-      ((floatp object) (out (dylan-float-string object)))
+      ((or (floatp object) (extended-float? object))
+       (out (dylan-float-string object)))
       ((complexp object)
        (out "#c(")
        (rec (realpart object))
@@ -600,6 +618,13 @@ back as X, in fixed notation when its magnitude is at least 1e-5 and below
 and its exponent (1.5s0), a double-float -- the default format, as when
 reading -- with e and its exponent only when it has one (9.0, 1.0e20)."
   (cond
+    ((extended-float? x)
+     (let ((string (dylan-float-string (extended-float-value x))))
+       ;; As a double prints, with l and its exponent (1.5l0)
+       (let ((e (position #\e string)))
+         (cond ((not (find #\. string)) string) ; +nan, +infinity
+               (e (concatenate 'string (subseq string 0 e) "l" (subseq string (1+ e))))
+               (t (concatenate 'string string "l0"))))))
     #+sbcl
     ((sb-ext:float-nan-p x) "+nan")
     #+sbcl
@@ -754,7 +779,29 @@ consuming it, or NIL at end of file."
                   (skip-dylan-block-comment stream))
                  (t (return ch)))))
 
+;;; Strings.  A <byte-string> is a simple Lisp string; a <unicode-string>,
+;;; one that is not simple, so that GET-TYPE can tell them apart.  As in
+;;; the compiler to C, a string constant with a character above code 255
+;;; is a <unicode-string>.
+
+(defun make-unicode-string (size &optional (fill #\Space))
+  (make-array size :element-type 'character :initial-element fill
+                   :adjustable t))
+
+(defun unicode-string? (object)
+  (and (stringp object) (not (simple-string-p object))))
+
+(defun as-unicode-string (string)
+  "A new <unicode-string> of the characters of STRING."
+  (replace (make-unicode-string (length string)) string))
+
 (defun read-dylan-string (stream)
+  (let ((string (read-dylan-string-characters stream)))
+    (if (some (lambda (ch) (> (char-code ch) 255)) string)
+        (as-unicode-string string)
+        string)))
+
+(defun read-dylan-string-characters (stream)
   (read-char stream)                    ; the opening quote
   (with-output-to-string (out)
     (loop for ch = (read-char stream nil nil)

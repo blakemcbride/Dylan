@@ -71,7 +71,7 @@ Class & What it is \\
 \code{<list>}, \code{<pair>}, \code{<empty-list>} & linked lists of pairs (sealed) \\
 \code{<simple-object-vector>} & a fixed-size vector of any objects (sealed) \\
 \code{<byte-string>} & a fixed-size string of 8-bit characters (sealed) \\
-\code{<unicode-string>} & a fixed-size string of any characters (sealed; compiler to C only) \\
+\code{<unicode-string>} & a fixed-size string of any characters (sealed) \\
 \code{<stretchy-vector>} & a vector that grows and shrinks \\
 \code{<deque>} & a double-ended queue \\
 \code{<range>} & an arithmetic progression, possibly unbounded; not mutable \\
@@ -842,12 +842,12 @@ characters. \code{"..."} writes a constant string; \code{make} of
 (size "abc")                        ; => 3
 \end{dylan}
 
-\noindent The implementations differ on Unicode. In the compiler to C a
-string literal with a character above code 255 is a
+\noindent A string literal with a character above code 255 is a
 \code{<unicode-string>}, and a byte string cannot hold such a character
-(storing one is an error). In the Common Lisp implementation every string
-is a \code{<byte-string>} that holds any character, and \code{make} of
-\code{<unicode-string>} is an error.
+(storing one is an error). \code{make} and \code{as} of
+\code{<unicode-string>} make one from any characters, and the new
+sequences of \code{copy-sequence}, \code{reverse}, \code{add},
+\code{as-lowercase} and the like keep it a \code{<unicode-string>}.
 
 \begin{warnbox}
 A string literal is a constant, and the compiler to C may share one

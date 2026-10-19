@@ -101,6 +101,17 @@
                 nil 'instance nil dylan/type-error-expected-type
                 'type-error-expected-type nil nil nil :type nil)
 
+;;; Chapter 13: the initialization argument condition: is accepted, and
+;;; ignored, by <restart>.
+(defparameter dylan/restart-condition
+  (dylan%generic-fn 'restart-condition
+                    (make-param-list `((restart ,<restart>)) nil nil nil)
+                    nil))
+
+(dylan%add-slot <restart>
+                nil 'instance nil dylan/restart-condition
+                'restart-condition dylan%false t nil :condition nil)
+
 (dylan%add-slot <simple-warning>
                 nil 'instance nil dylan/condition-format-string
                 'condition-format-string nil nil nil :format-string nil)
@@ -334,10 +345,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (dylan%generic-fn
    'return-description
    (make-param-list `((condition ,<condition>)) nil nil nil)
-   (lambda (condition)
-     (dylan-call dylan/error
-                 "(return-description <condition>) -- not specialized"
-                 condition))))
+   (lambda (condition) (declare (ignore condition)) dylan%false)))
 
 ;;; Chapter 13: a warning's recovery protocol is that any value can be
 ;;; returned and will be ignored.

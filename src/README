@@ -111,6 +111,8 @@ not within this one, and they no longer exist here.
   runtime-extensions.lisp  the language extensions the MIT kit added
   runtime-printing.lisp    new -- streams, format and print-object, as the
                              compiler to C has them
+  runtime-extended-float.lisp
+                           new -- <extended-float> arithmetic
   runtime-fast-paths.lisp  new -- guards for the inline arithmetic and
                              element calls the compiler emits
   rep.lisp                 src/portable-rep.scm

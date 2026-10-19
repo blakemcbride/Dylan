@@ -25,7 +25,7 @@
        (simple-key (list (append reals (list <character> <symbol> <keyword>))))
        (two-characters (list (list <character>) (list <character>)))
        (vector-index (list (list <simple-object-vector>) (list <integer>)))
-       (string-index (list (list <byte-string>) (list <integer>)))
+       (string-index (list (list <byte-string> <unicode-string>) (list <integer>)))
        (one-vector (list (list <simple-object-vector>)))
        (one-list (list (list <pair> <empty-list>)))
        (one-range (list (list <range>))))

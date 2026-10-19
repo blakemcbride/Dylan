@@ -316,7 +316,7 @@ Each line gives the best of three runs for each, their ratios, and
 
 | | |
 |---|---|
-| `src/` | the Common Lisp implementation — 39 Lisp files, ~15,200 lines |
+| `src/` | the Common Lisp implementation — 40 Lisp files, ~15,500 lines |
 | `src/README` | how it works, and which Thomas file each file grew from |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
 | `dylan-examples.dyl` | the examples from the Dylan book |

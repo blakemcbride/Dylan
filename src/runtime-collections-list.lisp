@@ -50,23 +50,19 @@
  dylan/binary=
  (dylan%function->method
   two-lists
+  ;; Chapter 9: lists are = when their elements are = (not id?), and a
+  ;; dotted list's final cdrs are = too.
   (lambda (list-1 list-2)
-    (let ((size-1 (collection-size list-1))
-          (size-2 (collection-size list-2)))
-      (if (not (= size-1 size-2))
-          dylan%false
-          (do ((state-1 (initial-state list-1)
-                        (next-state list-1 state-1))
-               (state-2 (initial-state list-2)
-                        (next-state list-2 state-2)))
-              ;; Elements are compared with = (chapter 9), not id?.
-              ((or (or (not state-1) (not state-2))
-                   (false? (dylan-call dylan/=
-                                       (current-element
-                                                   list-1 state-1)
-                                       (current-element
-                                                   list-2 state-2))))
-               (bool (not (or state-1 state-2))))))))))
+    (loop
+      (cond ((and (consp list-1) (consp list-2))
+             (when (false? (dylan-call dylan/= (car list-1) (car list-2)))
+               (return dylan%false))
+             (setf list-1 (cdr list-1)
+                   list-2 (cdr list-2)))
+            ((or (consp list-1) (consp list-2)) (return dylan%false))
+            ((and (null list-1) (null list-2)) (return t))
+            ((or (null list-1) (null list-2)) (return dylan%false))
+            (t (return (dylan-call dylan/= list-1 list-2))))))))
 
 (add-method
  dylan/as

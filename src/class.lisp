@@ -68,7 +68,9 @@
   ;; EQL, not EQ: numbers and characters that are the same value are the
   ;; same object in Dylan, but need not be EQ in Common Lisp (floats and
   ;; bignums, for instance).
-  (eql object-1 object-2))
+  (or (eql object-1 object-2)
+      (and (extended-float? object-1) (extended-float? object-2)
+           (eql (extended-float-value object-1) (extended-float-value object-2)))))
 
 (defun dylan%false-fn () nil)
 

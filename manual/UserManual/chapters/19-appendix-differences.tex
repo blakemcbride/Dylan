@@ -206,10 +206,9 @@ program depends on none of these; each is described where it arises.
   leaves it unhandled in the compiler to C; in the interactive
   implementation \code{check-type} answers what the handler returned
   (Section~\ref{sec:conditions-signalling}).
-\item Strings: in the compiler to C a literal with a character above
-  code 255 is a \code{<unicode-string>}, and equal literals may be one
-  object; in the interactive implementation every string is a
-  \code{<byte-string>} (Section~\ref{sec:collections-strings}).
+\item Equal string literals may be one object in the compiler to C;
+  in the interactive implementation each is its own
+  (Section~\ref{sec:collections-strings}).
 \item \code{min} and \code{max} of equal numbers of different classes,
   and functions whose true result is complex or infinite, answer
   differently (Sections~\ref{sec:numbers-misc}

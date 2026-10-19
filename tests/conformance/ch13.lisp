@@ -365,9 +365,10 @@ last
  ;; "Operators for Interactive Handling" and "Operators for
  ;; Introspection": restart-query (the default method for <restart> does
  ;; nothing), return-query, return-allowed? (the default method for
- ;; <condition> returns #f) and return-description, with methods for a
- ;; class of the program's own whose recovery protocol allows returning.
- ;; From the specification.
+ ;; <condition> returns #f; a warning's recovery protocol is that any value
+ ;; can be returned, so for a warning it is #t) and return-description,
+ ;; with methods for a class of the program's own whose recovery protocol
+ ;; allows returning.  From the specification.
  (ch13-introspection
   "(define-class <returnable> (<condition>))
    (define-method return-allowed? ((c <returnable>)) #t)
@@ -380,7 +381,7 @@ last
    (define r (make <simple-restart>))
    (restart-query r)
    (print (instance? r <simple-restart>))"
-  "(#f #f #t)
+  "(#f #t #t)
 \"return a number\"
 (1 2)
 #t

@@ -119,25 +119,26 @@ simple object vector."
 ;; These four generic operations must be specialized for the special cases
 ;; of <byte-string> and <simple-object-vector>
 
-(add-method dylan/get-array-value
-            (one-arg 'string <byte-string> #'identity))
-(add-method
- dylan/set-array-value!
- (dylan%function->method
-  (make-param-list `((string ,<byte-string>) (value ,<object>)) nil nil nil)
-  (lambda (string value)
-    (dylan-call dylan/error "set-array-value! -- internal error on string"
-                string value))))
-(add-method dylan/get-array-dimensions
-            (one-arg 'string <byte-string>
-                     (lambda (string) (list (length string)))))
-(add-method
- dylan/set-array-dimensions!
- (dylan%function->method
-  (make-param-list `((string ,<byte-string>) (value ,<object>)) nil nil nil)
-  (lambda (string value)
-    (dylan-call dylan/error "set-array-dimensions! -- internal error on string"
-                string value))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method dylan/get-array-value
+              (one-arg 'string class #'identity))
+  (add-method
+   dylan/set-array-value!
+   (dylan%function->method
+    (make-param-list `((string ,class) (value ,<object>)) nil nil nil)
+    (lambda (string value)
+      (dylan-call dylan/error "set-array-value! -- internal error on string"
+                  string value))))
+  (add-method dylan/get-array-dimensions
+              (one-arg 'string class
+                       (lambda (string) (list (length string)))))
+  (add-method
+   dylan/set-array-dimensions!
+   (dylan%function->method
+    (make-param-list `((string ,class) (value ,<object>)) nil nil nil)
+    (lambda (string value)
+      (dylan-call dylan/error "set-array-dimensions! -- internal error on string"
+                  string value)))))
 
 (add-method dylan/get-array-value
             (one-arg 'vector <simple-object-vector> #'identity))

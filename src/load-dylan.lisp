@@ -92,6 +92,7 @@
     "runtime-collections-vector"        ; Vectors
     "runtime-exceptions"                ; Exceptions
     "runtime-printing"                  ; Streams and printing
+    "runtime-extended-float"            ; <extended-float> arithmetic
     "runtime-fast-paths"))              ; Inline arithmetic and element
 
 (defparameter *dylan-fasl-directory*

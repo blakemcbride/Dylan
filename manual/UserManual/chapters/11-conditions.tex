@@ -430,13 +430,14 @@ Four generic functions let an interactive debugger ask whether a
 condition may be handled by returning (\code{return-allowed?}), what
 returning would mean (\code{return-description}), and the user for the
 contents of a restart (\code{restart-query}) or for values to return
-(\code{return-query}). The compiler to C, having no debugger, defines
-only methods that do nothing: all four answer \code{\#f}. In the Common
-Lisp implementation \code{return-allowed?} answers \code{\#t} for a
-warning, whose recovery protocol allows returning, and
-\code{return-description} then answers the string
-\code{"Return; the value is ignored."}; its \code{return-query} reads
-values typed by the user.
+(\code{return-query}). For any condition \code{return-allowed?} and
+\code{return-description} answer \code{\#f}, but for a warning, whose
+recovery protocol allows returning \dylanbook{chapter 13},
+\code{return-allowed?} answers \code{\#t} and
+\code{return-description} the string \code{"Return; the value is
+ignored."}. \code{restart-query} does nothing. The compiler to C, having
+no debugger, has \code{return-query} answer \code{\#f}; the Common Lisp
+implementation's reads values typed by the user.
 
 \section{Defining your own conditions}\label{sec:conditions-defining}
 

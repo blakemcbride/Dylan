@@ -133,6 +133,11 @@ module: dylan
 (define-generic-function return-description (condition))
 (define-method return-description ((c <condition>)) #f)
 
+;;; A warning's recovery protocol is that any value can be returned and
+;;; will be ignored (chapter 13).
+(define-method return-allowed? ((c <warning>)) #t)
+(define-method return-description ((c <warning>)) "Return; the value is ignored.")
+
 ;;; The runtime's own errors
 
 (define %runtime-error

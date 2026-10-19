@@ -65,6 +65,7 @@
 
 (defun get-type (obj)
   (cond ((instance? obj) (instance.class obj))
+        ((extended-float? obj) <extended-float>)
         ((numberp obj)
          (cond ((integerp obj) <integer>)
                ((rationalp obj) <ratio>)
@@ -82,7 +83,7 @@
         ((consp obj) <pair>)
         ;; Unlike Scheme, Common Lisp strings *are* vectors, so the string
         ;; test has to come first.
-        ((stringp obj) <byte-string>)
+        ((stringp obj) (if (simple-string-p obj) <byte-string> <unicode-string>))
         ((vectorp obj) <simple-object-vector>)
         ((characterp obj) <character>)
         ((functionp obj) (function-type obj))

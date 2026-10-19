@@ -61,10 +61,36 @@
                       (next-state collection state))
                (index 0 (+ index 1)))
               ((not state) new-string)
-            (let ((cur-element (current-element
-                                           collection state)))
-              (setf (char new-string index)
-                    (dylan-call dylan/as <character> cur-element)))))))))
+            (let ((character (dylan-call dylan/as <character>
+                                         (current-element collection state))))
+              (check-byte-character new-string character)
+              (setf (char new-string index) character))))))))
+
+;;; Chapter 12: <unicode-string> (see MAKE-UNICODE-STRING in compat.lisp)
+(add-method
+ dylan/as
+ (dylan%function->method
+  (make-param-list `((class ,(dylan%make-singleton <unicode-string>))
+                     (collection ,<collection>)) nil nil nil)
+  (lambda (class collection)
+    (declare (ignore class))
+    (if (unicode-string? collection)
+        collection
+        (as-unicode-string (dylan-call dylan/as <byte-string> collection))))))
+
+(defun check-byte-character (string character &optional (prefix ""))
+  "Signal an error, as the compiler to C does, if CHARACTER is to go into
+STRING, a <byte-string>, and its code is above 255."
+  (when (and (simple-string-p string) (characterp character)
+             (> (char-code character) 255))
+    (dylan-call dylan/error
+                (concatenate 'string prefix
+                             "a <byte-string> holds only 8-bit characters: ~s")
+                character)))
+
+(defun string-like (original result)
+  "The string RESULT, made from ORIGINAL, as a string of ORIGINAL's class."
+  (if (unicode-string? original) (as-unicode-string result) result))
 
 (add-method
  dylan/as
@@ -101,9 +127,9 @@
         (dylan-call dylan/error
                     "(make (singleton <string>)) -- fill: not a character"
                     fill))
-      (if have-fill?
-          (make-string size :initial-element fill)
-          (make-string size))))))
+      (when have-fill? (check-byte-character "" fill "make: "))
+      ;; As in the compiler to C, the fill is a space unless given.
+      (make-string size :initial-element (if have-fill? fill #\Space))))))
 
 ;;;
 ;;; STRING SPECIALIZED MAKE
@@ -118,8 +144,8 @@
     (dylan-apply dylan/make <byte-string> rest))))
 
 ;;;
-;;; UNICODE-STRING SPECIALIZED MAKE
-;;; <unicode-string> not supported
+;;; UNICODE-STRING SPECIALIZED MAKE: a <byte-string>'s characters in a
+;;; <unicode-string>
 ;;;
 (add-method
  dylan/make
@@ -127,14 +153,21 @@
   (make-param-list `((unicode ,(dylan%make-singleton <unicode-string>)))
                    nil nil t)
   (lambda (class &rest rest)
-    (declare (ignore class rest))
-    (dylan-call dylan/error
-                "(make (singleton <unicode-string>)) -- not supported"))))
+    (declare (ignore class))
+    (as-unicode-string (dylan-apply dylan/make <byte-string> rest)))))
 
 ;;;
 ;;; FUNCTIONS FOR COLLECTIONS (page 99)
 ;;;
 (add-method dylan/size (one-arg 'string <byte-string> #'length))
+(add-method dylan/size (one-arg 'string <unicode-string> #'length))
+
+(add-method dylan/class-for-copy
+            (dylan%function->method
+             (make-param-list `((string ,<unicode-string>)) nil nil nil)
+             (lambda (x)
+               (declare (ignore x))
+               <unicode-string>)))
 
 (add-method dylan/class-for-copy
             (dylan%function->method one-string
@@ -145,16 +178,18 @@
 ;;;;
 ;;;; Functions for Sequences (page 104)
 ;;;;
-(add-method
- dylan/add
- (dylan%function->method
-  one-byte-string-and-an-object
-  (lambda (the-string new-element)
-    (if (characterp new-element)
-        (concatenate 'string (string new-element) the-string)
-        (dylan-call dylan/error
-                    "(add <byte-string> <object>) -- cannot add a non-character to string"
-                    the-string new-element)))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/add
+   (dylan%function->method
+    (make-param-list `((string ,class) (object ,<object>)) nil nil nil)
+    (lambda (the-string new-element)
+      (if (characterp new-element)
+          (string-like the-string
+                       (concatenate 'string (string new-element) the-string))
+          (dylan-call dylan/error
+                      "(add <string> <object>) -- cannot add a non-character to string"
+                      the-string new-element))))))
 
 (add-method
  dylan/concatenate
@@ -170,30 +205,43 @@
 (add-method
  dylan/concatenate
  (dylan%function->method
+  (make-param-list `((unicode-string ,<unicode-string>)) nil 'rest nil)
+  (lambda (string-1 &rest rest)
+    (as-unicode-string
+     (apply #'concatenate 'string string-1
+            (mapcar (lambda (seq) (dylan-call dylan/as <byte-string> seq)) rest))))))
+
+;;; Any other <string>, of a class of the program's own
+(add-method
+ dylan/concatenate
+ (dylan%function->method
   (make-param-list `((string ,<string>)) nil 'rest nil)
   (lambda (string-1 &rest rest)
-    (dylan-call dylan/apply dylan/concatenate string-1 rest))))
+    (list->sequence-like string-1
+                         (mapcan #'sequence->list (cons string-1 rest))))))
 
-(add-method
- dylan/reverse
- (dylan%function->method
-  one-byte-string
-  (lambda (string-1)
-    (let ((result (make-string (length string-1))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/reverse
+   (dylan%function->method
+    (make-param-list `((string ,class)) nil nil nil)
+    (lambda (string-1)
+      (let ((result (make-string (length string-1))))
+        (do ((from (- (length string-1) 1) (- from 1))
+             (to 0 (+ to 1)))
+            ((< from 0) (string-like string-1 result))
+          (setf (char result to) (char string-1 from))))))))
+
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/reverse!
+   (dylan%function->method
+    (make-param-list `((string ,class)) nil nil nil)
+    (lambda (string-1)
       (do ((from (- (length string-1) 1) (- from 1))
            (to 0 (+ to 1)))
-          ((< from 0) result)
-        (setf (char result to) (char string-1 from)))))))
-
-(add-method
- dylan/reverse!
- (dylan%function->method
-  one-byte-string
-  (lambda (string-1)
-    (do ((from (- (length string-1) 1) (- from 1))
-         (to 0 (+ to 1)))
-        ((<= from to) string-1)
-      (rotatef (char string-1 to) (char string-1 from))))))
+          ((<= from to) string-1)
+        (rotatef (char string-1 to) (char string-1 from)))))))
 
 ;;;; Operations on Strings (page 119)
 
@@ -204,44 +252,48 @@
 ;;; The generic function DYLAN/AS-LOWERCASE is defined in
 ;;; runtime-methods.lisp.
 
-(add-method
- dylan/as-lowercase
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>)) nil nil nil)
-  (lambda (string) (map 'string #'char-downcase string))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/as-lowercase
+   (dylan%function->method
+    (make-param-list `((byte-string ,class)) nil nil nil)
+    (lambda (string) (string-like string (map 'string #'char-downcase string))))))
 
 (defparameter dylan/as-lowercase!
   (dylan%generic-fn 'as-lowercase! one-string nil))
 
-(add-method
- dylan/as-lowercase!
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>)) nil nil nil)
-  (lambda (string)
-    (do ((index 0 (+ index 1)))
-        ((>= index (length string)) string)
-      (setf (char string index) (char-downcase (char string index)))))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/as-lowercase!
+   (dylan%function->method
+    (make-param-list `((byte-string ,class)) nil nil nil)
+    (lambda (string)
+      (do ((index 0 (+ index 1)))
+          ((>= index (length string)) string)
+        (setf (char string index) (char-downcase (char string index))))))))
 
 ;;; The generic function DYLAN/AS-UPPERCASE is defined in
 ;;; runtime-methods.lisp.
 
-(add-method
- dylan/as-uppercase
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>)) nil nil nil)
-  (lambda (string) (map 'string #'char-upcase string))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/as-uppercase
+   (dylan%function->method
+    (make-param-list `((byte-string ,class)) nil nil nil)
+    (lambda (string) (string-like string (map 'string #'char-upcase string))))))
 
 (defparameter dylan/as-uppercase!
   (dylan%generic-fn 'as-uppercase! one-string nil))
 
-(add-method
- dylan/as-uppercase!
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>)) nil nil nil)
-  (lambda (string)
-    (do ((index 0 (+ index 1)))
-        ((>= index (length string)) string)
-      (setf (char string index) (char-upcase (char string index)))))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/as-uppercase!
+   (dylan%function->method
+    (make-param-list `((byte-string ,class)) nil nil nil)
+    (lambda (string)
+      (do ((index 0 (+ index 1)))
+          ((>= index (length string)) string)
+        (setf (char string index) (char-upcase (char string index))))))))
 
 ;;; PREVIOUS-STATE for strings is the array method: string states are
 ;;; index vectors.  (The Scheme had a method here specialized on integer
@@ -250,55 +302,60 @@
 ;;;
 ;;; Collection Keys
 ;;;
-(add-method
- dylan/element
- (dylan%dylan-callable->method
-  (make-param-list `((byte-string ,<byte-string>) (index ,<integer>))
-                   nil nil '(:default))
-  (lambda (multiple-values next-method string-value index &rest rest)
-    (declare (ignore multiple-values))
-    (dylan%keyword-validate next-method rest '(:default))
-    (let ((size (length string-value)))
-      (if (and (>= index 0) (< index size))
-          (char string-value index)
-          ;; N.B. the Scheme passed the LIST (default:) as the keyword to
-          ;; look for rather than the keyword itself, so the default: value
-          ;; was never found; fixed.
-          (dylan%find-keyword
-           rest :default
-           (lambda ()
-             (dylan-call
-              dylan/error
-              "(element <byte-string> <integer>) -- invalid index with no default value"
-              string-value index))))))))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/element
+   (dylan%dylan-callable->method
+    (make-param-list `((byte-string ,class) (index ,<integer>))
+                     nil nil '(:default))
+    (lambda (multiple-values next-method string-value index &rest rest)
+      (declare (ignore multiple-values))
+      (dylan%keyword-validate next-method rest '(:default))
+      (let ((size (length string-value)))
+        (if (and (>= index 0) (< index size))
+            (char string-value index)
+            ;; N.B. the Scheme passed the LIST (default:) as the keyword to
+            ;; look for rather than the keyword itself, so the default: value
+            ;; was never found; fixed.
+            (dylan%find-keyword
+             rest :default
+             (lambda ()
+               (dylan-call
+                dylan/error
+                "(element <byte-string> <integer>) -- invalid index with no default value"
+                string-value index)))))))))
 
 ;;;
 ;;; Mutable Collections
 ;;;
-(add-method
- dylan/setter/current-element/
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>) (state ,<object>)
-                     (new-value ,<object>))
-                   nil nil nil)
-  (lambda (the-string state new-value)
-    (setf (char the-string (aref state 0)) new-value)
-    new-value)))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/setter/current-element/
+   (dylan%function->method
+    (make-param-list `((byte-string ,class) (state ,<object>)
+                       (new-value ,<object>))
+                     nil nil nil)
+    (lambda (the-string state new-value)
+      (check-byte-character the-string new-value)
+      (setf (char the-string (aref state 0)) new-value)
+      new-value))))
 
-(add-method
- dylan/setter/element/
- (dylan%function->method
-  (make-param-list `((byte-string ,<byte-string>) (index ,<object>)
-                     (new-value ,<object>))
-                   nil nil nil)
-  (lambda (string index new-value)
-    (unless (and (integerp index) (< -1 index (length string)))
-      (dylan-call dylan/error
-                  "((setter element) <byte-string>) -- invalid index"
-                  string index))
-    (unless (characterp new-value)
-      (dylan-call dylan/error
-                  "((setter element) <byte-string>) -- not a character"
-                  string new-value))
-    (setf (char string index) new-value)
-    new-value)))
+(dolist (class (list <byte-string> <unicode-string>))
+  (add-method
+   dylan/setter/element/
+   (dylan%function->method
+    (make-param-list `((byte-string ,class) (index ,<object>)
+                       (new-value ,<object>))
+                     nil nil nil)
+    (lambda (string index new-value)
+      (unless (and (integerp index) (< -1 index (length string)))
+        (dylan-call dylan/error
+                    "((setter element) <string>) -- invalid index"
+                    string index))
+      (unless (characterp new-value)
+        (dylan-call dylan/error
+                    "((setter element) <string>) -- not a character"
+                    string new-value))
+      (check-byte-character string new-value)
+      (setf (char string index) new-value)
+      new-value))))

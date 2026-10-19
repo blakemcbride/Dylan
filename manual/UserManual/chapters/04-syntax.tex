@@ -114,10 +114,9 @@ number classes and arithmetic; here is only how numbers are written.
 (list #o-17 #b101 #xff/2 1.0e-3)   ; => (-15 5 255/2 0.001)
 \end{dylan}
 
-\noindent Both implementations print double floats the same way, but they
-print a single float and a large or small double float differently: the
-compiler to C prints \code{1.5s0} and \code{10000000000.0} where the Common
-Lisp implementation prints \code{1.5f0} and \code{1.0e10}.
+\noindent A single float prints with its \code{s} marker, \code{1.5s0},
+and a double float without one, \code{10000000000.0}
+(Section~\ref{sec:numbers-printing}).
 
 \begin{warnbox}
 The compiler to C has no bignums: an integer is 63 bits, and an integer

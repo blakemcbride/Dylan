@@ -325,3 +325,28 @@ module: dylan
 (define-method as ((class (singleton <single-float>)) (x <real>)) (%float x 0))
 (define-method as ((class (singleton <double-float>)) (x <real>)) (%float x 1))
 (define-method as ((class (singleton <extended-float>)) (x <real>)) (%float x 2))
+
+;;; From a float to an exact number: the number it holds exactly (chapter 11:
+;;; a new instance with the same contents), so an integer only from an
+;;; integral float and a ratio only from one that is not.
+
+(define %float->rational
+  (method (x)
+    (bind ((n d (%float-fraction x)))
+      (bind ((n-integer r1 (truncate n))
+             (d-integer r2 (truncate d)))
+        (/ n-integer d-integer)))))
+
+(define-method as ((class (singleton <rational>)) (x <float>)) (%float->rational x))
+
+(define-method as ((class (singleton <integer>)) (x <float>))
+  (bind ((r (%float->rational x)))
+    (if (%instance? r <integer>)
+        r
+        (error "as: ~s cannot be converted to ~s" x class))))
+
+(define-method as ((class (singleton <ratio>)) (x <float>))
+  (bind ((r (%float->rational x)))
+    (if (%instance? r <ratio>)
+        r
+        (error "as: ~s cannot be converted to ~s" x class))))

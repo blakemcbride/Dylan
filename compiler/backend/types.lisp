@@ -162,7 +162,14 @@ used only to call them, and the sole methods of generic functions used so."
                                   (gethash (first values) *let-values*)))
                       (fn (and (ir-lambda-p value) (ir-lambda-fn value)))
                       (cfun (and fn (gethash fn *cfuns*))))
-                 (when (and cfun (null (cfun-env cfun)) (not (gethash var assigned))
+                 (when (and fn
+                            ;; Before the C functions are made (inline.lisp),
+                            ;; what their environment would hold
+                            (if cfun
+                                (null (cfun-env cfun))
+                                (and (null (ir-fn-free-vars fn))
+                                     (notany #'ivar-p (ir-fn-specializers fn))))
+                            (not (gethash var assigned))
                             (not (module-var-thread-local-p var))
                             (= (length (module-var-definitions var)) 1))
                    (setf (gethash var *global-functions*) fn))))
@@ -266,6 +273,7 @@ or apply of %make to it."
         (results (make-hash-table :test #'eq))   ; ir-fn -> type of its value
         (declared (make-hash-table :test #'eq))  ; ivar -> the class a bind declares
         (callers (analyze-calls fns)))
+    (when *or-false-types* (clrhash *or-false-types*))
     (labels ((source (var s)
                ;; An expression is evaluated with the refinements where it is.
                (push (if (or (eq s :unknown) (class-info-p s)) s (cons s *refinements*))

@@ -44,6 +44,7 @@
     "backend/codegen"
     "backend/calls"
     "backend/types"
+    "backend/inline"
     "backend/output"
     "driver"))
 

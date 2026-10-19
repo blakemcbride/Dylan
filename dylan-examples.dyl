@@ -250,7 +250,7 @@ bar
     (list x y)))
 ;Value: (20 10)
 
-(bind ((!rest nums (edges 100 2)))
+(bind ((#rest nums (edges 100 2)))
   nums)
 ;Value: (98 102)
 
@@ -284,7 +284,7 @@ bar
 
 ;; Page 43
 
-(define-method show-rest (a !rest b)
+(define-method show-rest (a #rest b)
   (print a)
   (print b)
   #t)
@@ -304,10 +304,10 @@ bar
 ;; Page 44
 
 ;;; +
-(define-method make-coffee (!rest x) x)
+(define-method make-coffee (#rest x) x)
 ;Value: make-coffee
 
-(define-method percolate (!key (brand 'maxwell-house)
+(define-method percolate (#key (brand 'maxwell-house)
                                (cups 4)
                                (strength 'strong))
   (make-coffee brand cups strength))
@@ -330,7 +330,7 @@ bar
 (define-method align-objects (a b c d) (list a b c d))
 ;Value: align-objects
 
-(define-method layout (widget !key (position: the-pos)
+(define-method layout (widget #key (position: the-pos)
                                    (size: the-size))
   (bind ((the-sibling (sibling widget)))
     (unless (= the-pos (position the-sibling))
@@ -371,7 +371,7 @@ bar
 ;; Page 45
 
 ;;; In lieu of format, print lists.
-(define-method show-keys (req1 req2 !key foo)
+(define-method show-keys (req1 req2 #key foo)
   (print (list "requireds: " req1 req2))
   (print (list "key: " foo))
   #t)
@@ -389,16 +389,16 @@ bar
 
 ;; Page 46
 
-(define-method label ((x <object>) !key price)
+(define-method label ((x <object>) #key price)
   (list price x))
 ;Value: label
 
 ;;; length changed to size
-(define-method label ((x <sequence>) !key unit-price)
+(define-method label ((x <sequence>) #key unit-price)
   (add x (* unit-price (size x))))
 ;Value: label
 
-(define-method label ((x <list>) !rest info !key calories)
+(define-method label ((x <list>) #rest info #key calories)
   (add x calories))
 ;Value: label
 
@@ -422,7 +422,7 @@ bar
 
 ;; Page 46
 
-(define-method test (the-req !rest the-rest !key a b)
+(define-method test (the-req #rest the-rest #key a b)
   (print the-req)
   (print the-rest)
   (print a)
@@ -1070,7 +1070,7 @@ math-functions
 ;; Page 80
 
 (define-method double ((my-method <function>))
-  (method (!rest args)
+  (method (#rest args)
     (apply my-method args)
     (apply my-method args)
     #f))

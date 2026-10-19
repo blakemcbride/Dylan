@@ -290,9 +290,6 @@ Each line gives the best of three runs for each, their ratios, and
 
 **Different behavior**
 
-- **`!key`, `!rest` and `!next`** are read as `#key`, `#rest` and `#next`,
-  as in Thomas, whose programs (the book's examples among them) use them;
-  so they cannot name variables. Every other name is allowed.
 - **Modules** are declared as design note 32 describes; the 1992 manual
   left that to the programming environment.
 - **Backquote.** Chapter 3 defers it to "a separate section of this

@@ -37,6 +37,9 @@ Command & What it tests \\
 \cmd{make -C runtime test} & the C runtime's data representation \\
 \code{(dylan:test-examples)} & the interactive implementation, on the
   book's examples \\
+\cmd{sbcl --script tests/interpreter/run.lisp} & the compiler's test
+  programs, run in the interactive implementation: by default the macro
+  cases \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -289,6 +292,29 @@ manual decides; the few remaining differences are listed in
 \file{src} directory, as shown, since \code{test-examples} finds the
 examples at \file{../dylan-examples.dyl}; give it another file name as
 its argument to run other examples the same way.
+
+\index{tests/interpreter/run.lisp@\file{tests/interpreter/run.lisp}}
+The programs the compiler is tested on can be run in the interactive
+implementation too, by \file{tests/interpreter/run.lisp}. It takes files
+of cases in the form of Section~\ref{sec:test-case-format}, and test
+names, as the compiler's runners do; runs each program in a module of its
+own; and compares its output with the expected output, and the message
+of the error it signals, if the case expects one, with the expected
+text. Without arguments it runs the macro cases,
+\file{tests/codegen/cases-macros.lisp}, since macros are the one
+extension both implementations have, and all of them must pass:
+
+\begin{shell}
+$ sbcl --script tests/interpreter/run.lisp
+11 programs, 0 failures
+$ sbcl --script tests/interpreter/run.lisp tests/codegen/cases-control.lisp
+\end{shell}
+
+The other case files are a measure of how far the two implementations
+agree. Programs that use the compiler's other extensions fail here by
+design; so do the many whose expected error message is the compiler's
+wording, where the interactive implementation reports the same error in
+other words; the rest are differences worth looking into.
 
 \section{Adding a test}\label{sec:test-adding}
 

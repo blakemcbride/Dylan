@@ -312,6 +312,7 @@
           (forms (cddr e)))
       (unless (variable-name? name)
         (dylan%error "DEFINE-METHOD -- illegal name" name params forms))
+      (check-not-macro name "DEFINE-METHOD")
       (funcall
        compiler `(method ,(rebuild-param-list params) ,@forms)
        mod-vars bound-vars nil

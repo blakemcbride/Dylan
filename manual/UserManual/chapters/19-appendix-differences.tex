@@ -83,6 +83,12 @@ mention as they go. Each entry says which implementation it concerns:
   \code{stream-contents}, and \code{format}; every printing function
   takes \code{stream:}. The manual uses streams and \code{format} but
   does not define them. There is no input.
+\item[Macros.] \code{define-macro}, \code{define-for-macros} and
+  \code{gensym} (Chapter~\ref{ch:extensions}). Under the compiler,
+  macro bodies run in a compile-time environment apart from the program;
+  in the interactive implementation, in the program's own.
+\item[Timing.] \code{current-milliseconds}, a clock in milliseconds
+  from a fixed but arbitrary moment.
 \end{description}
 
 \section{The interactive implementation}\label{sec:diff-interactive}
@@ -95,8 +101,8 @@ mention as they go. Each entry says which implementation it concerns:
 \item[\code{\#t} and \code{\#f}.] Their class, as \code{object-class}
   answers it, is \code{<object>}; the manual names no class for them.
   (The compiler differs; see below.)
-\item[No extensions of the compiler.] The interactive implementation has
-  none of the compiler's macros and threads.
+\item[No threads.] The interactive implementation has none of the
+  compiler's threads (Chapter~\ref{ch:extensions}).
 \end{description}
 
 \section{The compiler to C}\label{sec:diff-compiler}
@@ -172,9 +178,9 @@ classes are already fixed.
 All of these are extensions; the 1992 manual has none of them.
 
 \begin{itemize}
-\item \textbf{Macros}: \code{define-macro}, \code{define-for-macros},
-  and \code{gensym} at compile time; \cmd{dylanc -E} to see expansions
-  (Chapter~\ref{ch:extensions}).
+\item \textbf{Seeing macro expansions}: \cmd{dylanc -E}
+  (Chapter~\ref{ch:extensions}). The macros themselves are in both
+  implementations (Section~\ref{sec:diff-additions}).
 \item \textbf{Threads}: \code{make-thread}, \code{join-thread},
   \code{current-thread}, \code{thread-yield}; \code{<lock>},
   \code{<recursive-lock>}, \code{acquire-lock}, \code{release-lock} and
@@ -186,7 +192,6 @@ All of these are extensions; the 1992 manual has none of them.
   \code{dynamic-bind}; \code{<thread-error>} with
   \code{thread-error-thread} and \code{thread-error-condition}
   (Chapter~\ref{ch:extensions}).
-\item \textbf{Timing}: \code{current-milliseconds}.
 \end{itemize}
 
 \section{Where the two implementations disagree}\label{sec:diff-between}

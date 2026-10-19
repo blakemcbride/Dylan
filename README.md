@@ -15,7 +15,8 @@ language moved to an infix syntax:
   generic dispatch compiled to decision trees, type inference, inlining
   and unboxed floats, a generational garbage collector (the Memory Pool
   System, or the Boehm-Demers-Weiser collector by choice), and real
-  threads. It adds macros and threads, which the manual lacks.
+  threads. It adds threads, which the manual lacks; macros, which the
+  manual also lacks, both implementations add.
 
 The standard both follow is the 1992 manual itself; an annotated copy is in
 `manual/Dylan-1992/`. A user manual for this system — a tutorial, the
@@ -200,8 +201,8 @@ checking its arguments.
 How it works, phase by phase, and how fast and small its programs are, is
 in [`CompilerPlan.md`](CompilerPlan.md).
 
-**Macros** (an extension; the 1992 manual has none) are Common Lisp's
-kind, expanded while compiling:
+**Macros** (an extension; the 1992 manual has none; both implementations
+have them) are Common Lisp's kind, expanded while compiling:
 
 ```lisp
 (define-macro swap! (a b)
@@ -217,7 +218,10 @@ can write. Macros are exported and imported as variables are, and a local
 variable of the same name hides one. The bodies run in the Common Lisp
 implementation of Dylan, with its library, `gensym`, and what
 `(define-for-macros form ...)` defines — forms run only while compiling.
-`dylanc -E` writes each use of a macro and its expansion.
+Under the compiler they run in an environment of their own, apart from
+the program; in the interactive implementation, which compiles and runs a
+form at a time, they run in the program's own. `dylanc -E` writes each
+use of a macro and its expansion.
 
 **Threads** (an extension): `make-thread` with a function of no arguments,
 `join-thread` (which answers its values), `current-thread` and
@@ -270,6 +274,7 @@ $ sbcl --script tests/codegen/run.lisp      # the compiler's own
 $ sbcl --script tests/stress/run.lisp       # 10^8 tail calls; many threads
 $ sh tests/driver/run.sh                    # bin/dylanc
 $ make -C runtime test                      # the C runtime
+$ sbcl --script tests/interpreter/run.lisp  # the macro cases, in the Common Lisp implementation
 ```
 
 ## Benchmarks
@@ -318,7 +323,7 @@ Each line gives the best of three runs for each, their ratios, and
 - In the Common Lisp implementation, `lisp-variable` and `lisp-procedure`
   reach Common Lisp values and functions from Dylan. Lisp's `NIL` arrives
   as the empty list, not `#f`.
-- In the compiler to C: macros and threads, above.
+- In the compiler to C: threads, above. Macros, above, are in both.
 
 ## Repository layout
 

@@ -58,6 +58,13 @@
 
 ;;; Normal external entry points for compilation
 
+(defvar *dylan-macros* (make-hash-table :test #'eq)
+  "The Lisp name of a module variable -> (dylan-name . expander), for
+define-macro; see Macros, below.")
+
+(defvar *expansions* 0
+  "Macro expansions so far in the top-level form being compiled.")
+
 (defun compile-expression (e multi-value mod-vars continue)
   "E is a single Dylan expression.  MULTI-VALUE is an expression to be
 passed as the multi-value vector (or NIL) at runtime.  MOD-VARS is a list
@@ -67,6 +74,7 @@ of pre-existing module variables.  CONTINUE is a function that receives:
   c: the output code."
   ;; DEFVAR, not DEFPARAMETER: a variable some file already loaded has
   ;; defined keeps its value.
+  (setf *expansions* 0)
   (flet ((define-module-variable (name)
            `(defvar ,(name->module-variable name) ',the-unassigned-value))
          (define-module-getter (name)
@@ -259,6 +267,8 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     (freeze-methods dylan/freeze-methods)           ; Generic-Function
     (function-arguments dylan/function-arguments)   ; Generic-Function
     (gcd dylan/gcd)                                 ; Method
+    (gensym dylan/gensym)                           ; Method (an extension: macros)
+    (current-milliseconds dylan/current-milliseconds) ; Method (an extension: timing)
     (generic-function-methods                       ; Generic-Function
      dylan/generic-function-methods)
     (identity dylan/identity)                       ; Method
@@ -520,6 +530,10 @@ module its header names (design note 33), or DYLAN-USER."
        (let* ((name (variable->name e))
               (lexical (name->lexical name))
               (new-mod-vars (add-variable name bound-vars module-vars)))
+         (when (and (not (member lexical bound-vars))
+                    (gethash (name->module-variable name) *dylan-macros*))
+           (dylan%error (format nil "~a is a macro, not a variable"
+                                (dylan-symbol->string e))))
          (funcall continue
                   (cond ((member lexical bound-vars) lexical)
                         ((member name new-mod-vars)
@@ -531,6 +545,9 @@ module its header names (design note 33), or DYLAN-USER."
       (binding
        (funcall (cdr binding) (cdr e) module-vars bound-vars
                 #'really-compile multiple-values? continue))
+      ((macro-call? e bound-vars)
+       (really-compile (expand-macro-call e) module-vars bound-vars
+                       multiple-values? continue))
       ((and (consp e) (null (cdr (cl:last e))))
        (compile-forms e module-vars bound-vars #'really-compile nil
                       (lambda (forms module-vars)
@@ -549,7 +566,9 @@ module its header names (design note 33), or DYLAN-USER."
     (cond           . compile-cond-form)
     (define         . compile-define-form)
     (define-class   . compile-define-class-form)
+    (define-for-macros . compile-define-for-macros-form)
     (define-generic-function . compile-define-generic-function-form)
+    (define-macro   . compile-define-macro-form)
     (define-method  . compile-define-method-form)
     (define-module  . compile-define-module-form)
     (define-slot    . compile-define-slot-form)
@@ -648,6 +667,7 @@ module its header names (design note 33), or DYLAN-USER."
     (unless (variable-name? name)
       (dylan%error "bad DEFINE variable" forms))
     (check-not-imported name "DEFINE")
+    (check-not-macro name "DEFINE")
     (funcall really-compile value
              (add-module-variable (variable->name name) nil module-vars)
              bound-vars nil
@@ -668,6 +688,112 @@ module its header names (design note 33), or DYLAN-USER."
 ;;; COMPILE-DEFINE-GENERIC-FUNCTION-FORM is in the file comp-class.lisp
 ;;; COMPILE-DEFINE-METHOD-FORM is in the file comp-method.lisp
 ;;; COMPILE-DEFINE-SLOT-FORM is in the file comp-class.lisp
+
+;;; Macros (an extension, as in the compiler to C: compiler/front/macros.lisp).
+;;;
+;;;   (define-macro name parameter-list form ...)
+;;;   (define-for-macros form ...)
+;;;
+;;; A macro is a module variable, resolved like any other, whose Lisp name
+;;; is in *DYLAN-MACROS* with the Dylan method that expands a call of it.
+;;; The method is made when the DEFINE-MACRO is compiled, not when the
+;;; compiled code runs, so that the forms compiled after it -- the rest of
+;;; the file, when a file is compiled whole -- expand with it; the compiled
+;;; code defines it again, so that a compiled file loaded later has it.
+;;; Here the compile-time environment is the program's own: whatever
+;;; DEFINE-FOR-MACROS defines, the program can see, where the compiler to C
+;;; keeps the two apart.
+
+(defparameter +max-expansions+ 100000)
+
+(defun dylan%define-macro (variable name expander)
+  (setf (gethash variable *dylan-macros*) (cons name expander))
+  name)
+
+(defun check-not-macro (dylan-variable form-name)
+  (when (and (symbolp dylan-variable)
+             (gethash (name->module-variable (variable->name dylan-variable))
+                      *dylan-macros*))
+    (dylan%error (format nil "~a -- ~a is a macro" form-name
+                         (dylan-symbol->string dylan-variable)))))
+
+(defun macro-call? (e bound-vars)
+  "Is E a call of a macro: its operator a name that is a macro in the
+current module, and not a lexical variable, which hides the macro?"
+  (and (consp e)
+       (symbolp (car e))
+       (variable-name? (car e))
+       (let ((name (variable->name (car e))))
+         (and (not (member (name->lexical name) bound-vars))
+              (gethash (name->module-variable name) *dylan-macros*)))))
+
+(defun condition-text (condition)
+  "The message of CONDITION on one line, without its Error: prefix."
+  (let ((text (string-trim '(#\Space #\Newline #\Tab) (format nil "~a" condition))))
+    (if (and (> (length text) 7) (string= "Error: " text :end2 7))
+        (subseq text 7)
+        text)))
+
+(defun expand-macro-call (e)
+  "The expansion of E, a call of a macro: its expander applied to the
+argument forms, unevaluated.  An error in the body is reported at the
+call, with the macro's name, as the compiler to C reports it."
+  (let* ((macro (gethash (name->module-variable (variable->name (car e)))
+                         *dylan-macros*))
+         (name (dylan-symbol->string (car macro))))
+    (unless (null (cdr (cl:last e)))
+      (dylan%error "a call of a macro must be a proper list" e))
+    (when (> (incf *expansions*) +max-expansions+)
+      (dylan%error (format nil "macro ~a: macros expanded ~d times in one form -- one never stops?"
+                           name +max-expansions+)))
+    (handler-case (apply (cdr macro) nil next-method/not-generic (cdr e))
+      (program-error ()
+        (dylan%error (format nil "macro ~a: wrong number of arguments" name)))
+      (error (condition)
+        (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
+
+(defun compile-define-macro-form (forms module-vars bound-vars really-compile
+                                  multiple-values? continue)
+  (declare (ignore really-compile multiple-values?))
+  (must-be-list-of-at-least-length forms 2 "Bad DEFINE-MACRO syntax")
+  (let ((name (car forms))
+        (params (cadr forms))
+        (body (cddr forms)))
+    (unless (and (symbolp name) (variable-name? name))
+      (dylan%error "define-macro -- bad macro name" name))
+    (unless (null bound-vars)
+      (dylan%error "define-macro must be at top level" name))
+    (unless (listp params)
+      (dylan%error "define-macro -- bad parameter list" name params))
+    (check-not-imported name "DEFINE-MACRO")
+    (let ((variable (name->module-variable (variable->name name))))
+      (when (and (boundp variable)
+                 (not (eq (symbol-value variable) the-unassigned-value)))
+        (dylan%error "define-macro -- the name is a variable already" name))
+      (compile-expression
+       `(method ,params ,@body) nil module-vars
+       (lambda (new-vars preamble output)
+         ;; Now, for the forms compiled after this one ...
+         (dylan%define-macro variable name
+                             (implementation-specific/eval
+                              (append preamble (list output))))
+         ;; ... and again when the compiled code runs.
+         (funcall continue
+                  `(progn (dylan%define-macro ',variable ',name ,output) ',name)
+                  (append new-vars module-vars)))))))
+
+(defun compile-define-for-macros-form (forms module-vars bound-vars really-compile
+                                       multiple-values? continue)
+  (declare (ignore really-compile multiple-values?))
+  (unless (null bound-vars)
+    (dylan%error "define-for-macros must be at top level" forms))
+  (compile-expression
+   `(begin ,@forms) nil module-vars
+   (lambda (new-vars preamble output)
+     ;; Run now, while compiling, as the compiler to C runs them, and
+     ;; left out of the compiled code, as it leaves them out.
+     (implementation-specific/eval (append preamble (list output)))
+     (funcall continue 'dylan%false (append new-vars module-vars)))))
 
 (defun compile-dotimes-form (forms module-vars bound-vars really-compile
                              multiple-values? continue)

@@ -127,6 +127,7 @@ $ sbcl --script tests/codegen/run.lisp quick
 $ sbcl --script tests/stress/run.lisp quick
 $ sh tests/driver/run.sh
 $ make -C runtime test
+$ sbcl --script tests/interpreter/run.lisp
 ```
 
 The suites call `gcc` and `clang` by name, not `$CC`; `quick` uses `gcc`

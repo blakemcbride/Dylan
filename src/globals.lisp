@@ -234,7 +234,9 @@
           dylan/floor/
           dylan/freeze-methods
           dylan/function-arguments
+          dylan/current-milliseconds
           dylan/gcd
+          dylan/gensym
           dylan/generic-function-methods
           dylan/get-array-dimensions
           dylan/get-array-value

@@ -95,6 +95,29 @@
 (defparameter dylan/identity
   (dylan%function->method one-object #'identity))
 
+;;; gensym (an extension, for macros -- chapter 16 of the user manual): a
+;;; symbol no program can write, named from the optional prefix and a
+;;; count.  The compiler to C's macros, whose bodies run here, use it too.
+(defvar *gensym-count* 0)
+
+(defparameter dylan/gensym
+  (dylan%function->method
+   only-rest-args
+   (lambda (&rest args)
+     (let ((prefix (if args (car args) "g")))
+       (unless (and (null (cdr args)) (stringp prefix))
+         (dylan%error "gensym -- takes one optional string, the start of the name"
+                      args))
+       (make-symbol (format nil "~a~d" prefix (incf *gensym-count*)))))))
+
+;;; current-milliseconds (an extension, for timing; the compiler to C has
+;;; it too): a clock in milliseconds from a fixed but arbitrary moment.
+(defparameter dylan/current-milliseconds
+  (dylan%function->method
+   (make-param-list '() nil nil nil)
+   (lambda ()
+     (values (floor (* 1000 (get-internal-real-time)) internal-time-units-per-second)))))
+
 (defparameter dylan/=
   (dylan%function->method
    at-least-two-objects

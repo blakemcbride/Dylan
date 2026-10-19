@@ -508,7 +508,8 @@ Name & Description & \\
 
 \section{Other extensions}\label{sec:lib-other}
 
-{\sloppy Extensions found in only one implementation.\par}
+{\sloppy Extensions of the library beyond the manual's, in both
+implementations unless marked.\par}
 
 {\small\frenchspacing
 \begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
@@ -516,7 +517,8 @@ Name & Description & \\
 Name & Description & \\
 \midrule
 \endhead
-\code{(current-milliseconds)}\index{current-milliseconds} & The time in milliseconds from a fixed but arbitrary moment, for timing. & \textsc{c} \\
+\code{(current-milliseconds)}\index{current-milliseconds} & The time in milliseconds from a fixed but arbitrary moment, for timing. &  \\
+\code{(gensym \#rest prefix)}\index{gensym} & A symbol no program can write, for macros (Chapter~\ref{ch:extensions}); the optional string begins its name. In the interactive implementation, and to macro bodies under the compiler. & \textsc{l} \\
 \code{(lisp-variable symbol)}\index{lisp-variable} & The value of the Common Lisp variable named \code{symbol} (Section~\ref{sec:lisp-interop}). & \textsc{l} \\
 \code{(lisp-procedure symbol)}\index{lisp-procedure} & A Dylan function that calls the Common Lisp function named \code{symbol}. & \textsc{l} \\
 \bottomrule
@@ -526,11 +528,11 @@ Name & Description & \\
 
 \index{special form}
 These forms are not functions: each has its own rules for which of its
-parts are evaluated. They are listed by the shape of a use. The five
+parts are evaluated. They are listed by the shape of a use. The three
 marked \textsc{c} are extensions of the compiler to C
-(Chapter~\ref{ch:extensions}). In the compiler to C, programs can also
-define macros of their own with \code{define-macro}; the interactive
-implementation has none.
+(Chapter~\ref{ch:extensions}); \code{define-macro} and
+\code{define-for-macros}, with which programs define macros of their
+own, are extensions too, in both implementations.
 
 
 
@@ -569,8 +571,8 @@ Name & Description & \\
 \code{(define-slot owner keyword value \dots)}\index{define-slot} & Adds a slot to a class or singleton. &  \\
 \code{(define-module name clause \dots)}\index{define-module} & Declares a module (Chapter~\ref{ch:modules}). &  \\
 \code{`template ,form ,@form}\index{backquote} & Backquote: a list built from a template, as in Common Lisp. &  \\
-\code{(define-macro name parameter-list form \dots)}\index{define-macro} & Defines a macro (Chapter~\ref{ch:extensions}). & \textsc{c} \\
-\code{(define-for-macros form \dots)}\index{define-for-macros} & Forms run only while compiling, for macros to use. & \textsc{c} \\
+\code{(define-macro name parameter-list form \dots)}\index{define-macro} & Defines a macro (Chapter~\ref{ch:extensions}). &  \\
+\code{(define-for-macros form \dots)}\index{define-for-macros} & Forms run only while compiling, for macros to use. &  \\
 \code{(define-thread-variable name value)}\index{define-thread-variable} & Defines a variable each thread can rebind. & \textsc{c} \\
 \code{(dynamic-bind ((name value) \dots) form \dots)}\index{dynamic-bind} & Gives thread variables new values in this thread while the forms run. & \textsc{c} \\
 \code{(with-lock (lock) form \dots)}\index{with-lock} & Holds the lock while the forms run. & \textsc{c} \\

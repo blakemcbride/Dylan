@@ -442,7 +442,8 @@ anything to evaluate (if not, the expansion is X quoted)."
 ;;;
 ;;; Bodies run in the Common Lisp implementation of Dylan (src/), loaded
 ;;; with the compiler, in a compile-time environment of their own: its
-;;; dylan library, gensym, and what define-for-macros has defined.
+;;; dylan library (which has gensym), and what define-for-macros has
+;;; defined.
 
 (defvar *compile-time-variables* nil
   "The compile-time environment's module variables so far, or :NEW when
@@ -454,12 +455,6 @@ it has yet to be set up.")
   "A stream to write each macro use and its expansion to, or NIL.")
 
 (defparameter +max-expansion-depth+ 500)
-
-(defvar *macro-gensym-counter* 0)
-
-(defun dylan::dylanc-gensym (&optional (prefix "g"))
-  "gensym, in the compile-time environment."
-  (make-symbol (format nil "~a~d" (if (stringp prefix) prefix "g") (incf *macro-gensym-counter*))))
 
 (defun condition-text (e)
   "The message of the condition E, on one line."
@@ -479,9 +474,7 @@ it has yet to be set up.")
   "Evaluate the Dylan FORM in the compile-time environment; answer its
 value.  An error in it is a compile error, its message beginning with WHAT."
   (when (eq *compile-time-variables* :new)
-    (setf *compile-time-variables* '())
-    (compile-time-eval (read-dylan-form "(define gensym (lisp-procedure 'dylanc-gensym))")
-                       "gensym"))
+    (setf *compile-time-variables* '()))
   (handler-case
       (let ((dylan::*current-module* 'dylan::dylan-user)
             (*standard-output* *error-output*)
@@ -494,9 +487,6 @@ value.  An error in it is a compile error, its message beginning with WHAT."
         result)
     (compile-error (e) (error e))
     (error (e) (compile-error "~a: ~a" what (condition-text e)))))
-
-(defun read-dylan-form (text)
-  (with-input-from-string (in text) (dylan::dylan-read in)))
 
 (defun define-user-macro (form)
   (require-list form 3 "define-macro")

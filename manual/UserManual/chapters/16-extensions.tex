@@ -2,11 +2,14 @@
 \sloppy
 
 The 1992 manual defines a language without macros and without threads.
-The compiler to C adds both. They are \emph{extensions}: a program that uses them is
-not a program of the 1992 language, and the interactive Common Lisp
-implementation does not have them (it has its own extensions, described
-in Chapter~\ref{ch:lisp}). Everything in this chapter applies to
-programs compiled with \cmd{dylanc}.
+This system adds both: macros in both implementations, threads in the
+compiler to C alone. They are \emph{extensions}: a program that uses
+them is not a program of the 1992 language. Everything in this chapter
+applies to programs compiled with \cmd{dylanc}; the section on macros
+applies to the interactive Common Lisp implementation too, with the one
+difference Section~\ref{sec:ext-compile-time} describes. (That
+implementation has extensions of its own, described in
+Chapter~\ref{ch:lisp}.)
 
 \section{Macros}\label{sec:ext-macros}
 
@@ -26,9 +29,9 @@ the macro's writer and \code{gensym}.
 
 The manual calls \code{and}, \code{or}, \code{cond}, \code{case},
 \code{for} and the other syntax of Chapter~\ref{ch:control} macros. In
-this system those are built into the compiler, not written with
-\code{define-macro}, and the program cannot redefine them: the compiler
-accepts a \code{define-macro} of one of their names without complaint,
+this system those are built into both implementations, not written with
+\code{define-macro}, and the program cannot redefine them: a
+\code{define-macro} of one of their names is accepted without complaint,
 but a call of the name still means the built-in form.
 
 \subsection{\code{define-macro}}\label{sec:ext-define-macro}
@@ -102,26 +105,27 @@ Here the multiplication happens when the program is compiled; the
 expansions are the constants \code{5} and \code{15}.
 
 Macros may expand into uses of other macros, or of themselves; the
-compiler expands again until no macro call is left. An expansion may also
-be a definition, or a \code{begin} of several, at top level. A macro that
-never stops expanding is reported (``macros expanded 500 deep --- one
-never stops?'').
+implementation expands again until no macro call is left. An expansion
+may also be a definition, or a \code{begin} of several, at top level. A
+macro that never stops expanding is reported (``one never stops?'').
 
 \subsection{Rules}
 
 \begin{itemize}
-\item \code{define-macro} must be at top level. Inside a method it is a
-  compile error (``define-macro must be at top level'').
+\item \code{define-macro} must be at top level. Inside a method it is
+  an error (``define-macro must be at top level'').
 \item A macro must be defined before its first use in the program. A
   call that comes earlier is compiled as a call of a variable that is not
-  defined: the compiler warns, and the call fails when it runs.
+  defined, and fails when it runs; the compiler warns of it.
 \item A name cannot be both a macro and a variable. \code{(define m 2)}
   after \code{(define-macro m () 1)}, or a use of \code{m} other than as
-  the operator of a call, is a compile error (``m is a macro'').
+  the operator of a call, is an error (``m is a macro''). In the
+  interactive implementation a \code{define-macro} may replace a macro,
+  as a \code{define} may replace a variable.
 \item A call of a macro must be a proper list, and must supply arguments
   its parameter list accepts (``macro m: wrong number of arguments'').
-\item An error signalled by a macro's body is a compile error, reported
-  at the call with the macro's name: \code{(define-macro m (a) (error "no
+\item An error signalled by a macro's body is reported at the call, with
+  the macro's name: \code{(define-macro m (a) (error "no
   good: \textasciitilde{}s" a))} and a call \code{(m 1)} report
   ``\code{macro m: no good: 1}''.
 \end{itemize}
@@ -200,9 +204,9 @@ as it would hide a module variable:
 \label{sec:ext-compile-time}
 
 \index{define-for-macros@\code{define-for-macros}}
-Macro bodies run inside the compiler, in the interactive Common Lisp
-implementation of Dylan (Chapter~\ref{ch:lisp}), which is loaded with
-the compiler. They run in a \emph{compile-time environment} of their own,
+Macro bodies run in the interactive Common Lisp implementation of Dylan
+(Chapter~\ref{ch:lisp}), which the compiler is loaded with. Under the
+compiler they run in a \emph{compile-time environment} of their own,
 separate from the program being compiled. It holds the whole library of
 the interactive implementation, \code{gensym}, and whatever
 \code{define-for-macros} has defined --- but nothing the program itself
@@ -247,11 +251,25 @@ class:
 \end{dylan}
 
 Two consequences of running macro bodies in the interactive
-implementation are worth knowing. First, \code{gensym} and anything
-\code{define-for-macros} defines exist only at compile time; a compiled
-program cannot call \code{gensym}. Second, where the two implementations
-differ, a macro body sees the interactive one: it has bignums, for
-instance (Appendix~\ref{app:differences}).
+implementation are worth knowing. First, under the compiler,
+\code{gensym} and anything \code{define-for-macros} defines exist only
+at compile time; a compiled program cannot call \code{gensym}. Second,
+where the two implementations differ, a macro body sees the interactive
+one: it has bignums, for instance (Appendix~\ref{app:differences}).
+
+The interactive implementation itself has no separate environment: it
+compiles and runs a program a form at a time, and a macro's body runs,
+while the forms after its definition are compiled, in the same world as
+the program. Everything defined so far is visible to it, the program's
+own functions included, and what \code{define-for-macros} defines is as
+visible to the program as any other definition; the forms of a
+\code{define-for-macros} run once, as they are compiled, and are left
+out of the compiled code, as under the compiler. (\code{dylan:compile-file}
+compiles a whole file before any of it runs, so there, as under the
+compiler, a macro body can use only what \code{define-for-macros} has
+defined.) A program meant to run both ways should keep to what works
+under the compiler: helpers for macros in \code{define-for-macros}, and
+none of them called by the program itself.
 
 \subsection{Macros and modules}\label{sec:ext-macro-modules}
 
@@ -316,7 +334,10 @@ m1.dyl:13:1: (show (reverse '(a b c)))
 \end{shell}
 
 Only the program's macros are shown, not the built-in syntax. Each step
-of a macro that expands into another macro is shown separately.
+of a macro that expands into another macro is shown separately. The
+interactive implementation has no equivalent; there, a macro's expansion
+can be seen by calling its body's logic as an ordinary function on quoted
+forms.
 
 \section{Threads}\label{sec:ext-threads}
 

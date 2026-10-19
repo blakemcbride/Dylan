@@ -698,22 +698,9 @@ dynamic, as the 1992 manual allows:
 \end{itemize}
 
 \paragraph{What only the compiler to C has.}
-The compiler's extensions to the 1992 language
-(Chapter~\ref{ch:extensions}) do not exist in the Common Lisp
-implementation:
-
-\begin{itemize}
-\item threads, locks, condition variables, atomic integers, thread
-  variables and \code{dynamic-bind};
-\item macros. The compiler expands a program's \code{define-macro}
-  definitions as it compiles, so a compiled program may use macros
-  freely; the Common Lisp implementation does not know
-  \code{define-macro} or \code{define-for-macros}, and treats them as
-  ordinary names;
-\item \code{current-milliseconds}.
-\end{itemize}
-
-\noindent
+Threads (Chapter~\ref{ch:extensions}): \code{make-thread} and the
+rest, locks, condition variables, atomic integers, thread variables and
+\code{dynamic-bind} do not exist in the Common Lisp implementation.
 Appendix~\ref{app:library} marks every name that only one
 implementation provides.
 

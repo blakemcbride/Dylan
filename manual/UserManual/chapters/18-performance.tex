@@ -433,9 +433,10 @@ collector's functions is time spent allocating and collecting.
 \cmd{perf annotate} shows the hot instructions with the Dylan lines they
 came from.
 
-For timing inside a program, the \code{dylan} module of the compiler to
-C exports \code{(current-milliseconds)}, an extension that answers a
-millisecond count, as the benchmark driver uses it.
+For timing inside a program, the \code{dylan} module exports
+\code{(current-milliseconds)}, an extension in both implementations that
+answers a millisecond count from a fixed but arbitrary moment, as the
+benchmark driver uses it.
 
 \section{Tuning the garbage collector}\label{sec:perf-gc}
 

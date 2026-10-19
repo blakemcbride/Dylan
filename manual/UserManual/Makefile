@@ -11,7 +11,7 @@ MAKEIDX := makeindex
 
 SOURCES := $(MAIN).tex $(wildcard chapters/*.tex)
 
-.PHONY: all clean cleanall
+.PHONY: all clean cleanall distclean realclean
 
 all: $(NAME).pdf
 
@@ -28,6 +28,7 @@ clean:
 	rm -f $(NAME).aux $(NAME).log $(NAME).toc $(NAME).out \
 	      $(NAME).idx $(NAME).ind $(NAME).ilg chapters/*.aux
 
-# Remove intermediate build files and the generated PDF.
-cleanall: clean
+# Remove intermediate build files and the generated PDF (distclean and
+# realclean are the same).
+cleanall distclean realclean: clean
 	rm -f $(NAME).pdf

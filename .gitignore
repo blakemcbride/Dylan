@@ -3,3 +3,5 @@ bench/build/
 src/fasl/
 compiler/fasl/
 runtime/build/
+bin/dylan
+bin/dylan.exe

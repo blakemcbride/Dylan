@@ -13,7 +13,7 @@ Chapter~\ref{ch:tutorial}.
 Both implementations are written in Common Lisp and need \textbf{SBCL},
 Steel Bank Common Lisp. The system was developed on SBCL~2.6.3, and any
 recent release should work. The interactive implementation needs nothing
-else.
+else but \cmd{make} to build it, and even that can be done without.
 
 The compiler to C needs three more things:
 
@@ -84,6 +84,8 @@ otherwise. The directories you will meet first are these:
 \begin{tabular}{@{}ll@{}}
 \toprule
 \file{src/} & the interactive implementation, in Common Lisp \\
+\file{Makefile} & builds \file{bin/dylan} \\
+\file{bin/dylan} & the interactive implementation, once built \\
 \file{bin/dylanc} & the command that runs the compiler to C \\
 \file{compiler/} & the compiler to C, in Common Lisp \\
 \file{runtime/} & the compiler's runtime: \file{runtime/c} in C,
@@ -95,46 +97,50 @@ otherwise. The directories you will meet first are these:
 \end{tabular}
 \end{center}
 
-You can run \cmd{dylanc} from anywhere by putting \file{bin} on your
-\code{PATH}, or by making a symbolic link to \file{bin/dylanc} in a
-directory that is already on it. The script finds the rest of the system
-relative to its own real location, so a link works.
+You can run \cmd{dylan} and \cmd{dylanc} from anywhere by putting
+\file{bin} on your \code{PATH}, or by making symbolic links to them in a
+directory that is already on it. \cmd{dylan} is self-contained, and the
+\cmd{dylanc} script finds the rest of the system relative to its own real
+location, so a link works for both.
 
 \section{The interactive implementation}\label{sec:start-rep}
 
-\index{read-eval-print loop}\index{dylan:rep}
-Start SBCL in the top directory of the clone and load
-\file{src/load-dylan.lisp}:
+\index{read-eval-print loop}\index{dylan@\cmd{dylan}}
+Build the interactive implementation once, in the top directory of the
+clone:
 
-\begin{repl}
-$ sbcl
-* (load "src/load-dylan.lisp")
+\begin{shell}
+$ make
+sbcl --script src/build-dylan.lisp
+;Writing /home/you/Dylan/bin/dylan
+\end{shell}
 
-Call DYLAN:REP to start a Dylan read-eval-print loop.
-;Dylan loaded.  (dylan:rep) starts a read-eval-print loop.
-T
-\end{repl}
+\noindent
+This loads the whole system into SBCL and saves it as one executable,
+\file{bin/dylan}. (On Windows, without \cmd{make}, run
+\cmd{sbcl -{}-script src/build-dylan.lisp} yourself; it writes
+\file{bin\textbackslash dylan.exe}.) Run \cmd{make} again whenever
+\file{src/} changes; it does nothing when \file{bin/dylan} is up to date.
 
 \index{fasl files}
-The first time you do this, SBCL compiles every Lisp file of the
-implementation and writes the compiled files (\emph{fasl} files) into a
-directory under \file{src/fasl/} named for the Lisp and its version, such
-as \file{src/fasl/SBCL-2-6-3/}. This takes a little while. Later loads
-use the compiled files and take well under a second. If you change a
-source file, the next load recompiles that file and every file loaded
-after it, since later files may depend on its macros; you never need to
-delete the fasl directory by hand. Because the fasl files are kept apart
-for each Lisp version, upgrading SBCL simply makes a new directory.
+The first build compiles every Lisp file of the implementation and
+writes the compiled files (\emph{fasl} files) into a directory under
+\file{src/fasl/} named for the Lisp and its version, such as
+\file{src/fasl/SBCL-2-6-3/}. This takes a little while. Later builds
+recompile only a changed source file and every file loaded after it,
+since later files may depend on its macros; you never need to delete the
+fasl directory by hand. Because the fasl files are kept apart for each
+Lisp version, upgrading SBCL simply makes a new directory.
 
-\paragraph{Starting the loop.} The function \code{dylan:rep} starts a
+\paragraph{Starting the loop.} Run \cmd{dylan}. It starts a
 read-eval-print loop that reads Dylan rather than Lisp. Its prompt is a
 question mark:
 
 \begin{repl}
-* (dylan:rep)
+$ bin/dylan
 
 Entering Dylan read-eval-print-loop.
-Exit by typing "dylan:done"
+Leave by typing "(exit)"
 
 ? (define greeting "Hello")
 
@@ -163,11 +169,38 @@ In a real terminal the loop prints an extra blank line after each form you
 type. The transcripts in this book leave it out.
 \end{notebox}
 
-\paragraph{Leaving the loop.} Type \code{dylan:done} to return to the
-Lisp prompt. What you defined is not lost: if you call \code{(dylan:rep)}
-again, the variables, classes and methods you defined earlier are still
-there. To leave SBCL altogether, type \code{(sb-ext:exit)} at the Lisp
-prompt.
+\paragraph{Leaving the loop.} Type \code{dylan:done} or \code{(exit)},
+or end the input with Ctrl-D, to leave \cmd{dylan}.
+
+\paragraph{Loading it into SBCL yourself.} \index{dylan:rep}
+\index{load-dylan.lisp@\file{load-dylan.lisp}}
+Instead of \cmd{dylan}, you can start a plain SBCL in the top directory
+of the clone, load \file{src/load-dylan.lisp}, and call the function
+\code{dylan:rep}, which starts the same loop. This needs no build step,
+since the load compiles what has changed, and it leaves you in a Lisp
+where you can mix Lisp and Dylan:
+
+\begin{repl}
+$ sbcl
+* (load "src/load-dylan.lisp")
+
+Call DYLAN:REP to start a Dylan read-eval-print loop.
+;Dylan loaded.  (dylan:rep) starts a read-eval-print loop.
+T
+* (dylan:rep)
+
+Entering Dylan read-eval-print-loop.
+Leave by typing "(exit)"
+
+?
+\end{repl}
+
+\noindent
+There \code{dylan:done} returns to the Lisp prompt. What you defined is
+not lost: if you call \code{(dylan:rep)} again, the variables, classes and
+methods you defined earlier are still there. To leave SBCL altogether,
+type \code{(exit)} at the \code{?} prompt, or \code{(sb-ext:exit)} at the
+Lisp prompt.
 
 \paragraph{When something goes wrong.} An error that your Dylan code does
 not handle stops the loop and enters SBCL's debugger. The debugger
@@ -186,7 +219,7 @@ Type HELP for debugger help, or (SB-EXT:EXIT) to exit from SBCL.
 restarts (invokable by number or by possibly-abbreviated name):
   0: [DYLAN-RESTART] Return to the read-eval-print loop.
   1: [DYLAN-REP    ] Return to the Dylan read-eval-print loop.
-  2: [ABORT        ] Exit debugger, returning to top level.
+  2: [ABORT        ] Return to the Dylan read-eval-print loop.
 ...
 0] 0
 ;Aborted
@@ -202,9 +235,10 @@ example, \code{(car 5)} is reported as a Lisp \code{TYPE-ERROR}. For such
 an error the debugger still offers \code{DYLAN-REP}, ``Return to the Dylan
 read-eval-print loop'', which gives you a new \code{?} prompt. Dylan's own
 handlers see these errors as instances of \code{<error>}, so
-\code{handler-case} catches them normally. If you ever do leave the loop
-for the Lisp \code{*} prompt, nothing you defined is lost; type
-\code{(dylan:rep)} to carry on.
+\code{handler-case} catches them normally. In a Lisp you loaded the
+system into, the debugger's \code{ABORT} leaves the loop for the Lisp
+\code{*} prompt; nothing you defined is lost; type \code{(dylan:rep)} to
+carry on.
 \end{notebox}
 
 \paragraph{Running a file at the loop.} The loop reads from standard
@@ -212,14 +246,12 @@ input, so you can feed it a whole file of Dylan from the shell. This runs
 every form in \file{program.dyl} and then leaves:
 
 \begin{shell}
-$ (cat program.dyl; echo dylan:done) | \
-    sbcl --non-interactive --eval '(load "src/load-dylan.lisp")' \
-         --eval '(dylan:rep)'
+$ bin/dylan < program.dyl
 \end{shell}
 
 Each form's value is printed after \code{;Value:}, as if you had typed it.
-With \cmd{-{}-non-interactive}, an unhandled error prints a backtrace and
-ends SBCL rather than waiting in the debugger.
+An unhandled error prints the debugger's report and ends the run, since
+the debugger finds no more input.
 
 \section{Compiling a file to Lisp}\label{sec:start-compile-file}
 

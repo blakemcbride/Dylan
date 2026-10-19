@@ -34,12 +34,25 @@ time, and afterwards recompiles only a changed file and those after it.
 
                              RUNNING IT
 
+"make" in the directory above builds ../bin/dylan (build-dylan.lisp): SBCL
+with the whole system loaded, saved as an executable that starts in the
+read-eval-print loop and exits on dylan:done, (exit) or end of file.
+
+    $ make
+    $ bin/dylan
+
+    Entering Dylan read-eval-print-loop.
+    Leave by typing "(exit)"
+
+Or load it into a plain SBCL, where dylan:done returns to the Lisp prompt
+and (exit) quits SBCL:
+
     $ sbcl
     * (load "load-dylan.lisp")
     * (dylan:rep)
 
     Entering Dylan read-eval-print-loop.
-    Exit by typing "dylan:done"
+    Leave by typing "(exit)"
 
     ? (define-method double ((n <number>)) (+ n n))
 
@@ -118,6 +131,7 @@ not within this one, and they no longer exist here.
   rep.lisp                 src/portable-rep.scm
   full-test.lisp           full-test.scm
   load-dylan.lisp          src/load-*.scm and the kits' loaders
+  build-dylan.lisp         new -- saves ../bin/dylan, an executable
   load-compiler.lisp       src/load-compiler.scm
   load-runtime.lisp        src/load-runtime.scm
 

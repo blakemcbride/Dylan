@@ -109,7 +109,7 @@ The first is written in Common Lisp and runs inside SBCL. Its source is in
 implementation} or \emph{the Common Lisp implementation}. It is not an
 interpreter: it compiles each Dylan form into Common Lisp as the form is
 entered and lets the Lisp compiler run it. You use it in three ways: at an
-interactive read-eval-print loop started with \code{(dylan:rep)}; by
+interactive read-eval-print loop, the command \cmd{dylan}; by
 compiling a file of Dylan into a file of Common Lisp with
 \code{dylan:compile-file}; and by loading such compiled files into a Lisp
 that runs them. It implements the whole language of the DIRM, including

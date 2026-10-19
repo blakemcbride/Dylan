@@ -46,6 +46,23 @@ Install SBCL for Windows from <https://www.sbcl.org/platform-table.html>
 in the repository:
 
 ```console
+> sbcl --script src/build-dylan.lisp
+> bin\dylan
+? (+ 1 2)
+
+;Value: 3
+
+? dylan:done
+```
+
+`src/build-dylan.lisp` (what `make` runs elsewhere) loads the system and
+saves it as `bin\dylan.exe`, which starts in the read-eval-print loop;
+`dylan:done`, `(exit)` or end of file (Ctrl-Z, Enter) leaves it. Run it again after
+changing `src\`.
+
+Or start a plain SBCL and load the system into it:
+
+```console
 > sbcl
 * (load "src/load-dylan.lisp")
 * (dylan:rep)
@@ -54,9 +71,10 @@ in the repository:
 ;Value: 3
 
 ? dylan:done
+*
 ```
 
-The first load compiles the Lisp sources into `src\fasl\`. Use
+Either way, the first load compiles the Lisp sources into `src\fasl\`. Use
 `dylan:compile-file` and the runtime as described in
 [`README.md`](README.md); nothing there depends on Unix.
 

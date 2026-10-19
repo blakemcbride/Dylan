@@ -15,16 +15,15 @@ familiar, and you can move quickly through the first sections.
 \section{How to follow along}\label{sec:tut-follow}
 
 The easiest way to follow the tutorial is at the interactive
-implementation's read-eval-print loop. Start SBCL in the top directory of
-the clone and start the loop, as Chapter~\ref{ch:start} explains:
+implementation's read-eval-print loop. Build \cmd{dylan} and start it,
+as Chapter~\ref{ch:start} explains:
 
 \begin{repl}
-$ sbcl
-* (load "src/load-dylan.lisp")
-* (dylan:rep)
+$ make
+$ bin/dylan
 
 Entering Dylan read-eval-print-loop.
-Exit by typing "dylan:done"
+Leave by typing "(exit)"
 
 ?
 \end{repl}
@@ -1486,9 +1485,7 @@ typing it, either by feeding it to the loop or by compiling it to Lisp, as
 Chapter~\ref{ch:start} showed:
 
 \begin{shell}
-$ (cat bank.dyl; echo dylan:done) | \
-    sbcl --non-interactive --eval '(load "src/load-dylan.lisp")' \
-         --eval '(dylan:rep)'
+$ bin/dylan < bank.dyl
 \end{shell}
 
 This is the usual way of working with the two implementations: develop

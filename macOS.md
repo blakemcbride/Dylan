@@ -44,6 +44,27 @@ $ cd Dylan
 Nothing differs from Linux:
 
 ```console
+$ make
+$ bin/dylan
+? (+ 1 2)
+
+;Value: 3
+
+? dylan:done
+```
+
+`make` loads the system into SBCL and saves it as the executable
+`bin/dylan`, which starts in the read-eval-print loop; `dylan:done`, `(exit)`
+or end of file (Ctrl-D) leaves it. Run `make` again after changing `src/`. To run
+`dylan` from anywhere, put `bin/` on your `PATH` or link to it:
+
+```console
+$ ln -s "$PWD/bin/dylan" ~/.local/bin/dylan
+```
+
+Or start a plain SBCL and load the system into it:
+
+```console
 $ sbcl
 * (load "src/load-dylan.lisp")
 * (dylan:rep)
@@ -52,9 +73,13 @@ $ sbcl
 ;Value: 3
 
 ? dylan:done
+*
 ```
 
-The first load compiles the Lisp sources into `src/fasl/`.
+There `dylan:done` returns to the Lisp prompt, and `(dylan:rep)` carries
+on where you left off; `(exit)` quits SBCL too.
+
+Either way, the first load compiles the Lisp sources into `src/fasl/`.
 
 ## The compiler to C
 

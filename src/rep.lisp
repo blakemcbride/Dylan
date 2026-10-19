@@ -51,6 +51,9 @@
 
 (defvar rep-module-variables '())
 
+(defvar rep-eof (list 'eof)
+  "What DYLAN-READ returns at the end of the input.")
+
 (defun empty-environment! ()
   "Forget the module variables created by previous DYLAN:REP interactions,
 and their values."
@@ -79,10 +82,19 @@ and their values."
           (!result ,compiled-output))
      (print-rep-result !result !multiple-values)))
 
+(defun rep-command-p (input name)
+  "True if INPUT is the command NAME, typed bare or as (NAME)."
+  (flet ((named-p (x)
+           (and (symbolp x) x (string-equal (symbol-name x) name))))
+    (or (named-p input)
+        (and (consp input) (null (cdr input)) (named-p (car input))))))
+
+;;; dylan:done leaves the loop; exit leaves Lisp as well.
 (defun rep-done-p (input)
-  (and (symbolp input)
-       (not (null input))
-       (string-equal (symbol-name input) "DYLAN:DONE")))
+  (rep-command-p input "DYLAN:DONE"))
+
+(defun rep-exit-p (input)
+  (and (consp input) (rep-command-p input "EXIT")))
 
 ;;; (dylan:in-module name) switches the module later input is compiled in.
 (defun rep-in-module-p (input)
@@ -111,17 +123,21 @@ and their values."
   "Start a Dylan read-eval-print loop."
   (terpri)
   (write-line "Entering Dylan read-eval-print-loop.")
-  (write-line "Exit by typing \"dylan:done\"")
+  (write-line "Leave by typing \"(exit)\"")
   (dylan%catch-all-conditions
    (lambda ()
      (loop
        (terpri)
        (write-string "? ")
        (finish-output)
-       (let ((input (dylan-read)))
+       (let ((input (dylan-read *standard-input* nil rep-eof)))
          (terpri)
          (cond
-           ((rep-done-p input) (return '|DYLAN:DONE|))
+           ((or (eq input rep-eof) (rep-done-p input)) (return '|DYLAN:DONE|))
+           ((rep-exit-p input)
+            (finish-output)
+            #+sbcl (sb-ext:exit :code 0)
+            #-sbcl (return '|DYLAN:DONE|))
            ((rep-in-module-p input)
             (unless (list-of-length? input 2)
               (dylan%error "dylan:in-module -- one module name expected" input))

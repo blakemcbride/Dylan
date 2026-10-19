@@ -11,7 +11,7 @@ GCC 15). For macOS see [`macOS.md`](macOS.md); for Windows,
 | SBCL | yes | yes |
 | A C compiler with `musttail` (GCC 15+ or Clang 13+) | | yes |
 | The Boehm-Demers-Weiser collector, built for threads (`libgc` and headers) | | yes |
-| `make` | | yes |
+| `make` | to build `bin/dylan` | yes |
 
 Install them:
 
@@ -48,6 +48,27 @@ $ cd Dylan
 ## The Common Lisp implementation
 
 ```console
+$ make
+$ bin/dylan
+? (+ 1 2)
+
+;Value: 3
+
+? dylan:done
+```
+
+`make` loads the system into SBCL and saves it as the executable
+`bin/dylan`, which starts in the read-eval-print loop; `dylan:done`, `(exit)`
+or end of file (Ctrl-D) leaves it. Run `make` again after changing `src/`. To run
+`dylan` from anywhere, put `bin/` on your `PATH` or link to it:
+
+```console
+$ ln -s "$PWD/bin/dylan" ~/.local/bin/dylan
+```
+
+Or start a plain SBCL and load the system into it:
+
+```console
 $ sbcl
 * (load "src/load-dylan.lisp")
 * (dylan:rep)
@@ -56,10 +77,14 @@ $ sbcl
 ;Value: 3
 
 ? dylan:done
+*
 ```
 
-The first load compiles the Lisp sources into `src/fasl/`; later loads
-recompile only what changed.
+There `dylan:done` returns to the Lisp prompt, and `(dylan:rep)` carries
+on where you left off; `(exit)` quits SBCL too.
+
+Either way, the first load compiles the Lisp sources into `src/fasl/`;
+later loads recompile only what changed.
 
 ## The compiler to C
 

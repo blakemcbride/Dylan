@@ -51,15 +51,15 @@ Thomas's 1992 README and release notes are kept as
 
 ## Quick start
 
-The Common Lisp implementation:
+The Common Lisp implementation: build `bin/dylan` once with `make`, then
+run it.
 
 ```console
-$ sbcl
-* (load "src/load-dylan.lisp")
-* (dylan:rep)
+$ make
+$ bin/dylan
 
 Entering Dylan read-eval-print-loop.
-Exit by typing "dylan:done"
+Leave by typing "(exit)"
 
 ? (define-class <point> (<object>)
     (x init-value: 0 init-keyword: x:)
@@ -110,14 +110,22 @@ otherwise exact.
 How to install these and build on each platform: [`BUILD.md`](BUILD.md)
 (Linux), [`macOS.md`](macOS.md), [`Windows.md`](Windows.md).
 
-The first use compiles the Lisp sources into a `fasl/` directory beside
-them; later uses recompile only a changed file and those loaded after it.
+The first load compiles the Lisp sources into a `fasl/` directory beside
+them; later loads recompile only a changed file and those loaded after it.
 
 ## The Common Lisp implementation
 
 There are three ways in.
 
-**Interactive.** Load `src/load-dylan.lisp`.
+**Interactive.** Run `bin/dylan`, which `make` builds: SBCL with the whole
+system loaded, saved as one executable that starts in the read-eval-print
+loop. `dylan:done`, `(exit)` or end of file leaves it. Run `make` again after changing
+`src/`. To use `dylan` from anywhere, put `bin/` on your `PATH` or link to
+it. `bin/dylan < program.dyl` runs a file of Dylan.
+
+Or, in a plain SBCL, load `src/load-dylan.lisp` and call `(dylan:rep)`.
+`dylan:done` then returns to the Lisp prompt, and `(dylan:rep)` carries on
+where you left off; `(exit)` quits SBCL too.
 
 | | |
 |---|---|
@@ -317,6 +325,7 @@ Each line gives the best of three runs for each, their ratios, and
 | | |
 |---|---|
 | `src/` | the Common Lisp implementation — 40 Lisp files, ~15,500 lines |
+| `Makefile` | builds `bin/dylan`, the Common Lisp implementation as one executable (`src/build-dylan.lisp`); `make distclean` (or `realclean`) removes everything built |
 | `src/README` | how it works, and which Thomas file each file grew from |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
 | `dylan-examples.dyl` | the examples from the Dylan book |

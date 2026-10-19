@@ -80,6 +80,7 @@ File & Role \\
 \file{runtime-fast-paths.lisp} & turns on the guarded fast paths (Section~\ref{sec:lisp-performance}) \\
 \file{rep.lisp} & the read-eval-print loop \\
 \file{load-dylan.lisp}, \file{load-compiler.lisp}, \file{load-runtime.lisp} & loaders \\
+\file{build-dylan.lisp} & saves the executable \file{bin/dylan} \\
 \file{full-test.lisp} & the regression test driver \\
 \bottomrule
 \end{longtable}
@@ -89,8 +90,32 @@ File & Role \\
 
 \section{Loading it}\label{sec:lisp-loading}
 
+\index{dylan@\cmd{dylan}}\index{build-dylan.lisp@\file{build-dylan.lisp}}
+The usual way in is the executable \file{bin/dylan}. Running \cmd{make}
+in the repository's top directory builds it: \file{src/build-dylan.lisp}
+loads the whole system into SBCL and saves it, with SBCL, as one
+executable that starts in the read-eval-print loop.
+
+\begin{shell}
+$ make
+$ bin/dylan
+
+Entering Dylan read-eval-print-loop.
+Leave by typing "(exit)"
+
+?
+\end{shell}
+
+\noindent
+The executable needs nothing else from the repository, so it may be
+copied or linked anywhere. It does not see later changes to \file{src/};
+run \cmd{make} again to rebuild it. On Windows, without \cmd{make}, run
+\cmd{sbcl -{}-script src/build-dylan.lisp}, which writes
+\file{bin\textbackslash dylan.exe}.
+
 \index{load-dylan.lisp@\file{load-dylan.lisp}}
-Start SBCL in the repository's top directory and load the system:
+The other way is to start a plain SBCL in the repository's top directory
+and load the system into it, which is how \cmd{make} itself begins:
 
 \begin{shell}
 $ sbcl
@@ -131,7 +156,8 @@ $ sbcl --eval '(load "src/load-dylan.lisp")' --eval '(dylan:rep)'
 \section{The read-eval-print loop}\label{sec:lisp-rep}
 
 \index{read-eval-print loop}\index{rep@\code{dylan:rep}}
-\code{(dylan:rep)} starts the loop. It prompts with \code{?}, reads one
+\file{bin/dylan} starts the loop at once; in a Lisp with the system
+loaded, \code{(dylan:rep)} starts it. It prompts with \code{?}, reads one
 Dylan form, compiles and runs it, and prints the value after
 \code{;Value:}. A form may span several lines; the loop reads until the
 form is complete.
@@ -140,7 +166,7 @@ form is complete.
 * (dylan:rep)
 
 Entering Dylan read-eval-print-loop.
-Exit by typing "dylan:done"
+Leave by typing "(exit)"
 
 ? (define-method double ((n <number>)) (+ n n))
 
@@ -171,10 +197,18 @@ Values are printed as \code{print} prints them (Chapter~\ref{ch:printing}),
 and output the form itself writes appears before the \code{;Value:} line.
 A definition answers the name it defined.
 
-Typing \code{dylan:done} leaves the loop and returns to Lisp's \code{*}
-prompt; the Lisp prints the symbol the loop returned. Everything the
-loop defined remains: call \code{(dylan:rep)} again and carry on where
-you left off. Typing \code{(dylan:in-module \meta{name})} at the
+Typing \code{dylan:done}, or ending the input (Ctrl-D), leaves the
+loop. In \file{bin/dylan} that ends the program. In a Lisp you loaded
+the system into, it returns to Lisp's \code{*} prompt; the Lisp prints
+the symbol the loop returned. Everything the loop defined remains: call
+\code{(dylan:rep)} again and carry on where you left off. \code{dylan:done}
+may also be typed in parentheses, as \code{(dylan:done)}.
+
+\index{exit@\code{(exit)}}
+Typing \code{(exit)} quits altogether: it ends \file{bin/dylan}, and in a
+Lisp you loaded the system into, it ends the Lisp as well. It is a command
+of the loop, like \code{dylan:done}, not a Dylan function; a variable
+named \code{exit} is still evaluated when typed bare. Typing \code{(dylan:in-module \meta{name})} at the
 \code{?} prompt changes the module later input is compiled in
 (Section~\ref{sec:modules-lisp}).
 
@@ -284,8 +318,9 @@ restarts (invokable by number or by possibly-abbreviated name):
   1: [ABORT    ] Exit debugger, returning to top level.
 \end{repl}
 \noindent Choose \code{DYLAN-REP} to carry on at the \code{?} prompt.
-(Should you choose \code{ABORT} and land at the Lisp \code{*} prompt,
-nothing is lost: type \code{(dylan:rep)} to go back in.) A Dylan
+(In \file{bin/dylan}, \code{ABORT} also returns to the loop. In a Lisp you
+loaded the system into, it lands at the Lisp \code{*} prompt; nothing is
+lost: type \code{(dylan:rep)} to go back in.) A Dylan
 handler still catches these errors as instances of \code{<error>}:
 \code{(handler-case (car 5) ((<error>) 'caught))} answers \code{caught}.
 \end{notebox}
@@ -293,8 +328,10 @@ handler still catches these errors as instances of \code{<error>}:
 \subsection{Running a file at the loop}\label{sec:lisp-test-file}
 
 \index{test@\code{dylan:test}}
-The loop reads from the terminal; it has no command to load a file of
-Dylan. The regression test driver can do it: \code{dylan:test} reads a
+The loop reads from standard input, so \cmd{bin/dylan < fact.dyl} runs
+a file, printing each value as if it had been typed; at the end of the
+file the program exits. The loop has no command to load a file of Dylan.
+The regression test driver can do it: \code{dylan:test} reads a
 file form by form, echoes each form, runs it, and prints its value, or
 the message of an error, and goes on to the next form.
 

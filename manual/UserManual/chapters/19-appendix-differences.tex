@@ -221,19 +221,4 @@ program depends on none of these; each is described where it arises.
   (Section~\ref{sec:conditions-runtime-errors}).
 \end{itemize}
 
-\section{Known differences of the interactive implementation from Thomas}
-
-The interactive implementation began as a translation of Thomas, and
-its test compares results with Thomas's 1992 transcripts
-(Appendix~\ref{app:testing}). Where Thomas and the manual disagree, the
-manual is followed: \code{\#f} and the empty list are distinct objects,
-and \code{\#f} prints as \code{\#f}; floats print as the manual prints
-them (\code{9.0}, \code{0.5}); \code{print} writes its newline after
-the object, as the manual's examples show; \code{sqrt} answers a float;
-\code{make} given a keyword that no slot and no \code{initialize}
-method accepts is an error, as in the compiler to C; reading a slot that
-nothing initialized is an error; and \code{map-into} behaves as
-described above. These are not differences from the manual, but a
-reader comparing with Thomas's documentation will meet them.
-
 \fussy

@@ -107,7 +107,7 @@ expects. They share one runner, \file{tests/codegen/runner.lisp}.
   \file{cases-threads.lisp}, \file{cases-macros.lisp} and
   \file{cases-optimize.lisp} (type inference, inlining, unboxing,
   escape analysis).
-\item[\file{tests/conformance/ch*.lisp}] 236 programs, one file for each
+\item[\file{tests/conformance/ch*.lisp}] 237 programs, one file for each
   chapter of the manual from 2 to 18: the manual's examples with the
   results it gives, and its specifications, each test citing its
   section. What a static program cannot do is not tested here; it is
@@ -225,7 +225,7 @@ seconds once the compiler and the library's object are cached
 (Section~\ref{sec:dylanc-cache}); a configuration whose C compiler and
 options are new must first compile the library, which takes some
 seconds more. On the 32-thread machine of Chapter~\ref{ch:performance},
-the conformance suite in mode \cmd{all} --- 236 programs in four
+the conformance suite in mode \cmd{all} --- 237 programs in four
 configurations --- took about a quarter of an hour; \cmd{quick} needs a
 fraction of that. The \cmd{address}, \cmd{thread} and \cmd{gc-stress}
 modes are much slower, because their programs run slowly, and the stress
@@ -280,7 +280,7 @@ expected results are in \file{src/reference/}, the transcripts Thomas
 produced from the same file in 1992 (\file{MIT.output} among them);
 compare the output with them. Where they and the manual disagree, the
 manual decides; the few remaining differences are listed in
-\file{src/README} and in Appendix~\ref{app:differences}. Run it from the
+\file{src/README}. Run it from the
 \file{src} directory, as shown, since \code{test-examples} finds the
 examples at \file{../dylan-examples.dyl}; give it another file name as
 its argument to run other examples the same way.

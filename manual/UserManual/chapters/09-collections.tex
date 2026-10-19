@@ -931,8 +931,7 @@ is an error to pop an empty deque. \code{add!} is \code{push}, and
 (as <list> d)       ; => (1)
 \end{dylan}
 
-\noindent The compiler to C prints a deque as \code{\{<deque> 0 1 2 3\}};
-the Common Lisp implementation prints only \code{\#[instance-of <deque>]}.
+\noindent A deque prints as \code{\{<deque> 0 1 2 3\}}.
 \code{make} takes \code{size:} and \code{fill:}. The Common Lisp
 implementation can also set a deque's size; the compiler to C cannot.
 
@@ -982,9 +981,7 @@ cannot be reversed); \code{intersection} of two ranges is a range; and
 (choose odd? (range from: 1 through: 6))       ; => (1 3 5)
 \end{dylan}
 
-\noindent The compiler to C prints a range as
-\code{\{range 1 by 1 size 3\}}, the Common Lisp implementation as
-\code{\#[instance-of <range>]}.
+\noindent A range prints as \code{\{range 1 by 1 size 3\}}.
 
 \section{Tables}\label{sec:collections-tables}
 
@@ -1010,8 +1007,7 @@ does nothing if the key is absent).
 \noindent Asking for a missing key without a \code{default:} is an
 error. A table is unstable under iteration: its elements come in an
 order of the implementation's choosing, which may change as it grows.
-The compiler to C prints a table as \code{\{table "two" => 2\}}, the
-Common Lisp implementation as \code{\#[instance-of <table>]}.
+A table prints as \code{\{table "two" => 2\}}.
 
 \section{Equality: = and id?}\label{sec:collections-equality}
 

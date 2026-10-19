@@ -15,17 +15,19 @@ module: dylan
 
 ;;; The largest range from FROM by BY such that no value is at or beyond
 ;;; UP-TO, none beyond THROUGH, and there are no more than SIZE values.
-(define range
-  (method (#key (from 0) up-to through (by 1) size)
-    (bind ((count size))
-      (bind-methods ((limit (n) (when (or (not count) (binary< n count)) (set! count n))))
-        (when (or up-to through)
-          (when (zero? by) (error "range: by: must not be 0 with up-to: or through:")))
-        (when up-to
-          (limit (max 0 (ceiling/ (binary- up-to from) by))))
-        (when through
-          (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))
-        (make <range> from: from by: by size: count)))))
+;;; range is a generic function (chapter 12).
+(define-generic-function range (#key from up-to through by size))
+
+(define-method range (#key (from 0) up-to through (by 1) size)
+  (bind ((count size))
+    (bind-methods ((limit (n) (when (or (not count) (binary< n count)) (set! count n))))
+      (when (or up-to through)
+        (when (zero? by) (error "range: by: must not be 0 with up-to: or through:")))
+      (when up-to
+        (limit (max 0 (ceiling/ (binary- up-to from) by))))
+      (when through
+        (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))
+      (make <range> from: from by: by size: count))))
 
 (define-method make ((class (singleton <range>)) #rest arguments)
   (if (or (member? up-to: arguments) (member? through: arguments))
@@ -36,7 +38,7 @@ module: dylan
 
 (define %range-index?
   (method (r i)
-    (and (instance? i <integer>) (not (negative? i))
+    (and (%instance? i <integer>) (not (negative? i))
          (or (not (%size r)) (binary< i (%size r))))))
 
 (define-method size ((r <range>)) (%size r))
@@ -65,12 +67,12 @@ module: dylan
       (if (%size r)
           (any? (method (e) (test value e)) (%elements r))
           (error "member?: a test: on an unbounded range might not terminate"))
-      (and (instance? value <real>)
+      (and (%instance? value <real>)
            (if (zero? (%by r))
                (and (%range-index? r 0) (= value (%from r)))
                (bind ((k (binary/ (binary- value (%from r)) (%by r))))
                  (and (integral? k)
-                      (%range-index? r (if (instance? k <integer>) k (truncate k)))
+                      (%range-index? r (if (%instance? k <integer>) k (truncate k)))
                       #t))))))
 
 (define-method copy-sequence ((r <range>) #key (start 0) end)
@@ -149,7 +151,7 @@ module: dylan
 
 (define %intersect-increasing
   (method (x y)
-    (unless (every? (method (n) (instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
+    (unless (every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
       (error "intersection: two unbounded ranges must be of rationals"))
     ;; Scaled to integers by the denominators' least common multiple
     (bind ((d (lcm (denominator (%from x)) (denominator (%by x))

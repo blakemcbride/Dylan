@@ -109,6 +109,8 @@ not within this one, and they no longer exist here.
   class-structure.lisp     src/class-structure.scm
   runtime-*.lisp           src/runtime-*.scm
   runtime-extensions.lisp  the language extensions the MIT kit added
+  runtime-printing.lisp    new -- streams, format and print-object, as the
+                             compiler to C has them
   runtime-fast-paths.lisp  new -- guards for the inline arithmetic and
                              element calls the compiler emits
   rep.lisp                 src/portable-rep.scm
@@ -184,8 +186,12 @@ not contain, so it follows the usual Lisp semantics, nesting included.
 
 Printing.  For the same reasons there is a printer of its own: NIL prints
 as (), T as #t, :FOO as foo:, floats as the manual shows them (9.0,
-0.5), and a simple condition or type error as its message (chapter 13).  PP pretty-prints Dylan; LISP-PP pretty-prints the compiler's
-Lisp output.
+0.5), and a condition as its message (chapter 13).  It prints every
+object as the compiler to C does, and runtime-printing.lisp adds the
+compiler's streams, FORMAT, WRITE and the generic function PRINT-OBJECT,
+so that a program prints the same in both.  The Lisp function PP
+pretty-prints Dylan code (the test driver's echo); LISP-PP pretty-prints
+the compiler's Lisp output.
 
 Module variables.  In the Scheme a Dylan module variable and a Dylan
 lexical variable of the same name both compiled to the same Scheme symbol,
@@ -248,8 +254,10 @@ The rest ../README.thomas already describes as implementation-dependent:
     returned #F.  The three reference transcripts disagree with each other
     here.
 
-  * Object printed representations (#[dylan-class <window>] and the like)
-    of course differ, as the original output file notes.
+  * Object printed representations ({the class <window>} and the like)
+    of course differ, as the original output file notes.  So does the
+    place of PRINT's newline, which Thomas wrote before the object and
+    this implementation, like the manual's examples, after it.
 
   * The compiler's echo of the input wraps lines differently, because the
     line breaking is the host pretty printer's.

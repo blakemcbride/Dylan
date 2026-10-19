@@ -26,7 +26,9 @@ bool dy_specializer_matches(D x, D spec) {
 }
 
 static const char *generic_name(D generic) {
-    DySymbol *name = DY_PTR(((DyGeneric *)DY_PTR(generic))->name);
+    D symbol = ((DyGeneric *)DY_PTR(generic))->name;
+    if (symbol == DY_FALSE) return "an anonymous generic function";
+    DySymbol *name = DY_PTR(symbol);
     return ((DyByteString *)DY_PTR(name->name))->data;
 }
 
@@ -127,4 +129,4 @@ static D default_initialize_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc)
 }
 
 DyFunction dy_default_initialize = { &dy_wrapper_method, default_initialize_entry,
-                                     DY_FALSE, DY_FALSE };
+                                     DY_FALSE, DY_FALSE, DY_FALSE, NULL };

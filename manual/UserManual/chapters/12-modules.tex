@@ -534,8 +534,6 @@ compiler to C would warn that \code{area} is not defined in module
 \code{app}, and the program would stop with an error on reaching the
 call, because \code{app} did not import it.
 
-The example uses \code{display} rather than \code{format} because
-\code{format} exists only in the compiler to C
-(Chapter~\ref{ch:printing}). A program meant to run in both
-implementations must keep to the names both provide;
-Appendix~\ref{app:library} marks the ones that only one of them has.
+A program meant to run in both implementations must keep to the names
+both provide; Appendix~\ref{app:library} marks the ones that only one of
+them has.

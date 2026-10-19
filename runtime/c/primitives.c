@@ -187,7 +187,8 @@ static D no_methods_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 PRIMITIVE(make_generic_function) {
     need(self, argc, 2, 2);
     if (!DY_IS_INT(a0) || DY_INT_VALUE(a0) < 0) dy_error("make: bad required:", a0);
-    if (!dy_kind_p(a1, DY_KIND_SYMBOL)) dy_error("make: debug-name: must be a symbol", a1);
+    if (a1 != DY_FALSE && !dy_kind_p(a1, DY_KIND_SYMBOL))
+        dy_error("make: debug-name: must be a symbol", a1);
     DyGeneric *g = dy_alloc(&dy_wrapper_generic_function, sizeof(DyGeneric));
     g->entry = no_methods_entry;
     g->name = a1;

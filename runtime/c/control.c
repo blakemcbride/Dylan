@@ -192,7 +192,7 @@ static D always_true_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 }
 
 static DyFunction always_true = { &dy_wrapper_method, always_true_entry, DY_FALSE,
-                                  DY_FALSE };
+                                  DY_FALSE, DY_FALSE, NULL };
 
 /* (do-handlers funarg): funarg on each active handler's type, test,
  * function and description, the most recent first. */

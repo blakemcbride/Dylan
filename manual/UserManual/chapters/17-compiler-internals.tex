@@ -536,7 +536,12 @@ and the iteration protocol on lists, simple object vectors and byte
 strings, and \code{id?}, \code{not}, \code{car}, \code{cdr},
 \code{instance?} and slot getters and setters are done \emph{inline} ---
 when the static program shows that no other method could apply to such
-arguments. Each inline case is guarded by a test of the arguments' classes,
+arguments. The manual's generic functions that the runtime writes in C
+--- \code{instance?}, \code{object-class}, \code{subclass?} and the
+other reflective functions of \dylanbook{chapters 10 and 11} --- each
+have one library method, which calls a \code{\%} primitive; while the
+program adds no method of its own to one, its calls are calls of the
+primitive, and \code{instance?} of a known class is done inline. Each inline case is guarded by a test of the arguments' classes,
 and the test is left out where their types are known. A float
 operation with one argument known to be a \code{<double-float>} answers a
 \code{<double-float>} (float contagion), so its result's type is known

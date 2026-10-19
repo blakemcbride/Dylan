@@ -78,7 +78,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 13
+#define DY_ABI_VERSION 14
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -536,6 +536,10 @@ typedef struct DyFunction {        /* <method>                          */
     D info;                        /* #(required rest? keys) for
                                       function-arguments, keys #f for no
                                       #key; 0 or #f if unknown           */
+    D owner;                       /* the generic function it is a method
+                                      of; 0 or #f if none                */
+    const char *name;              /* a predefined method's Dylan name,
+                                      or NULL; how it prints (chapter 8) */
     D env[];                       /* a closure's free variables         */
 } DyFunction;
 
@@ -675,6 +679,10 @@ static inline DyEntry dy_entry(D f) {
 
 D dy_make_closure(DyEntry entry, size_t env_size);
 
+/* Give the method F, the value of a predefined variable of the DYLAN
+ * module, that variable's NAME, unless it has an owner or a name. */
+void dy_name_method(D f, const char *name);
+
 /* Closures and instances on the stack of the function that makes them,
  * which the compiler has found do not outlive it (CompilerPlan.md, Phase
  * 9).  BUFFER is suitably aligned and large enough; the collector scans
@@ -685,6 +693,8 @@ static inline D dy_init_closure(void *buffer, DyEntry entry) {
     f->entry = entry;
     f->specializers = DY_FALSE;
     f->info = DY_FALSE;
+    f->owner = DY_FALSE;
+    f->name = NULL;
     return DY_OBJ(f);
 }
 

@@ -71,10 +71,11 @@ File & Role \\
 \file{class-structure.lisp} & the predefined class heterarchy \\
 \file{runtime-top.lisp}, \file{runtime-internal.lisp} & common parameter lists and the procedures compiled code calls \\
 \file{runtime-methods.lisp}, \file{runtime-functions.lisp} & the predefined methods and functions \\
-\file{runtime-extensions.lisp} & \code{pp}, \code{lisp-variable}, \code{lisp-procedure} \\
+\file{runtime-extensions.lisp} & \code{lisp-variable}, \code{lisp-procedure} \\
 \file{runtime-bitstrings.lisp} & \code{logand} and the other bit operations \\
 \file{runtime-collections*.lisp} & collections: the iteration protocol, the generic operations, and one file for each kind (lists, vectors, strings, deques, ranges, tables, arrays) \\
 \file{runtime-exceptions.lisp} & conditions, handlers and restarts \\
+\file{runtime-printing.lisp} & streams, \code{print-object}, \code{format} and the other printing functions (Chapter~\ref{ch:printing}) \\
 \file{runtime-fast-paths.lisp} & turns on the guarded fast paths (Section~\ref{sec:lisp-performance}) \\
 \file{rep.lisp} & the read-eval-print loop \\
 \file{load-dylan.lisp}, \file{load-compiler.lisp}, \file{load-runtime.lisp} & loaders \\
@@ -643,7 +644,7 @@ dynamic, as the 1992 manual allows:
 ;Value: color
 
 ? (add-slot <sq> getter: color init-value: 'red)
-;Value: #[dylan-slot *the-unnamed-slot*]
+;Value: {slot color}
 
 ? (color s)
 ;Value: red
@@ -666,8 +667,6 @@ absent here:
   variables or \code{dynamic-bind};
 \item no macros: \code{define-macro} and \code{define-for-macros} are
   not special forms here;
-\item no streams, \code{format}, \code{write} or \code{print-object}
-  (Chapter~\ref{ch:printing});
 \item no \code{current-milliseconds}.
 \end{itemize}
 
@@ -678,10 +677,6 @@ implementation provides.
 \paragraph{What behaves differently.}
 
 \begin{itemize}
-\item \code{print} and \code{write-line} write the newline before the
-  object here, after it in the compiler to C.
-\item Many objects print differently: \code{\#[dylan-class <point>]}
-  here, \code{\{the class <point>\}} there (Section~\ref{sec:printing-classes}).
 \item Modules must be declared before they are used, in order; the
   compiler to C sees the whole program first (Chapter~\ref{ch:modules}).
 \item Errors are reported when the code runs; the compiler to C reports
@@ -697,7 +692,6 @@ implementation provides.
   with \code{dylan:compile-file} and load the result.
 \item \code{(as <unicode-string> "abc")} is not implemented: it signals
   \code{as -{}- not specialized for this class type}.
-\item The way a class's instances print cannot be changed.
 \item Thomas's MIT Scheme restart example, written against MIT Scheme's
   condition system, has no counterpart; it would have to be rewritten
   against Common Lisp's.

@@ -64,12 +64,12 @@ and their values."
       (progn
         (loop for value in (aref multiple-values 0)
               for count from 1
-              do (terpri)
+              do (fresh-line)
                  (format t ";Value[~a]: " count)
                  (dylan-write value))
         (terpri))
       (progn
-        (terpri)
+        (fresh-line)
         (write-string ";Value: ")
         (dylan-write result)
         (terpri))))

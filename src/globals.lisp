@@ -109,7 +109,9 @@
           <singleton>
           <slot-descriptor>
           <stretchy-vector>
+          <stream>
           <string>
+          <string-stream>
           <symbol>
           <table>
           <type-error>
@@ -300,6 +302,7 @@
           dylan/positive?
           dylan/previous-state
           dylan/print
+          dylan/print-object
           dylan/push
           dylan/push-last
           dylan/range
@@ -395,6 +398,11 @@
           dylan/union
           dylan/values
           dylan/vector
+          dylan/write
           dylan/write-line
+          dylan/format
+          dylan/stream-contents
+          dylan/*standard-output*
+          dylan/*standard-error*
           dylan/zero?
           ))

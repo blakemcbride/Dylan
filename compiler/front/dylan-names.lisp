@@ -99,6 +99,15 @@
     "%set-cdr!" "%pair?" "%intern-symbol" "%intern-keyword" "%symbol-name"
     "%object-hash" "%number-hash" "%string-hash" "%write-string"
     "%write-char" "%number->string" "%class-name" "%generic-name"
-    "%singleton-object" "%function?")
+    "%singleton-object" "%function?" "%method-owner" "%method-name"
+    ;; The primitives of the manual's generic functions (00-kernel.dyl)
+    "%object-class" "%instance?" "%subclass?" "%all-superclasses"
+    "%direct-superclasses" "%direct-subclasses"
+    "%generic-function-methods" "%method-specializers"
+    "%applicable-method?" "%sorted-applicable-methods" "%find-method"
+    "%function-arguments" "%slot-getter" "%slot-setter" "%slot-type"
+    "%slot-allocation" "%init-value" "%init-function" "%init-keyword"
+    "%slot-value" "%slot-initialized?" "%slot-descriptor"
+    "%slot-descriptors")
   "Variables the DYLAN module owns, with values in the runtime, but does not
 export: for the library's own use.")

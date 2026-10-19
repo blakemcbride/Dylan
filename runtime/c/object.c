@@ -153,9 +153,22 @@ void dy_debug_write(FILE *out, D x) {
         print_symbol_name(out, ((DySymbol *)DY_PTR(x))->name);
         fputc(':', out);
         return;
-    case DY_KIND_FUNCTION:
-        fputs("{method}", out);
+    case DY_KIND_FUNCTION: {
+        /* As the 1992 manual prints them (chapters 8, 10 and 11) */
+        DyFunction *f = DY_PTR(x);
+        if (f->owner != 0 && f->owner != DY_FALSE) {
+            fputs("{a method on ", out);
+            D name = ((DyGeneric *)DY_PTR(f->owner))->name;
+            if (name == DY_FALSE) fputs("an anonymous generic function", out);
+            else print_symbol_name(out, ((DySymbol *)DY_PTR(name))->name);
+            fputc('}', out);
+        } else if (f->name) {
+            fprintf(out, "{method %s}", f->name);
+        } else {
+            fputs("{an anonymous method}", out);
+        }
         return;
+    }
     case DY_KIND_THREAD: fputs("{thread}", out); return;
     case DY_KIND_SLOT_DESCRIPTOR: fputs("{slot}", out); return;
     case DY_KIND_LOCK: fputs("{lock}", out); return;
@@ -164,11 +177,17 @@ void dy_debug_write(FILE *out, D x) {
         fprintf(out, "{atomic-integer %" PRIdPTR "}",
                 (intptr_t)atomic_load(&((DyAtomicInteger *)DY_PTR(x))->value));
         return;
-    case DY_KIND_GENERIC:
+    case DY_KIND_GENERIC: {
+        D name = ((DyGeneric *)DY_PTR(x))->name;
+        if (name == DY_FALSE) {
+            fputs("{an anonymous generic function}", out);
+            return;
+        }
         fputs("{the generic function ", out);
-        print_symbol_name(out, ((DySymbol *)DY_PTR(((DyGeneric *)DY_PTR(x))->name))->name);
+        print_symbol_name(out, ((DySymbol *)DY_PTR(name))->name);
         fputc('}', out);
         return;
+    }
     case DY_KIND_CLASS:
         fputs("{the class ", out);
         print_symbol_name(out, ((DySymbol *)DY_PTR(((DyClass *)DY_PTR(x))->name))->name);

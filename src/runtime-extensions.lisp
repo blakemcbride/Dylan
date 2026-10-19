@@ -47,7 +47,8 @@
 ;;;; own.  These are the Common Lisp counterparts of the three the MIT kit
 ;;;; provided (see kits/MIT/README):
 ;;;;
-;;;;   (PP <object>)               calls the Lisp pretty printer.
+;;;;   (PP <object>)               calls the Lisp pretty printer
+;;;;     (defined in runtime-printing.lisp with the other printing functions).
 ;;;;   (LISP-VARIABLE <symbol>)    returns the value of a Lisp variable.
 ;;;;     Results are unpredictable unless the object has a type that
 ;;;;     corresponds to one of the non-procedural Dylan types.
@@ -62,8 +63,6 @@
 ;;;; system itself defines, since a fully qualified name is not available.
 
 (in-package #:dylan)
-
-(defparameter dylan/pp (make-dylan-callable #'pp 1))
 
 (defparameter dylan/lisp-variable
   (make-dylan-callable

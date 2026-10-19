@@ -183,7 +183,7 @@ direct-subclasses."
       ;; What the code generator refers to itself
       (dolist (name '("initialize"))
         (push (dylan-var name) work))
-      (setf subclasses (dylan-var "direct-subclasses")))
+      (setf subclasses (dylan-var "%direct-subclasses")))
     (labels ((make-possible (class)
                (unless (gethash class possible)
                  (setf (gethash class possible) t)

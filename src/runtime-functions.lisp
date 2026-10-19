@@ -57,7 +57,7 @@
                    nil nil '(:debug-name :required :rest? :key?))
   (lambda (class &rest rest)
     (let ((name (dylan%find-keyword rest :debug-name
-                                    (lambda () "Anonymous Generic Function")))
+                                    (lambda () nil)))
           (nrequired
             (dylan%find-keyword
              rest :required
@@ -252,8 +252,9 @@
                     (make-param-list `((method ,<method>)) nil nil nil)
                     #'method.specializers))
 
+;;; Chapter 10: singleton is a function, not a generic function.
 (defparameter dylan/singleton
-  (dylan%generic-fn 'singleton one-object #'dylan%make-singleton))
+  (dylan%function->method one-object #'dylan%make-singleton))
 
 (defparameter dylan/sorted-applicable-methods
   (dylan%generic-fn 'sorted-applicable-methods
@@ -398,9 +399,3 @@ to INSTANCE's singleton rather than one of its class's slots."
                                      nil nil nil)
                     #'dylan%remove-slot))
 
-;;;;;;;;;;;; CRL additions
-
-(defparameter dylan/display (make-dylan-callable #'dylan-display 1))
-(defparameter dylan/newline (make-dylan-callable #'dylan-newline 0))
-(defparameter dylan/write-line (make-dylan-callable #'dylan-write-line 1))
-(defparameter dylan/print (make-dylan-callable #'dylan-write-line 1))

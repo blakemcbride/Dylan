@@ -91,6 +91,7 @@
     "runtime-collections-table"         ; Tables
     "runtime-collections-vector"        ; Vectors
     "runtime-exceptions"                ; Exceptions
+    "runtime-printing"                  ; Streams and printing
     "runtime-fast-paths"))              ; Inline arithmetic and element
 
 (defparameter *dylan-fasl-directory*

@@ -119,11 +119,11 @@ module: dylan
 (define %vectors-for?
   (method (class sequences)
     (cond ((id? class <byte-string>)
-           (every? (method (s) (instance? s <byte-string>)) sequences))
+           (every? (method (s) (%instance? s <byte-string>)) sequences))
           ((id? class <simple-object-vector>)
-           (every? (method (s) (or (instance? s <simple-object-vector>)
-                                   (instance? s <byte-string>)
-                                   (instance? s <unicode-string>)))
+           (every? (method (s) (or (%instance? s <simple-object-vector>)
+                                   (%instance? s <byte-string>)
+                                   (%instance? s <unicode-string>)))
                    sequences))
           (else: #f))))
 
@@ -276,6 +276,6 @@ module: dylan
 ;;; takes lists and simple vectors itself, and asks for the others' elements.
 (%set-sequence-hook
   (method (s)
-    (if (instance? s <sequence>)
+    (if (%instance? s <sequence>)
         (as <list> s)
         (error "apply: the last argument is not a sequence: ~s" s))))

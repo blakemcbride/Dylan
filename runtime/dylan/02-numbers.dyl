@@ -87,7 +87,7 @@ module: dylan
 (define-method even? ((n <integer>)) (id? (%logand n 1) 0))
 
 (define-generic-function integral? (number))
-(define-method integral? ((n <rational>)) (instance? n <integer>))
+(define-method integral? ((n <rational>)) (%instance? n <integer>))
 (define-method integral? ((x <float>))
   (bind ((q r (%divide 3 x 1))) (zero? r)))
 
@@ -173,7 +173,7 @@ module: dylan
 (define-generic-function expt (number1 number2))
 
 (define-method expt ((base <real>) (power <real>))
-  (if (and (instance? base <rational>) (instance? power <integer>))
+  (if (and (%instance? base <rational>) (%instance? power <integer>))
       (bind-methods ((raise (b n result)
                        (cond ((zero? n) result)
                              ((odd? n) (raise b (- n 1) (binary* result b)))
@@ -269,13 +269,13 @@ module: dylan
 
 (define-generic-function make-rectangular (real-part imag-part))
 (define-method make-rectangular ((r <real>) (i <real>))
-  (if (and (instance? i <rational>) (zero? i))
+  (if (and (%instance? i <rational>) (zero? i))
       r
       (error "complex numbers are not supported: ~s ~s" r i)))
 
 (define-generic-function make-polar (magnitude angle))
 (define-method make-polar ((m <real>) (a <real>))
-  (if (and (instance? a <rational>) (zero? a))
+  (if (and (%instance? a <rational>) (zero? a))
       m
       (error "complex numbers are not supported: ~s ~s" m a)))
 
@@ -321,7 +321,7 @@ module: dylan
 ;;; Conversions between the kinds of float
 
 (define-method as ((class (singleton <float>)) (x <real>))
-  (if (instance? x <float>) x (%float x 1)))
+  (if (%instance? x <float>) x (%float x 1)))
 (define-method as ((class (singleton <single-float>)) (x <real>)) (%float x 0))
 (define-method as ((class (singleton <double-float>)) (x <real>)) (%float x 1))
 (define-method as ((class (singleton <extended-float>)) (x <real>)) (%float x 2))

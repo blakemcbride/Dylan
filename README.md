@@ -14,7 +14,7 @@ language moved to an infix syntax:
   A whole, static program becomes a native executable: proper tail calls,
   generic dispatch compiled to decision trees, type inference, inlining
   and unboxed floats, the Boehm-Demers-Weiser collector, and real threads.
-  It adds macros, threads and streams, which the manual lacks.
+  It adds macros and threads, which the manual lacks.
 
 The standard both follow is the 1992 manual itself; an annotated copy is in
 `manual/Dylan-1992/`. A user manual for this system — a tutorial, the
@@ -215,11 +215,6 @@ implementation of Dylan, with its library, `gensym`, and what
 `dynamic-bind`. A condition a thread does not handle ends it, and
 `join-thread` signals a `<thread-error>` holding it.
 
-**Streams** (an extension; the manual uses them but does not define
-them): `<stream>`, `*standard-output*`, `*standard-error*`,
-`<string-stream>` with `stream-contents`, and `format`; every printing
-function takes `stream:`.
-
 What a static program cannot do, which the 1992 manual allows:
 
 - **Change its classes or generic functions while running:** `add-method`,
@@ -305,18 +300,23 @@ Each line gives the best of three runs for each, their ratios, and
 
 **Additions**
 
-- `display`, `newline`, `print` and `write-line`, and `pp`, which
-  pretty-prints an object.
+- Printing: `display`, `newline`, `print`, `write-line`, `write` and
+  `pp`, and the generic function `print-object`, to which programs add
+  methods. Both implementations print every object the same way.
+- Streams (the manual uses them but does not define them): `<stream>`,
+  `*standard-output*`, `*standard-error*`, `<string-stream>` with
+  `stream-contents`, and `format`; every printing function takes
+  `stream:`.
 - In the Common Lisp implementation, `lisp-variable` and `lisp-procedure`
   reach Common Lisp values and functions from Dylan. Lisp's `NIL` arrives
   as the empty list, not `#f`.
-- In the compiler to C: macros, threads and streams, above.
+- In the compiler to C: macros and threads, above.
 
 ## Repository layout
 
 | | |
 |---|---|
-| `src/` | the Common Lisp implementation — 38 Lisp files, ~14,800 lines |
+| `src/` | the Common Lisp implementation — 39 Lisp files, ~15,200 lines |
 | `src/README` | how it works, and which Thomas file each file grew from |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
 | `dylan-examples.dyl` | the examples from the Dylan book |

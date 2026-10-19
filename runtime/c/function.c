@@ -38,7 +38,15 @@ D dy_make_closure(DyEntry entry, size_t env_size) {
     f->entry = entry;
     f->specializers = DY_FALSE;
     f->info = DY_FALSE;
+    f->owner = DY_FALSE;
+    f->name = NULL;
     return DY_OBJ(f);
+}
+
+void dy_name_method(D f, const char *name) {
+    if (!dy_kind_p(f, DY_KIND_FUNCTION)) return;
+    DyFunction *m = DY_PTR(f);
+    if ((m->owner == 0 || m->owner == DY_FALSE) && !m->name) m->name = name;
 }
 
 D dy_collect_arguments(intptr_t argc, intptr_t start, D a0, D a1, D a2, D a3) {

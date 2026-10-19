@@ -52,7 +52,7 @@
                   (dylan-call dylan/condition-format-arguments condition))))
 
 (defun display-condition (condition)
-  (terpri)
+  (fresh-line)
   (let ((condition-type (get-type condition)))
     (cond
       ((eq condition-type <simple-error>)
@@ -63,10 +63,7 @@
        (display-simple-condition condition))
       ((eq condition-type <type-error>)
        (dylan-display ";Error: ")
-       (dylan-write (dylan-call dylan/type-error-value condition))
-       (dylan-display " is not an instance of ")
-       (dylan-display (class.debug-name
-                       (dylan-call dylan/type-error-expected-type condition))))
+       (dylan-display (condition-message condition)))
       (t
        (dylan-display ";Unhandled dylan condition: ")
        (dylan-write condition)))))
@@ -81,6 +78,7 @@
             (terpri) (terpri)
             (return))
           (pp sexpr)
+          (terpri)
           (setf module-variables
                 (call-with-escape-continuation
                  (lambda (error-exit)

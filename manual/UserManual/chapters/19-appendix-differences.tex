@@ -73,10 +73,16 @@ mention as they go. Each entry says which implementation it concerns:
 \section{Additions in both implementations}\label{sec:diff-additions}
 
 \begin{description}
-\item[Printing.] \code{display}, \code{newline}, \code{print} and
-  \code{write-line}, and \code{pp}, which pretty-prints an object
-  (Chapter~\ref{ch:printing}). The manual uses some of these in its
-  examples without defining them.
+\item[Printing.] \code{display}, \code{newline}, \code{print},
+  \code{write-line}, \code{write} and \code{pp}, and the generic
+  function \code{print-object}, to which programs add methods to control
+  how their objects print (Chapter~\ref{ch:printing}). The manual uses
+  \code{print} in its examples without defining it.
+\item[Streams.] \code{<stream>}, \code{*standard-output*},
+  \code{*standard-error*}, \code{<string-stream>} with
+  \code{stream-contents}, and \code{format}; every printing function
+  takes \code{stream:}. The manual uses streams and \code{format} but
+  does not define them. There is no input.
 \end{description}
 
 \section{The interactive implementation}\label{sec:diff-interactive}
@@ -89,14 +95,8 @@ mention as they go. Each entry says which implementation it concerns:
 \item[\code{\#t} and \code{\#f}.] Their class, as \code{object-class}
   answers it, is \code{<object>}; the manual names no class for them.
   (The compiler differs; see below.)
-\item[Printed representations.] Objects without a printed syntax print
-  in the implementation's own way: a class as
-  \code{\#[dylan-class <integer>]}, for instance, where the compiled
-  program prints \code{\{the class <integer>\}}. A single float prints
-  as \code{1.5f0} here and \code{1.5s0} in a compiled program.
 \item[No extensions of the compiler.] The interactive implementation has
-  none of the compiler's macros, threads and streams, and no
-  \code{format}, \code{write} or \code{print-object}.
+  none of the compiler's macros and threads.
 \end{description}
 
 \section{The compiler to C}\label{sec:diff-compiler}
@@ -186,14 +186,6 @@ All of these are extensions; the 1992 manual has none of them.
   \code{dynamic-bind}; \code{<thread-error>} with
   \code{thread-error-thread} and \code{thread-error-condition}
   (Chapter~\ref{ch:extensions}).
-\item \textbf{Streams}: \code{<stream>}, \code{*standard-output*},
-  \code{*standard-error*}, \code{<string-stream>} with
-  \code{stream-contents}, and \code{format}; every printing function
-  takes \code{stream:}. The manual uses streams but does not define
-  them. There is no input.
-\item \textbf{Printing}: \code{write}, and the generic function
-  \code{print-object}, to which programs add methods to control how
-  their objects print (Chapter~\ref{ch:printing}).
 \item \textbf{Timing}: \code{current-milliseconds}.
 \end{itemize}
 
@@ -214,9 +206,6 @@ program depends on none of these; each is described where it arises.
   leaves it unhandled in the compiler to C; in the interactive
   implementation \code{check-type} answers what the handler returned
   (Section~\ref{sec:conditions-signalling}).
-\item \code{print} and \code{write-line} write their newline after the
-  object in the compiler to C and before it in the interactive
-  implementation (Section~\ref{sec:printing-functions}).
 \item Strings: in the compiler to C a literal with a character above
   code 255 is a \code{<unicode-string>}, and equal literals may be one
   object; in the interactive implementation every string is a
@@ -240,7 +229,8 @@ its test compares results with Thomas's 1992 transcripts
 (Appendix~\ref{app:testing}). Where Thomas and the manual disagree, the
 manual is followed: \code{\#f} and the empty list are distinct objects,
 and \code{\#f} prints as \code{\#f}; floats print as the manual prints
-them (\code{9.0}, \code{0.5}); \code{sqrt} answers a float;
+them (\code{9.0}, \code{0.5}); \code{print} writes its newline after
+the object, as the manual's examples show; \code{sqrt} answers a float;
 \code{make} given a keyword that no slot and no \code{initialize}
 method accepts is an error, as in the compiler to C; reading a slot that
 nothing initialized is an error; and \code{map-into} behaves as

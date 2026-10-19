@@ -36,13 +36,13 @@ module: dylan
 
 (define %deque-check
   (method (d i)
-    (unless (and (instance? i <integer>) (not (negative? i)) (binary< i (%count d)))
+    (unless (and (%instance? i <integer>) (not (negative? i)) (binary< i (%count d)))
       (error "element: there is no element at the index ~s" i))))
 
 (define-method size ((d <deque>)) (%count d))
 
 (define-method element ((d <deque>) index #key (default %no-default))
-  (if (and (instance? index <integer>) (not (negative? index)) (binary< index (%count d)))
+  (if (and (%instance? index <integer>) (not (negative? index)) (binary< index (%count d)))
       (%vector-element (%data d) (%deque-slot d index))
       (if (id? default %no-default)
           (error "element: there is no element at the index ~s" index)

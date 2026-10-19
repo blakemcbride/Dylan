@@ -484,4 +484,27 @@ found
 (1 2 3 4 5)
 (128 163 198 233 268)
 ")
+ ;; pp: as print, laid out over lines of 79 columns; an array prints as
+ ;; <array> and its elements.  The Common Lisp implementation prints the same.
+ (pretty-printing
+  "(pp '(define-method foo ((x <integer>))
+          (bind ((y (* x x)) (z (+ x x x x x x x x x x x x x x x x x x x x)))
+            (list y z y z y z y z y z y z y z y z y z))))
+   (pp '(foo: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ccccccccc))
+   (pp (vector '(aaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbb) '(cccccccccccccccccccccccccccc dddddddddddddddddddddddddd eeeeeeeeeee) 3))
+   (pp '(a \"b\" 'c))
+   (print (make <array> dimensions: '(2 2) fill: 0))"
+  "(define-method foo ((x <integer>))
+  (bind ((y (* x x)) (z (+ x x x x x x x x x x x x x x x x x x x x)))
+    (list y z y z y z y z y z y z y z y z y z)))
+(foo:
+ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ ccccccccc)
+#((aaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbb)
+  (cccccccccccccccccccccccccccc dddddddddddddddddddddddddd eeeeeeeeeee)
+  3)
+(a \"b\" (quote c))
+{<array> 0 0 0 0}
+")
 )

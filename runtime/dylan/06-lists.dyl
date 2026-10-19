@@ -108,7 +108,7 @@ module: dylan
 (define-method find-pair (item (l <list>) #key (test id?))
   (bind-methods ((walk (l)
                    (cond ((not (%pair? l)) #f)
-                         ((not (instance? (car l) <list>))
+                         ((not (%instance? (car l) <list>))
                           (error "find-pair: ~s is not a list" (car l)))
                          ((and (%pair? (car l)) (test item (car (car l)))) (car l))
                          (else: (walk (cdr l))))))

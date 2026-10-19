@@ -80,7 +80,7 @@ module: dylan
 
 (define %make-condition
   (method (class condition arguments)
-    (if (instance? condition <condition>)
+    (if (%instance? condition <condition>)
         condition
         (make class format-string: condition format-arguments: arguments))))
 
@@ -110,7 +110,7 @@ module: dylan
 
 (define check-type
   (method (value type)
-    (if (instance? value type)
+    (if (%instance? value type)
         value
         (error (make <type-error> value: value type: type)))))
 

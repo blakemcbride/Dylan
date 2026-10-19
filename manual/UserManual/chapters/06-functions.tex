@@ -725,9 +725,9 @@ generic function can change there anyway; it returns its argument.
 \begin{dylan}
 (define-method double ((x <number>)) (+ x x))
 (define m (method ((s <string>)) (concatenate s s)))
-(add-method double m)          ; => {method}, #f
+(add-method double m)          ; => {a method on double}, #f
 (double "ab")                  ; => "abab"
-(remove-method double m)       ; => {method}
+(remove-method double m)       ; => {an anonymous method}
 (double "ab")                  ; => error: no applicable method
 \end{dylan}
 

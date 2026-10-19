@@ -705,25 +705,30 @@ slot SD in the object VAR."
 (defun emit-method-objects ()
   "Emit each method's object.  Its specializers and its arguments are for
 the reflective functions, which can get at a method of a generic function
-only when *REFLECTIVE-METHODS*; otherwise they are dropped."
+only when *REFLECTIVE-METHODS*; otherwise they are dropped.  Its owner, the
+generic function, is how it prints (chapter 11's {a method on double})."
   (loop for g being the hash-values of *gfuns*
         do (dolist (m (gfun-methods g))
              (unless (eq (gmethod-kind m) :default)
-               (emit-object "DyFunction ~a = { &dy_wrapper_method, ~a, ~a, ~a };"
+               (emit-object "DyFunction ~a = { &dy_wrapper_method, ~a, ~a, ~a, ~a, NULL };"
                             (gmethod-object-c m)
                             (if (and (eq (gmethod-kind m) :ir) *reflective-methods*)
                                 (format nil "~a_direct" (gmethod-entry-c m))
                                 (gmethod-entry-c m))
                             (if *reflective-methods* (spec-vector-c (gmethod-specs m)) "DY_FALSE")
-                            (if *reflective-methods* (method-info-c m) "DY_FALSE"))))))
+                            (if *reflective-methods* (method-info-c m) "DY_FALSE")
+                            (address (gfun-c-name g)))))))
 
 (defparameter *method-reflection-functions*
   '("generic-function-methods" "find-method" "sorted-applicable-methods"))
 
 (defun uses-method-reflection-p (ir)
+  "Does the program -- not the library, whose methods of these generic
+functions call their primitives -- use them?"
   (let ((functions (mapcar #'dylan-var *method-reflection-functions*)))
     (some (lambda (top)
-            (some (lambda (v) (member v functions)) (referenced-variables top)))
+            (and (not (library-form-p top))
+                 (some (lambda (v) (member v functions)) (referenced-variables top))))
           (ir-program-toplevels ir))))
 
 (defun arg-c (i) (if (< i 4) (format nil "a~d" i) (format nil "dy_thread->args[~d]" (- i 4))))
@@ -779,7 +784,7 @@ no next method."
                         (after (next-object (rest methods))))
                    (declare-object "static D ~a_entry(D, D, D, D, D, intptr_t);" name)
                    (declare-object "static DyFunction ~a;" name)
-                   (emit-object "static DyFunction ~a = { &dy_wrapper_method, ~a_entry, DY_FALSE, DY_FALSE };"
+                   (emit-object "static DyFunction ~a = { &dy_wrapper_method, ~a_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };"
                                 name name)
                    (emit-object "static D ~a_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {"
                                 name)
@@ -1132,7 +1137,7 @@ objects, makers."
                  (emit-object "    }")))))
   (emit-object "    dy_error(\"slot-initialized?: the getter does not read a slot of the object\", a0);~%}")
   (declare-object "DyFunction dy_prim_slot_initialized_p;")
-  (emit-object "DyFunction dy_prim_slot_initialized_p = { &dy_wrapper_method, dy_slot_initialized_entry, DY_FALSE, DY_FALSE };"))
+  (emit-object "DyFunction dy_prim_slot_initialized_p = { &dy_wrapper_method, dy_slot_initialized_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };"))
 
 ;;; Slot descriptors (chapter 11): one static DySlotDescriptor for each slot
 ;;; definition, and the functions slot-descriptor and slot-descriptors,
@@ -1171,7 +1176,7 @@ objects, makers."
                    (wrapper-c-name (sdef-class sd)) (address (sdef-descriptor-c sd))))
     (emit-object "    return DY_FALSE;~%}")
     (declare-object "DyFunction dy_prim_slot_descriptor;")
-    (emit-object "DyFunction dy_prim_slot_descriptor = { &dy_wrapper_method, dy_slot_descriptor_entry, DY_FALSE, DY_FALSE };")
+    (emit-object "DyFunction dy_prim_slot_descriptor = { &dy_wrapper_method, dy_slot_descriptor_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };")
     ;; (slot-descriptors class): of each slot of its instances, the most
     ;; specific definition
     (emit-object "static D dy_slot_descriptors_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
@@ -1195,4 +1200,4 @@ objects, makers."
                                                                effective))))))
     (emit-object "    return ~a;~%}" (address (c-vector *cdata* '())))
     (declare-object "DyFunction dy_prim_slot_descriptors;")
-    (emit-object "DyFunction dy_prim_slot_descriptors = { &dy_wrapper_method, dy_slot_descriptors_entry, DY_FALSE, DY_FALSE };")))
+    (emit-object "DyFunction dy_prim_slot_descriptors = { &dy_wrapper_method, dy_slot_descriptors_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };")))

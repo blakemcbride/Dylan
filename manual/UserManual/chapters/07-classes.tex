@@ -645,12 +645,13 @@ implementation differs, a note says so.
       <abort>
 \end{dylan}
 
-\noindent The compiler to C has further classes for its extensions
-(Chapter~\ref{ch:extensions}), all direct subclasses of \code{<object>}:
-the stream class \code{<stream>}, which has the subclass
-\code{<string-stream>}, and the thread classes \code{<thread>},
-\code{<lock>}, \code{<condition-variable>} and \code{<atomic-integer>}.
-\code{<lock>} has the subclass \code{<recursive-lock>}.
+\noindent Both implementations add the stream class \code{<stream>},
+a direct subclass of \code{<object>} with the subclass
+\code{<string-stream>} (Chapter~\ref{ch:printing}). The compiler to C
+has further classes for its threads (Chapter~\ref{ch:extensions}), also
+direct subclasses of \code{<object>}: \code{<thread>}, \code{<lock>},
+\code{<condition-variable>} and \code{<atomic-integer>}. \code{<lock>}
+has the subclass \code{<recursive-lock>}.
 
 Numbers are described in Chapter~\ref{ch:numbers}, collections in
 Chapter~\ref{ch:collections} and conditions in Chapter~\ref{ch:conditions}.

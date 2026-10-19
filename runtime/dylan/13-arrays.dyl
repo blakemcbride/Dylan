@@ -21,7 +21,7 @@ module: dylan
 
 (define dimensions
   (method (array)
-    (if (instance? array <%general-array>)
+    (if (%instance? array <%general-array>)
         (%dimensions array)
         (list (size array)))))
 
@@ -31,7 +31,7 @@ module: dylan
                      (cond ((and (id? dims '()) (id? indices '())) k)
                            ((or (id? dims '()) (id? indices '()))
                             (error "aref: the wrong number of indices for ~s" array))
-                           ((not (and (instance? (car indices) <integer>)
+                           ((not (and (%instance? (car indices) <integer>)
                                       (not (negative? (car indices)))
                                       (binary< (car indices) (car dims))))
                             (error "aref: the index ~s is out of bounds" (car indices)))
@@ -41,7 +41,7 @@ module: dylan
 
 (define aref
   (method (array #rest indices)
-    (if (instance? array <%general-array>)
+    (if (%instance? array <%general-array>)
         (%vector-element (%data array) (%row-major array indices))
         (if (and (%pair? indices) (id? (cdr indices) '()))
             (element array (car indices))
@@ -52,7 +52,7 @@ module: dylan
     (bind ((new-value (last indices-and-new-value))
            (indices (copy-sequence indices-and-new-value
                                    end: (binary- (%list-length indices-and-new-value) 1))))
-      (if (instance? array <%general-array>)
+      (if (%instance? array <%general-array>)
           (%vector-element-setter (%data array) (%row-major array indices) new-value)
           (if (and (%pair? indices) (id? (cdr indices) '()))
               (set! (element array (car indices)) new-value)
@@ -63,7 +63,7 @@ module: dylan
 (define-method element ((a <%general-array>) (indices <sequence>) #key (default %no-default))
   (bind ((l (as <list> indices)))
     (if (and (= (size l) (size (%dimensions a)))
-             (every? (method (i d) (and (instance? i <integer>) (not (negative? i)) (binary< i d)))
+             (every? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
                      l (%dimensions a)))
         (apply aref a l)
         (if (id? default %no-default)

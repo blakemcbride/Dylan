@@ -405,6 +405,15 @@ of pre-existing module variables.  CONTINUE is a function that receives:
     (newline dylan/newline)
     (write-line dylan/write-line)
     (print dylan/print)
+    ;;;;;;;;;;;;;;; Streams and printing (runtime-printing.lisp)
+    (<stream> <stream>)
+    (<string-stream> <string-stream>)
+    (*standard-output* dylan/*standard-output*)
+    (*standard-error* dylan/*standard-error*)
+    (stream-contents dylan/stream-contents)
+    (write dylan/write)
+    (format dylan/format)
+    (print-object dylan/print-object)
     ,@implementation-specific/additional-dylan-bindings))
 
 (defparameter dylan%predefined-names

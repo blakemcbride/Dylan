@@ -313,7 +313,15 @@ can vanish while a caller walks it."
 ;;;
 ;;; Thomas printed its values with the host Scheme's WRITE and DISPLAY.  In
 ;;; Common Lisp that would show NIL, T and :FOO where Dylan wants (), #t
-;;; and foo:, so this implementation brings a printer of its own.
+;;; and foo:, so this implementation brings a printer of its own.  It
+;;; prints every object as the compiler to C does (runtime/dylan/
+;;; 14-printing.dyl), so that a program prints the same in both.
+;;;
+;;; DYLAN-PRINT writes the predefined forms.  The Dylan-visible printing
+;;; functions go through the generic function PRINT-OBJECT, whose method
+;;; on <object> calls DYLAN-PRINT, and DYLAN-PRINT then prints the
+;;; elements of a collection through PRINT-OBJECT again, so that a
+;;; program's own methods are used inside lists too (runtime-printing.lisp).
 
 (defun print-opaque-object (object stream)
   (format stream "#[~(~a~) ~x]"
@@ -322,6 +330,52 @@ can vanish while a caller walks it."
 
 (defvar *dylan-print-escape* t
   "True for WRITE-style output, false for DISPLAY-style output.")
+
+(defvar *dylan-print-target* nil
+  "The Dylan stream DYLAN-PRINT is writing to on behalf of PRINT-OBJECT,
+whose elements go through PRINT-OBJECT too; NIL when it is printing on its
+own.")
+
+(defvar *dylan-debug-print* nil
+  "True while an error message is put together: objects then print as the
+compiler's %FORMAT-MESSAGE prints them, without PRINT-OBJECT, and an
+instance of a class other than a predefined collection or class shows only
+its class.")
+
+;;;; Streams
+;;;
+;;; A Dylan stream (chapter 13 passes them around; the stream functions
+;;; themselves are runtime-printing.lisp's) is one of *STANDARD-OUTPUT* and
+;;; *STANDARD-ERROR*, which write to whatever Lisp's standard output and
+;;; error output are at the time, a string stream, which collects its
+;;; characters, or a wrapper around a Lisp stream.
+
+(defstruct (dylan-stream (:constructor %make-dylan-stream (target))
+                         (:predicate dylan-stream?)
+                         (:print-object print-opaque-object))
+  target                                ; :STDOUT, :STDERR, :STRING or a stream
+  (output nil)                          ; for :STRING, a string output stream
+  (contents ""))                        ; for :STRING, the characters so far
+
+(defun dylan-stream-lisp (stream)
+  "The Lisp stream that writing to the Dylan STREAM writes to."
+  (let ((target (dylan-stream-target stream)))
+    (case target
+      (:stdout *standard-output*)
+      (:stderr *error-output*)
+      (:string (or (dylan-stream-output stream)
+                   (setf (dylan-stream-output stream)
+                         (make-string-output-stream))))
+      (t target))))
+
+(defun dylan-stream-string (stream)
+  "Everything written to the string stream STREAM so far."
+  (let ((output (dylan-stream-output stream)))
+    (when output
+      (setf (dylan-stream-contents stream)
+            (concatenate 'string (dylan-stream-contents stream)
+                         (get-output-stream-string output))))
+    (copy-seq (dylan-stream-contents stream))))
 
 (defun dylan-function-name (name)
   "The Dylan name of a generic function the runtime knows as NAME: the
@@ -346,9 +400,32 @@ shown as Dylan writes them."
             (format nil "(setter ~a)" base)
             base))))
 
+
+(declaim (special <condition> <simple-error> <simple-warning> <type-error>
+                  <range> <table> <sequence> <array>
+                  dylan/print-object dylan/initial-state dylan/next-state
+                  dylan/current-element dylan/current-key dylan/size))
+
+(defun dylan-class-name (class)
+  (dylan-symbol->string (class.debug-name class)))
+
 (defun dylan-print (object &optional (stream *standard-output*))
   (labels ((out (x) (write-string x stream))
-           (rec (x) (dylan-print x stream)))
+           (rec (x)
+             ;; An element, through PRINT-OBJECT when printing for it
+             (if *dylan-print-target*
+                 (dylan-call dylan/print-object x *dylan-print-target*
+                             (bool *dylan-print-escape*))
+                 (dylan-print x stream)))
+           (elements (collection)
+             ;; The elements of a collection, separated by spaces
+             (loop for state = (dylan-call dylan/initial-state collection)
+                     then (dylan-call dylan/next-state collection state)
+                   for first = t then nil
+                   while (true? state)
+                   do (unless first (write-char #\Space stream))
+                      (rec (dylan-call dylan/current-element collection
+                                       state)))))
     (cond
       ((null object) (out "()"))
       ((eq object t) (out "#t"))
@@ -356,28 +433,23 @@ shown as Dylan writes them."
       ((keywordp object) (format stream "~a:" (dylan-symbol->string object)))
       ((symbolp object) (out (dylan-symbol->string object)))
       ((stringp object)
-       (if *dylan-print-escape*
-           (progn (write-char #\" stream)
-                  (loop for ch across object
-                        do (when (or (char= ch #\") (char= ch #\\))
-                             (write-char #\\ stream))
-                           (write-char ch stream))
-                  (write-char #\" stream))
-           (out object)))
+       (cond ((not *dylan-print-escape*) (out object))
+             (*dylan-debug-print*
+              (write-char #\" stream) (out object) (write-char #\" stream))
+             (t
+              (write-char #\" stream)
+              (loop for ch across object
+                    do (when (or (char= ch #\") (char= ch #\\))
+                         (write-char #\\ stream))
+                       (write-char ch stream))
+              (write-char #\" stream))))
       ((characterp object)
-       (if *dylan-print-escape*
-           (let ((*print-readably* nil)) (format stream "#\\~a" (char-name-or-self object)))
-           (write-char object stream)))
-      ;; WRITE abbreviates (quote x) as 'x, and Thomas's output was
-      ;; produced by Scheme's WRITE.
-      ((and (consp object)
-            (member (car object)
-                    '(quote quasiquote unquote unquote-splicing))
-            (consp (cdr object)) (null (cddr object)))
-       (out (ecase (car object)
-              (quote "'") (quasiquote "`") (unquote ",")
-              (unquote-splicing ",@")))
-       (rec (cadr object)))
+       (cond ((not *dylan-print-escape*) (write-char object stream))
+             (*dylan-debug-print*
+              (if (<= 32 (char-code object) 126)
+                  (format stream "#\\~c" object)
+                  (format stream "#\\U+~4,'0X" (char-code object))))
+             (t (out "#\\") (out (char-name-or-self object)))))
       ((consp object)
        (write-char #\( stream)
        (loop with first = t
@@ -395,45 +467,119 @@ shown as Dylan writes them."
              do (unless (zerop i) (write-char #\Space stream))
                 (rec (aref object i)))
        (write-char #\) stream))
-      ((class? object)
-       (format stream "#[dylan-class ~a]"
-               (dylan-symbol->string (class.debug-name object))))
-      ((and (instance? object) (condition-message object))
-       ;; Chapter 13: a condition prints as its message.
-       (out (condition-message object)))
-      ((instance? object)
-       (format stream "#[instance-of ~a]"
-               (dylan-symbol->string
-                (class.debug-name (instance.class object)))))
-      ((slot? object)
-       (format stream "#[dylan-slot ~a]"
-               (let ((n (slot.debug-name object)))
-                 (if (symbolp n) (dylan-symbol->string n) n))))
-      ((singleton? object)
-       (out "#[dylan-singleton ")
-       (rec (singleton.object object))
-       (write-char #\] stream))
-      ((functionp object)
-       (cond ((dylan%generic-function? object)
-              (format stream "#[generic function ~a]"
-                      (dylan-function-name
-                       (generic-function.name object))))
-             ((dylan%method? object) (out "#[method]"))
-             (t (out "#[compiled-procedure]"))))
-      ((floatp object) (write-string (dylan-float-string object) stream))
+      ((floatp object) (out (dylan-float-string object)))
       ((complexp object)
        (out "#c(")
        (rec (realpart object))
        (write-char #\Space stream)
        (rec (imagpart object))
        (write-char #\) stream))
+      ((numberp object) (princ object stream))
+      ((class? object)
+       (format stream "{the class ~a}" (dylan-class-name object)))
+      ((dylan-stream? object) (out "{stream}"))
+      ((instance? object)
+       (let ((class (instance.class object)))
+         (cond
+           (*dylan-debug-print*
+            (format stream "{instance of ~a}" (dylan-class-name class)))
+           ;; Chapter 13: a condition prints as its message.
+           ((subclass? class <condition>) (out (condition-message object)))
+           ((subclass? class <range>)
+            (out "{range ")
+            (rec (range-start object))
+            (out " by ")
+            (rec (range-step object))
+            (let ((size (range-size object)))
+              (when size
+                (out " size ")
+                (rec size)))
+            (write-char #\} stream))
+           ((subclass? class <table>)
+            (out "{table")
+            (loop for state = (dylan-call dylan/initial-state object)
+                    then (dylan-call dylan/next-state object state)
+                  while (true? state)
+                  do (write-char #\Space stream)
+                     (rec (dylan-call dylan/current-key object state))
+                     (out " => ")
+                     (rec (dylan-call dylan/current-element object state)))
+            (write-char #\} stream))
+           ;; Any other sequence, or an array: its class and its elements
+           ((or (subclass? class <sequence>) (subclass? class <array>))
+            (format stream "{~a" (dylan-class-name class))
+            (let ((size (dylan-call dylan/size object)))
+              (cond ((false? size)
+                     (out " ..."))
+                    ((plusp size)
+                     (write-char #\Space stream)
+                     (elements object))))
+            (write-char #\} stream))
+           (t (format stream "{instance of ~a}" (dylan-class-name class))))))
+      ((slot? object)
+       (if *dylan-debug-print*
+           (out "{slot}")
+           (format stream "{slot ~a}"
+                   (let ((getter (slot.getter object))
+                         (n (slot.debug-name object)))
+                     (cond ((and (functionp getter)
+                                 (dylan%generic-function? getter))
+                            (dylan-function-name
+                             (generic-function.name getter)))
+                           ((symbolp n) (dylan-function-name n))
+                           (t n))))))
+      ((singleton? object)
+       (if *dylan-debug-print*
+           (out "{instance of <singleton>}")
+           (progn
+             (out "{singleton ")
+             (let ((*dylan-print-escape* t)) (rec (singleton.object object)))
+             (write-char #\} stream))))
+      ;; Generic functions and methods as the manual's examples show them
+      ;; (chapters 3, 8, 10 and 11)
+      ((and (functionp object) (dylan%generic-function? object))
+       (let ((name (generic-function-print-name object)))
+         (if name
+             (format stream "{the generic function ~a}" name)
+             (out "{an anonymous generic function}"))))
+      ((functionp object)
+       (let ((owner (method-owner object))
+             (name (predefined-method-name object)))
+         (cond (owner
+                (format stream "{a method on ~a}"
+                        (or (generic-function-print-name owner)
+                            "an anonymous generic function")))
+               (name (format stream "{method ~a}" name))
+               (t (out "{an anonymous method}")))))
       (t (princ object stream)))
     object))
 
-(declaim (special <simple-error> <simple-warning> <type-error>))
+(defun generic-function-print-name (generic-function)
+  "The name a generic function prints with, or NIL if it has none."
+  (let ((name (generic-function.name generic-function)))
+    (and name (not (false? name)) (dylan-function-name name))))
+
+(defvar *predefined-method-names* nil
+  "Each predefined method -> the name of the variable that holds it, made
+when first needed.")
+
+(defun predefined-method-name (method)
+  "The name of the predefined variable whose value is METHOD, or NIL."
+  (unless *predefined-method-names*
+    (let ((table (make-hash-table :test 'eq)))
+      (loop for (name variable) in (symbol-value 'dylan%lisp-names-of-predefined-names)
+            do (when (boundp variable)
+                 (let ((value (symbol-value variable)))
+                   (when (and (functionp value)
+                              (not (dylan%generic-function? value))
+                              (not (gethash value table)))
+                     (setf (gethash value table) (dylan-function-name name))))))
+      (setf *predefined-method-names* table)))
+  (gethash method *predefined-method-names*))
 
 (defun condition-message (object)
-  "The message of a simple condition or type error, or NIL."
+  "The message of a condition, as the compiler's %CONDITION-MESSAGE puts
+it together (chapter 13)."
   (let ((class (instance.class object)))
     (cond ((or (subclass? class <simple-error>)
                (subclass? class <simple-warning>))
@@ -442,52 +588,85 @@ shown as Dylan writes them."
             (dylan-call dylan/condition-format-arguments object)))
           ((subclass? class <type-error>)
            (dylan-format-message
-            "~s is not an instance of ~a"
+            "~s is not an instance of ~s"
             (list (dylan-call dylan/type-error-value object)
-                  (let ((type (dylan-call dylan/type-error-expected-type
-                                          object)))
-                    (if (class? type)
-                        (class.debug-name type)
-                        type)))))
-          (t nil))))
+                  (dylan-call dylan/type-error-expected-type object))))
+          (t (dylan-format-message "~s" (list object))))))
 
 (defun dylan-float-string (x)
-  "A float as Common Lisp writes one with double-float the default format:
-9.0, 0.5, 1.0e20 -- the form the manual's examples show (9.0 in chapter
-10), where Thomas wrote Scheme's 9. and .5.  Other float formats keep
-their exponent marker (1.5f0), so that they read back as themselves."
-  (let ((*read-default-float-format* 'double-float))
-    (prin1-to-string x)))
+  "A float as the compiler to C prints one: the fewest digits that read
+back as X, in fixed notation when its magnitude is at least 1e-5 and below
+1e16 (or it is zero), else with an exponent; a single-float ends with s
+and its exponent (1.5s0), a double-float -- the default format, as when
+reading -- with e and its exponent only when it has one (9.0, 1.0e20)."
+  (cond
+    #+sbcl
+    ((sb-ext:float-nan-p x) "+nan")
+    #+sbcl
+    ((sb-ext:float-infinity-p x) (if (plusp x) "+infinity" "-infinity"))
+    (t
+     (let* ((single (typep x 'single-float))
+            (magnitude (abs (coerce x 'double-float)))
+            (fixed (or (zerop x) (and (>= magnitude 1d-5) (< magnitude 1d16))))
+            (exponent 0)
+            (body
+              (if (zerop x)
+                  "0.0"
+                  (multiple-value-bind (k digits)
+                      #+sbcl (sb-impl::flonum-to-digits (abs x))
+                      #-sbcl (let ((s (string-trim "0" (remove #\. (format nil "~,,,,,,'eE" (abs x))))))
+                               (values 1 s))
+                    (let ((n (length digits)))
+                      (cond ((not fixed)
+                             (setf exponent (1- k))
+                             (format nil "~a.~a" (char digits 0)
+                                     (if (> n 1) (subseq digits 1) "0")))
+                            ((<= k 0)
+                             (format nil "0.~a~a"
+                                     (make-string (- k) :initial-element #\0)
+                                     digits))
+                            ((>= k n)
+                             (format nil "~a~a.0" digits
+                                     (make-string (- k n) :initial-element #\0)))
+                            (t (format nil "~a.~a" (subseq digits 0 k)
+                                       (subseq digits k)))))))))
+       (format nil "~:[~;-~]~a~a" (minusp (float-sign x)) body
+               (cond (single (format nil "s~d" exponent))
+                     ((not fixed) (format nil "e~d" exponent))
+                     (t "")))))))
 
 (defun char-name-or-self (ch)
-  "The manual's character names (chapter 3) where there is one."
+  "The name the compiler to C prints a character by, or the character."
   (case ch
     (#\Space "space")
     (#\Newline "newline")
     (#\Tab "tab")
-    (#\Rubout "rubout")
-    (#\Page "page")
-    (#\Backspace "backspace")
     (#\Return "return")
+    (#\Page "page")
     (#\Nul "null")
-    (t (if (graphic-char-p ch)
-           (string ch)
-           (or (char-name ch) (string ch))))))
+    (#\Rubout "rubout")
+    (#\Backspace "backspace")
+    (#\Esc "escape")
+    (t (string ch))))
+
+(defun dylan-print-object (object stream escape)
+  "Print OBJECT on the Lisp STREAM through the generic function
+PRINT-OBJECT, as the Dylan printing functions do."
+  (if (and (boundp 'dylan/print-object) dylan/print-object)
+      (dylan-call dylan/print-object object (%make-dylan-stream stream)
+                  (bool escape))
+      (let ((*dylan-print-escape* escape)) (dylan-print object stream)))
+  object)
 
 (defun dylan-write (object &optional (stream *standard-output*))
-  (let ((*dylan-print-escape* t)) (dylan-print object stream)))
+  (dylan-print-object object stream t))
 
 (defun dylan-display (object &optional (stream *standard-output*))
-  (let ((*dylan-print-escape* nil)) (dylan-print object stream)))
+  (dylan-print-object object stream nil))
 
 (defun dylan-newline (&optional (stream *standard-output*))
   (terpri stream)
   dylan%false)
-
-(defun dylan-write-line (object &optional (stream *standard-output*))
-  (terpri stream)
-  (dylan-write object stream)
-  object)
 
 (defvar *dylan-pprint-dispatch*
   (let ((table (copy-pprint-dispatch nil)))
@@ -507,24 +686,35 @@ their exponent marker (1.5f0), so that they read back as themselves."
                          2 table)
     (set-pprint-dispatch 'keyword
                          (lambda (s x)
-                           (format s "~a:" (dylan-symbol->string x)))
+                           (write-string (dylan-symbol->string x) s)
+                           (write-char #\: s))
                          2 table)
     (set-pprint-dispatch 'symbol
                          (lambda (s x)
                            (write-string (dylan-symbol->string x) s))
                          1 table)
+    ;; Every other object but a list or a vector -- a string, a float, an
+    ;; instance -- as Dylan's printer writes it.
+    (set-pprint-dispatch '(not (or cons (and vector (not string))))
+                         (lambda (s x)
+                           (let ((*print-pretty* nil)) (dylan-write x s)))
+                         0 table)
     table)
   "A pretty-print dispatch table that lays out Dylan code the way Dylan
 writes it.")
 
+(defmacro with-dylan-pretty-printer ((table) &body body)
+  `(let ((*print-case* :downcase)
+         (*print-right-margin* 79)
+         (*print-readably* nil)
+         (*print-pprint-dispatch* ,table)
+         (*print-pretty* t))
+     ,@body))
+
 (defun pp (object &optional (stream *standard-output*))
-  "Pretty print, for the Dylan-visible PP extension, for the compiler's
-file output, and for echoing input in the test harness."
-  (let ((*print-case* :downcase)
-        (*print-right-margin* 79)
-        (*print-readably* nil)
-        (*print-pprint-dispatch* *dylan-pprint-dispatch*)
-        (*print-pretty* t))
+  "Pretty print, for the compiler's file output and for echoing input in
+the test harness: on a new line, which it does not end."
+  (with-dylan-pretty-printer (*dylan-pprint-dispatch*)
     (pprint object stream))
   object)
 
@@ -818,39 +1008,45 @@ this to report errors by file and line.")
 ;;; of irritants, exactly as MIT Scheme's simple errors did.
 
 ;;; An error message is a format string and its arguments (chapter 13's
-;;; <simple-error>; the manual's examples use Common Lisp's directives).
-;;; ~A and ~S print an argument as Dylan's DISPLAY and WRITE do, ~D as
-;;; DISPLAY, ~% and ~& start a line and ~~ is a tilde; any other directive is
-;;; left as it is.  Arguments no directive consumes follow the message, as
-;;; the runtime's own MIT-style error calls (message, then irritants)
-;;; expect.
+;;; <simple-error>; the manual's examples use Common Lisp's directives),
+;;; put together as the compiler's %FORMAT-MESSAGE does: ~A and ~D print
+;;; an argument plain, ~S escaped, ~% and ~& a newline and ~~ a tilde; any
+;;; other directive is left as it is, a directive with no argument left
+;;; prints nothing, and arguments no directive consumes follow the message,
+;;; each after a space, as the runtime's own MIT-style error calls
+;;; (message, then irritants) expect.
 
 (defun dylan-format-message (control arguments)
-  (with-output-to-string (out)
-    (let ((args arguments)
-          (n (length control))
-          (i 0))
-      (loop while (< i n)
-            do (let ((ch (char control i)))
-                 (if (and (char= ch #\~) (< (1+ i) n))
-                     (let ((directive (char-downcase (char control (1+ i)))))
-                       (case directive
-                         ((#\a #\d) (if args
-                                        (dylan-display (pop args) out)
-                                        (write-string "~a" out)))
-                         ((#\s) (if args
-                                    (dylan-write (pop args) out)
-                                    (write-string "~s" out)))
-                         ((#\%) (terpri out))
-                         ((#\&) (fresh-line out))
-                         ((#\~) (write-char #\~ out))
-                         (t (write-char ch out)
-                            (write-char (char control (1+ i)) out)))
-                       (incf i 2))
-                     (progn (write-char ch out) (incf i)))))
-      (dolist (arg args)
-        (write-char #\Space out)
-        (dylan-write arg out)))))
+  (let ((*dylan-debug-print* t)
+        (*dylan-print-target* nil))
+    ;; Printing plain affects only a string or a character itself, not
+    ;; one inside a list, as %FORMAT-MESSAGE's DISPLAY does.
+    (flet ((put (object escape out)
+             (let ((*dylan-print-escape*
+                     (or escape (not (or (stringp object) (characterp object))))))
+               (dylan-print object out))))
+      (with-output-to-string (out)
+        (let ((args arguments))
+          (if (not (stringp control))
+              (put control nil out)
+              (let ((n (length control))
+                    (i 0))
+                (loop while (< i n)
+                      do (let ((ch (char control i)))
+                           (if (and (char= ch #\~) (< (1+ i) n))
+                               (let ((directive (char-downcase (char control (1+ i)))))
+                                 (case directive
+                                   ((#\a #\d) (when args (put (pop args) nil out)))
+                                   ((#\s) (when args (put (pop args) t out)))
+                                   ((#\% #\&) (terpri out))
+                                   ((#\~) (write-char #\~ out))
+                                   (t (write-char ch out)
+                                    (write-char (char control (1+ i)) out)))
+                                 (incf i 2))
+                               (progn (write-char ch out) (incf i)))))))
+          (dolist (arg args)
+            (write-char #\Space out)
+            (put arg nil out)))))))
 
 (define-condition dylan-condition (error)
   ((offered :initarg :offered :initform nil :reader offered-to-dylan-p)

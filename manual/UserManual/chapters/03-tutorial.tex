@@ -484,15 +484,10 @@ quotes, followed by a newline.
 ; prints: The answer is 42
 \end{dylan}
 
-\begin{notebox}
-The interactive implementation's \code{print} writes its newline
-\emph{before} the object, Thomas's way; the compiled \code{print} writes
-it after. A program that prints with \code{print} therefore puts the
-same lines on the screen in either implementation, but the interactive
-one starts with a blank line and does not end its last line.
-The compiler also has \code{format}, which the interactive implementation
-does not (Chapter~\ref{ch:printing}).
-\end{notebox}
+\noindent
+\code{format} does the same in one call, \code{(format \#t "The answer
+is \textasciitilde a\textasciitilde\%" 42)}; Chapter~\ref{ch:printing}
+describes it and the other printing functions.
 
 \paragraph{for.}\index{for}
 \code{for} is the general loop. Its first argument lists the loop
@@ -821,13 +816,10 @@ It defined a setter too, which \code{set!} uses:
 (object-class pt)
 \end{dylan}
 
-The two implementations print a class, or any object without a readable
-printed form, differently. The interactive implementation shows the last
-example's value as \code{\#[dylan-class <point>]}, and a compiled program
-prints it as \code{\{the class <point>\}}; an instance of \code{<point>}
-is \code{\#[instance-of <point>]} in the one and \code{\{instance of
-<point>\}} in the other. Chapter~\ref{ch:printing} explains how to give
-your own classes a printed form.
+\code{(object-class pt)} prints as \code{\{the class <point>\}}, and
+\code{pt} itself, like any object without a readable printed form, as
+\code{\{instance of <point>\}}. Chapter~\ref{ch:printing} explains how
+to give your own classes a printed form.
 
 \paragraph{Inheritance.} A class inherits the slots of its superclasses
 and adds its own. Here is a small family of shapes, which the following
@@ -1524,7 +1516,7 @@ modules (Chapter~\ref{ch:modules}), and printing
 
 Part~III describes the two implementations as tools. Read
 Chapter~\ref{ch:dylanc} before building larger programs with the compiler,
-and Chapter~\ref{ch:extensions} for its macros, threads and streams.
+and Chapter~\ref{ch:extensions} for its macros and threads.
 Appendix~\ref{app:differences} lists everything in which this system
 differs from the 1992 manual.
 

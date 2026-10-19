@@ -135,9 +135,9 @@ module: dylan
 
 (define-method make ((class (singleton <generic-function>)) #key (required %no-default)
                      debug-name)
-  (unless (and (instance? required <integer>) (not (negative? required)))
+  (unless (and (%instance? required <integer>) (not (negative? required)))
     (error "make: a <generic-function> needs required:, an integer not below 0"))
-  (%make-generic-function required (or debug-name 'anonymous)))
+  (%make-generic-function required debug-name))
 
 ;;; initialize (chapter 6).  Its method on <object>, which does nothing,
 ;;; is the compiler's own.
@@ -155,7 +155,7 @@ module: dylan
 (define-generic-function as (class object))
 
 (define-method as ((class <class>) object)
-  (if (instance? object class)
+  (if (%instance? object class)
       object
       (error "as: ~s cannot be converted to ~s" object class)))
 
@@ -164,6 +164,60 @@ module: dylan
 (define %no-default (cons #f #f))
 
 ;;; Slot descriptors (chapter 11): the rest are the runtime's.
-(define (setter slot-value)
-  (method (instance descriptor new-value)
-    (%slot-value-setter instance descriptor new-value)))
+(define-generic-function (setter slot-value) (instance slot-descriptor new-value))
+(define-method (setter slot-value) (instance slot-descriptor new-value)
+  (%slot-value-setter instance slot-descriptor new-value))
+
+
+;;; The manual's generic functions of chapters 10 and 11 that the runtime
+;;; writes in C: each has one method, which calls the primitive.  A program
+;;; may add methods; while it adds none, the compiler calls the primitive
+;;; (compiler/backend/primitives.lisp, *primitive-generics*).  The
+;;; library itself calls the primitives.
+
+(define-generic-function object-class (object))
+(define-method object-class (object) (%object-class object))
+(define-generic-function instance? (object type))
+(define-method instance? (object type) (%instance? object type))
+(define-generic-function subclass? (class-1 class-2))
+(define-method subclass? (class-1 class-2) (%subclass? class-1 class-2))
+(define-generic-function all-superclasses (class))
+(define-method all-superclasses (class) (%all-superclasses class))
+(define-generic-function direct-superclasses (class))
+(define-method direct-superclasses (class) (%direct-superclasses class))
+(define-generic-function direct-subclasses (class))
+(define-method direct-subclasses (class) (%direct-subclasses class))
+(define-generic-function generic-function-methods (generic-function))
+(define-method generic-function-methods (generic-function) (%generic-function-methods generic-function))
+(define-generic-function method-specializers (m))
+(define-method method-specializers (m) (%method-specializers m))
+(define-generic-function applicable-method? (function #rest sample-arguments))
+(define-method applicable-method? (function #rest sample-arguments) (apply %applicable-method? function sample-arguments))
+(define-generic-function sorted-applicable-methods (generic-function #rest sample-arguments))
+(define-method sorted-applicable-methods (generic-function #rest sample-arguments) (apply %sorted-applicable-methods generic-function sample-arguments))
+(define-generic-function find-method (generic-function specializers))
+(define-method find-method (generic-function specializers) (%find-method generic-function specializers))
+(define-generic-function function-arguments (function))
+(define-method function-arguments (function) (%function-arguments function))
+(define-generic-function slot-getter (slot-descriptor))
+(define-method slot-getter (slot-descriptor) (%slot-getter slot-descriptor))
+(define-generic-function slot-setter (slot-descriptor))
+(define-method slot-setter (slot-descriptor) (%slot-setter slot-descriptor))
+(define-generic-function slot-type (slot-descriptor))
+(define-method slot-type (slot-descriptor) (%slot-type slot-descriptor))
+(define-generic-function slot-allocation (slot-descriptor))
+(define-method slot-allocation (slot-descriptor) (%slot-allocation slot-descriptor))
+(define-generic-function init-value (slot-descriptor))
+(define-method init-value (slot-descriptor) (%init-value slot-descriptor))
+(define-generic-function init-function (slot-descriptor))
+(define-method init-function (slot-descriptor) (%init-function slot-descriptor))
+(define-generic-function init-keyword (slot-descriptor))
+(define-method init-keyword (slot-descriptor) (%init-keyword slot-descriptor))
+(define-generic-function slot-value (instance slot-descriptor))
+(define-method slot-value (instance slot-descriptor) (%slot-value instance slot-descriptor))
+(define-generic-function slot-initialized? (instance getter))
+(define-method slot-initialized? (instance getter) (%slot-initialized? instance getter))
+(define-generic-function slot-descriptor (instance getter))
+(define-method slot-descriptor (instance getter) (%slot-descriptor instance getter))
+(define-generic-function slot-descriptors (class))
+(define-method slot-descriptors (class) (%slot-descriptors class))

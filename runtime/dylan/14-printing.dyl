@@ -14,12 +14,14 @@ module: dylan
 ;;;     as display, write and display do; ~% and ~& a newline; ~~ a tilde.
 ;;;     A STREAM of #t means *standard-output*; of #f, answer a string.
 ;;;
-;;; Printing follows the Common Lisp implementation, which follows Thomas:
+;;; The Common Lisp implementation prints the same way (src/compat.lisp,
+;;; src/runtime-printing.lisp):
 ;;;
 ;;;   (print object #key stream verbose)  as write does, then a newline
 ;;;   (write object #key stream)          strings in quotes, characters #\c
 ;;;   (display object #key stream)        strings and characters as they are
-;;;   (newline #key stream)  (write-line object #key stream)  (pp object)
+;;;   (newline #key stream)  (write-line object #key stream)
+;;;   (pp object #key stream)             as print, laid out over lines
 ;;;
 ;;; How an object prints is the generic function print-object (object
 ;;; stream escape?), to which programs add methods.
@@ -69,7 +71,7 @@ module: dylan
 
 (define-method print-object ((x <object>) stream escape?)
   (%put stream "{instance of ")
-  (print-object (%class-name (object-class x)) stream #f)
+  (print-object (%class-name (%object-class x)) stream #f)
   (%put stream #\}))
 
 (define-method print-object ((x <number>) stream escape?) (%put stream (%number->string x)))
@@ -125,12 +127,20 @@ module: dylan
 ;;; Other sequences: their class and their elements
 (define-method print-object ((x <sequence>) stream escape?)
   (%put stream #\{)
-  (print-object (%class-name (object-class x)) stream #f)
+  (print-object (%class-name (%object-class x)) stream #f)
   (unless (empty? x)
     (%put stream #\space)
     (if (size x)
         (%print-elements x stream escape?)
         (%put stream "...")))
+  (%put stream #\}))
+
+;;; An array: <array> and its elements, in row-major order
+(define-method print-object ((x <%general-array>) stream escape?)
+  (%put stream "{<array>")
+  (unless (empty? x)
+    (%put stream #\space)
+    (%print-elements x stream escape?))
   (%put stream #\}))
 
 (define-method print-object ((x <range>) stream escape?)
@@ -158,12 +168,32 @@ module: dylan
   (print-object (%class-name x) stream #f)
   (%put stream #\}))
 
+;;; Generic functions and methods print as the manual's examples show them
+;;; (chapters 3, 8, 10 and 11).
 (define-method print-object ((x <generic-function>) stream escape?)
-  (%put stream "{the generic function ")
-  (print-object (%generic-name x) stream #f)
-  (%put stream #\}))
+  (bind ((name (%generic-name x)))
+    (if name
+        (begin
+          (%put stream "{the generic function ")
+          (print-object name stream #f)
+          (%put stream #\}))
+        (%put stream "{an anonymous generic function}"))))
 
-(define-method print-object ((x <method>) stream escape?) (%put stream "{method}"))
+(define-method print-object ((x <method>) stream escape?)
+  (bind ((owner (%method-owner x))
+         (name (%method-name x)))
+    (cond (owner
+           (%put stream "{a method on ")
+           (bind ((g (%generic-name owner)))
+             (if g
+                 (print-object g stream #f)
+                 (%put stream "an anonymous generic function")))
+           (%put stream #\}))
+          (name
+           (%put stream "{method ")
+           (print-object name stream #f)
+           (%put stream #\}))
+          (else: (%put stream "{an anonymous method}")))))
 
 (define-method print-object ((x <singleton>) stream escape?)
   (%put stream "{singleton ")
@@ -174,7 +204,7 @@ module: dylan
 
 (define-method print-object ((x <slot-descriptor>) stream escape?)
   (%put stream "{slot ")
-  (print-object (%generic-name (slot-getter x)) stream #f)
+  (print-object (%generic-name (%slot-getter x)) stream #f)
   (%put stream #\}))
 
 (define-method print-object ((x <stream>) stream escape?) (%put stream "{stream}"))
@@ -214,10 +244,80 @@ module: dylan
       (%put s #\newline)
       object)))
 
+;;; pp lays an object out as src/runtime-printing.lisp's PRETTY-PRINT
+;;; does: an object whose printed form fits on what is left of a line of
+;;; 79 columns is printed as print prints it; otherwise a proper list
+;;; headed by a symbol has after its head as many of its elements as fit
+;;; on the line (the first, laid out, if none does), and then each further
+;;; element on a line of its own, indented two columns past the
+;;; parenthesis; any other proper list has each element on a line of its
+;;; own, one column past the parenthesis; a vector has them two columns
+;;; past the #; and anything else is printed as print prints it.
+
+(define %printed-form
+  (method (object)
+    (bind ((s (make <string-stream>)))
+      (print-object object s #t)
+      (stream-contents s))))
+
+(define %proper-list?
+  (method (x)
+    (bind-methods ((loop (l) (if (%pair? l) (loop (cdr l)) (id? l '()))))
+      (and (%pair? x) (loop x)))))
+
+(define %fits?
+  (method (column text) (not (binary< 79 (binary+ column (size text))))))
+
+(define %pretty-print
+  (method (object s column)
+    (bind ((flat (%printed-form object)))
+      (bind-methods ((lines (elements indent)
+                       ;; Each of ELEMENTS on a new line at INDENT
+                       (for-each ((element elements)) ()
+                         (%put s #\newline)
+                         (for ((i 0 (binary+ i 1))) ((not (binary< i indent)))
+                           (%put s #\space))
+                         (%pretty-print element s indent))))
+        (cond ((%fits? column flat) (%put s flat))
+              ((%proper-list? object)
+               (bind ((head (car object)))
+                 (%put s #\()
+                 (if (%instance? head <symbol>)
+                     (bind ((name (%printed-form head))
+                            (at (binary+ (binary+ column 1) (size name)))
+                            (rest (cdr object)))
+                       (%put s name)
+                       ;; The elements that fit on the head's line
+                       (bind-methods ((fill ()
+                                        (unless (id? rest '())
+                                          (bind ((next (%printed-form (car rest))))
+                                            (when (%fits? (binary+ at 1) next)
+                                              (%put s #\space)
+                                              (%put s next)
+                                              (set! at (binary+ at (binary+ 1 (size next))))
+                                              (set! rest (cdr rest))
+                                              (fill))))))
+                         (fill))
+                       (when (and (not (id? rest '())) (id? rest (cdr object)))
+                         (%put s #\space)
+                         (%pretty-print (car rest) s (binary+ at 1))
+                         (set! rest (cdr rest)))
+                       (lines rest (binary+ column 2)))
+                     (begin
+                       (%pretty-print head s (binary+ column 1))
+                       (lines (cdr object) (binary+ column 1))))
+                 (%put s #\))))
+              ((and (%instance? object <simple-object-vector>) (not (empty? object)))
+               (%put s "#(")
+               (%pretty-print (element object 0) s (binary+ column 2))
+               (lines (cdr (as <list> object)) (binary+ column 2))
+               (%put s #\)))
+              (else: (%put s flat)))))))
+
 (define pp
   (method (object #key stream)
     (bind ((s (%stream stream)))
-      (print-object object s #t)
+      (%pretty-print object s 0)
       (%put s #\newline)
       object)))
 

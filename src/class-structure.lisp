@@ -164,6 +164,10 @@
   (make-dylan-class '<keyword> (list <object>) '() nil))
 (defparameter <character>               ; Instantiable
   (make-dylan-class '<character> (list <object>) '() nil))
+(defparameter <stream>                  ; Abstract (an extension)
+  (make-dylan-class '<stream> (list <object>) '() nil))
+(defparameter <string-stream>           ; Instantiable (an extension)
+  (make-dylan-class '<string-stream> (list <stream>) '() nil))
 
 ;;;; Abstract and sealed classes
 ;;;
@@ -181,7 +185,7 @@
                      <mutable-collection> <sequence>
                      <mutable-explicit-key-collection> <mutable-sequence>
                      <function> <method> <class> <slot-descriptor>
-                     <symbol> <keyword> <character>))
+                     <symbol> <keyword> <character> <stream>))
   (setf (class.abstract? class) t))
 
 (dolist (class (list <complex> <real> <rectangular-complex> <rational>

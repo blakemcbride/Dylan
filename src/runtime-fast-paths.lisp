@@ -53,7 +53,7 @@
     (guard dylan/setter/element/ '*fast-setter-element* vector-index
            '*fast-string-setter-element* string-index)
     (dolist (generic-function (list dylan/initial-state dylan/next-state
-                                    dylan/current-element dylan/dimensions))
+                                    dylan/current-element))
       (guard generic-function
              '*fast-iterate-vector* one-vector '*fast-iterate-list* one-list))
     (dolist (generic-function (list dylan/initial-state dylan/next-state

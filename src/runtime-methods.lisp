@@ -832,15 +832,13 @@ irrational functions; an exact real stays exact."
                    ((dylan%method? fn) (applicable? fn))
                    (t nil)))))))
 
+;;; Chapter 8: apply is a function, not a generic function.
 (defparameter dylan/apply
-  (dylan%generic-fn 'apply (make-param-list `((fn ,<function>)) nil t nil) nil))
-
-(add-method
- dylan/apply
  (dylan%dylan-callable->method
   (make-param-list `((fn ,<function>)) nil t nil)
   (lambda (multiple-values next-method fn &rest args)
     (declare (ignore next-method))
+    (dylan-call dylan/check-type fn <function>)
     (dylan-full-apply fn multiple-values next-method/not-generic
                       (split-last
                        args

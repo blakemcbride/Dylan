@@ -295,11 +295,8 @@ top of the file when the executable starts. There is no \code{main}
 function; here the last form calls \code{greet}.
 
 \begin{notebox}
-\code{format} is part of the compiler's streams extension
-(Chapter~\ref{ch:extensions}). The 1992 manual uses it in examples but does
-not define it, and the interactive implementation does not have it. To
-write output that works in both implementations, use \code{display},
-\code{print}, \code{write-line} and \code{newline}, as the tutorial does.
+The 1992 manual uses \code{format} in examples but does not define it;
+both implementations provide it (Chapter~\ref{ch:printing}).
 \end{notebox}
 
 \paragraph{The first build takes longer.} The first time you run

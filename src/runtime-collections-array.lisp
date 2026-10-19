@@ -238,11 +238,12 @@ wrong number or out of bounds (chapter 12)."
                  (setf row (aref row index)))
                (values row (car (cl:last indices))))))))
 
+;;; Chapter 12: aref and dimensions are functions, not generic functions.
 (defparameter dylan/aref
-  (dylan%generic-fn
-   'aref
+  (dylan%function->method
    (make-param-list `((array ,<array>)) nil t nil)
    (lambda (array-instance &rest indices)
+     (dylan-call dylan/check-type array-instance <array>)
      (multiple-value-bind (row index)
          (locate-array-element
           array-instance indices
@@ -252,10 +253,10 @@ wrong number or out of bounds (chapter 12)."
        (aref row index)))))
 
 (defparameter dylan/setter/aref/
-  (dylan%generic-fn
-   'aref
+  (dylan%function->method
    (make-param-list `((array ,<array>)) nil t nil)
    (lambda (array-instance &rest indices-and-new-value)
+     (dylan-call dylan/check-type array-instance <array>)
      (when (null indices-and-new-value)
        (dylan-call dylan/error
                    "(setter aref) -- no indices and new-value given"
@@ -272,11 +273,12 @@ wrong number or out of bounds (chapter 12)."
          (setf (aref row index) new-value))))))
 
 (defparameter dylan/dimensions
-  (dylan%generic-fn
-   'dimensions
+  (dylan%function->method
    (make-param-list `((array ,<array>)) nil nil nil)
    ;; A copy: the array's own list is what it checks subscripts against.
-   (lambda (array) (copy-list (dylan-call dylan/get-array-dimensions array)))))
+   (lambda (array)
+     (dylan-call dylan/check-type array <array>)
+     (copy-list (dylan-call dylan/get-array-dimensions array)))))
 
 (add-method
  dylan/element

@@ -449,7 +449,7 @@ Name & Description & \\
 
 \section{Printing and streams}\label{sec:lib-printing}
 
-{\sloppy Output (Chapter~\ref{ch:printing}). The 1992 manual defines none of these. In the interactive implementation the first five take exactly one argument (\code{newline} none); in the compiler to C each also takes \code{stream:}.\par}
+{\sloppy Output (Chapter~\ref{ch:printing}). The 1992 manual defines none of these; both implementations have all of them.\par}
 
 {\small\frenchspacing
 \begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
@@ -461,15 +461,15 @@ Name & Description & \\
 \code{(write-line object \#key stream)}\index{write-line} & The same as \code{print}. &  \\
 \code{(display object \#key stream)}\index{display} & Prints \code{object} plain; answers it. &  \\
 \code{(newline \#key stream)}\index{newline} & Ends the line; answers \code{\#f}. &  \\
-\code{(pp object \#key stream)}\index{pp} & Pretty-prints \code{object} (in the compiler to C, prints it as \code{print} does). &  \\
-\code{(write object \#key stream)}\index{write} & Prints \code{object} escaped, with no newline; answers it. & \textsc{c} \\
-\code{(print-object object stream escape?)}\index{print-object} & The generic function all printing goes through; add methods to change how a class prints. & \textsc{c} \\
-\code{(format stream control-string \#rest arguments)}\index{format} & Formatted output: \code{\textasciitilde a}, \code{\textasciitilde s}, \code{\textasciitilde d}, \code{\textasciitilde\%}, \code{\textasciitilde\&}, \code{\textasciitilde\textasciitilde}. A stream of \code{\#t} is standard output; of \code{\#f}, answer a string. & \textsc{c} \\
-\code{<stream>}\index{<stream>} & The class of streams. & \textsc{c} \\
-\code{<string-stream>}\index{<string-stream>} & Streams that collect their output in memory. & \textsc{c} \\
-\code{*standard-output*}\index{*standard-output*} & The stream to standard output. & \textsc{c} \\
-\code{*standard-error*}\index{*standard-error*} & The stream to standard error. & \textsc{c} \\
-\code{(stream-contents string-stream)}\index{stream-contents} & A string of everything written to the stream. & \textsc{c} \\
+\code{(pp object \#key stream)}\index{pp} & Prints \code{object} as \code{print} does, laid out over lines as code. &  \\
+\code{(write object \#key stream)}\index{write} & Prints \code{object} escaped, with no newline; answers it. &  \\
+\code{(print-object object stream escape?)}\index{print-object} & The generic function all printing goes through; add methods to change how a class prints. &  \\
+\code{(format stream control-string \#rest arguments)}\index{format} & Formatted output: \code{\textasciitilde a}, \code{\textasciitilde s}, \code{\textasciitilde d}, \code{\textasciitilde\%}, \code{\textasciitilde\&}, \code{\textasciitilde\textasciitilde}. A stream of \code{\#t} is standard output; of \code{\#f}, answer a string. &  \\
+\code{<stream>}\index{<stream>} & The class of streams. &  \\
+\code{<string-stream>}\index{<string-stream>} & Streams that collect their output in memory. &  \\
+\code{*standard-output*}\index{*standard-output*} & The stream to standard output. &  \\
+\code{*standard-error*}\index{*standard-error*} & The stream to standard error. &  \\
+\code{(stream-contents string-stream)}\index{stream-contents} & A string of everything written to the stream. &  \\
 \bottomrule
 \end{longtable}}
 

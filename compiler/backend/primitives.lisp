@@ -13,17 +13,19 @@
     ("id?" . "id") ("not" . "not") ("identity" . "identity")
     ("list" . "list") ("cons" . "cons") ("car" . "car") ("cdr" . "cdr")
     ("vector" . "vector") ("values" . "values") ("apply" . "apply")
-    ;; Classes and functions (chapters 10 and 11)
-    ("object-class" . "object_class") ("instance?" . "instance_p")
-    ("subclass?" . "subclass_p") ("singleton" . "singleton")
-    ("all-superclasses" . "all_superclasses")
-    ("direct-superclasses" . "direct_superclasses")
-    ("direct-subclasses" . "direct_subclasses")
-    ("generic-function-methods" . "generic_function_methods")
-    ("method-specializers" . "method_specializers")
-    ("applicable-method?" . "applicable_method_p")
-    ("sorted-applicable-methods" . "sorted_applicable_methods")
-    ("find-method" . "find_method")
+    ;; Classes and functions (chapters 10 and 11).  The manual's generic
+    ;; functions among them are defined by the library (00-kernel.dyl),
+    ;; each with one method calling its % primitive (*primitive-generics*).
+    ("%object-class" . "object_class") ("%instance?" . "instance_p")
+    ("%subclass?" . "subclass_p") ("singleton" . "singleton")
+    ("%all-superclasses" . "all_superclasses")
+    ("%direct-superclasses" . "direct_superclasses")
+    ("%direct-subclasses" . "direct_subclasses")
+    ("%generic-function-methods" . "generic_function_methods")
+    ("%method-specializers" . "method_specializers")
+    ("%applicable-method?" . "applicable_method_p")
+    ("%sorted-applicable-methods" . "sorted_applicable_methods")
+    ("%find-method" . "find_method")
     ("seal" . "seal") ("make-read-only" . "seal")
     ;; Conditions (chapter 13)
     ("do-handlers" . "do_handlers")
@@ -73,19 +75,45 @@
     ("%number->string" . "number_to_string")
     ("%class-name" . "class_name") ("%generic-name" . "generic_name")
     ("%singleton-object" . "singleton_object") ("%function?" . "function_p")
+    ("%method-owner" . "method_owner") ("%method-name" . "method_name")
     ("%shallow-copy" . "shallow_copy") ("%write-fd" . "write_fd")
     ("current-milliseconds" . "current_milliseconds")
-    ;; Reflection (chapters 10 and 11)
-    ("function-arguments" . "function_arguments")
-    ("slot-getter" . "slot_getter") ("slot-setter" . "slot_setter")
-    ("slot-type" . "slot_type") ("slot-allocation" . "slot_allocation")
-    ("init-value" . "init_value") ("init-function" . "init_function")
-    ("init-keyword" . "init_keyword") ("slot-value" . "slot_value")
+    ;; Reflection (chapters 10 and 11), generic functions as above
+    ("%function-arguments" . "function_arguments")
+    ("%slot-getter" . "slot_getter") ("%slot-setter" . "slot_setter")
+    ("%slot-type" . "slot_type") ("%slot-allocation" . "slot_allocation")
+    ("%init-value" . "init_value") ("%init-function" . "init_function")
+    ("%init-keyword" . "init_keyword") ("%slot-value" . "slot_value")
     ("%slot-value-setter" . "slot_value_setter")
-    ;; Written by the compiler into each program (objects.lisp)
-    ("slot-initialized?" . "slot_initialized_p")
-    ("slot-descriptor" . "slot_descriptor") ("slot-descriptors" . "slot_descriptors"))
+    ;; Written by the compiler into each program (objects.lisp), generic
+    ;; functions as above
+    ("%slot-initialized?" . "slot_initialized_p")
+    ("%slot-descriptor" . "slot_descriptor") ("%slot-descriptors" . "slot_descriptors"))
   "Dylan name -> the C name of its DyFunction, less the dy_prim_ prefix.")
+
+(defparameter *primitive-generics*
+  '("object-class" "instance?" "subclass?" "all-superclasses"
+    "direct-superclasses" "direct-subclasses" "generic-function-methods"
+    "method-specializers" "applicable-method?" "sorted-applicable-methods"
+    "find-method" "function-arguments" "slot-getter" "slot-setter" "slot-type"
+    "slot-allocation" "init-value" "init-function" "init-keyword" "slot-value"
+    "slot-initialized?" "slot-descriptor" "slot-descriptors")
+  "Generic functions of the manual whose only method in the library calls
+the primitive %NAME.  While a program adds no method of its own, a call of
+one is the primitive's call, which calls.lisp can do inline.")
+
+(defun primitive-generic-c-name (var g)
+  "The C name of the primitive a call of the generic function G, the value
+of the DYLAN module's variable VAR, can call instead, or NIL."
+  (and (eq (module-var-module var) (dylan-module))
+       (not (consp (module-var-name var)))
+       (let ((name (dylan::dylan-symbol->string (module-var-name var))))
+         (and (member name *primitive-generics* :test #'string-equal)
+              (let ((methods (gfun-methods g)))
+                (and (= (length methods) 1)
+                     (library-method-p (first methods))))
+              (cdr (assoc (concatenate 'string "%" name) *primitive-functions*
+                          :test #'string-equal))))))
 
 (defun predefined-c-value (var classes)
   "The C expression for the value of the DYLAN module's variable VAR, or

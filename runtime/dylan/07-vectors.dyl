@@ -16,7 +16,7 @@ module: dylan
 
 (define %vector-ref
   (method (v index default)
-    (if (and (instance? index <integer>) (not (negative? index))
+    (if (and (%instance? index <integer>) (not (negative? index))
              (binary< index (%vector-size v)))
         (%vector-element v index)
         (if (id? default %no-default)
@@ -49,9 +49,9 @@ module: dylan
 (define %copy-vector
   (method (v start end)
     (bind ((n (binary- end start))
-           (copy (if (instance? v <simple-object-vector>)
+           (copy (if (%instance? v <simple-object-vector>)
                      (%make-vector n #f)
-                     (make (object-class v) size: n))))
+                     (make (%object-class v) size: n))))
       (%replace-vector! copy 0 v start n))))
 
 (define-method copy-sequence ((v <simple-object-vector>) #key (start 0) end)

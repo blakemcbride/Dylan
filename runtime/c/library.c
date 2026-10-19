@@ -600,6 +600,22 @@ PRIMITIVE(generic_name) {
     return ((DyGeneric *)DY_PTR(a0))->name;
 }
 
+/* (%method-owner m): the generic function the method M is a method of,
+ * or #f.  (%method-name m): the name of a predefined method, or #f. */
+PRIMITIVE(method_owner) {
+    need(self, argc, 1, 1);
+    if (!dy_kind_p(a0, DY_KIND_FUNCTION)) dy_error("not a method", a0);
+    D owner = ((DyFunction *)DY_PTR(a0))->owner;
+    return owner == 0 ? DY_FALSE : owner;
+}
+
+PRIMITIVE(method_name) {
+    need(self, argc, 1, 1);
+    if (!dy_kind_p(a0, DY_KIND_FUNCTION)) dy_error("not a method", a0);
+    const char *name = ((DyFunction *)DY_PTR(a0))->name;
+    return name ? dy_intern_symbol(name, strlen(name)) : DY_FALSE;
+}
+
 PRIMITIVE(singleton_object) {
     need(self, argc, 1, 1);
     if (!dy_kind_p(a0, DY_KIND_SINGLETON)) dy_error("not a singleton", a0);

@@ -37,11 +37,11 @@ module: dylan
 
 (define %stretchy-check
   (method (v i)
-    (unless (and (instance? i <integer>) (not (negative? i)) (binary< i (%count v)))
+    (unless (and (%instance? i <integer>) (not (negative? i)) (binary< i (%count v)))
       (error "element: there is no element at the index ~s" i))))
 
 (define-method element ((v <stretchy-vector>) index #key (default %no-default))
-  (if (and (instance? index <integer>) (not (negative? index)) (binary< index (%count v)))
+  (if (and (%instance? index <integer>) (not (negative? index)) (binary< index (%count v)))
       (%vector-element (%data v) index)
       (if (id? default %no-default)
           (error "element: there is no element at the index ~s" index)

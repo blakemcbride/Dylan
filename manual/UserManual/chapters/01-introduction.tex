@@ -127,8 +127,7 @@ itself written in Dylan. The compiled programs have proper tail calls,
 generic dispatch compiled to decision trees, type inference, inlining,
 unboxed floating-point arithmetic, the Boehm-Demers-Weiser garbage
 collector, and real operating-system threads. The compiler also adds
-three things the 1992 language does not have: macros, threads, and
-streams with \code{format}.
+two things the 1992 language does not have: macros and threads.
 
 The price of this speed is that the compiler treats a program as
 \emph{static}. Everything the program defines must be visible when it is
@@ -210,7 +209,7 @@ section by section, where either implementation differs from it.
 \paragraph{Part III, The Implementations,} describes each implementation
 as a tool: the Common Lisp implementation (Chapter~\ref{ch:lisp}), the
 \cmd{dylanc} compiler and its options (Chapter~\ref{ch:dylanc}), the
-compiler's extensions---macros, threads and streams
+compiler's extensions---macros and threads
 (Chapter~\ref{ch:extensions}), how the compiler works inside
 (Chapter~\ref{ch:internals}), and how to write fast programs and measure
 them (Chapter~\ref{ch:performance}).

@@ -103,7 +103,7 @@ hand, a branch of an if that tested it (types.lisp).")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 13 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 14 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -307,6 +307,13 @@ dropped unevaluated?"
       (ir-define-variable
        (let ((var (ir-define-variable-var e)))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-define-variable-value e)))
+         (let ((name (name-string (module-var-name var))))
+           ;; A predefined method prints with its name (chapter 8's
+           ;; {method +}); a program's own stays anonymous.
+           (when (and (eq (module-var-module var) (dylan-module))
+                      (char/= (char name 0) #\%))
+             (emit "dy_name_method(~a, ~a);" (global-c-name var)
+                   (c-string-literal (map 'list #'char-code name)))))
          (when (module-var-thread-local-p var)
            ;; The value threads made from now on start with.
            (emit "dy_thread_variable_defaults[~d] = ~a;"
@@ -1144,7 +1151,7 @@ each of its Dylan functions -> the name of the module it was written in."
             (closure-lines
               (loop for cfun in cfuns
                     when (null (cfun-env cfun))
-                      collect (format nil "static DyFunction ~a_closure = { &dy_wrapper_method, ~a, DY_FALSE, ~a };"
+                      collect (format nil "static DyFunction ~a_closure = { &dy_wrapper_method, ~a, DY_FALSE, ~a, DY_FALSE, NULL };"
                                       (cfun-c-name cfun) (cfun-c-name cfun)
                                       (if (eq (ir-fn-kind (cfun-fn cfun)) :toplevel)
                                           "DY_FALSE"
@@ -1173,6 +1180,15 @@ each of its Dylan functions -> the name of the module it was written in."
         (dolist (text texts) (format stream "~a~%" text))
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))
         (format stream "int main(void) {~%    dy_init();~%")
+        ;; The predefined methods written in C print with their names
+        (dolist (p *used-primitives*)
+          (let ((name (car (find-if (lambda (entry)
+                                      (and (string= (format nil "dy_prim_~a" (cdr entry)) p)
+                                           (char/= (char (car entry) 0) #\%)))
+                                    *primitive-functions*))))
+            (when name
+              (format stream "    dy_name_method(DY_OBJ(&~a), ~a);~%" p
+                      (c-string-literal (map 'list #'char-code name))))))
         (dolist (top (ir-program-toplevels ir))
           (unless (inert-toplevel-p top)
             (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"

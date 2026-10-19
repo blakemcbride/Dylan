@@ -1,9 +1,8 @@
-\chapter{Macros, Threads and Streams}\label{ch:extensions}
+\chapter{Macros and Threads}\label{ch:extensions}
 \sloppy
 
-The 1992 manual defines a language without macros, without threads, and
-without streams --- though it uses streams in passing. The compiler to C
-adds all three. They are \emph{extensions}: a program that uses them is
+The 1992 manual defines a language without macros and without threads.
+The compiler to C adds both. They are \emph{extensions}: a program that uses them is
 not a program of the 1992 language, and the interactive Common Lisp
 implementation does not have them (it has its own extensions, described
 in Chapter~\ref{ch:lisp}). Everything in this chapter applies to
@@ -688,56 +687,5 @@ deques and the rest --- do no locking of their own: two threads adding to
 one table at once can leave it in a wrong state. The runtime's own shared state, such as the table of
 symbols, is locked internally, and since the program's classes and
 generic functions never change, method dispatch needs no locks at all.
-
-\section{Streams}\label{sec:ext-streams}
-
-\index{streams}
-The 1992 manual's printing functions take a \code{stream:} argument, and
-its examples call \code{format}, but it defines no streams. The compiler
-to C provides a minimal set:
-
-\begin{description}
-\item[\code{<stream>}] The class of streams.
-\item[\code{*standard-output*}, \code{*standard-error*}] Streams to the
-  program's standard output and standard error.
-\item[\code{(make <string-stream>)}] A stream that collects what is
-  written to it; \code{(stream-contents \meta{s})} answers what it holds
-  so far, as a string.
-\item[\code{(format \meta{stream} \meta{control} \meta{argument} ...)}]
-  Formatted output to \meta{stream}; a \meta{stream} of \code{\#t} means
-  \code{*standard-output*}, and \code{\#f} makes \code{format} answer the
-  output as a string. The directives are described in
-  Chapter~\ref{ch:printing}.
-\end{description}
-
-Every printing function --- \code{print}, \code{write}, \code{display},
-\code{newline}, \code{write-line}, \code{pp} --- takes \code{stream:},
-which defaults to \code{*standard-output*}:
-
-\begin{dylan}
-(define s (make <string-stream>))
-(write 'total: stream: s)
-(display " " stream: s)
-(print (list 1 "two" #\3) stream: s)
-(format s "~a items~%" 3)
-(write (stream-contents s))
-(newline)
-(print (format #f "~s and ~a" "quoted" "plain"))
-(format *standard-error* "this goes to standard error~%")
-\end{dylan}
-
-\noindent writes to the standard output
-
-\begin{dylan}
-"total: (1 \"two\" #\\3)
-3 items
-"
-"\"quoted\" and plain"
-\end{dylan}
-
-\noindent and \code{this goes to standard error} to the standard error.
-There is no input: a compiled program cannot read from a stream or a
-file. How objects print, and how to make your own classes print
-differently with \code{print-object}, is in Chapter~\ref{ch:printing}.
 
 \fussy

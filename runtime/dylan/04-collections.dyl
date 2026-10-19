@@ -107,13 +107,13 @@ module: dylan
 (define-method empty? ((c <collection>)) (not (initial-state c)))
 
 (define-generic-function class-for-copy (object))
-(define-method class-for-copy ((x <object>)) (object-class x))
+(define-method class-for-copy ((x <object>)) (%object-class x))
 
 ;;; A new collection of CLASS holding the elements of the list ELEMENTS.
 
 (define %from-list
   (method (class elements)
-    (if (subclass? class <list>)
+    (if (%subclass? class <list>)
         elements
         (bind ((result (make class size: (%list-length elements))))
           (for ((state (initial-state result) (next-state result state))
@@ -128,7 +128,7 @@ module: dylan
 
 (define %each-group
   (method (collections function)
-    (if (%list-every? (method (c) (instance? c <sequence>)) collections)
+    (if (%list-every? (method (c) (%instance? c <sequence>)) collections)
         (bind-methods ((loop (states)
                          (when (%list-every? (method (s) s) states)
                            (function (%list-map2 current-element collections states))
@@ -167,8 +167,8 @@ module: dylan
   (bind ((collections (cons c more)))
     ;; A vector is a sequence, though also (as an array) an explicit-key
     ;; collection: sequences first.
-    (if (not (subclass? class <sequence>))
-        (bind ((result (if (and (subclass? class <array>) (instance? c <array>))
+    (if (not (%subclass? class <sequence>))
+        (bind ((result (if (and (%subclass? class <array>) (%instance? c <array>))
                            ;; An array is made with its dimensions
                            (make <array> dimensions: (dimensions c))
                            (make class))))
@@ -186,8 +186,8 @@ module: dylan
 
 (define-method map-into ((target <mutable-collection>) (f <function>) (c <collection>) #rest more)
   (bind ((collections (cons c more)))
-    (if (and (instance? target <sequence>)
-             (%list-every? (method (c) (instance? c <sequence>)) collections))
+    (if (and (%instance? target <sequence>)
+             (%list-every? (method (c) (%instance? c <sequence>)) collections))
         ;; The values first: TARGET may be one of the collections.
         (bind ((results '()))
           (%each-group collections
@@ -257,7 +257,7 @@ module: dylan
 (define-generic-function find-key (collection procedure #key skip failure))
 
 (define-method find-key ((c <collection>) (f <function>) #key (skip 0) (failure #f))
-  (bind ((sequence? (instance? c <sequence>)))
+  (bind ((sequence? (%instance? c <sequence>)))
     (for ((state (initial-state c) (next-state c state))
           (index 0 (binary+ index 1))
           (skip skip (if (f (current-element c state)) (binary- skip 1) skip)))
@@ -282,7 +282,7 @@ module: dylan
 (define-generic-function fill! (mutable-collection value #key start end))
 
 (define-method fill! ((c <mutable-collection>) value #key (start 0) end)
-  (if (instance? c <sequence>)
+  (if (%instance? c <sequence>)
       (for ((state (initial-state c) (next-state c state))
             (index 0 (binary+ index 1)))
            ((or (not state) (and end (not (binary< index end)))) c)
@@ -321,6 +321,6 @@ module: dylan
 ;;; their natural order.
 
 (define-method as ((class <class>) (c <collection>))
-  (cond ((instance? c class) c)
-        ((subclass? class <sequence>) (map-as class identity c))
+  (cond ((%instance? c class) c)
+        ((%subclass? class <sequence>) (map-as class identity c))
         (else: (error "as: ~s cannot be converted to ~s" c class))))

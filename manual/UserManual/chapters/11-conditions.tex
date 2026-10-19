@@ -617,7 +617,7 @@ Lisp, such as \code{(car 5)}, has a message beginning
 (handler-case (f "s")
   ((<error> condition: c) c))
 ; C:    no applicable method for f
-; Lisp: generic-dispatch -- no applicable methods #[generic function f] ("s")
+; Lisp: generic-dispatch -- no applicable methods {the generic function f} ("s")
 
 (define-class <account> (<object>)
   (balance type: <integer> init-value: 0))

@@ -225,6 +225,13 @@ checked them; a direct call (next-method #f) is checked here."
                                " -- the methods are frozen (freeze-methods)")
                   generic-function method))))
 
+;;; The generic function a method was added to, for printing it as the
+;;; manual's examples do (chapter 11's {a method on double}).
+(defvar *method-owners* (make-oned-table))
+
+(defun method-owner (method)
+  (oned-table/get *method-owners* method nil))
+
 (defun delete-method! (generic-function method)
   (check-not-frozen generic-function method "remove-method")
   (let* ((data (generic-function-data generic-function))
@@ -234,6 +241,8 @@ checked them; a direct call (next-method #f) is checked here."
                     method generic-function)
         (setf (generic-function-data.methods data)
               (delete-pair! pair (generic-function-data.methods data))))
+    (when (eq (method-owner method) generic-function)
+      (oned-table/put! *method-owners* method nil))
     (setf (generic-function-data.cache data) nil)
     (check-fast-path data method)
     method))
@@ -293,6 +302,7 @@ checked them; a direct call (next-method #f) is checked here."
       (when old-method
         (delete-method! generic-function old-method))
       (push method (generic-function-data.methods data))
+      (oned-table/put! *method-owners* method generic-function)
       (setf (generic-function-data.cache data) nil)
       (check-fast-path data method)
       (if multi-value-receiver

@@ -53,9 +53,8 @@ belongs to exactly one of the concrete classes, which
 (object-class 1.5s0)    ; => <single-float>
 \end{dylan}
 
-\noindent (The compiler to C prints a class as \code{\{the class
-<integer>\}} and the Common Lisp implementation as
-\code{\#[dylan-class <integer>]}; this chapter writes just the name.)
+\noindent (A class prints as \code{\{the class <integer>\}}; this
+chapter writes just the name.)
 
 \subsection{Integers}
 
@@ -718,46 +717,35 @@ signals an error for \code{(as <integer> 2.5)}.
 \index{float!printing}
 Both implementations print a float with the fewest digits that read back
 as the same float, so a float printed and read again is the same float.
-They differ in when they switch to exponential notation and in how they
-mark a single-float:
-
-\begin{itemize}
-\item The \textbf{compiler to C} prints a float in fixed notation when
-  its magnitude is at least $10^{-5}$ and less than $10^{16}$, and
-  otherwise with an exponent. A single-float ends in \code{s0} (or
-  \code{s}\meta{n} with an exponent), an extended-float in \code{l0}. A
-  double's exponent is written with \code{e}. An infinity prints as
-  \code{+infinity} or \code{-infinity} and a NaN as \code{+nan}; neither
-  can be read back.
-\item The \textbf{Common Lisp implementation} prints as Common Lisp does
-  with double-float the default format: fixed notation from $10^{-3}$ up
-  to $10^{7}$, an exponent otherwise; a single-float ends in \code{f0}.
-\end{itemize}
+A float prints in fixed notation when its magnitude is at least
+$10^{-5}$ and less than $10^{16}$, or it is zero, and otherwise with an
+exponent. A double-float, the default format, is marked only by its
+exponent, written with \code{e}; a single-float ends in \code{s0} (or
+\code{s}\meta{n} with an exponent), an extended-float in \code{l0}. An
+infinity prints as \code{+infinity} or \code{-infinity} and a NaN as
+\code{+nan}; neither can be read back.
 
 \begin{center}
-\begin{tabular}{lll}
+\begin{tabular}{ll}
 \toprule
-Value & Compiler to C & Common Lisp implementation \\
+Value & Prints as \\
 \midrule
-\code{0.1} & \code{0.1} & \code{0.1} \\
-\code{(/ 1.0 3)} & \code{0.3333333333333333} & \code{0.3333333333333333} \\
-\code{100.0} & \code{100.0} & \code{100.0} \\
-\code{1234567.0} & \code{1234567.0} & \code{1234567.0} \\
-\code{123456789.0} & \code{123456789.0} & \code{1.23456789e8} \\
-\code{1e10} & \code{10000000000.0} & \code{1.0e10} \\
-\code{1e15} & \code{1000000000000000.0} & \code{1.0e15} \\
-\code{1e16} & \code{1.0e16} & \code{1.0e16} \\
-\code{0.001} & \code{0.001} & \code{0.001} \\
-\code{1e-4} & \code{0.0001} & \code{1.0e-4} \\
-\code{1e-7} & \code{1.0e-7} & \code{1.0e-7} \\
-\code{(/ 2.0s0 3)} & \code{0.6666667s0} & \code{0.6666667f0} \\
-\code{(* 1.5s0 2)} & \code{3.0s0} & \code{3.0f0} \\
+\code{0.1} & \code{0.1} \\
+\code{(/ 1.0 3)} & \code{0.3333333333333333} \\
+\code{100.0} & \code{100.0} \\
+\code{123456789.0} & \code{123456789.0} \\
+\code{1e15} & \code{1000000000000000.0} \\
+\code{1e16} & \code{1.0e16} \\
+\code{1e-4} & \code{0.0001} \\
+\code{1e-7} & \code{1.0e-7} \\
+\code{(/ 2.0s0 3)} & \code{0.6666667s0} \\
+\code{(* 1.5s0 2)} & \code{3.0s0} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent Integers print in decimal and ratios as
-\code{numerator/denominator}, the same in both. Printing in general is
+\code{numerator/denominator}. Printing in general is
 the subject of chapter~\ref{ch:printing}.
 
 \section{Characters}\label{sec:characters}

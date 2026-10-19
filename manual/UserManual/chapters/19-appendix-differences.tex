@@ -204,9 +204,6 @@ program depends on none of these; each is described where it arises.
 \item The operator of a call is evaluated first by the compiler to C
   and last by the interactive implementation; arguments are evaluated
   left to right in both (Section~\ref{sec:syntax-calls}).
-\item A method whose parameter list has \code{\#key} with no keywords
-  accepts no keywords in the compiler to C and any keyword in the
-  interactive implementation (Section~\ref{sec:functions-keyword-checking}).
 \item A handler that returns from the error \code{check-type} signals
   leaves it unhandled in the compiler to C; in the interactive
   implementation \code{check-type} answers what the handler returned
@@ -222,7 +219,9 @@ program depends on none of these; each is described where it arises.
   compiler to C and an error when it runs in the interactive
   implementation, which also needs modules declared before use
   (Sections~\ref{sec:modules-readonly} and~\ref{sec:modules-lisp}).
-\item Error messages are worded differently
+\item A compiled program that an unhandled error stops reports it on
+  the standard error, \code{Dylan error:} and the message; the
+  interactive implementation enters its debugger with the same message
   (Section~\ref{sec:conditions-runtime-errors}).
 \end{itemize}
 

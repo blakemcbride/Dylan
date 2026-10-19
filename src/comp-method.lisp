@@ -251,8 +251,10 @@
                     (cond
                       ((not keys) (generate mod-vars body-forms))
                       ((eq keys t)
+                       ;; Chapter 6: #key with no keywords accepts none,
+                       ;; but the arguments must still be keyword/value pairs.
                        (generate mod-vars
-                                 `((dylan%keyword-validate !raw-next ,key-name t)
+                                 `((dylan%keyword-validate !raw-next ,key-name '())
                                    ,@body-forms)))
                       (t
                        (compile-let*-forms
@@ -334,8 +336,9 @@
                                      ,(if (or keys rest) t nil))))
                         ((dylan%not (dylan%generic-function? ,ref))
                          (dylan-call dylan/error
-                                     "DEFINE-METHOD -- already has a value"
-                                     ',name ,ref ',reqs ',next ',rest ',keys)))
+                                     ,(format nil "~a is defined both as a variable and as a generic function"
+                                              (dylan-symbol->string
+                                               (if (consp name) (cadr name) name))))))
                   (dylan%add-method ,ref ,method-code)
                   ',name))))))))))
 

@@ -138,7 +138,7 @@ STRING, a <byte-string>, and its code is above 255."
 (add-method
  dylan/make
  (dylan%function->method
-  (make-param-list `((string ,(dylan%make-singleton <string>))) nil nil t)
+  (make-param-list `((string ,(dylan%make-singleton <string>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class))
     (dylan-apply dylan/make <byte-string> rest))))
@@ -151,7 +151,7 @@ STRING, a <byte-string>, and its code is above 255."
  dylan/make
  (dylan%function->method
   (make-param-list `((unicode ,(dylan%make-singleton <unicode-string>)))
-                   nil nil t)
+                   nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class))
     (as-unicode-string (dylan-apply dylan/make <byte-string> rest)))))

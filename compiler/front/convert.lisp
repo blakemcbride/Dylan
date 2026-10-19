@@ -505,12 +505,15 @@ does."
           (compile-error "slot ~a: required-init-keyword: with an init-keyword: or initial value"
                          getter))
         (let ((allocation-keyword
+                ;; Chapter 6: one of the symbols, not a keyword
                 (and (symbolp allocation)
+                     (not (keywordp allocation))
                      (find (symbol-name allocation)
                            '(:instance :class :each-subclass :constant :virtual)
                            :test #'string-equal))))
           (unless allocation-keyword
-            (compile-error "slot ~a: bad allocation ~a" getter allocation))
+            (compile-error "slot ~a: allocation: must be one of the symbols instance, class, each-subclass, constant and virtual, not ~a"
+                           getter (dylan-form-string allocation)))
           (%make-slot-spec
            :getter (reference-module-var getter)
            :setter (and setter (reference-module-var setter))

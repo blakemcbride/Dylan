@@ -358,6 +358,40 @@ its C the object, which the define-slot stores."
            (compile-error "slot ~a: a virtual slot cannot be initialized" name)))))
     sd))
 
+(defun inherited-slot-definition (class getter)
+  "The definition of the slot GETTER reads in a proper superclass of CLASS
+that the program defines, or NIL."
+  (dolist (c (class-info-cpl class) nil)
+    (unless (eq c class)
+      (let ((cg (class-gclass c)))
+        (when cg
+          (let ((sd (find getter (gclass-sdefs cg) :key #'sdef-getter)))
+            (when sd (return sd))))))))
+
+(defun check-slot-redefinition (sd old)
+  "Chapter 6: if you redefine an inherited slot, you must respecify all the
+slot features the superior definition specified."
+  (let ((new (sdef-spec sd))
+        (was (sdef-spec old))
+        (name (name-string (module-var-name (sdef-getter sd))))
+        (*location* (or (sdef-location sd) *location*)))
+    (flet ((missing (what)
+             (compile-error "slot ~a: redefining an inherited slot must respecify its ~a"
+                            name what)))
+      (when (and (slot-spec-type was) (not (slot-spec-type new)))
+        (missing "type:"))
+      (when (and (or (slot-spec-init-value was) (slot-spec-init-function was))
+                 (not (or (slot-spec-init-value new) (slot-spec-init-function new))))
+        (missing "init-value: or init-function:"))
+      (when (and (or (slot-spec-init-keyword was) (slot-spec-required-init-keyword was))
+                 (not (or (slot-spec-init-keyword new) (slot-spec-required-init-keyword new))))
+        (missing "init-keyword:"))
+      (when (and (not (eq (sdef-allocation old) :instance))
+                 (eq (sdef-allocation sd) :instance))
+        (missing "allocation:"))
+      (when (and (sdef-setter old) (not (sdef-setter sd)))
+        (missing "setter:")))))
+
 (defun build-slots (definitions)
   (dolist (d definitions)
     (typecase d
@@ -394,6 +428,12 @@ its C the object, which the define-slot stores."
                  (let ((sd (make-slot-definition nil spec *location*)))
                    (setf (gethash d *sdef-of-node*) (list sd))
                    (push sd *singleton-sdefs*)))))))))
+  ;; Chapter 6: a slot redefined in a subclass must respecify what the
+  ;; inherited definition specified.
+  (loop for g being the hash-values of *gclasses*
+        do (dolist (sd (gclass-sdefs g))
+             (let ((old (inherited-slot-definition (gclass-info g) (sdef-getter sd))))
+               (when old (check-slot-redefinition sd old)))))
   ;; Number the instance slots, and lay out each class's instances.
   (let ((count 0))
     (loop for g being the hash-values of *gclasses*

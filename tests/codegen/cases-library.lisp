@@ -417,7 +417,8 @@ found
  (static-program
   "(add-method print (method (x) x))"
   ""
-  :compile-error "add-method cannot be used")
+  :compile-error "add-method cannot be used"
+  :compiler-only t)
  ;; Chapter 11: slot descriptors.  Chapter 10: function-arguments.
  (slot-descriptors
   "(define-class <p> (<object>) (x init-keyword: x: type: <integer>) (y init-value: 7 allocation: class)

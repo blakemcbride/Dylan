@@ -18,7 +18,8 @@
 1
 (#t #f)
 #t
-")
+"
+  :compiler-only t)
 
  ;; Eight threads add to one counter: under a lock, and atomically.
  (locks-and-atomics
@@ -39,7 +40,8 @@
 80000
 (#t #f 5)
 twice
-")
+"
+  :compiler-only t)
 
  ;; A producer and a consumer, with a condition variable.
  (condition-variable
@@ -62,7 +64,8 @@ twice
      (with-lock (lock) (set! queue (cons (+ i 1) queue)) (notify-condition-variable ready)))
    (print (join-thread consumer))"
   "5050
-")
+"
+  :compiler-only t)
 
  ;; Each thread has its own value of a thread variable.
  (thread-variables
@@ -81,7 +84,8 @@ twice
 8
 3
 0
-")
+"
+  :compiler-only t)
 
  ;; A serious condition a thread does not handle ends that thread, and
  ;; join-thread signals a <thread-error> holding it.
@@ -97,7 +101,8 @@ twice
 handled
 alive
 "
-  :error "a thread ended with an unhandled condition: again")
+  :error "a thread ended with an unhandled condition: again"
+  :compiler-only t)
 
  ;; Threads allocating at once, with the collector running.
  (allocation
@@ -113,18 +118,21 @@ alive
 19999900000
 19999900000
 19999900000
-")
+"
+  :compiler-only t)
 
  ;; A million tail calls on a thread's own stack.
  (thread-tail-calls
   "(define loop (method (n) (if (= n 0) 'done (loop (- n 1)))))
    (print (join-thread (make-thread (method () (loop 1000000)))))"
   "done
-")
+"
+  :compiler-only t)
 
  (lock-not-held
   "(define l (make <lock>)) (print (handler-case (release-lock l) ((<error>) 'caught))) (acquire-lock l) (acquire-lock l)"
   "caught
 "
-  :error "holds the lock already")
+  :error "holds the lock already"
+  :compiler-only t)
 )

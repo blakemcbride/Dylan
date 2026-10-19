@@ -72,8 +72,8 @@ caught
 true
 false
 3/2
-")
-
+"
+  :compiler-only t)
  (sequence-inlines
   "(define v (vector 1 2 3))
    (define s \"abc\")

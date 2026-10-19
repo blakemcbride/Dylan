@@ -209,6 +209,13 @@
                     (make-param-list `((fn ,<function>)) nil nil nil)
                     nil))
 
+(defun keyword-sequence (keys)
+  "Chapter 10: function-arguments' third value -- #f without #key, else the
+keywords, a sequence that may be empty."
+  (cond ((null keys) dylan%false)
+        ((consp keys) keys)
+        (t '())))
+
 (progn
   (add-method
    dylan/function-arguments
@@ -218,7 +225,7 @@
       (dylan-full-call dylan/values multiple-values next-method
                        (method.nrequired method)
                        (bool (method.rest? method))
-                       (or-false (method.keys method))))))
+                       (keyword-sequence (method.keys method))))))
   (add-method
    dylan/function-arguments
    (dylan%dylan-callable->method
@@ -332,8 +339,10 @@ to INSTANCE's singleton rather than one of its class's slots."
                                 slot-desc allocation)))))
          ;; Chapter 6: getting an uninitialized slot is an error.
          (if (eq value *the-uninitialized-slot-value*)
-             (dylan-call dylan/error "uninitialized slot accessed"
-                         instance (slot.debug-name slot-desc))
+             (dylan-call dylan/error
+                         (format nil "the slot ~a is not initialized"
+                                 (dylan-symbol->string (slot.debug-name slot-desc)))
+                         instance)
              value))))))
 
 (defparameter dylan/setter/slot-value/
@@ -344,8 +353,9 @@ to INSTANCE's singleton rather than one of its class's slots."
                     nil nil nil)
    (lambda (instance slot-desc new-value)
      (unless (match-specializer? new-value (slot.type slot-desc))
-       (dylan-call dylan/error "(setter slot-value) -- type conflict"
-                   instance (slot.type slot-desc) slot-desc new-value))
+       (dylan-call dylan/error
+                   (dylan-call dylan/make <type-error>
+                               :value new-value :type (slot.type slot-desc))))
      (let ((allocation (slot.allocation slot-desc))
            (loc (slot.data-location slot-desc)))
        (case allocation

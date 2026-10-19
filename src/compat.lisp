@@ -1109,7 +1109,9 @@ this to report errors by file and line.")
    (dylan-condition :initarg :dylan-condition :reader unhandled-dylan-condition-object))
   (:report (lambda (condition stream)
              (write-string "Unhandled Dylan condition: " stream)
-             (dylan-write (unhandled-dylan-condition-object condition) stream))))
+             ;; As the compiler to C reports it: {instance of <class>}
+             (let ((*dylan-debug-print* t))
+               (dylan-write (unhandled-dylan-condition-object condition) stream)))))
 
 (defvar *reflected-error-tag* "Lisp condition: "
   "Used, by identity, to recognise a Dylan condition that merely reflects a
@@ -1215,6 +1217,36 @@ handlers."
                                        (offered-to-dylan-p condition))
                             (funcall handler condition)))))
     (funcall thunk)))
+
+(defun implementation-specific/reflect-condition (condition)
+  "The format string and arguments of the Dylan <simple-error> that
+reflects the Lisp CONDITION.  The errors the host signals for what Dylan
+calls errors too -- a call with the wrong number of arguments, a value of
+the wrong type, division by zero -- become Dylan's own, worded as the
+compiler to C words them; any other Lisp condition is reflected as itself,
+for the Lisp handlers to have back if no Dylan handler takes it."
+  (typecase condition
+    (dylan-condition
+     (values (dylan-condition-message condition) (dylan-condition-irritants condition)))
+    (program-error
+     (let ((control (and (typep condition 'simple-condition)
+                         (simple-condition-format-control condition))))
+       (if (and (stringp control) (search "invalid number of arguments" control))
+           (values "wrong number of arguments (~a)"
+                   (list (car (simple-condition-format-arguments condition))))
+           (values *reflected-error-tag* (list condition)))))
+    (division-by-zero (values "division by zero" '()))
+    (arithmetic-error
+     (values (format nil "arithmetic error: ~(~a~)" (type-of condition)) '()))
+    (type-error
+     (values (format nil "~~s is not of type ~(~a~)" (type-error-expected-type condition))
+             (list (type-error-datum condition))))
+    (simple-condition
+     (let ((c (simple-condition-format-control condition)))
+       (if (stringp c)
+           (values c (simple-condition-format-arguments condition))
+           (values *reflected-error-tag* (list condition)))))
+    (t (values *reflected-error-tag* (list condition)))))
 
 (defun implementation-specific/get-error-message (condition)
   (typecase condition

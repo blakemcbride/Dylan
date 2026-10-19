@@ -67,7 +67,8 @@ the runtime turns it off itself (object.c), and this says so too.")
 
 (defun run-case (case configurations debug mode)
   "A list of failure descriptions for CASE, built for MODE."
-  (destructuring-bind (name source expected &key error compile-error) case
+  (destructuring-bind (name source expected &key error compile-error compiler-only) case
+    (declare (ignore compiler-only))      ; for tests/interpreter/run.lisp
     (let* ((stem (merge-pathnames (format nil "~:[~*~;~a/~]~(~a~)" (string/= mode "all") mode
                                           (symbol-name name))
                                   *build-directory*))

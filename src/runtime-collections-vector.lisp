@@ -109,7 +109,7 @@
 (add-method
  dylan/make
  (dylan%function->method
-  (make-param-list `((vector ,(dylan%make-singleton <vector>))) nil nil t)
+  (make-param-list `((vector ,(dylan%make-singleton <vector>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class))
     (dylan-apply dylan/make <simple-object-vector> rest))))

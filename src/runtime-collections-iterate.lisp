@@ -675,6 +675,16 @@ runs out before the DONE? test causes an exit."
           (dylan-call dylan/range :from 0)
           (dylan-call dylan/range :from 0 :through (- size 1) :by 1))))))
 
+;; A vector is an array, whose keys are explicit, but its keys are the
+;; range of its indices, as for any sequence (and as the compiler to C
+;; answers).
+(add-method
+ dylan/key-sequence
+ (dylan%function->method
+  one-vector
+  (lambda (vector)
+    (dylan-call dylan/range :from 0 :through (- (collection-size vector) 1) :by 1))))
+
 (defparameter dylan/current-key
   (dylan%generic-fn
    'current-key

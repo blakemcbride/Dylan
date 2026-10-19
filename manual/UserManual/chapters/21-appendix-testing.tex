@@ -38,8 +38,7 @@ Command & What it tests \\
 \code{(dylan:test-examples)} & the interactive implementation, on the
   book's examples \\
 \cmd{sbcl --script tests/interpreter/run.lisp} & the compiler's test
-  programs, run in the interactive implementation: by default the macro
-  cases \\
+  programs, run in the interactive implementation \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -130,7 +129,7 @@ A file of cases holds one list of cases, each
 
 \begin{lisp}
 (name "dylan source" "expected standard output"
-      [:error "text"] [:compile-error "text"])
+      [:error "text"] [:compile-error "text"] [:compiler-only t])
 \end{lisp}
 
 The program is the source string; the strings follow Lisp's rules, so a
@@ -140,7 +139,12 @@ expected text, newline for newline. With \code{:error}, the program must
 instead stop with status~1 and an error message on the standard error
 containing the text --- after writing the expected output. With
 \code{:compile-error}, the compiler must report an error containing the
-text, and the program is not run. From \file{cases-threads.lisp}:
+text, and the program is not run. \code{:compiler-only t} marks a case
+that tests what the interactive implementation does not do by design ---
+63-bit integers, a static program's restrictions, the compiler's own
+diagnostics, threads --- which \file{tests/interpreter/run.lisp}
+(Section~\ref{sec:test-interactive}) skips. From
+\file{cases-threads.lisp}:
 
 \begin{lisp}
  (thread-values
@@ -294,27 +298,26 @@ examples at \file{../dylan-examples.dyl}; give it another file name as
 its argument to run other examples the same way.
 
 \index{tests/interpreter/run.lisp@\file{tests/interpreter/run.lisp}}
-The programs the compiler is tested on can be run in the interactive
-implementation too, by \file{tests/interpreter/run.lisp}. It takes files
-of cases in the form of Section~\ref{sec:test-case-format}, and test
-names, as the compiler's runners do; runs each program in a module of its
-own; and compares its output with the expected output, and the message
-of the error it signals, if the case expects one, with the expected
-text. Without arguments it runs the macro cases,
-\file{tests/codegen/cases-macros.lisp}, since macros are the one
-extension both implementations have, and all of them must pass:
+The programs the compiler is tested on run in the interactive
+implementation too, by \file{tests/interpreter/run.lisp}, which is how
+the two implementations are kept in agreement. It takes files of cases in
+the form of Section~\ref{sec:test-case-format}, and test names, as the
+compiler's runners do; by default all of \file{tests/codegen/cases*.lisp}.
+Each program runs in \code{dylan-user}, as a compiled program does, and
+what it defined is forgotten before the next; its output must be the
+expected output, and the error it signals, if the case expects one, must
+have a message containing the expected text --- whether the compiler
+would find the error compiling or running makes no difference here, and
+the \code{Dylan error:} of a compiled program's report is not expected.
+Cases marked \code{:compiler-only} are skipped and counted:
 
 \begin{shell}
 $ sbcl --script tests/interpreter/run.lisp
-11 programs, 0 failures
+97 programs, 0 failures, 14 compiler-only skipped
 $ sbcl --script tests/interpreter/run.lisp tests/codegen/cases-control.lisp
 \end{shell}
 
-The other case files are a measure of how far the two implementations
-agree. Programs that use the compiler's other extensions fail here by
-design; so do the many whose expected error message is the compiler's
-wording, where the interactive implementation reports the same error in
-other words; the rest are differences worth looking into.
+Every program not so marked must pass in both implementations.
 
 \section{Adding a test}\label{sec:test-adding}
 

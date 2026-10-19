@@ -576,8 +576,9 @@ ends that thread instead, as chapter~\ref{ch:extensions} describes.
 Errors the implementations detect themselves are signalled as Dylan
 conditions, so programs can handle them like any other. They are
 \code{<type-error>}s when a value of the wrong type is stored in a typed
-slot or variable, and \code{<simple-error>}s otherwise. In the compiler
-to C:
+slot or variable, or passed to a method whose parameter requires another
+type, and \code{<simple-error>}s otherwise. Both implementations word
+them alike:
 
 \begin{center}
 \begin{tabular}{p{0.36\textwidth}p{0.57\textwidth}}
@@ -605,12 +606,13 @@ is not defined anywhere (\code{warning: x is not defined}); the program
 is still built, and signals the error above if the reference is
 evaluated.
 
-The Common Lisp implementation detects the same errors with messages of
-its own, for example \code{generic-dispatch -- no applicable methods},
-\code{invalid number of arguments: 3}, \code{illegal keyword argument b:
-(a:)} and \code{unbound variable x}. An error that arises inside Common
-Lisp, such as \code{(car 5)}, has a message beginning
-\code{Lisp condition:} followed by Common Lisp's own description.
+In the Common Lisp implementation an error that arises inside Common Lisp
+itself is reflected as a Dylan \code{<simple-error>}, which handlers see
+as they see any other: the host's errors for a call with the wrong number
+of arguments, a value of the wrong type (\code{5 is not of type list}
+for \code{(car 5)}) and division by zero are worded as above, and any
+other has a message beginning \code{Lisp condition:} followed by Common
+Lisp's own description.
 
 \begin{dylan}
 (define-method f ((x <integer>)) x)

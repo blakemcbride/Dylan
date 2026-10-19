@@ -637,21 +637,29 @@ module its header names (design note 33), or DYLAN-USER."
        (lambda (body module-vars)
          (funcall
           continue
-          `(dylan%call/cc
-            (lambda (!bind-exit)
-              ;; The exit's own parameters are named so as not to shadow
-              ;; the multiple-values variable its values go to.
-              (let ((,name
-                      (lambda (!exit/multiple-values !exit/next-method
-                               &rest values)
-                        (declare (ignore !exit/multiple-values
-                                         !exit/next-method))
-                        (funcall !bind-exit
-                                 (dylan%lisp-apply
-                                  dylan/values ,multiple-values?
-                                  next-method/not-generic
-                                  values)))))
-                ,body)))
+          ;; Chapter 8: the exit procedure may be called only while the
+          ;; bind-exit is still running.
+          `(let ((!bind-exit/live t))
+             (unwind-protect
+                  (dylan%call/cc
+                   (lambda (!bind-exit)
+                     ;; The exit's own parameters are named so as not to
+                     ;; shadow the multiple-values variable its values go to.
+                     (let ((,name
+                             (lambda (!exit/multiple-values !exit/next-method
+                                      &rest values)
+                               (declare (ignore !exit/multiple-values
+                                                !exit/next-method))
+                               (unless !bind-exit/live
+                                 (dylan-call dylan/error
+                                             "an exit procedure was called after its bind-exit returned"))
+                               (funcall !bind-exit
+                                        (dylan%lisp-apply
+                                         dylan/values ,multiple-values?
+                                         next-method/not-generic
+                                         values)))))
+                       ,body)))
+               (setf !bind-exit/live nil)))
           module-vars))))))
 
 ;;; COMPILE-BIND-METHODS-FORM is in the file comp-method.lisp

@@ -101,7 +101,7 @@
 (add-method
  dylan/make
  (dylan%function->method
-  (make-param-list `((table ,(dylan%make-singleton <table>))) nil nil t)
+  (make-param-list `((table ,(dylan%make-singleton <table>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class rest))
     (let ((instance (dylan%make-<object> <table>)))

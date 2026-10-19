@@ -118,9 +118,7 @@ direct call (NEXT-METHOD #f) is checked here."
              (eq next-method next-method/last-applicable))
          t)
         (t
-         (validate-keywords arglist allowed
-                            (lambda (&rest args)
-                              (dylan-apply dylan/error args))))))
+         (validate-keywords arglist allowed #'keyword-error))))
 
 ;;;
 ;;; Common parameter lists for MAKE-PARAM-LIST

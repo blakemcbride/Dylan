@@ -264,8 +264,10 @@ respecify a slot it inherits, to give it, for example, a different initial
 value. The 1992 manual asks that the new specification repeat every feature
 the inherited one specified (its type, an initial value, its init-keyword,
 a non-instance allocation and a setter), with a type no wider than the
-inherited one. A class that inherits the same slot from two superclasses
-with different specifications must respecify it.
+inherited one, and both implementations report a respecification that
+leaves one out (``redefining an inherited slot must respecify its
+init-keyword:''). A class that inherits the same slot from two
+superclasses with different specifications must respecify it.
 
 \begin{dylan}
 (define-class <base> (<object>)

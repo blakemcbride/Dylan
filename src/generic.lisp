@@ -79,8 +79,12 @@
        (dylan-call dylan/error "invalid param-list" original-list))))
 
 (defun guarantee-keys (keys)
+  "A parameter list's keywords: NIL without #key; :ANY for the runtime's
+own methods that take any keyword; an empty vector for #key with no
+keywords, which chapter 6 says accepts none; else the list of keywords."
   (cond ((not keys) nil)
-        ((not (consp keys)) (vector))   ; "any keywords are acceptable"
+        ((eq keys :any) :any)
+        ((not (consp keys)) (vector))
         ((all? #'keyword? keys) keys)
         (t (guarantee-keys
             (dylan-call dylan/error "invalid keywords" keys)))))
@@ -145,8 +149,8 @@ checked them; a direct call (next-method #f) is checked here."
                     for rest on arguments
                     unless (match-specializer? (car rest) specializer)
                     do (dylan-call dylan/error
-                                   "method called with an argument that does not match its specializer"
-                                   (car rest) specializer method)))
+                                   (dylan-call dylan/make <type-error>
+                                               :value (car rest) :type specializer))))
             (apply lambda multiple-values next-method arguments)))
     (oned-table/put! *dispatch-entries* method lambda)
     (dylan%make-method param-list method)))
@@ -283,9 +287,10 @@ checked them; a direct call (next-method #f) is checked here."
             ((and (consp (generic-function-data.keys data))
                   (not (let ((method-keys (param-list.keys param-list)))
                          (or (param-list.rest? param-list)
-                             (and method-keys (not (consp method-keys)))
-                             (subset? (generic-function-data.keys data)
-                                      method-keys)))))
+                             (eq method-keys :any)
+                             (and (consp method-keys)
+                                  (subset? (generic-function-data.keys data)
+                                           method-keys))))))
              (dylan-call dylan/error
                          "add-method -- generic function requires certain keys"
                          (generic-function-data.keys data)))
@@ -332,8 +337,15 @@ CACHED-APPLICABLE-METHODS); else NIL."
             (car ,table)
             ,table))))
 
-(defun keyword-error (&rest args)
-  (dylan-apply dylan/error args))
+(defun keyword-error (message &rest args)
+  "The errors of chapter 6 for a call's keyword arguments, as
+VALIDATE-KEYWORDS reports them, worded as the compiler to C words them."
+  (cond ((string= message "incorrect keyword format")
+         (dylan-call dylan/error
+                     "the arguments after the required ones are not keyword/value pairs"))
+        ((string= message "illegal keyword argument")
+         (dylan-call dylan/error "keyword argument not accepted" (car args)))
+        (t (dylan-apply dylan/error (cons message args)))))
 
 (defun check-extra-arguments (data extra cached)
   "What GENERIC-DISPATCH checks of the EXTRA arguments, after the required
@@ -422,8 +434,10 @@ cache's entry for the call."
                  original-args)))
       (unless (consp applicable-methods)
         (dylan-call dylan/error
-                    "generic-dispatch -- no applicable methods"
-                    generic-function original-args))
+                    (format nil "no applicable method for ~a"
+                            (or (generic-function-print-name generic-function)
+                                "an anonymous generic function"))
+                    original-args))
       (when (> ngiven nreq)             ; More supplied than required
         (let ((non-req-args (but-first nreq original-args)))
           (if (or (generic-function-data.keys data)
@@ -470,8 +484,9 @@ the rest (on the same arguments, unless it is given others)."
                  (keys (param-list.keys param-list))
                  (rest? (param-list.rest? param-list)))
             (when (or (not rest?) keys) (setf all-!rest? nil))
-            (cond ((or rest? (and keys (not (consp keys))))
-                   (setf any-!key? t))
+            ;; Chapter 6: a method accepts the keywords it names, or any if
+            ;; it takes #rest; #key alone accepts none.
+            (cond ((or rest? (eq keys :any)) (setf any-!key? t))
                   ((consp keys)
                    (setf keywords (append keys keywords))))
             (pop methods))

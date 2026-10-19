@@ -309,7 +309,7 @@ same."
         (dylan%find-keyword
          rest k (lambda ()
                   (dylan-call dylan/error
-                              "make -- missing required keyword" k rest))))
+                              "make: the required init-keyword is missing" k))))
       (vector-iterate slots
                       (lambda (i slot)
                         (declare (ignore i))
@@ -344,16 +344,16 @@ than the default accepts."
                                     (or (eq key (slot.init-keyword slot))
                                         (eq key (slot.required-init-keyword slot)))))
                              (coerce (class.slots class) 'list)))
-              do (dylan-call dylan/error "make -- illegal keyword argument" key)))))
+              do (dylan-call dylan/error "keyword argument not accepted" key)))))
 
 (defparameter dylan/make
   (dylan%generic-fn 'make
-                    (make-param-list `((class ,<class>)) nil nil t)
+                    (make-param-list `((class ,<class>)) nil nil :any)
                     #'dylan%make-<object>))
 
 (defparameter dylan/initialize
   (dylan%generic-fn 'initialize
-                    (make-param-list `((object ,<object>)) nil nil t)
+                    (make-param-list `((object ,<object>)) nil nil :any)
                     (lambda (instance &rest rest)
                       (declare (ignore rest))
                       instance)))
@@ -514,7 +514,8 @@ irrational functions; an exact real stays exact."
 (defparameter dylan/direct-subclasses
   (dylan%generic-fn 'direct-subclasses one-class
                     (lambda (class)
-                      (population->list (class.subclasses class)))))
+                      ;; In the order defined, as the compiler to C has them
+                      (reverse (population->list (class.subclasses class))))))
 
 (defparameter dylan/instance?
   (dylan%generic-fn 'instance?
@@ -794,8 +795,16 @@ irrational functions; an exact real stays exact."
   (dylan%generic-fn
    'shallow-copy one-object
    (lambda (obj)
-     (dylan-call dylan/error
-                 "shallow-copy -- not specialized for this object type" obj))))
+     ;; Chapter 11: a new object with the same contents -- for an instance
+     ;; of a program's class, the same slot values.  The collections have
+     ;; methods of their own.
+     (if (instance? obj)
+         (let* ((class (instance.class obj))
+                (copy (make-dylan-instance class nil (copy-seq (instance.data obj)))))
+           (add-new-to-population! (class.instances class) copy)
+           copy)
+         (dylan-call dylan/error
+                     "shallow-copy -- not specialized for this object type" obj)))))
 
 (defparameter dylan/binary-gcd (dylan%generic-fn 'binary-gcd two-integers #'gcd))
 (defparameter dylan/binary-lcm (dylan%generic-fn 'binary-lcm two-integers #'lcm))

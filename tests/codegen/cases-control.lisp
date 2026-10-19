@@ -79,7 +79,7 @@ a
             ((<error>) 'error)))
    (print (handler-case (car 5)
             ((<simple-error> condition: c) (condition-format-arguments c))))
-   (print (handler-case (* 4611686018427387903 2) ((<error>) 'overflow)))
+   (print (handler-case (/ 1 0) ((<error>) 'overflow)))
    (print (handler-case (undefined-function 1) ((<error>) 'caught)))
    (define undefined-function 3)"
   "(\"bad ~a\" (1))

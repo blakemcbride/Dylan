@@ -766,12 +766,12 @@ answer the class precedence list."
     (cond ((singleton? owner)
            (unless (member allocation '(instance constant virtual))
              (dylan-call dylan/error
-                         "dylan%add-slot -- bad singleton allocation"
-                         allocation))
+                         "the slot of a singleton must be instance, constant or virtual"
+                         debug-name allocation))
            (when (or init-keyword required-init-keyword)
              (dylan-call dylan/error
-                         "dylan%add-slot -- singleton with init-keyword"
-                         (or init-keyword required-init-keyword))))
+                         "the slot of a singleton takes no init-keyword"
+                         debug-name (or init-keyword required-init-keyword))))
           ((and (class? owner) (class.read-only? owner))
            (dylan-call dylan/error "add-slot -- class is read-only" owner))
           ((not (class? owner))
@@ -1150,7 +1150,9 @@ it has now)."
 (defun object-ref (data offset object name)
   (let ((value (aref data offset)))
     (if (eq value *the-uninitialized-slot-value*)
-        (dylan-call dylan/error "uninitialized slot accessed" object name)
+        (dylan-call dylan/error
+                    (format nil "the slot ~a is not initialized" (dylan-symbol->string name))
+                    object)
         value)))
 
 (defun make-class-getter (class offset name)

@@ -55,7 +55,11 @@
 (declaim (inline dylan%free-variable-ref))
 (defun dylan%free-variable-ref (value name)
   (if (eq value the-unassigned-value)
-      (dylan-call dylan/error "unbound variable" name)
+      ;; As the compiler to C words it: the variable, with its module
+      (let ((shown (dylan-symbol->string name)))
+        (dylan-call dylan/error
+                    (format nil "the variable ~a~:[@dylan-user~;~] has no value"
+                            shown (find #\@ shown))))
       value))
 
 ;;; Read-only module variables (chapter 5): DEFINE-CLASS and
@@ -79,7 +83,9 @@
 
 (defun dylan%check-assignable (variable name)
   (when (gethash variable *read-only-variables*)
-    (dylan-call dylan/error "variable is read-only" name)))
+    (dylan-call dylan/error
+                (format nil "~a holds a class or generic function and cannot be assigned"
+                        (dylan-symbol->string (if (consp name) (cadr name) name))))))
 
 (defun dylan%note-redefinition (variable name)
   "Chapter 4: DEFINE of a variable that already has a value warns."
@@ -95,7 +101,7 @@ parameter list is consistent with the existing GENERIC-FUNCTION."
         (keys (guarantee-keys keys)))
     (flet ((same-keys? (a b)
              (cond ((or (null a) (null b)) (and (null a) (null b)))
-                   ((or (vectorp a) (vectorp b)) (and (vectorp a) (vectorp b)))
+                   ((or (not (consp a)) (not (consp b))) (and (not (consp a)) (not (consp b))))
                    (t (and (subsetp a b) (subsetp b a))))))
       (unless (and (= nrequired (generic-function-data.nrequired data))
                    (eq rest? (generic-function-data.rest? data))

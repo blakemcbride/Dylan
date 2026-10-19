@@ -274,7 +274,7 @@ $ sbcl --script tests/codegen/run.lisp      # the compiler's own
 $ sbcl --script tests/stress/run.lisp       # 10^8 tail calls; many threads
 $ sh tests/driver/run.sh                    # bin/dylanc
 $ make -C runtime test                      # the C runtime
-$ sbcl --script tests/interpreter/run.lisp  # the macro cases, in the Common Lisp implementation
+$ sbcl --script tests/interpreter/run.lisp  # the compiler's test programs, in the Common Lisp implementation
 ```
 
 ## Benchmarks

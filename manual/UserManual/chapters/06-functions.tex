@@ -288,10 +288,10 @@ symbol, so only \code{price:} is accepted. A vector is a sequence, so both
 \code{price:} and \code{unit-price:} are. For a list the third method
 applies, and it has \code{\#rest}, so anything goes.
 
-The two implementations differ on one point. A method whose parameter list
-has \code{\#key} with no keywords after it accepts no keywords in the
-compiler to C, as the rule above says; in the Common Lisp implementation it
-accepts any.
+A method whose parameter list has \code{\#key} with no keywords after it
+accepts no keywords, as the rule says, though its arguments after the
+required ones must still be keyword/value pairs; both implementations
+check this.
 
 \section{Defining methods: define-method}\label{sec:functions-define-method}
 

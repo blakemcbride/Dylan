@@ -238,5 +238,5 @@ w
   "(define big (method (n) (if (= n 0) 1 (* 2 (big (- n 1)))))) (print (big 61)) (print (big 62))"
   "2305843009213693952
 "
-  :error "integer overflow")
-)
+  :error "integer overflow"
+  :compiler-only t))

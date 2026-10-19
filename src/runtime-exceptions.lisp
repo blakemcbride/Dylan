@@ -290,7 +290,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (make-param-list `((condition ,<restart>)) nil nil nil)
   (lambda (restart)
     (dylan-call dylan/error
-                "(default-handler <restart>) -- no handler established"
+                "no handler was established for the restart"
                 restart))))
 
 ;;; Operators for Interactive Handling
@@ -373,13 +373,12 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 
 ;; A name for the condition handler...
 (defun dylan%lisp-condition-handler (condition)
-  (dylan-call
-   dylan/signal
-   (dylan-call dylan/make <simple-error>
-               :format-string (implementation-specific/get-error-message
-                               condition)
-               :format-arguments (implementation-specific/get-error-arguments
-                                  condition))))
+  (multiple-value-bind (format-string format-arguments)
+      (implementation-specific/reflect-condition condition)
+    (dylan-call dylan/signal
+                (dylan-call dylan/make <simple-error>
+                            :format-string format-string
+                            :format-arguments format-arguments))))
 
 ;;; Chapter 2: every Dylan function is a method or a generic function.
 ;;; These predefined functions are Lisp closures, made methods here with

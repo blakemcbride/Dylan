@@ -161,7 +161,7 @@
 (add-method
  dylan/make
  (dylan%function->method
-  (make-param-list `((range ,(dylan%make-singleton <range>))) nil nil t)
+  (make-param-list `((range ,(dylan%make-singleton <range>))) nil nil :any)
   (lambda (range &rest rest)
     (declare (ignore range))
     (dylan-apply dylan/range rest))))

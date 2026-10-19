@@ -43,7 +43,7 @@
 (add-method
  dylan/make
  (dylan%function->method
-  (make-param-list `((class ,(dylan%make-singleton <string-stream>))) nil nil t)
+  (make-param-list `((class ,(dylan%make-singleton <string-stream>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class rest))
     (%make-dylan-stream :string))))

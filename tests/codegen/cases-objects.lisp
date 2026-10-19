@@ -186,7 +186,7 @@ a
  ;; <shape>.
  (filtered-slots
   "(define-class <view> (<object>) (position init-keyword: position:))
-   (define-class <displaced-view> (<view>) (position allocation: virtual))
+   (define-class <displaced-view> (<view>))
    (define-method position ((v <displaced-view>)) (list 'displaced (next-method v)))
    (define-method (setter position) ((v <displaced-view>) new)
      (next-method v (list 'undisplaced new)))
@@ -294,7 +294,8 @@ pong
  (dynamic-superclass
   "(define c (method () <object>)) (define-class <x> ((c)))"
   ""
-  :compile-error "a superclass must be a class known at compile time")
+  :compile-error "a superclass must be a class known at compile time"
+  :compiler-only t)
  (variable-and-generic
   "(define g 1) (define-method g (x) x)"
   ""
@@ -306,7 +307,8 @@ pong
  (dynamic-specializer
   "(define-method i ((x (singleton (list 1)))) x)"
   ""
-  :compile-error "a specializer must be a class or a singleton known at compile time")
+  :compile-error "a specializer must be a class or a singleton known at compile time"
+  :compiler-only t)
  (assign-class
   "(define-class <z> (<object>)) (set! <z> 3)"
   ""
@@ -327,7 +329,7 @@ pong
    (define-slot (singleton q) weight type: <integer> init-function: (method () 42))
    (print (weight q))
    (print (handler-case (begin (set! (weight q) 'heavy) 'set) ((<error>) 'type-error)))
-   (define-slot (singleton p) kind allocation: constant: init-value: 'special)
+   (define-slot (singleton p) kind allocation: constant init-value: 'special)
    (print (kind p))
    (define-slot (singleton 7) seven-name init-value: \"seven\")
    (print (seven-name 7))
@@ -356,7 +358,7 @@ not-a-singleton
 ")
 
  (define-slot-singleton-class-allocation
-  "(define-slot (singleton 1) z allocation: class:)"
+  "(define-slot (singleton 1) z allocation: class)"
   ""
   :compile-error "the slot of a singleton must be instance, constant or virtual")
 
@@ -400,5 +402,5 @@ not-a-singleton
 (bind ((k 1))
   (define-method f ((x <integer>)) (+ x k)))"
   ""
-  :compile-error ":4:3: error: define-method: the method refers to local variables (k)")
-)
+  :compile-error ":4:3: error: define-method: the method refers to local variables (k)"
+  :compiler-only t))

@@ -27,6 +27,10 @@ void dy_gc_stress(void) {
 
 void dy_init(void) {
     setlocale(LC_CTYPE, "C.UTF-8");        /* for the case of characters */
+    /* Two threads marking, not one for each processor: more spend longer
+     * waiting on each other than marking, even for a large heap shared by
+     * many threads.  GC_MARKERS, if set, says otherwise. */
+    if (!getenv("GC_MARKERS")) GC_set_markers_count(2);
     GC_INIT();
 #ifdef DY_GC_STRESS
     const char *interval = getenv("DYLAN_GC_STRESS");

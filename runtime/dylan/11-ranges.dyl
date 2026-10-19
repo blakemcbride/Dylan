@@ -27,7 +27,7 @@ module: dylan
         (limit (max 0 (ceiling/ (binary- up-to from) by))))
       (when through
         (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))
-      (make <range> from: from by: by size: count))))
+      (%make <range> from: from by: by size: count))))
 
 (define-method make ((class (singleton <range>)) #rest arguments)
   (if (or (member? up-to: arguments) (member? through: arguments))

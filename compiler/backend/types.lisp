@@ -15,7 +15,9 @@
 ;;;; They are also flow-sensitive where a test proves more: in the branch
 ;;;; of an if that (instance? x C) chose -- (not (instance? x C)) too -- x
 ;;;; is known to be a C (*REFINEMENTS*), for the code generated there and
-;;;; for the types of what is bound there.
+;;;; for the types of what is bound there.  A variable whose values are a
+;;;; C or #f, as the iteration protocol's states are, is known to be a C in
+;;;; the branch of an if that tested it true (*OR-FALSE-TYPES*).
 ;;;;
 ;;;; The types let calls.lisp drop the tests of its inline cases.  A
 ;;;; <double-float> variable that no closure holds, and whose every use
@@ -35,8 +37,12 @@ If neither is a subclass of the other, the code is never run; TYPE."
   "The class of the atom A's value, if known."
   (etypecase a
     (const (ignore-errors (constant-class (const-value a))))
-    (ivar (let ((type (ivar-type a)))
-            (narrower (and (class-info-p type) type) (cdr (assoc a *refinements*)))))
+    (ivar (let ((type (ivar-type a))
+                (refined (cdr (assoc a *refinements*))))
+            (if (eq refined :true)
+                (or (and (class-info-p type) type)
+                    (and *or-false-types* (gethash a *or-false-types*)))
+                (narrower (and (class-info-p type) type) refined))))
     (c-atom (c-atom-type a))))
 
 (defun type-test (atom &optional negated)
@@ -58,9 +64,12 @@ assigned and C a class known when compiling -- or of not of such a value
 
 (defun if-refinements (e)
   "The refinements the test of the if E gives its then branch and its else
-branch: two alists."
+branch: two alists.  A variable the test is, never assigned, is :TRUE in
+the then branch: not #f."
   (multiple-value-bind (var class negated) (type-test (ir-if-test e))
-    (cond ((null var) (values '() '()))
+    (cond ((and (null var) (ivar-p (ir-if-test e)) (not (ivar-assigned-p (ir-if-test e))))
+           (values (list (cons (ir-if-test e) :true)) '()))
+          ((null var) (values '() '()))
           (negated (values '() (list (cons var class))))
           (t (values (list (cons var class)) '())))))
 
@@ -196,17 +205,59 @@ used only to call them, and the sole methods of generic functions used so."
   "The IR-FN the call E always calls, if known."
   (or (call-target e)
       (global-callee e)
-      (multiple-value-bind (kind what) (call-callee e)
+      (multiple-value-bind (kind what swap) (call-callee e)
         (and (eq kind :generic)
-             (let ((m (sole-method what))) (and m (gmethod-fn m)))))))
+             (let ((m (or (sole-method what)
+                          (resolved-method what (if swap
+                                                    (reverse (ir-call-arguments e))
+                                                    (ir-call-arguments e))))))
+               (and m (gmethod-fn m)))))))
+
+(defun made-class (c-name args)
+  "The class of what the function written in C named C-NAME makes, if it
+makes an instance of a class known when compiling: %make of the class,
+or apply of %make to it."
+  (flet ((make-p (a)
+           (let ((v (static-value a)))
+             (and (eq (car v) :global) (eq (second v) (dylan-var "%make"))))))
+    (cond ((and (string= c-name "make") args) (known-made-class (first args)))
+          ((and (string= c-name "apply") (rest args) (make-p (first args)))
+           (known-made-class (second args))))))
+
+(defun known-made-class (a)
+  "The class A is, if %make of it makes a direct instance of it."
+  (let ((class (known-class a)))
+    (and class (class-gclass class) class)))
 
 ;;; Inference
 
+;;; During the search a type is also :NONE, for no value yet; :FALSE, for
+;;; #f alone; or (:OR-FALSE . C), for an instance of the class C or #f.
+
+(defun or-false-type-p (type) (and (consp type) (eq (car type) :or-false)))
+
 (defun join-types (a b)
-  (cond ((eq a :none) b)
-        ((eq b :none) a)
-        ((eq a b) a)
-        (t nil)))
+  (flet ((join-false (other)
+           ;; :FALSE and OTHER
+           (cond ((or (eq other :false) (or-false-type-p other)) other)
+                 ((and (class-info-p other)
+                       (subclass-info-p other (find-class-info "<boolean>" *classes*)))
+                  (find-class-info "<boolean>" *classes*))
+                 ((class-info-p other) (cons :or-false other)))))
+    (cond ((eq a :none) b)
+          ((eq b :none) a)
+          ((equal a b) a)
+          ((eq a :false) (join-false b))
+          ((eq b :false) (join-false a))
+          ((and (or-false-type-p a) (eq (cdr a) b)) a)
+          ((and (or-false-type-p b) (eq (cdr b) a)) b)
+          (t nil))))
+
+(defun class-of-type (type)
+  "The class a search type stands for: NIL if not one, or :NONE."
+  (cond ((eq type :false) (find-class-info "<boolean>" *classes*))
+        ((or-false-type-p type) nil)
+        (t type)))
 
 (defun infer-types (fns)
   "Set the type of every variable of FNS."
@@ -269,16 +320,22 @@ used only to call them, and the sole methods of generic functions used so."
              (var-type (var)
                (multiple-value-bind (type found) (gethash var types)
                  (if found type nil)))
-             (atom-type* (a)
-               (if (ivar-p a)
-                   (let ((type (var-type a)))
-                     (if (eq type :none)
-                         :none
-                         (narrower type (cdr (assoc a *refinements*)))))
-                   (atom-type a)))
+             (search-atom-type (a)
+               ;; The search type of A's value
+               (cond ((ivar-p a)
+                      (let ((type (var-type a))
+                            (refined (cdr (assoc a *refinements*))))
+                        (cond ((eq type :none) :none)
+                              ((eq refined :true)
+                               (if (or-false-type-p type) (cdr type) type))
+                              ((or (null type) (class-info-p type)) (narrower type refined))
+                              (t type))))
+                     ((and (const-p a) (eq (const-value a) +false+)) :false)
+                     (t (atom-type a))))
+             (atom-type* (a) (class-of-type (search-atom-type a)))
              (expr-type (e)
                (typecase e
-                 ((or const ivar) (atom-type* e))
+                 ((or const ivar) (search-atom-type e))
                  (ir-let (expr-type (ir-let-body e)))
                  (ir-mv-let (expr-type (ir-mv-let-body e)))
                  (ir-letrec (expr-type (ir-letrec-body e)))
@@ -286,8 +343,8 @@ used only to call them, and the sole methods of generic functions used so."
                  (ir-if (multiple-value-bind (then else) (if-refinements e)
                           (join-types (with-refinements (then) (expr-type (ir-if-then e)))
                                       (with-refinements (else) (expr-type (ir-if-else e))))))
-                 (ir-set (atom-type* (ir-set-value e)))
-                 (ir-global-set (atom-type* (ir-global-set-value e)))
+                 (ir-set (search-atom-type (ir-set-value e)))
+                 (ir-global-set (search-atom-type (ir-global-set-value e)))
                  (ir-prim (and (eq (ir-prim-name e) :pair) (find-class-info "<pair>" *classes*)))
                  (ir-call (call-type e))
                  (t nil)))
@@ -308,9 +365,18 @@ used only to call them, and the sole methods of generic functions used so."
                                 (:primitive
                                  (let ((class (second (assoc what *primitive-result-classes*
                                                              :test #'string=))))
-                                   (and class (find-class-info class *classes*))))
+                                   (if class
+                                       (find-class-info class *classes*)
+                                       (made-class what args))))
                                 (t nil)))
-                            (callee (and (null type) (known-callee e))))
+                            (callee (and (null type)
+                                         (or (known-callee e)
+                                             (and (eq kind :generic)
+                                                  (let ((types (mapcar #'atom-type* args)))
+                                                    (if (member :none types)
+                                                        (return-from call-type :none)
+                                                        (let ((m (resolved-method what args types)))
+                                                          (and m (gmethod-fn m))))))))))
                        (if callee
                            (multiple-value-bind (r found) (gethash callee results)
                              (if found r nil))
@@ -341,17 +407,20 @@ used only to call them, and the sole methods of generic functions used so."
                                                srcs)
                                        :initial-value :none))
                          (declared-type (gethash var declared)))
-                     (when (and declared-type (not (eq type :none)))
+                     (when (and declared-type (or (null type) (class-info-p type)))
                        (setf type (narrower type declared-type)))
-                     (unless (eq type (gethash var types))
+                     (unless (equal type (gethash var types))
                        (setf (gethash var types) type changed t))))
           (dolist (fn fns)
             (let ((type (expr-type (ir-fn-body fn))))
-              (unless (eq type (gethash fn results))
+              (unless (equal type (gethash fn results))
                 (setf (gethash fn results) type changed t))))
           (unless changed (return))))
       (loop for var being the hash-keys of types using (hash-value type)
-            do (setf (ivar-type var) (and (class-info-p type) type))))))
+            do (setf (ivar-type var) (and (class-info-p (class-of-type type))
+                                          (class-of-type type)))
+               (when (and (or-false-type-p type) *or-false-types*)
+                 (setf (gethash var *or-false-types*) (cdr type)))))))
 
 ;;; Unboxing
 

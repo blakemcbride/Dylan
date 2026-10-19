@@ -593,6 +593,88 @@ maker -- applies to it, that class."
                         (gfun-methods g)))
         class))))
 
+;;; Methods chosen when compiling.  When the classes of a call's arguments
+;;; show which of a generic function's methods apply -- each surely or
+;;; surely not -- and one of them is at least as specific as every other at
+;;; every argument, that method is first in any order dispatch would find,
+;;; so the call can go straight to it.
+
+(defun spec-fit (spec type object)
+  "Does a method specialized by SPEC apply to an argument whose class is
+TYPE (or NIL), and which is OBJECT if that is not :UNKNOWN: :YES, :NO or
+:MAYBE?"
+  (flet ((overlap-p (a b)
+           (some (lambda (c) (and (subclass-info-p c a) (subclass-info-p c b))) *classes*)))
+    (when (and (null type) (not (eq object :unknown)))
+      (setf type (ignore-errors (constant-class object))))
+    (cond ((runtime-spec-p spec) :maybe)
+          ((eq (spec-kind spec) :singleton)
+           (cond ((not (eq object :unknown))
+                  (if (eql object (spec-value spec)) :yes :no))
+                 ((and type (not (overlap-p type (spec-class spec)))) :no)
+                 (t :maybe)))
+          ((object-spec-p spec) :yes)
+          ((null type) :maybe)
+          ((subclass-info-p type (spec-class spec)) :yes)
+          ((overlap-p type (spec-class spec)) :maybe)
+          (t :no))))
+
+(defun spec<= (a b)
+  "Is the spec A at least as specific as B, for any argument both apply to?"
+  (cond ((eq (spec-kind a) :singleton) t)
+        ((eq (spec-kind b) :singleton) nil)
+        (t (subclass-info-p (spec-class a) (spec-class b)))))
+
+(defun argument-object (a)
+  "The object the atom A always is, if known when compiling, or :UNKNOWN."
+  (let ((class (known-class a))
+        (c (and (not (c-atom-p a)) (constant-atom* a))))
+    (cond (class class)
+          ((and c (typep (const-value c) '(or symbol character integer))) (const-value c))
+          (t :unknown))))
+
+(defun resolved-method (g args &optional (types (mapcar #'atom-type args)))
+  "The method of G a call on ARGS, whose classes are TYPES, goes straight
+to, if it is known when compiling: an IR method that does not call
+next-method, given the keyword arguments it takes, if any."
+  (let* ((r (gfun-required g))
+         (n (length args)))
+    (when (and (not *reflective-methods*)
+               (>= n r)
+               (or (= n r) (and (gfun-variable-p g) (evenp (- n r)))))
+      (let ((applicable '()))
+        (dolist (m (gfun-methods g))
+          (case (let ((fits (loop for spec in (gmethod-specs m)
+                                  for a in args for type in types
+                                  collect (spec-fit spec type (argument-object a)))))
+                  (cond ((member :no fits) :no)
+                        ((member :maybe fits) :maybe)
+                        (t :yes)))
+            (:yes (push m applicable))
+            (:maybe (return-from resolved-method nil))))
+        (let ((m (find-if (lambda (m)
+                            (every (lambda (other)
+                                     (every #'spec<= (gmethod-specs m) (gmethod-specs other)))
+                                   applicable))
+                          applicable)))
+          (and m
+               (eq (gmethod-kind m) :ir)
+               (gmethod-fn m)
+               (not (uses-next-method-p (gmethod-fn m)))
+               (resolved-keywords-p m (nthcdr r args))
+               m))))))
+
+(defun resolved-keywords-p (m pairs)
+  "Are PAIRS, the keyword arguments of a call, constant keywords M takes?
+Then a check of them against every applicable method's would pass."
+  (or (null pairs)
+      (let ((keys (gmethod-keys m)))
+        (and keys
+             (loop for (k) on pairs by #'cddr
+                   always (let ((c (and (not (c-atom-p k)) (constant-atom* k))))
+                            (and c (or (eq keys :any) (gmethod-rest-p m)
+                                       (member (const-value c) keys)))))))))
+
 (defun slot-getter-type (g args)
   "If every method of G is the getter of a slot whose type is a class
 known when compiling, the same for all, that class: the class of the value
@@ -660,8 +742,9 @@ of a call of G on ARGS."
     (and next (plusp (ivar-ref-count next)))))
 
 (defun gen-dispatched-call (g args dest tail)
-  (let* ((sole (sole-method g))
-         (m (spec-method g))
+  (let* ((resolved (resolved-method g args))
+         (sole (or (sole-method g) resolved))
+         (m (or (spec-method g) resolved))
          (spec (and m (not tail)
                     (spec-call-c (gmethod-fn m) (format nil "DY_OBJ(&~a)" (gmethod-object-c m))
                                  args))))

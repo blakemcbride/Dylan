@@ -86,6 +86,9 @@ its value.")
 (defvar *stack-rests* nil
   "#rest IVAR -> T, for the lists that never escape (types.lisp).")
 (defvar *unboxed* nil "IVAR -> T, for the variables that are C doubles (types.lisp).")
+(defvar *or-false-types* nil
+  "IVAR -> C, for the variables whose values are instances of the class C
+or #f (types.lisp).")
 (defvar *stack-objects* nil
   "IVAR -> :CLOSURE or :INSTANCE, for the variables whose object is made on
 the stack (types.lisp).")
@@ -1105,6 +1108,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*object-decls* '())
         (*definition-order* 0)
         (*reflective-methods* t)
+        (*or-false-types* (make-hash-table :test #'eq))
         (*sdef-counter* 0)
         (*used-primitives* '())
         (*label-counter* 0)

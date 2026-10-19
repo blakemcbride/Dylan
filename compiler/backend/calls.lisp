@@ -77,7 +77,7 @@
      (("<double-float>" "<double-float>") "<boolean>" "DY_BOOL({d0} == {d1})"))
     ("unary-" 1
      (("<integer>") "<integer>" "dy_int_negate({0})" :fold ,#'-)
-     (("<double-float>") "<double-float>" "-{d0}"))
+     (("<double-float>") "<double-float>" "-({d0})"))
     ;; The iteration protocol on lists and simple vectors
     ("initial-state" 1
      (("<pair>") "<pair>" "{0}")
@@ -218,9 +218,11 @@ gfun), (values :primitive c-name), or NIL."
 
 (defun dead-binding-p (var value)
   "Is the let of VAR to VALUE needless: the value pure, and every use of
-VAR absorbed by a known call?"
+VAR absorbed by a known call -- none by a closure, whose environment holds
+it?"
   (and (typep value '(or ir-global-ref const))
        (not (cell-var-p var))
+       (not (ivar-captured-p var))
        (= (ivar-ref-count var) (gethash var *absorbed-uses* 0))))
 
 ;;; Whether a method is the library's

@@ -243,6 +243,12 @@ or apply of %make to it."
 
 (defun or-false-type-p (type) (and (consp type) (eq (car type) :or-false)))
 
+(defun common-class (a b)
+  "The most specific class both the classes A and B are subclasses of, or
+NIL for <object>."
+  (let ((c (find-if (lambda (c) (subclass-info-p b c)) (class-info-cpl a))))
+    (and c (not (string= (class-info-name c) "<object>")) c)))
+
 (defun join-types (a b)
   (flet ((join-false (other)
            ;; :FALSE and OTHER
@@ -250,15 +256,18 @@ or apply of %make to it."
                  ((and (class-info-p other)
                        (subclass-info-p other (find-class-info "<boolean>" *classes*)))
                   (find-class-info "<boolean>" *classes*))
-                 ((class-info-p other) (cons :or-false other)))))
+                 ((class-info-p other) (cons :or-false other))))
+         (or-false (class) (and class (cons :or-false class))))
     (cond ((eq a :none) b)
           ((eq b :none) a)
           ((equal a b) a)
           ((eq a :false) (join-false b))
           ((eq b :false) (join-false a))
-          ((and (or-false-type-p a) (eq (cdr a) b)) a)
-          ((and (or-false-type-p b) (eq (cdr b) a)) b)
-          (t nil))))
+          ((or (null a) (null b)) nil)
+          ((and (or-false-type-p a) (or-false-type-p b)) (or-false (common-class (cdr a) (cdr b))))
+          ((or-false-type-p a) (or-false (common-class (cdr a) b)))
+          ((or-false-type-p b) (or-false (common-class a (cdr b))))
+          (t (common-class a b)))))
 
 (defun class-of-type (type)
   "The class a search type stands for: NIL if not one, or :NONE."

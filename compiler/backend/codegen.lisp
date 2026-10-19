@@ -1117,7 +1117,9 @@ each of its Dylan functions -> the name of the module it was written in."
     (setf *reflective-methods* (uses-method-reflection-p ir))
     (number-thread-variables ir)
     (prepare-object-system ir)
-    (unless *debug* (inline-calls ir))
+    (unless *debug*
+      (inline-calls ir)
+      (setf fns (ir-fns ir)))
     (dolist (fn fns)
       (dolist (letrec (letrecs-in (ir-fn-body fn)))
         (decide-contification letrec)))

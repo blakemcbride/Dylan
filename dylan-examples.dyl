@@ -319,8 +319,8 @@ bar
 
 ;;; +
 (add-method position (method ((x <number>)) x))
-;Value[1]: #[method ...]
-;Value[2]: ()
+;Value[1]: {a method on position}
+;Value[2]: #f                            ; the manual: #f when no method is replaced
 
 ;;; +
 (define-method sibling ((x <number>)) (+ x 5))
@@ -533,7 +533,7 @@ bar
 
 ;;; Punt dots.
 (define-class <view> (<object>)
-  (position allocation: instance))
+  (position allocation: instance init-keyword: position:))   ; the book elides the init-keyword its make below needs
 ;Value: <view>
 
 ;;; Punt dots.
@@ -567,8 +567,6 @@ bar
 ;;; +
 (position my-displaced-view)
 ;Value: (displace-transform initial-position)
-;;; Actually getting (displace-transform ()) instead because of limitation
-;;; (9) in DIFFERENCES.
 
 ;;; +
 (set! (position my-displaced-view) 'next-position)
@@ -1122,7 +1120,10 @@ print-twice
 ;Value: newtons-sqrt
 
 (newtons-sqrt 25)
-;Value: 5.000000000053723
+;Value: 3433683820310959228731558640897/686736764054813148116827907533
+;;; The book prints 5.000000000053723, a float.  The manual's arithmetic
+;;; (chapter 14) is Common Lisp's, in which dividing integers gives an
+;;; exact ratio, so the exact answer is the right one; Thomas gave it too.
 
 
 ;; Page 82
@@ -1302,10 +1303,13 @@ print-twice
 ;Value: x
 
 (map-into x + '(1 2 3 4))
-;Value: (101 102 203 204)
+;Value: (1 2 3 4)
+;;; The book prints (101 102 203 204), which its definition of map-into
+;;; contradicts: the function is applied to the elements of the collections
+;;; after it, not of x, so each result is (+ n).
 
 x
-;Value: (101 102 203 204)
+;Value: (1 2 3 4)
 
 
 ;; Page 102
@@ -1466,8 +1470,9 @@ numbers
 
 (union '(butter flour sugar salt eggs)
        '(eggs butter mushrooms onions salt))
-;;; The union may have the elements in a different order.
-;Value: (salt butter flour sugar eggs mushrooms onions)
+;;; The manual fixes no order for union; the book printed
+;;; (salt butter flour sugar eggs mushrooms onions).
+;Value: (butter flour sugar salt eggs mushrooms onions)
 
 
 ;; Page 107

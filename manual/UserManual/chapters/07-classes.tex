@@ -266,7 +266,10 @@ the inherited one specified (its type, an initial value, its init-keyword,
 a non-instance allocation and a setter), with a type no wider than the
 inherited one, and both implementations report a respecification that
 leaves one out (``redefining an inherited slot must respecify its
-init-keyword:''). A class that inherits the same slot from two
+init-keyword:''). The exception is a slot redeclared \code{virtual}, a
+filtered slot (below), which respecifies nothing: the inherited slot keeps
+its storage, its type and its initialization, so \code{make} still takes
+its init-keyword. A class that inherits the same slot from two
 superclasses with different specifications must respecify it.
 
 \begin{dylan}

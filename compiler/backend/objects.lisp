@@ -432,8 +432,12 @@ slot features the superior definition specified."
   ;; inherited definition specified.
   (loop for g being the hash-values of *gclasses*
         do (dolist (sd (gclass-sdefs g))
-             (let ((old (inherited-slot-definition (gclass-info g) (sdef-getter sd))))
-               (when old (check-slot-redefinition sd old)))))
+             ;; Except a virtual redeclaration, a filtered slot (the
+             ;; manual's <displaced-view>): the inherited slot stays as it
+             ;; was, storage, initialization and all.
+             (unless (eq (sdef-allocation sd) :virtual)
+               (let ((old (inherited-slot-definition (gclass-info g) (sdef-getter sd))))
+                 (when old (check-slot-redefinition sd old))))))
   ;; Number the instance slots, and lay out each class's instances.
   (let ((count 0))
     (loop for g being the hash-values of *gclasses*

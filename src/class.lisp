@@ -535,34 +535,37 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
                   'new-slot new-slot
                   'new-slot-type (slot.type new-slot)))
     ;; Chapter 6: redefining an inherited slot respecifies every feature
-    ;; the inherited definition specified.
-    (dolist (class (class.superclasses
-                    (if (class? owner)
-                        owner
-                        (instance.class (singleton.object owner)))))
+    ;; the inherited definition specified -- unless the new slot is
+    ;; virtual, a filtered slot (the manual's <displaced-view>), which
+    ;; keeps the inherited slot's storage and initialization as they were.
+    (dolist (class (if (eq (slot.allocation new-slot) 'virtual)
+                       '()
+                       (class.superclasses
+                        (if (class? owner)
+                            owner
+                            (instance.class (singleton.object owner))))))
       (let ((old (same-slot-getter-in-slot-vector->slot (slot.getter new-slot)
                                                         (class.slots class))))
         (when old
           (flet ((missing (feature)
                    (dylan-call dylan/error
-                               (concatenate 'string
-                                            "slot redefinition -- must respecify the inherited "
-                                            feature)
-                               (slot.debug-name new-slot) owner)))
+                               (format nil "slot ~a: redefining an inherited slot must respecify its ~a"
+                                       (dylan-symbol->string (slot.debug-name new-slot))
+                                       feature))))
             (when (and (or (slot.has-initial-value? old) (slot.init-function old))
                        (not (or (slot.has-initial-value? new-slot)
                                 (slot.init-function new-slot))))
-              (missing "init-value or init-function"))
+              (missing "init-value: or init-function:"))
             (when (and (or (slot.init-keyword old)
                            (slot.required-init-keyword old))
                        (not (or (slot.init-keyword new-slot)
                                 (slot.required-init-keyword new-slot))))
-              (missing "init-keyword"))
+              (missing "init-keyword:"))
             (when (and (not (eq (slot.allocation old) 'instance))
                        (eq (slot.allocation new-slot) 'instance))
-              (missing "allocation"))
+              (missing "allocation:"))
             (when (and (slot.setter old) (not (slot.setter new-slot)))
-              (missing "setter"))))))))
+              (missing "setter:"))))))))
 
 (defun remove-this-slot-only! (owner slot-vector slot)
   (incf *class-structure-epoch*)        ; See REQUIRED-INIT-KEYWORDS

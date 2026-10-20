@@ -340,9 +340,12 @@ than the default accepts."
       (loop for (key nil) on arguments by #'cddr
             unless (or (member key handled)
                        (some (lambda (slot)
-                               (and slot
-                                    (or (eq key (slot.init-keyword slot))
-                                        (eq key (slot.required-init-keyword slot)))))
+                               ;; A filtered slot takes the keyword of the
+                               ;; stored slot it filters.
+                               (let ((slot (and slot (or (slot.filtered slot) slot))))
+                                 (and slot
+                                      (or (eq key (slot.init-keyword slot))
+                                          (eq key (slot.required-init-keyword slot))))))
                              (coerce (class.slots class) 'list)))
               do (dylan-call dylan/error "keyword argument not accepted" key)))))
 

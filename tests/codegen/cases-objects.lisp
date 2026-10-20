@@ -186,7 +186,7 @@ a
  ;; <shape>.
  (filtered-slots
   "(define-class <view> (<object>) (position init-keyword: position:))
-   (define-class <displaced-view> (<view>))
+   (define-class <displaced-view> (<view>) (position allocation: virtual))
    (define-method position ((v <displaced-view>)) (list 'displaced (next-method v)))
    (define-method (setter position) ((v <displaced-view>) new)
      (next-method v (list 'undisplaced new)))

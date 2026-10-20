@@ -250,12 +250,13 @@ and Scheme disagree, and the manual is followed:
     not Scheme's exact 5.
 
   * The book's <displaced-view> example (page 58) passes make the keyword
-    position:, but the example's <view> slot has no init-keyword (the book
-    elided its slot options).  The manual makes a keyword that nothing
-    accepts an error (chapter 6), and make signals "illegal keyword
-    argument", so my-displaced-view is never defined and the forms after
-    it fail; Thomas ignored the keyword, and, as it did not keep a filtered
-    slot's storage, answered (displace-transform ()).
+    position:, but the example's <view> slot as printed has no
+    init-keyword (the book elided its slot options), and the manual makes
+    a keyword that nothing accepts an error (chapter 6).  The example here
+    supplies init-keyword: position:, and both implementations then answer
+    as the book does, (displace-transform initial-position); Thomas, which
+    did not keep a filtered slot's storage, answered
+    (displace-transform ()).
 
   * MAP-INTO passes the function the elements of the source collections
     only, as chapter 12's prose and design note 27 say, so the chapter's

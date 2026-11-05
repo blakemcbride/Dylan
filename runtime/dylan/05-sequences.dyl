@@ -98,6 +98,7 @@ module: dylan
 
 (define-generic-function copy-sequence (source #key start end))
 (define-method copy-sequence ((s <sequence>) #key (start 0) end)
+  (%check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s" s start end)
   (%copy-like s (for ((state (initial-state s) (next-state s state))
                       (index 0 (binary+ index 1))
                       (l '() (if (binary< index start) l (cons (current-element s state) l))))

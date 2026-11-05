@@ -326,9 +326,11 @@
   (lambda (multiple-values next-method source &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:start :end))
-    (let ((start (dylan%find-keyword rest :start (lambda () 0)))
-          (end (dylan%find-keyword
-                rest :end (lambda () (collection-size source)))))
+    (let* ((start (dylan%find-keyword rest :start (lambda () 0)))
+           (end (check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s"
+                                 source start
+                                 (dylan%find-keyword rest :end
+                                                     (lambda () dylan%false)))))
       (loop with state = (initial-state source)
             with result = (dylan-call dylan/make
                                       (dylan-call dylan/class-for-copy source))

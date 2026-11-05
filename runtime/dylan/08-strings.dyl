@@ -20,6 +20,7 @@ module: dylan
 (define-method (setter element) ((v <byte-string>) index new-value)
   (%vector-set v index new-value))
 (define-method copy-sequence ((v <byte-string>) #key (start 0) end)
+  (%check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s" v start end)
   (%copy-vector v start (or end (%vector-size v))))
 (define-method =hash ((s <byte-string>)) (%string-hash s))
 
@@ -38,6 +39,7 @@ module: dylan
 (define-method (setter element) ((v <unicode-string>) index new-value)
   (%vector-set v index new-value))
 (define-method copy-sequence ((v <unicode-string>) #key (start 0) end)
+  (%check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s" v start end)
   (%copy-vector v start (or end (%vector-size v))))
 (define-method =hash ((s <unicode-string>)) (%string-hash s))
 

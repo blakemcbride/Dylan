@@ -521,6 +521,19 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
                      (t (setf state (next-state
                                                 coll state)))))))))
 
+;;; START and END must be indexes of the sequence S, END exclusive and not
+;;; before START, as in a compiled program; MESSAGE reports them if not.
+;;; END is #f when not given.  Answers the end to stop at.
+(defun check-start-end (message s start end)
+  (let ((n (collection-size s))
+        (end (if (false? end) nil end)))
+    (when (or (not (integerp start)) (minusp start)
+              (and n (> start n))
+              (and end (or (not (integerp end)) (< end start)
+                           (and n (> end n)))))
+      (dylan-call dylan/error message s start (or end dylan%false)))
+    (or end n)))
+
 (defparameter dylan/fill!
   (dylan%generic-fn
    'fill!
@@ -538,9 +551,13 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
   (lambda (multiple-values next-method collection new-value &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:start :end))
-    (let ((start (dylan%find-keyword rest :start (lambda () 0)))
-          (end (dylan%find-keyword
-                rest :end (lambda () (collection-size collection)))))
+    (let* ((start (dylan%find-keyword rest :start (lambda () 0)))
+           (end (if (true? (dylan-call dylan/instance? collection <sequence>))
+                    (check-start-end "fill!: bad start: or end: for ~s: ~s ~s"
+                                     collection start
+                                     (dylan%find-keyword rest :end
+                                                         (lambda () dylan%false)))
+                    (collection-size collection))))
       (do ((state (initial-state collection)
                   (next-state collection state))
            (index 0 (+ index 1)))

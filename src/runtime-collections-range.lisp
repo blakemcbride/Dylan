@@ -294,19 +294,13 @@
     (dylan%keyword-validate next-method rest '(:start :end))
     ;; START and END are indices, END exclusive (chapter 12), as for any
     ;; sequence.  (The Scheme took them as element values, END inclusive.)
-    (let* ((size (collection-size range))
-           (start (dylan%find-keyword rest :start (lambda () 0)))
-           (end (dylan%find-keyword rest :end (lambda () size)))
+    (let* ((start (dylan%find-keyword rest :start (lambda () 0)))
+           (end (check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s"
+                                 range start
+                                 (dylan%find-keyword rest :end
+                                                     (lambda () dylan%false))))
            (step (dylan-call dylan/get-range-step range))
            (from (+ (dylan-call dylan/get-range-start range) (* start step))))
-      (when (or (not (integerp start)) (minusp start)
-                (and size (> start size))
-                (and end (or (not (integerp end)) (< end start)
-                             (and size (> end size)))))
-        (dylan-call
-         dylan/error
-         "(copy-sequence <range>) -- bad start: or end: index"
-         range start end))
       (if end
           (dylan-call dylan/range :from from :size (- end start) :by step)
           (dylan-call dylan/range :from from :by step))))))

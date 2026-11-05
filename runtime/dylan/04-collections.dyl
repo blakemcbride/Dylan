@@ -302,9 +302,22 @@ module: dylan
         (set! (current-element c state) (new-value-fn e))
         (when left (set! left (binary- left 1)))))))
 
+;;; START and END must be indexes of the sequence S, END exclusive and not
+;;; before START; MESSAGE reports them if not.
+(define %check-start-end
+  (method (message s start end)
+    (bind ((n (size s)))
+      (when (or (not (%instance? start <integer>)) (negative? start)
+                (and n (binary< n start))
+                (and end (or (not (%instance? end <integer>)) (binary< end start)
+                             (and n (binary< n end)))))
+        (error message s start end)))))
+
 (define-generic-function fill! (mutable-collection value #key start end))
 
 (define-method fill! ((c <mutable-collection>) value #key (start 0) end)
+  (when (%instance? c <sequence>)
+    (%check-start-end "fill!: bad start: or end: for ~s: ~s ~s" c start end))
   (if (%instance? c <sequence>)
       (for ((state (initial-state c) (next-state c state))
             (index 0 (binary+ index 1)))

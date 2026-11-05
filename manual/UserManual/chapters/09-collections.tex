@@ -535,7 +535,10 @@ predicate is true by the result of calling the function on it, at most
 \index{fill"!}
 \code{(fill! \meta{collection} \meta{value})} stores the value under
 every key. For a sequence, \code{start:} (inclusive, default 0) and
-\code{end:} (exclusive, default the size) limit it to a part:
+\code{end:} (exclusive, default the size) limit it to a part. A
+\code{start:} or \code{end:} that is not an index of the sequence, or an
+\code{end:} before \code{start:}, is an error, here and for
+\code{copy-sequence}:
 
 \begin{dylan}
 (fill! (list 'a 'b 'c 'd 'e 'f) 3 start: 2)      ; => (a b 3 3 3 3)
@@ -622,7 +625,8 @@ element of the first sequence and one of the second.
 \index{copy-sequence}\index{concatenate}\index{concatenate-as}
 \index{replace-subsequence"!}
 \code{copy-sequence} answers a new sequence of the elements from
-\code{start:} (default 0) up to \code{end:} (default the size).
+\code{start:} (default 0) up to \code{end:} (default the size); bounds
+outside the sequence are an error, as for \code{fill!}.
 \code{concatenate} joins sequences into a new one of the first one's
 \code{class-for-copy}; \code{concatenate-as} takes the class.
 \code{replace-subsequence!} overwrites the elements of a sequence from

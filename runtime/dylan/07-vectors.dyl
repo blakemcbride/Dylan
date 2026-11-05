@@ -62,6 +62,7 @@ module: dylan
       (%replace-vector! copy 0 v start n))))
 
 (define-method copy-sequence ((v <simple-object-vector>) #key (start 0) end)
+  (%check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s" v start end)
   (%copy-vector v start (or end (%vector-size v))))
 
 (define-method reverse ((v <simple-object-vector>))
@@ -71,6 +72,7 @@ module: dylan
       (%vector-element-setter r i (%vector-element v (binary- (binary- n 1) i))))))
 
 (define-method fill! ((v <simple-object-vector>) value #key (start 0) end)
+  (%check-start-end "fill!: bad start: or end: for ~s: ~s ~s" v start end)
   (for ((i start (binary+ i 1)))
        ((not (binary< i (or end (%vector-size v)))) v)
     (%vector-element-setter v i value)))

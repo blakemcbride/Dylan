@@ -154,15 +154,15 @@
                     (setf prev-obj x))))))))
 
 (defparameter dylan/>
+  ;; Chapter 9: > and <= compare with binary< alone, "with appropriate
+  ;; argument reordering": a > b is b < a, and a <= b is not b < a.
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (bool (and (not (or (true? (dylan-call dylan/binary< obj1 obj2))
-                         (true? (dylan-call dylan/binary= obj1 obj2))))
+     (bool (and (true? (dylan-call dylan/binary< obj2 obj1))
                 (let ((prev-obj obj2))
                   (dolist (x rest-objs t)
-                    (when (or (true? (dylan-call dylan/binary< prev-obj x))
-                              (true? (dylan-call dylan/binary= prev-obj x)))
+                    (unless (true? (dylan-call dylan/binary< x prev-obj))
                       (return nil))
                     (setf prev-obj x))))))))
 
@@ -170,12 +170,10 @@
   (dylan%function->method
    at-least-two-objects
    (lambda (obj1 obj2 &rest rest-objs)
-     (bool (and (or (true? (dylan-call dylan/binary< obj1 obj2))
-                    (true? (dylan-call dylan/binary= obj1 obj2)))
+     (bool (and (false? (dylan-call dylan/binary< obj2 obj1))
                 (let ((prev-obj obj2))
                   (dolist (x rest-objs t)
-                    (unless (or (true? (dylan-call dylan/binary< prev-obj x))
-                                (true? (dylan-call dylan/binary= prev-obj x)))
+                    (when (true? (dylan-call dylan/binary< x prev-obj))
                       (return nil))
                     (setf prev-obj x))))))))
 

@@ -1163,4 +1163,27 @@ neg
   "(0.0 3.141592653589793 0.0 3.141592653589793 0.0 0.0 3.141592653589793 3.1415927s0 0.0s0 0.0 3.141592653589793)
 (3 2.5s0)
 ")
+
+ ;; Chapter 9: >, <= and the rest compare with binary< alone, with the
+ ;; arguments reordered; a partial order's incomparable objects are
+ ;; neither > nor <, and both <= and >=.
+ (compare-by-binary-less
+  "(define-class <ver> (<object>) (n init-keyword: n:))
+   (define-method binary< ((a <ver>) (b <ver>)) (< (n a) (n b)))
+   (define v1 (make <ver> n: 1))
+   (define v2 (make <ver> n: 2))
+   (print (list (<= v1 (make <ver> n: 1)) (<= v1 v2) (<= v2 v1) (> v2 v1) (> v1 v2) (> v1 (make <ver> n: 1))))
+   (print (list (<= v1 v1 v2) (<= v1 v2 v1) (> v2 v1 v1) (> (make <ver> n: 3) v2 v1)))
+   (define-class <set> (<object>) (bits init-keyword: bits:))
+   (define-method binary< ((a <set>) (b <set>))
+     (and (not (= (bits a) (bits b))) (= (logand (bits a) (bits b)) (bits a))))
+   (define a (make <set> bits: 1))
+   (define b (make <set> bits: 2))
+   (print (list (> a b) (< a b) (<= a b) (>= a b)))
+   (print (list (> 3 2 1) (> 3 3) (<= 1 1 2) (<= 2 1) (> #\\b #\\a) (<= #\\a #\\a)))"
+  "(#t #t #f #t #f #f)
+(#t #f #f #t)
+(#f #f #t #t)
+(#t #f #t #f #t #t)
+")
 )

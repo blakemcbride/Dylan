@@ -27,6 +27,14 @@ them. This choice, \term{method dispatch}, is how Dylan does
 object-oriented programming: behavior is attached to classes by defining
 methods on generic functions, not by putting functions inside classes.
 
+A method made with \code{method} (Section~\ref{sec:functions-method})
+belongs to no generic function, and none is made for it.
+\code{define-method} (Section~\ref{sec:functions-define-method}) is what
+joins the two: it makes a method and adds it to the generic function held
+in a module variable, creating that generic function if there is none. The
+generic function holds its methods, and one method can be in more than one
+generic function (Section~\ref{sec:functions-changing}).
+
 \begin{dylan}
 (define-method double ((thing <number>))
   (+ thing thing))
@@ -288,6 +296,20 @@ symbol, so only \code{price:} is accepted. A vector is a sequence, so both
 \code{price:} and \code{unit-price:} are. For a list the third method
 applies, and it has \code{\#rest}, so anything goes.
 
+The applicable methods also decide whether the arguments after the required
+ones must be keyword/value pairs. They must be if any applicable method has
+\code{\#key}, even when another has only \code{\#rest}; if none has
+\code{\#key}, they may be anything. (A generic function declared with
+\code{\#key} always requires pairs; Section~\ref{sec:functions-define-generic}.)
+
+\begin{dylan}
+(define-method mx ((a <object>) #rest r) r)
+(define-method mx ((a <integer>) #key x) (list x (next-method)))
+(mx 'sym 1 2)                  ; => (1 2)
+(mx 5 x: 3)                    ; => (3 (x: 3))
+(mx 5 1 2)                     ; => error: not keyword/value pairs
+\end{dylan}
+
 A method whose parameter list has \code{\#key} with no keywords after it
 accepts no keywords, as the rule says, though its arguments after the
 required ones must still be keyword/value pairs; both implementations
@@ -336,14 +358,23 @@ them have \code{\#rest} or \code{\#key} (or both), or none has either.
 Adding a method that is not congruent is an error, reported when compiling
 by the compiler to C.
 
+Nothing else has to agree. Each method has its own specializers, and they
+are what dispatch chooses among. The parameter names, the keywords named
+after \code{\#key}, and the next-method parameter may all differ from one
+method to another, except that a \code{define-generic-function} that names
+keys requires every method to accept them
+(Section~\ref{sec:functions-define-generic}).
+
 \begin{center}
 \begin{tabular}{@{}l@{}}
 \toprule
 Groups of congruent parameter lists \\
 \midrule
 \code{(a b)} \quad \code{(x y)} \\
-\code{(a b \#key)} \quad \code{(x y \#key foo)} \quad
-  \code{(a b \#rest l)} \quad \code{(a b \#rest l \#key quux)} \\
+\midrule
+\code{(a b \#key)} \quad \code{(x y \#key foo)} \quad \code{(a b \#key bar)} \\
+\quad \code{(a b \#rest l)} \quad \code{(a b \#rest l \#key quux)} \\
+\midrule
 \code{(a b c)} \quad \code{(d e f)} \\
 \bottomrule
 \end{tabular}
@@ -362,6 +393,13 @@ and, if the method has \code{\#rest} or \code{\#key}, a rest argument.
 \noindent A generic function with no required parameters can hold only one
 method, since all its methods have the same (empty) specializers; defining
 another replaces the first.
+
+\begin{notebox}
+Design note 21 later added result-type declarations: \code{\#values} at the
+end of a parameter list, with congruency rules for them between a generic
+function and its methods. Neither implementation supports them;
+\code{\#values} is a syntax error.
+\end{notebox}
 
 \section{Declaring generic functions: define-generic-function}\label{sec:functions-define-generic}
 
@@ -397,14 +435,33 @@ The meaning of giving both is unspecified.
 (function-arguments resize)    ; => 1, #f, (scale:)
 \end{dylan}
 
-\noindent When keys are listed, every method is meant to accept them, by
-naming them after \code{\#key} or by having \code{\#rest}. The Common Lisp
-implementation checks this when the method is added; the compiler to C does
-not.
+\noindent When keys are listed, every method must accept them, by naming
+them after \code{\#key} or by having \code{\#rest}.
+
+The methods may be defined before or after the declaration. If the variable
+already holds a generic function that \code{define-method} made, the
+declaration replaces the parameter list \code{define-method} gave it
+(Section~\ref{sec:functions-define-method}) and keeps its methods. Either
+way, every method must be congruent with the declaration and accept its
+keys, or it is an error. It is also an error if the variable holds something
+other than a generic function.
+
+\begin{dylan}
+(define-method tag (x #key color) (list x color))
+(define-generic-function tag (x #key color))
+(tag 'box color: 'red)         ; => (box red)
+(function-arguments tag)       ; => 1, #f, (color:)
+(define-method tint (x #key shade) shade)
+(define-generic-function tint (x #key hue))
+                               ; => error: the method does not accept hue:
+\end{dylan}
 
 The options are keyword/value pairs reserved by the manual for future use.
-Both implementations accept them and ignore them. In the compiler to C a
-generic function may be declared only once.
+Both implementations accept them and ignore them. In the Common Lisp
+implementation a generic function may be declared again, as when a file is
+loaded a second time, if the new declaration has the same number of
+required parameters, the same \code{\#rest} and the same keys; in the
+compiler to C it may be declared only once.
 
 \section{Specializers and singletons}\label{sec:functions-singletons}
 
@@ -729,6 +786,23 @@ generic function can change there anyway; it returns its argument.
 (double "ab")                  ; => "abab"
 (remove-method double m)       ; => {an anonymous method}
 (double "ab")                  ; => error: no applicable method
+\end{dylan}
+
+\noindent One method can be added to several generic functions. Each holds
+it independently, so removing it from one leaves it in the others:
+
+%! lisp-only
+\begin{dylan}
+(define dbl (method ((n <integer>)) (* n 2)))
+(define-generic-function scale (x))
+(define-generic-function enlarge (x))
+(add-method scale dbl)
+(add-method enlarge dbl)
+(scale 3)                      ; => 6
+(enlarge 4)                    ; => 8
+(remove-method scale dbl)
+(enlarge 5)                    ; => 10
+(scale 5)                      ; => error: no applicable method
 \end{dylan}
 
 \noindent A generic function can also be made with \code{make}, with the

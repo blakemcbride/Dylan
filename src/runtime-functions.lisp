@@ -70,6 +70,10 @@
           (keys (let ((keys (dylan%find-keyword rest :key?
                                                 (lambda () dylan%false))))
                   (and (true? keys) (or keys t)))))
+      (unless (and (integerp nrequired) (>= nrequired 0))
+        (dylan-call dylan/error
+                    "make: a <generic-function> needs required:, an integer not below 0"
+                    nrequired))
       (dylan%create-generic-function name nrequired keys rest?)))))
 
 ;;; Chapter 11: classes can be made with MAKE as well as DEFINE-CLASS.

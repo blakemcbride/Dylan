@@ -100,7 +100,20 @@
       (must-be-list-of-at-least-length protection 1
                                        "HANDLER-CASE: bad protection clause")
       (must-be-list-of-at-least-length (car protection) 1
-                                       "HANDLER-CASE: bad handler description"))
+                                       "HANDLER-CASE: bad handler description")
+      ;; Chapter 13: a clause's options are condition:, a variable, and
+      ;; test: and description:, as for handler-bind.
+      (let ((options (cdr (car protection))))
+        (unless (and (listp options) (null (cdr (cl:last options)))
+                     (evenp (length options))
+                     (loop for key in options by #'cddr always (keyword? key)))
+          (dylan%error "handler-case: bad keyword options" options))
+        (loop for (key value) on options by #'cddr
+              do (unless (member key '(:condition :test :description))
+                   (dylan%error "handler-case: unknown option" key))
+                 (when (and (eq key :condition) (not (variable-name? value)))
+                   (dylan%error "handler-case condition:: ~s is not a variable name"
+                                value)))))
     (funcall
      really-compile protected-form module-vars bound-vars multiple-values?
      (lambda (compiled-form module-vars)

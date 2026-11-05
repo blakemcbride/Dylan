@@ -215,6 +215,14 @@ the main body."
       (adjoin name module-vars #'member)
       module-vars))
 
+(defun check-names-once (form-name names)
+  "Signal an error, naming FORM-NAME, if one of the variable NAMES a form
+binds appears twice."
+  (loop for tail on names
+        when (member (car tail) (cdr tail) :test #'equal)
+          do (dylan%error (concatenate 'string form-name ": ~a appears twice")
+                          (car tail))))
+
 (defun must-be-unique (objects predicate error-string)
   (unless (unique? objects predicate)
     (dylan%error error-string (car objects) objects)))

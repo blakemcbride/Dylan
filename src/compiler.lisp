@@ -861,6 +861,7 @@ call, with the macro's name, as the compiler to C reports it."
   (must-be-list-of-at-least-length forms 2 "FOR-EACH: bad syntax")
   (dolist (binding (car forms))
     (must-be-list-of-length binding 2 "FOR-EACH: bad binding"))
+  (check-names-once "for-each" (mapcar #'car (car forms)))
   (let ((names (mapcar (lambda (binding) (variable->lexical (car binding)))
                        (car forms)))
         (collections (mapcar #'cadr (car forms)))

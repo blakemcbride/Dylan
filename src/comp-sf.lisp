@@ -155,9 +155,23 @@
 ;;; (otherwise) to be the default, so the expansion here is a COND over
 ;;; MEMBER instead, which compares with EQL -- Common Lisp's EQV?.
 
+(defun check-case-keys-once (clauses)
+  "Chapter 8: it is an error for a key to appear in more than one match
+list.  The keys are compared as case compares them, by id?; no two
+string literals are id?."
+  (let ((seen '()))
+    (dolist (clause clauses)
+      (when (and (consp clause) (consp (car clause))
+                 (null (cdr (cl:last (car clause)))))
+        (dolist (key (car clause))
+          (when (and (not (stringp key)) (member key seen :test #'eql))
+            (dylan%error "case: ~s appears in more than one match list" key))
+          (push key seen))))))
+
 (defun compile-case-form (e module-vars bound-vars compiler
                           multiple-values? continue)
   (must-be-list-of-at-least-length e 1 "CASE -- bad syntax")
+  (check-case-keys-once (cdr e))
   (let ((have-default? nil))
     (labels
         ((compile-clause (clause mod-vars continue)
@@ -287,6 +301,7 @@
     (when (or (not (and (listp bindings) (null (cdr (cl:last bindings)))))
               (not (all? (lambda (x) (list-of-length? x 3)) bindings)))
       (dylan%error "FOR -- illegal binding list" e))
+    (check-names-once "for" (mapcar #'car bindings))
     (let ((vars (mapcar (lambda (x)
                           (unless (variable-name? (car x))
                             (dylan%error "FOR -- illegal variable name" x e))

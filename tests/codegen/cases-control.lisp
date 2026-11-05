@@ -219,4 +219,51 @@ aborted
 (3)
 (1 2 3 #f)
 ")
+
+ ;; Chapter 8: it is an error for a case key to appear in more than one
+ ;; match list; no two strings are id?.
+ (case-key-twice
+  "(print (case 1 ((1 2) 'a) ((2 3) 'b)))"
+  ""
+  :compile-error "2 appears in more than one match list")
+ (case-strings-not-twice
+  "(print (case \"a\" ((\"a\" \"a\") 1) (else: 2)))"
+  "2
+")
+
+ ;; Chapter 13: a handler-case clause takes the options condition:, a
+ ;; variable, test: and description:, and no others.
+ (handler-case-options
+  "(print (handler-case (error \"x\")
+            ((<error> condition: c test: (method (c) #t) description: \"d\")
+             (condition-format-string c))))"
+  "\"x\"
+")
+ (handler-case-unknown-option
+  "(print (handler-case 1 ((<error> foo: 3) 2)))"
+  ""
+  :compile-error "handler-case: unknown option foo:")
+ (handler-case-odd-options
+  "(print (handler-case 1 ((<error> condition:) 2)))"
+  ""
+  :compile-error "handler-case: bad keyword options")
+ (handler-case-condition-not-a-variable
+  "(print (handler-case 1 ((<error> condition: 5) 2)))"
+  ""
+  :compile-error "5 is not a variable name")
+
+ ;; A for binds each variable once.
+ (for-variable-twice
+  "(for ((i 0 (+ i 1)) (i 0 (+ i 1))) ((> i 2)) (print i))"
+  ""
+  :compile-error "i appears twice")
+
+ ;; Chapter 10: make of a <generic-function> needs a count of required
+ ;; arguments.
+ (generic-function-required-count
+  "(print (function-arguments (make <generic-function> required: 2)))
+   (make <generic-function> required: -1)"
+  "2
+"
+  :error "needs required:, an integer not below 0")
 )

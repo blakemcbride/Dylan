@@ -1937,4 +1937,35 @@ error
 0
 (2.5 2.0 1.5 1.0)
 ")
+ ;; range's bounds and step must be real numbers and its size a
+ ;; non-negative integer, as make's size: must.
+ (range-arguments
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (size (range size: 1.5)))))
+(print (try (method () (size (range size: 5/2)))))
+(print (try (method () (size (range size: -1.5)))))
+(print (try (method () (size (range size: -1)))))
+(print (try (method () (range from: 'a size: 1))))
+(print (try (method () (range by: 'b))))
+(print (try (method () (range up-to: \"x\"))))
+(print (try (method () (range through: #\\a))))
+(print (try (method () (range from: #f))))
+(print (try (method () (size (range up-to: #f size: #f from: 2)))))
+(print (try (method () (size (range up-to: 5 size: 3)))))
+(print (try (method () (size (range size: 0)))))
+(print (try (method () (as <list> (range from: 1.5 by: 1/2 through: 3)))))"
+  "\"ERR: range: size: must be a non-negative integer: 1.5\"
+\"ERR: range: size: must be a non-negative integer: 5/2\"
+\"ERR: range: size: must be a non-negative integer: -1.5\"
+\"ERR: range: size: must be a non-negative integer: -1\"
+\"ERR: range: from: must be a real number: a\"
+\"ERR: range: by: must be a real number: b\"
+\"ERR: range: up-to: must be a real number: \\\"x\\\"\"
+\"ERR: range: through: must be a real number: #\\\\a\"
+\"ERR: range: from: must be a real number: #f\"
+#f
+3
+0
+(1.5 2.0 2.5 3.0)
+")
 )

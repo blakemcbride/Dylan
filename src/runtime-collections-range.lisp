@@ -376,6 +376,20 @@
 ;;; is not above it (through is an inclusive bound, as for any step).  The
 ;;; range is unbounded unless size is given or a bound admits nothing.
 
+;;; Each bound and the step a real number, and size, if given, a count.
+(defun check-range-arguments (rest)
+  (loop for (keyword name optional) in '((:from "from:" nil) (:up-to "up-to:" t)
+                                         (:through "through:" t) (:by "by:" nil))
+        do (let ((value (dylan%find-keyword rest keyword (lambda () 0))))
+             (unless (or (and optional (false? value))
+                         (true? (dylan-call dylan/instance? value <real>)))
+               (dylan-call dylan/error "range: ~a must be a real number: ~s"
+                           name value))))
+  (let ((size (false->nil (dylan%find-keyword rest :size (lambda () nil)))))
+    (when (and size (not (and (integerp size) (>= size 0))))
+      (dylan-call dylan/error "range: size: must be a non-negative integer: ~s"
+                  size))))
+
 (defun make-zero-step-range (rest)
   (let* ((from (dylan%find-keyword rest :from (lambda () 0)))
          (up-to (false->nil (dylan%find-keyword rest :up-to (lambda () nil))))
@@ -400,6 +414,7 @@
   (lambda (multiple-values next-method &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:by :through :from :up-to :size))
+    (check-range-arguments rest)
    (block range-zero-step
     (when (zerop (dylan%find-keyword rest :by (lambda () 1)))
       (return-from range-zero-step (make-zero-step-range rest)))

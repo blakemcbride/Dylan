@@ -986,7 +986,9 @@ A \code{<range>} is an arithmetic progression, computed rather than
 stored, and possibly unbounded. \code{range} makes one from keywords:
 \code{from:} (default 0) is the first value and \code{by:} (default 1)
 the step; \code{up-to:} is an exclusive bound, \code{through:} an
-inclusive one, and \code{size:} a number of elements. With none of the
+inclusive one, and \code{size:} a number of elements. Each bound and the
+step must be a real number, and \code{size:} a non-negative integer, or
+\code{range} signals an error. With none of the
 last three the range is unbounded. A negative \code{by:} makes a range
 that runs downward, with the bounds below it. With \code{by:} 0 every
 element is \code{from:}, so \code{up-to:} or \code{through:} leaves the

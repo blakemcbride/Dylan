@@ -21,6 +21,16 @@ module: dylan
 (define-generic-function range (#key from up-to through by size))
 
 (define-method range (#key (from 0) up-to through (by 1) size)
+  ;; Each bound and the step a real number, and size, if given, a count.
+  (bind-methods ((check (name value optional?)
+                   (unless (or (and optional? (not value)) (%instance? value <real>))
+                     (error "range: ~a must be a real number: ~s" name value))))
+    (check "from:" from #f)
+    (check "up-to:" up-to #t)
+    (check "through:" through #t)
+    (check "by:" by #f))
+  (unless (or (not size) (and (%instance? size <integer>) (not (negative? size))))
+    (error "range: size: must be a non-negative integer: ~s" size))
   (bind ((count size))
     (bind-methods ((limit (n) (when (or (not count) (binary< n count)) (set! count n))))
       ;; With by: 0 every value is FROM: the range is unbounded if FROM is

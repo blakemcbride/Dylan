@@ -1186,4 +1186,37 @@ neg
 (#f #f #t #t)
 (#t #f #t #f #t #t)
 ")
+
+ ;; Chapter 12: the default sequence functions work on a program's own
+ ;; sequence classes through the iteration protocol, answering instances
+ ;; of the class-for-copy: one the class names, or a <mutable-sequence>
+ ;; of its own, made by make with size: and filled in order.
+ (own-sequence-classes
+  "(define-class <trio> (<sequence>) (a init-keyword: a:) (b init-keyword: b:) (c init-keyword: c:))
+   (define-method initial-state ((t <trio>)) 0)
+   (define-method next-state ((t <trio>) s) (if (< s 2) (+ s 1) #f))
+   (define-method current-element ((t <trio>) s) (select s id? ((0) (a t)) ((1) (b t)) ((2) (c t))))
+   (define-method class-for-copy ((t <trio>)) <vector>)
+   (define tr (make <trio> a: 3 b: 1 c: 2))
+   (print (list (reverse tr) (sort tr) (map (method (x) (* x 10)) tr) (concatenate tr '(4))))
+   (print (list (copy-sequence tr) (add tr 0) (remove tr 1) (choose odd? tr) (union tr '(5))))
+   (define-class <box> (<mutable-sequence>) (items init-keyword: items: init-value: (vector)))
+   (define-method make ((c (singleton <box>)) #key (size 0) (fill #f))
+     (next-method c items: (make <vector> size: size fill: fill)))
+   (define-method initial-state ((b <box>)) (if (empty? (items b)) #f 0))
+   (define-method next-state ((b <box>) s) (if (< (+ s 1) (size (items b))) (+ s 1) #f))
+   (define-method current-element ((b <box>) s) (element (items b) s))
+   (define-method (setter current-element) ((b <box>) s v) (set! (element (items b) s) v))
+   (define-method element ((b <box>) k #key default) (element (items b) k))
+   (define-method (setter element) ((b <box>) k v) (set! (element (items b) k) v))
+   (define-method size ((b <box>)) (size (items b)))
+   (define bx (as <box> '(3 1 2)))
+   (define show (method (x) (if (instance? x <box>) (items x) (list 'not-a-box x))))
+   (print (map show (list (reverse bx) (sort bx) (map (method (x) (* x 10)) bx) (concatenate bx '(4)))))
+   (print (map show (list (copy-sequence bx) (add bx 0) (remove bx 1) (choose odd? bx))))"
+  "(#(2 1 3) #(1 2 3) #(30 10 20) #(3 1 2 4))
+(#(3 1 2) #(0 3 1 2) #(3 2) #(3 1) #(3 1 2 5))
+(#(2 1 3) #(1 2 3) #(30 10 20) #(3 1 2 4))
+(#(3 1 2) #(0 3 1 2) #(3 2) #(3 1))
+")
 )

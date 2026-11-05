@@ -149,6 +149,30 @@
     (declare (ignore class))
     (dylan-call dylan/as <vector> collection))))
 
+(add-method
+ dylan/as
+ ;; A sequence of any other class -- a program's own <mutable-sequence> --
+ ;; is made by make with size:, and its elements set in their natural
+ ;; order, as the compiled library does.  Chapter 12: the default sequence
+ ;; functions answer an instance of the class-for-copy, which comes here.
+ (dylan%function->method
+  (make-param-list `((class ,<class>) (collection ,<collection>)) nil nil nil)
+  (lambda (class collection)
+    (cond ((true? (dylan-call dylan/instance? collection class)) collection)
+          ((subclass? class <sequence>)
+           (let* ((elements (iterate->list #'identity collection))
+                  (result (dylan-call dylan/make class :size (length elements)))
+                  (state (initial-state result)))
+             (loop while (and state elements)
+                   do (set-current-element result state (pop elements))
+                      (setf state (next-state result state)))
+             (when elements             ; It made too few places: <empty-list>
+               (dylan-call dylan/error "as -- not specialized for this class type"
+                           class collection))
+             result))
+          (t (dylan-call dylan/error "as -- not specialized for this class type"
+                         class collection))))))
+
 ;;;;
 ;;;; FUNCTIONS FOR COLLECTIONS (page 99)
 ;;;;

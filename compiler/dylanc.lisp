@@ -125,19 +125,23 @@ Options:
                     (compile-files files c-file))))
     (unless c-files (sb-ext:exit :code 1 :abort t))
     (unless (getf options :c-only)
-      (let ((ok (build-c c-files output
-                         :trampoline (getf options :trampoline)
-                         :cc (getf options :cc)
-                         :optimize (getf options :optimize)
-                         :size (getf options :size)
-                         :debug (getf options :debug)
-                         :variant variant
-                         :lto (getf options :lto))))
+      (let ((ok (handler-case
+                    (build-c c-files output
+                             :trampoline (getf options :trampoline)
+                             :cc (getf options :cc)
+                             :optimize (getf options :optimize)
+                             :size (getf options :size)
+                             :debug (getf options :debug)
+                             :variant variant
+                             :lto (getf options :lto))
+                  (build-failure (e)
+                    (format *error-output* "dylanc: ~a.~%" e)
+                    :reported))))
         (unless (getf options :keep)
           (dolist (f (cons (header-pathname c-file) c-files))
             (when (probe-file f) (delete-file f))))
-        (unless ok
-          (format *error-output* "dylanc: the C compiler failed.~%")
+        (unless (eq ok t)
+          (unless ok (format *error-output* "dylanc: the C compiler failed.~%"))
           (sb-ext:exit :code 1 :abort t))))
     (finish-output)
     (sb-ext:exit :code 0)))

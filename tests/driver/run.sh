@@ -133,6 +133,11 @@ check "a name with * ? [" "$dylanc" -k greet.dyl 'w??!*[1].dyl' -o 'w??!*[1]'
 check "it runs" output_is "$expected" './w??!*[1]'
 "$dylanc" 'none??.dyl' >/dev/null 2>&1; status=$?
 check "a missing file with ? in its name: status 2" test "$status" = 2
+# A C compiler that is not there is reported, not a Lisp backtrace
+"$dylanc" --cc no-such-cc -o nocc greet.dyl main.dyl >nocc.out 2>&1; status=$?
+check "no C compiler: status 1" test "$status" = 1
+check "no C compiler: reported plainly" sh -c '! grep -q Backtrace nocc.out && grep -q "the C compiler failed" nocc.out'
+check "no C compiler: no C left" test ! -e nocc.c -a ! -e nocc.h
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

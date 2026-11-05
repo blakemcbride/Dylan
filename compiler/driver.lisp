@@ -52,11 +52,16 @@ PROGRAM.  Answer the list of C files, or NIL after reporting why not."
   (compile-program (front-end files :library t) c-file))
 
 (defun run (program arguments)
-  "Run PROGRAM; answer its exit code.  Its output goes to ours."
-  (sb-ext:process-exit-code
-   (sb-ext:run-program program arguments :search t
-                                         :output *standard-output*
-                                         :error *error-output*)))
+  "Run PROGRAM; answer its exit code.  Its output goes to ours.  A program
+that cannot be run is reported, and answers 127, as the shell's would."
+  (handler-case
+      (sb-ext:process-exit-code
+       (sb-ext:run-program program arguments :search t
+                                             :output *standard-output*
+                                             :error *error-output*))
+    (error (e)
+      (format *error-output* "dylanc: ~a~%" e)
+      127)))
 
 (defvar *gc*
   (if (equal (sb-ext:posix-getenv "DYLAN_GC") "boehm") :boehm :mps)
@@ -93,6 +98,12 @@ ThreadSanitizer.")
 (defparameter *lto-flags* "-O2 -g -flto"
   "The C flags of the runtime library for link-time optimization.")
 
+(define-condition build-failure (error)
+  ((message :initarg :message :reader build-failure-message))
+  (:report (lambda (c stream) (write-string (build-failure-message c) stream)))
+  (:documentation "A part of the build that is not the program failed, as
+the runtime library's: dylanc reports it plainly."))
+
 (defun runtime-library (trampoline &key variant (cc "cc") lto)
   "The runtime library's pathname, made if it does not exist or is out of
 date.  A VARIANT, or the library for link-time optimization (LTO), or one
@@ -117,7 +128,7 @@ program must be compiled with too."
                                        (format nil "CC=~a" cc)))
                             (list target))))
     (unless (zerop (run "make" arguments))
-      (error "Could not make the runtime library."))
+      (error 'build-failure :message "could not make the runtime library"))
     (merge-pathnames target *runtime-directory*)))
 
 (defun build (files executable &key trampoline (cc "cc") (optimize "-O2") size debug variant

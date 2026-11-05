@@ -1264,4 +1264,34 @@ error
   "((4.0s0 {the class <single-float>}) (4.0s0 {the class <single-float>}) (1.4142135s0 {the class <single-float>}) (2.0 {the class <double-float>}) (1.4142135623730951 {the class <double-float>}) (1/4 {the class <ratio>}))
 ((0.7853982s0 {the class <single-float>}) (0.7853982s0 {the class <single-float>}) (0.7853981633974483 {the class <double-float>}) (0.7853981633974483 {the class <double-float>}))
 ")
+
+ ;; Lists and arrays.  An improper list has no size: design note 16 makes
+ ;; it a <type-error>, of the tail; a circular one's is #f.  find-pair
+ ;; passes over an element that is not a pair.  <pair> is not
+ ;; instantiable (chapter 12).  An array of no dimensions has one element.
+ (lists-and-arrays
+  "(define try (method (f) (handler-case (f) ((<type-error> condition: c) (list 'type-error (type-error-value c))) ((<error>) 'error))))
+   (print (map (method (l) (try (method () (size l)))) (list '(1 . 2) '(1 2 . 3) '(1 2 3 . 4) '() '(1) '(1 2 3))))
+   (define c (list 1 2 3))
+   (set! (cdr (cddr c)) c)
+   (print (size c))
+   (print (list (find-pair 'b '(() (b . 2))) (find-pair 'c '((a . 1) () (b . 2)))
+                (try (method () (find-pair 'c '((a . 1) 5 (b . 2)))))))
+   (print (list (try (method () (make <pair>))) (try (method () (make <pair> size: 2))) (make <list> size: 2)))
+   (define a (make <array> dimensions: '() fill: 7))
+   (print a)
+   (print (list (dimensions a) (size a) (aref a)))
+   (set! (aref a) 8)
+   (print (list (aref a) (as <list> a) (key-sequence a) (map (method (x) (* x 2)) a)))
+   (for-each ((x a)) () (set! (aref a) (+ x 1)))
+   (print (list (aref a) (empty? a) (try (method () (aref a 0))) (try (method () (element a 0)))))"
+  "((type-error 2) (type-error 3) (type-error 4) 0 1 3)
+#f
+((b . 2) #f error)
+(error error (#f #f))
+{<array> 7}
+(() 1 7)
+(8 (8) (#()) {<array> 16})
+(9 #f error error)
+")
 )

@@ -172,9 +172,11 @@ simple object vector."
   (lambda (multiple-values next-method class &rest rest)
     (declare (ignore multiple-values))
     (labels ((make-multi-dimensional-array (dimensions fill)
+               ;; An array of no dimensions has one element, kept in a
+               ;; vector of one (see LOCATE-ARRAY-ELEMENT).
                (when (null dimensions)
-                 (dylan-call dylan/error
-                             "make -- 0-dimensional arrays not allowed"))
+                 (return-from make-multi-dimensional-array
+                   (make-array 1 :initial-element fill)))
                (let ((result (make-array (car dimensions)
                                          :initial-element fill)))
                  (if (null (cdr dimensions))
@@ -234,6 +236,8 @@ wrong number or out of bounds (chapter 12)."
                        (and (integerp index) (< -1 index dimension)))
                      indices dimensions)
            (funcall fail "subscript out of range"))
+          ((null indices)               ; No dimensions: the one element
+           (values (dylan-call dylan/get-array-value array-instance) 0))
           (t (let ((row (dylan-call dylan/get-array-value array-instance)))
                (dolist (index (butlast indices))
                  (setf row (aref row index)))
@@ -321,11 +325,13 @@ wrong number or out of bounds (chapter 12)."
  (dylan%function->method
   (make-param-list `((array ,<array>) (state ,<object>) (new-value ,<object>))
                    nil nil nil)
+  ;; The state is the element's subscripts, which may be none.
   (lambda (array state new-value)
-    (loop with vectors = (dylan-call dylan/get-array-value array)
-          with state-list = (coerce state 'list)
-          do (if (= (length state-list) 1)
-                 (progn (setf (aref vectors (car state-list)) new-value)
-                        (return new-value))
-                 (progn (setf vectors (aref vectors (car state-list)))
-                        (pop state-list)))))))
+    (multiple-value-bind (row index)
+        (locate-array-element
+         array (coerce state 'list)
+         (lambda (message)
+           (dylan-call dylan/error
+                       (concatenate 'string "(setter current-element) -- " message)
+                       array state)))
+      (setf (aref row index) new-value)))))

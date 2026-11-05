@@ -133,9 +133,9 @@ no particular order.
 \index{class-for-copy}
 \code{class-for-copy} answers the class used when a function such as
 \code{map} or \code{reverse} makes a new collection like an existing
-one. For most collections it is the collection's own class; a range,
-which is not mutable, answers \code{<list>}, and a string answers
-\code{<byte-string>}. A collection class that is not mutable must define
+one. For most collections it is the collection's own class; a list,
+of either subclass, and a range, which is not mutable, answer
+\code{<list>}, and a string answers \code{<byte-string>}. A collection class that is not mutable must define
 a method for it (section~\ref{sec:collections-own}).
 
 \section{The iteration protocol}\label{sec:collections-iteration}

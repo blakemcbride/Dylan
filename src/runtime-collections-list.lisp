@@ -105,21 +105,16 @@
       (make-list size :initial-element fill)))))
 
 ;;;
-;;; PAIR SPECIALIZED MAKE
+;;; <pair> is not instantiable (chapter 12 lists <list> among the
+;;; instantiable collection classes, not <pair>): pairs are made by cons.
 ;;;
 (add-method
  dylan/make
- (dylan%dylan-callable->method
-  (make-param-list `((pair ,(dylan%make-singleton <pair>)))
-                   nil nil '(:size :fill))
-  (lambda (multiple-values next-method class &rest rest)
-    (declare (ignore multiple-values class))
-    (dylan%keyword-validate next-method rest '(:size :fill))
-    (let ((size (dylan%find-keyword rest :size (lambda () 0)))
-          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
-      (when (or (not (integerp size)) (minusp size))
-        (dylan-call dylan/error "make -- list size invalid" size))
-      (make-list size :initial-element fill)))))
+ (dylan%function->method
+  (make-param-list `((pair ,(dylan%make-singleton <pair>))) nil nil :any)
+  (lambda (class &rest rest)
+    (declare (ignore rest))
+    (dylan-call dylan/error "cannot make an instance of this class:" class))))
 
 ;;;
 ;;; EMPTY-LIST SPECIALIZED MAKE
@@ -137,12 +132,27 @@
 ;;;
 ;;; FUNCTIONS FOR COLLECTIONS (page 99)
 ;;;
+
+;;; A list's copies are lists, of either subclass: <list> is the
+;;; instantiable class (chapter 12), as the compiled library has it.
+(add-method dylan/class-for-copy
+            (one-arg 'list <list> (lambda (list) (declare (ignore list)) <list>)))
+
 (add-method
  dylan/size
  (one-arg 'list <list>
+          ;; #f for a circular list.  An improper list has no size;
+          ;; design note 16 makes it a <type-error>, of the tail that is
+          ;; not a list.
           (lambda (list)
             (let ((length (dylan-list-length list)))
-              (if (= length -1) dylan%false length)))))
+              (cond ((= length -1) dylan%false)
+                    ((cdr (cl:last list))
+                     (dylan-call dylan/error
+                                 (dylan-call dylan/make <type-error>
+                                             :value (cdr (cl:last list))
+                                             :type <list>)))
+                    (t length))))))
 
 (add-method dylan/size
             (one-arg 'pair <empty-list>
@@ -296,9 +306,12 @@
             do (cond ((null rest-list) (return dylan%false))
                      ;; N.B. the Scheme tested (car LIST) rather than
                      ;; (car REST-LIST) here; fixed.
+                     ;; An empty list is passed over, as by the compiled
+                     ;; library and Common Lisp's ASSOC; any other element
+                     ;; not a pair is an error.
+                     ((null (car rest-list)))
                      ((not (consp (car rest-list)))
-                      (return (dylan-call dylan/error
-                                          "find-pair -- list element not a pair"
+                      (return (dylan-call dylan/error "find-pair: ~s is not a list"
                                           (car rest-list))))
                      ((true? (dylan-call test-fn item (caar rest-list)))
                       (return (car rest-list)))))))))

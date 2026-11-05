@@ -15,11 +15,14 @@ module: dylan
 
 (define-method class-for-copy ((l <list>)) <list>)
 
-;;; size: #f for a circular list (tortoise and hare)
+;;; size: #f for a circular list (tortoise and hare).  An improper list
+;;; has no size; design note 16 makes it a <type-error>, of the tail that
+;;; is not a list.
 (define-method size ((l <list>))
-  (bind-methods ((loop (slow fast n)
-                   (cond ((not (%pair? fast)) n)
-                         ((not (%pair? (cdr fast))) (binary+ n 1))
+  (bind-methods ((end (tail n) (if (id? tail '()) n (%runtime-type-error tail <list>)))
+                 (loop (slow fast n)
+                   (cond ((not (%pair? fast)) (end fast n))
+                         ((not (%pair? (cdr fast))) (end (cdr fast) (binary+ n 1)))
                          ((and (binary< 0 n) (id? (cdr (cdr fast)) (cdr slow))) #f)
                          (else: (loop (cdr slow) (cdr (cdr fast)) (binary+ n 2))))))
     (if (%pair? l)

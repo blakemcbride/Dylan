@@ -291,7 +291,7 @@
               (compile-forms
                steps module-vars inner-bound compiler nil
                (lambda (step-code module-vars)
-                 (compile-forms
+                 (compile-end-test
                   end-test module-vars inner-bound compiler multiple-values?
                   (lambda (end-code module-vars)
                     ;; Scheme's DO, which makes fresh bindings for each

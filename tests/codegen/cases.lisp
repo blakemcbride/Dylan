@@ -287,4 +287,31 @@ w
 no
 other
 ")
+
+ ;; Chapter 8: the end test of for and for-each is one value, even with no
+ ;; result forms after it, and the last result form gives the values.
+ (end-test-values
+  "(define-method done? (i) (values (> i 3) i))
+   (for ((i 0 (+ i 1))) ((done? i)) (print i))
+   (for-each ((x '(1 2 3 4 5))) ((done? x)) (print x))
+   (define-method f () (for ((i 0 (+ i 1))) ((done? i))))
+   (bind ((#rest r (f))) (print r))
+   (define-method g () (for ((i 0 (+ i 1))) ((done? i) (values 'a 'b))))
+   (bind ((#rest r (g))) (print r))
+   (define-method h () (for-each ((x '(1 2 3 4 5))) ((done? x) (values 'c x))))
+   (bind ((#rest r (h))) (print r))
+   (define-method k () (for-each ((x '(1 2 3 4 5))) ((done? x))))
+   (bind ((#rest r (k))) (print r))"
+  "0
+1
+2
+3
+1
+2
+3
+(#f)
+(a b)
+(c 4)
+(#f)
+")
 )

@@ -486,6 +486,22 @@ module its header names (design note 33), or DYLAN-USER."
 ;;; ASSUMPTION: multiple-values?, if not NIL, is to be used only for
 ;;; compiling the last of the forms.
 
+(defun compile-end-test (end-test module-vars bound-vars really-compile
+                         multiple-values? continue)
+  "Compile END-TEST, a for or for-each's (test result ...), and call
+CONTINUE with the list of their codes and the module variables.  The test
+answers one value whatever the context, even with no result forms after
+it; the last result form delivers MULTIPLE-VALUES?."
+  (if (null end-test)
+      (funcall continue '() module-vars)
+      (funcall really-compile (car end-test) module-vars bound-vars nil
+               (lambda (test-code module-vars)
+                 (compile-forms (cdr end-test) module-vars bound-vars
+                                really-compile multiple-values?
+                                (lambda (result-codes module-vars)
+                                  (funcall continue (cons test-code result-codes)
+                                           module-vars)))))))
+
 (defun compile-forms (forms module-vars bound-vars really-compile
                       multiple-values? continue)
   (labels ((walk (result forms mod-vars)
@@ -853,7 +869,7 @@ call, with the macro's name, as the compiler to C reports it."
     (compile-forms
      collections module-vars bound-vars really-compile nil
      (lambda (compiled-collections module-vars)
-       (compile-forms
+       (compile-end-test
         (if (null end-test-and-return-vals)
             (list dylan%false)
             end-test-and-return-vals)

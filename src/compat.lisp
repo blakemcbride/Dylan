@@ -1361,9 +1361,12 @@ for the Lisp handlers to have back if no Dylan handler takes it."
   "Evaluate the list of compiled top-level FORMS, returning the last value.
 Compiled Dylan binds more variables than it always uses -- the two extra
 arguments of the Dylan calling convention, for one -- so the style warnings
-the host compiler would produce for it are muffled."
+the host compiler would produce for it are muffled.  So is the host's
+warning that a literal is changed: a Dylan program may change one, and
+the warning is not the program's output."
   (let ((result nil))
-    (handler-bind ((style-warning #'muffle-warning))
+    (handler-bind ((style-warning #'muffle-warning)
+                   #+sbcl (sb-int:constant-modified #'muffle-warning))
       (dolist (form forms result)
         (setf result (eval form))))))
 

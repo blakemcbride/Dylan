@@ -5,8 +5,12 @@
 ;;;;
 ;;;; A CDATA collects definitions as constants are asked for; C-CONSTANT
 ;;;; answers a C expression of type D for a Dylan constant, defining static
-;;;; objects for it as needed.  Equal constants are one object, named for
-;;;; what it holds (CONTENT-NAME); a symbol (or keyword) is defined once
+;;;; objects for it as needed.  A literal string, list or vector of the
+;;;; program is its own object, as reading it makes it in the interactive
+;;;; implementation -- one for each place the program writes it, however
+;;;; often that runs -- named for what it holds and where it was written;
+;;;; equal constants of the compiler's own are one object, named for what
+;;;; they hold (CONTENT-NAME); a symbol (or keyword) is defined once
 ;;;; whatever the case it is written in, with the spelling it first had,
 ;;;; and every one is listed in dy_static_symbols for the runtime to intern
 ;;;; when it starts.
@@ -99,8 +103,19 @@ begin a trigraph."
 
 ;;; Constants
 
-(defun c-constant (data value)
-  "A C expression of type D for the Dylan constant VALUE."
+(defvar *literal-keys* nil
+  "An EQ table: each string, list and vector the program's source holds ->
+where it was written, \"file:index\"; or NIL.")
+
+(defun literal-key (object inherited)
+  "The key that makes OBJECT its own constant: where it was written, or,
+for a part of a literal that has no place of its own (a list's tail),
+INHERITED, made from the literal's."
+  (or (and *literal-keys* (gethash object *literal-keys*)) inherited))
+
+(defun c-constant (data value &optional key)
+  "A C expression of type D for the Dylan constant VALUE.  KEY: as for
+LITERAL-KEY."
   (cond ((integerp value)
          (check-type value (integer #.(- (expt 2 62)) #.(1- (expt 2 62))))
          (format nil "DY_INT(~d)" value))
@@ -108,14 +123,18 @@ begin a trigraph."
         ((eq value t) "DY_TRUE")
         ((eq value dylan::dylan%false) "DY_FALSE")
         ((null value) "DY_EMPTY")
-        ((stringp value) (address (c-string data value)))
+        ((stringp value) (address (c-string data value (literal-key value key))))
         ((keywordp value)
          (address (c-symbol data (dylan::dylan-symbol->string value) :keyword)))
         ((symbolp value)
          (address (c-symbol data (dylan::dylan-symbol->string value) :symbol)))
-        ((consp value) (address (c-pair data value)))
-        ((vectorp value) (address (c-vector data (map 'list (lambda (x) (c-constant data x))
-                                                      value))))
+        ((consp value) (address (c-pair data value (literal-key value key))))
+        ((vectorp value)
+         (let ((key (literal-key value key)))
+           (address (c-vector data (loop for x across value
+                                         for i from 0
+                                         collect (c-constant data x (and key (format nil "~a.~d" key i))))
+                              key))))
         ((typep value 'ratio)
          (multiple-value-bind (name old)
              (content-name data "dy_ratio_" (format nil "~d/~d" (numerator value) (denominator value)))
@@ -139,13 +158,15 @@ begin a trigraph."
            (address name)))
         (t (error "No C representation for the constant ~s." value))))
 
-(defun c-string (data string)
+(defun c-string (data string &optional key)
   "The C name of a static string object holding STRING: a <byte-string>
-if every character fits in a byte, else a <unicode-string>."
-  (or (gethash string (cdata-strings data))
-      (setf (gethash string (cdata-strings data))
+if every character fits in a byte, else a <unicode-string>.  KEY, if not
+NIL, makes it the object of the literal written there."
+  (or (gethash (cons string key) (cdata-strings data))
+      (setf (gethash (cons string key) (cdata-strings data))
             (let* ((codes (map 'list #'char-code string))
-                   (name (content-name data "dy_string_" (format nil "~{~d~^ ~}" codes))))
+                   (name (content-name data "dy_string_"
+                                       (format nil "~{~d~^ ~}~@[ @~a~]" codes key))))
               (if (every (lambda (c) (< c 256)) codes)
                   (define-c data "static struct { DyWrapper *wrapper; D size; char data[~d]; } ~a =~%  { &dy_wrapper_byte_string, DY_INT(~d), ~a };"
                             (1+ (length codes)) name (length codes)
@@ -178,20 +199,24 @@ named SPELLING."
                 (push name (cdata-symbol-list data))
                 name)))))
 
-(defun c-pair (data list)
-  "The C name of a static pair holding LIST.  Equal literal lists are one
-object."
-  (let ((head (c-constant data (car list)))
-        (tail (c-constant data (cdr list))))
-    (multiple-value-bind (name old) (content-name data "dy_pair_" (format nil "~a ~a" head tail))
+(defun c-pair (data list &optional key)
+  "The C name of a static pair holding LIST.  KEY, if not NIL, makes it
+the object of the literal written there; equal lists of the compiler's own
+are one object."
+  (let ((head (c-constant data (car list) (and key (format nil "~a.a" key))))
+        (tail (c-constant data (cdr list) (and key (format nil "~a.d" key)))))
+    (multiple-value-bind (name old) (content-name data "dy_pair_"
+                                                  (format nil "~a ~a~@[ @~a~]" head tail key))
       (unless old
         (define-c data "static DyPair ~a = { &dy_wrapper_pair, ~a, ~a };" name head tail))
       name)))
 
-(defun c-vector (data elements)
+(defun c-vector (data elements &optional key)
   "The C name of a static <simple-object-vector> of ELEMENTS, C
-expressions.  Equal ones are one object."
-  (multiple-value-bind (name old) (content-name data "dy_vector_" (format nil "~{~a~^ ~}" elements))
+expressions.  KEY, if not NIL, makes it the object of the literal written
+there; equal ones of the compiler's own are one object."
+  (multiple-value-bind (name old) (content-name data "dy_vector_"
+                                                (format nil "~{~a~^ ~}~@[ @~a~]" elements key))
     (unless old
       (define-c data "static struct { DyWrapper *wrapper; D size; D data[~d]; } ~a =~%  { &dy_wrapper_simple_object_vector, DY_INT(~d), { ~{~a~^, ~} } };"
                 (max 1 (length elements)) name (length elements) elements))

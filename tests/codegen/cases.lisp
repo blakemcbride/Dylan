@@ -256,4 +256,35 @@ w
 |q??!|
 11
 ")
+
+ ;; Each literal the program writes is its own object, as reading it makes
+ ;; one: equal literals in two places are two objects; one place is one
+ ;; object however often it runs.
+ (literal-identity
+  "(define a \"abc\") (define b \"abc\")
+   (set! (element a 0) #\\x)
+   (format #t \"~s ~s~%\" a b)
+   (define la '(1 2 3)) (define lb '(9 2 3))
+   (set! (car (cdr la)) 'x)
+   (print (list la lb))
+   (define va #(1 \"s\" (2))) (define vb #(1 \"s\" (2)))
+   (set! (element va 0) 'q)
+   (print (list va vb))
+   (print (id? \"a\" \"a\"))
+   (define-method lit () \"x\")
+   (define-method f1 () (lit))
+   (define-method f2 () (lit))
+   (print (id? (f1) (f2)))
+   (print (case '(1) (((1)) 'yes) (else: 'no)))
+   (define-method s ((x (singleton \"s\"))) 'single)
+   (define-method s (x) 'other)
+   (print (s \"s\"))"
+  "\"xbc\" \"abc\"
+((1 x 3) (9 2 3))
+(#(q \"s\" (2)) #(1 \"s\" (2)))
+#f
+#t
+no
+other
+")
 )

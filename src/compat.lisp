@@ -997,16 +997,16 @@ introduces the tail of a dotted list."
 
 (defvar *dylan-source-positions* nil
   "When an EQ hash table, the reader records in it the stream position at
-which each list and vector it reads began.  The Dylan-to-C compiler uses
-this to report errors by file and line.")
+which each list, vector and string it reads began.  The Dylan-to-C
+compiler uses this to report errors by file and line, and to make each
+literal its own object, as reading it here does.")
 
 (defun read-dylan-object (stream)
   (if *dylan-source-positions*
       (let* ((ch (skip-dylan-whitespace stream))
              (start (and ch (file-position stream)))
              (object (read-dylan-object-1 stream)))
-        (when (and start (or (consp object)
-                             (and (vectorp object) (not (stringp object)))))
+        (when (and start (or (consp object) (vectorp object)))
           (setf (gethash object *dylan-source-positions*) start))
         object)
       (read-dylan-object-1 stream)))

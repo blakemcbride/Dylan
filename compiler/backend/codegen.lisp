@@ -1110,6 +1110,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (dylan::*symbol-spellings* (or (program-spellings (ir-program-source ir))
                                        dylan::*symbol-spellings*))
         (*symbol-forms* (program-symbol-forms (ir-program-source ir)))
+        (*literal-keys* (program-literal-keys (ir-program-source ir)))
         (*let-values* (make-hash-table :test #'eq))
         (*global-definitions* (make-hash-table :test #'eq))
         (*assigned-globals* (make-hash-table :test #'eq))

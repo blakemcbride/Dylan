@@ -72,6 +72,19 @@ STARTS.  Answer the last number given."
     (setf (gethash file starts) (coerce (nreverse positions) 'vector))
     number))
 
+(defun program-literal-keys (program)
+  "An EQ table: each string, list and vector read from PROGRAM's sources
+-> \"file:index\", where it was written."
+  (let ((keys (make-hash-table :test #'eq)))
+    (dolist (unit (program-units program))
+      (let ((file (unit-file unit)))
+        (when file
+          (maphash (lambda (object index)
+                     (setf (gethash object keys)
+                           (format nil "~a:~d" (source-file-name file) index)))
+                   (source-file-positions file)))))
+    keys))
+
 (defun location-form-number (program location)
   "The number of the top-level form LOCATION is in, or NIL."
   (let ((starts (and location (program-form-starts program)

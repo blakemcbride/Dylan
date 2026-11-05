@@ -721,4 +721,35 @@ found
   ""
   :error "integer overflow"
   :compiler-only t)
+
+ ;; Chapter 14, float contagion as in Common Lisp: a rational is converted
+ ;; to the float's format, rounded once, and the operation is done in that
+ ;; format.  floor/ and the rest divide in it, and take the remainder by
+ ;; the same contagion.
+ (float-contagion
+  "(print (- 1/3 1.0s0))
+   (print (+ 1.0s0 16777217))
+   (print (+ 2/3 0.5s0))
+   (print (as <double-float> (/ (+ (ash 1 61) 255) (- (ash 1 61) 1))))
+   (print (as <single-float> (+ (ash 1 60) (ash 1 36) 1)))
+   (print (as <single-float> 1/3))
+   (print (/ 2/3 3.0s0))
+   (bind ((q r (floor/ 7/3 0.5s0))) (print (list q r)))
+   (bind ((q r (floor/ -0.0 1))) (print (list q r)))
+   (bind ((q r (round/ 2.5 1))) (print (list q r)))
+   (bind ((q r (truncate/ -7.5s0 2))) (print (list q r)))
+   (print (modulo 7/3 0.5s0))"
+  "-0.6666666s0
+16777216.0s0
+1.1666667s0
+1.0000000000000002
+1.1529216s18
+0.33333334s0
+0.22222222s0
+(4 0.33333325s0)
+(0 -0.0)
+(2 0.5)
+(-3 -1.5s0)
+0.33333325s0
+")
 )

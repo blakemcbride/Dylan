@@ -694,7 +694,8 @@ D dy_make_ratio(D numerator, D denominator);    /* canonicalized */
 D dy_make_single_float(float value);
 D dy_make_double_float(double value);
 D dy_make_extended_float(double value);
-double dy_float_value(D x);                     /* any float */
+double dy_float_value(D x);                     /* any real, as a double */
+float dy_single_value(D x);                     /* any real, as a single-float */
 
 D dy_add(D a, D b);
 D dy_sub(D a, D b);

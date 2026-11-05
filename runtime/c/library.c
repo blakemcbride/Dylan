@@ -103,14 +103,18 @@ PRIMITIVE(divide) {
         }
         return two_values(q, dy_sub(a, dy_mul(q, b)));
     }
-    double x = dy_float_value(a), y = dy_float_value(b), q = x / y;
+    /* As the interactive implementation does it, by Common Lisp: the
+     * quotient a / b in the arguments' float format, made an integer;
+     * then a - b * that, by the usual contagion. */
+    double q = dy_float_value(dy_div(a, b));
     switch (kind) {
     case FLOOR: q = floor(q); break;
     case CEILING: q = ceil(q); break;
     case ROUND: q = nearbyint(q); break;      /* ties to even */
     default: q = trunc(q); break;
     }
-    return two_values(integer_of_double(q), float_like2(a, b, x - q * y));
+    D quotient = integer_of_double(q);
+    return two_values(quotient, dy_sub(a, dy_mul(b, quotient)));
 }
 
 /* (%math op x [y]): the irrational functions, on floats.  A rational
@@ -164,11 +168,10 @@ PRIMITIVE(float_p) { need(self, argc, 1, 1); return DY_BOOL(float_p(a0)); }
 PRIMITIVE(to_float) {
     need(self, argc, 2, 2);
     if (!dy_number_p(a0)) dy_error("not a number", a0);
-    double x = dy_float_value(a0);
     switch (int_arg(a1)) {
-    case 0: return dy_make_single_float((float)x);
-    case 2: return dy_make_extended_float(x);
-    default: return dy_make_double_float(x);
+    case 0: return dy_make_single_float(dy_single_value(a0));
+    case 2: return dy_make_extended_float(dy_float_value(a0));
+    default: return dy_make_double_float(dy_float_value(a0));
     }
 }
 

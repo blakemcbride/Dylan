@@ -224,25 +224,70 @@ static D make_float(int kind, double value) {
     }
 }
 
-/* X, any real, as a double.  A ratio is divided in long double, which
- * holds both its parts exactly on x86-64. */
-static double to_double(D x, int kind) {
+static int log2_floor(unsigned __int128 x) {
+    uint64_t high = (uint64_t)(x >> 64);
+    return high ? 127 - __builtin_clzll(high) : 63 - __builtin_clzll((uint64_t)x);
+}
+
+/* N/D, D positive and both within 63 bits, rounded once -- to nearest,
+ * ties to even -- to BITS bits of precision (24 for a single-float, 53
+ * for a double), and so exact in a double.  Dividing in floating point
+ * would round twice.  The magnitude is between 2^-62 and 2^62, so neither
+ * format's exponent is ever out of range. */
+static double ratio_rounded(intptr_t n, intptr_t d, int bits) {
+    typedef unsigned __int128 u128;
+    if (n == 0) return 0;
+    bool negative = n < 0;
+    u128 un = negative ? (u128)(-(i128)n) : (u128)n, ud = (u128)d;
+    /* Q = floor(N * 2^S / D), with BITS + 1 bits: one to round by */
+    int s = bits - (log2_floor(un) - log2_floor(ud));
+    u128 q, r;
+    for (;;) {
+        u128 num = s >= 0 ? un << s : un, den = s >= 0 ? ud : ud << -s;
+        q = num / den;
+        r = num % den;
+        if (q >> bits) break;
+        s++;
+    }
+    u128 mantissa = q >> 1;
+    if ((q & 1) && (r != 0 || (mantissa & 1))) mantissa++;
+    double magnitude = ldexp((double)(uint64_t)mantissa, 1 - s);
+    return negative ? -magnitude : magnitude;
+}
+
+/* X, any real, rounded once to the precision of a float of KIND
+ * (N_SINGLE, or else a double's), as Common Lisp converts a rational for
+ * arithmetic with a float of that format. */
+static double to_format(D x, int kind, int format) {
+    bool single = format == N_SINGLE;
     switch (kind) {
-    case N_INT: return (double)DY_INT_VALUE(x);
+    case N_INT:
+        return single ? (double)(float)DY_INT_VALUE(x) : (double)DY_INT_VALUE(x);
     case N_RATIO: {
         DyRatio *r = DY_PTR(x);
-        return (double)((long double)DY_INT_VALUE(r->numerator) /
-                        (long double)DY_INT_VALUE(r->denominator));
+        return ratio_rounded(DY_INT_VALUE(r->numerator), DY_INT_VALUE(r->denominator),
+                             single ? 24 : 53);
     }
     case N_SINGLE: return ((DySingleFloat *)DY_PTR(x))->value;
-    default: return ((DyDoubleFloat *)DY_PTR(x))->value;
+    default: {
+        double v = ((DyDoubleFloat *)DY_PTR(x))->value;
+        return single ? (double)(float)v : v;
+    }
     }
 }
+
+static double to_double(D x, int kind) { return to_format(x, kind, N_DOUBLE); }
 
 double dy_float_value(D x) {
     int kind = number_kind(x);
     if (kind == N_NOT) not_a_number(x);
     return to_double(x, kind);
+}
+
+float dy_single_value(D x) {
+    int kind = number_kind(x);
+    if (kind == N_NOT) not_a_number(x);
+    return (float)to_format(x, kind, N_SINGLE);
 }
 
 /* --------------------------------------------------------- Arithmetic */
@@ -254,8 +299,22 @@ static D arith(int op, D a, D b) {
     if (ka == N_NOT) not_a_number(a);
     if (kb == N_NOT) not_a_number(b);
     if (ka >= N_SINGLE || kb >= N_SINGLE) {
-        /* Float contagion: the wider format. */
+        /* Float contagion: the wider format, each argument converted to
+         * it, and the operation done in it (chapter 14, as in Common
+         * Lisp). */
         int kind = ka > kb ? ka : kb;
+        if (kind == N_SINGLE) {
+            float x = (float)to_format(a, ka, N_SINGLE), y = (float)to_format(b, kb, N_SINGLE), r;
+            switch (op) {
+            case OP_ADD: r = x + y; break;
+            case OP_SUB: r = x - y; break;
+            case OP_MUL: r = x * y; break;
+            default:
+                if (y == 0.0f) dy_division_by_zero();
+                r = x / y;
+            }
+            return dy_make_single_float(r);
+        }
         double x = to_double(a, ka), y = to_double(b, kb), r;
         switch (op) {
         case OP_ADD: r = x + y; break;

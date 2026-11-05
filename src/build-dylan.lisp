@@ -7,6 +7,24 @@
 
 (in-package #:cl-user)
 
+;;; A control stack of 1 GB for each thread, the main one too, in place of
+;;; SBCL's 2 MB, which ends a recursion some 15,000 calls deep: deep
+;;; recursions run as deep as compiled ones.  Only the part used is memory;
+;;; the rest is address space.  The executable keeps the stack size of the
+;;; SBCL that builds it, so the build runs again in one started with it.
+(let ((wanted (* 1024 1024 1024)))
+  (when (< (extern-alien "thread_control_stack_size" unsigned-long) wanted)
+    (sb-ext:exit
+     :code (sb-ext:process-exit-code
+            (sb-ext:run-program
+             sb-ext:*runtime-pathname*
+             (list "--control-stack-size" (format nil "~dMB" (floor wanted (* 1024 1024)))
+                   "--dynamic-space-size"
+                   (format nil "~dMB" (floor (sb-ext:dynamic-space-size) (* 1024 1024)))
+                   "--script" (sb-ext:native-namestring *load-truename*))
+             :input t :output t :error t))
+     :abort t)))
+
 (let ((*standard-output* (make-broadcast-stream)))
   (load (merge-pathnames "load-dylan.lisp" *load-truename*)))
 
@@ -38,7 +56,7 @@ ends the run with status 1 (DYLAN::*BATCH*)."
   ;; Dylan code does not trap.
   (sb-ext:enable-debugger)
   ;; :SAVE-RUNTIME-OPTIONS, so the runtime does not take the command line's
-  ;; options for its own.
+  ;; options for its own, and keeps this one's stack size (above).
   (sb-ext:save-lisp-and-die executable
                             :executable t
                             :toplevel #'dylan-main

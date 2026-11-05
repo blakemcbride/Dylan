@@ -310,12 +310,29 @@ to INSTANCE's singleton rather than one of its class's slots."
          (find slot-desc (singleton.extra-slot-descriptors singleton))
          (singleton.extra-slot-values singleton))))
 
+(defun instance-slot-descriptor (instance slot-desc)
+  "SLOT-DESC as INSTANCE's class has it.  Each class keeps its own copy of
+an inherited slot's descriptor, saying where that class stores the slot,
+which multiple inheritance can make another place than the superclass's;
+a descriptor of a class INSTANCE is not an instance of is an error."
+  (let ((class (get-type instance)))
+    (cond ((find slot-desc (class.slots class)) slot-desc)
+          ((and (class? class)
+                (some (lambda (super) (find slot-desc (class.slots super)))
+                      (class-precedence-list class)))
+           (same-slot-getter-in-slot-vector->slot (slot.getter slot-desc)
+                                                  (class.slots class)))
+          (t (dylan-call dylan/error "slot-value: the object does not have the slot"
+                         instance)))))
+
 (defparameter dylan/slot-value
   (dylan%generic-fn
    'slot-value
    (make-param-list `((instance ,<object>) (slot-desc ,<slot-descriptor>))
                     nil nil nil)
    (lambda (instance slot-desc)
+     (unless (singleton-slot-values instance slot-desc)
+       (setf slot-desc (instance-slot-descriptor instance slot-desc)))
      (let ((allocation (slot.allocation slot-desc))
            (loc (slot.data-location slot-desc)))
        ;; The Scheme applied VECTOR-REF straight to the instance and to the
@@ -352,6 +369,8 @@ to INSTANCE's singleton rather than one of its class's slots."
                       (new-value ,<object>))
                     nil nil nil)
    (lambda (instance slot-desc new-value)
+     (unless (singleton-slot-values instance slot-desc)
+       (setf slot-desc (instance-slot-descriptor instance slot-desc)))
      (unless (match-specializer? new-value (slot.type slot-desc))
        (dylan-call dylan/error
                    (dylan-call dylan/make <type-error>

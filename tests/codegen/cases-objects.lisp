@@ -504,4 +504,46 @@ not-a-singleton
 refused
 {the class <node>}
 ")
+
+ ;; Chapter 11: slot-value with a superclass's slot descriptor reaches the
+ ;; slot where the instance's class keeps it, under multiple inheritance
+ ;; too; a descriptor of a class the object is not an instance of, even
+ ;; one with the same getter, is an error.
+ (slot-value-inherited
+  "(define-class <a> (<object>) (aa init-value: 'a-slot))
+   (define-class <b> (<object>) (bb init-value: 'b-slot)
+     (cc allocation: class init-value: 3) (ee allocation: each-subclass init-value: 4))
+   (define-class <c> (<a> <b>))
+   (define-class <z> (<object>) (zz init-value: 'z-slot) (aa init-value: 'z-aa))
+   (define c (make <c>))
+   (define sd (method (class name)
+     (find-key (slot-descriptors class) (method (s) (id? (slot-getter s) name)))))
+   (define bd (element (slot-descriptors <b>) (sd <b> bb)))
+   (print (slot-value c bd))
+   (set! (slot-value c bd) 'new-b)
+   (print (list (aa c) (bb c)))
+   (print (slot-value c (element (slot-descriptors <a>) (sd <a> aa))))
+   (define try (method (f) (handler-case (f) ((<error>) 'refused))))
+   (print (try (method () (slot-value c (element (slot-descriptors <z>) (sd <z> zz))))))
+   (print (try (method () (slot-value c (element (slot-descriptors <z>) (sd <z> aa))))))
+   (print (try (method () (set! (slot-value c (element (slot-descriptors <z>) (sd <z> aa))) 1))))
+   (print (list (aa c) (bb c)))
+   (define bs (slot-descriptors <b>))
+   (print (list (slot-value c (element bs (sd <b> cc))) (slot-value c (element bs (sd <b> ee)))))
+   (set! (slot-value c (element bs (sd <b> cc))) 30)
+   (set! (slot-value c (element bs (sd <b> ee))) 40)
+   (print (list (cc c) (ee c) (cc (make <b>)) (ee (make <b>))))
+   (define-class <d> (<c>) (dd init-value: 'd-slot))
+   (print (slot-value (make <d>) bd))"
+  "b-slot
+(a-slot new-b)
+a-slot
+refused
+refused
+refused
+(a-slot new-b)
+(3 4)
+(30 40 30 4)
+b-slot
+")
 )

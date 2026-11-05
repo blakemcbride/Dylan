@@ -17,6 +17,19 @@
 
 (in-package #:dylan-compiler)
 
+;;; The line of the page 68 example, the if with too many arguments: the
+;;; last "(if #t" before the comment that records its error.
+(defun page-68-if-line (file)
+  (with-open-file (in file)
+    (loop with if-line = nil
+          for line = (read-line in nil)
+          for n from 1
+          while line
+          when (string= (string-trim " " line) "(if #t")
+            do (setf if-line n)
+          when (search "error: too many arguments to if" line)
+            return if-line)))
+
 (defvar *print-actual* (member "print" sb-ext:*posix-argv* :test #'string=)
   "Given the argument print, show what each case converts to.")
 
@@ -54,13 +67,14 @@
          (failures (remove nil (mapcar #'run-case cases))))
     (dolist (f failures) (format t "FAIL ~a~%" f))
     ;; The book's examples.
-    (let* ((program (front-end (list (merge-pathnames
-                                      "../../dylan-examples.dyl"
-                                      cl-user::*front-end-test-directory*))))
-           (diagnostics (mapcar #'diagnostic-string (program-diagnostics program))))
+    (let* ((file (merge-pathnames "../../dylan-examples.dyl"
+                                  cl-user::*front-end-test-directory*))
+           (program (front-end (list file)))
+           (diagnostics (mapcar #'diagnostic-string (program-diagnostics program)))
+           (expected (format nil "dylan-examples.dyl:~d:1: error: if: needs a test"
+                             (page-68-if-line file))))
       (unless (and (= (length diagnostics) 1)
-                   (search "dylan-examples.dyl:889:1: error: if: needs a test"
-                           (first diagnostics)))
+                   (search expected (first diagnostics)))
         (push "dylan-examples" failures)
         (format t "FAIL dylan-examples.dyl:~%~{  ~a~%~}" diagnostics)))
     (format t "~d case~:p, ~d failure~:p~%" (1+ (length cases)) (length failures))

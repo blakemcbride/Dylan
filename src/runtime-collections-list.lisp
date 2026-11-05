@@ -116,7 +116,7 @@
   (make-param-list `((pair ,(dylan%make-singleton <pair>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore rest))
-    (dylan-call dylan/error "cannot make an instance of this class:" class))))
+    (dylan-call dylan/error "cannot make an instance of this class: ~s" class))))
 
 ;;;
 ;;; EMPTY-LIST SPECIALIZED MAKE

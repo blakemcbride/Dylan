@@ -168,6 +168,10 @@
   (make-dylan-class '<stream> (list <object>) '() nil))
 (defparameter <string-stream>           ; Instantiable (an extension)
   (make-dylan-class '<string-stream> (list <stream>) '() nil))
+(defparameter <boolean>                 ; Internal: the class of #t and #f
+  ;; The manual names no class for #t and #f.  As in a compiled program,
+  ;; object-class answers this one, which no program can name.
+  (make-dylan-class '<boolean> (list <object>) '() nil))
 
 ;;;; Abstract and sealed classes
 ;;;
@@ -176,7 +180,8 @@
 ;;; Lisp objects and that have no MAKE method of their own.  The sealed
 ;;; classes are the manual's (chapters 12 and 14).
 
-(dolist (class (list <condition> <serious-condition> <error> <warning>
+(dolist (class (list <object> <boolean>
+                     <condition> <serious-condition> <error> <warning>
                      <restart>
                      <number> <real> <rectangular-complex> <rational>
                      <integer> <ratio> <float> <single-float> <double-float>
@@ -192,5 +197,5 @@
                      <integer> <ratio> <float> <single-float> <double-float>
                      <extended-float>
                      <simple-object-vector> <unicode-string> <byte-string>
-                     <list> <pair> <empty-list>))
+                     <list> <pair> <empty-list> <boolean>))
   (setf (class.sealed? class) t))

@@ -76,9 +76,9 @@
         ((class? obj) <class>)
         ((singleton? obj) <singleton>)
         ((null obj) <empty-list>)
-        ;; In Scheme #T is not a symbol; keep it an <object> rather than
-        ;; letting the SYMBOLP clause below claim it.
-        ((eq obj t) <object>)
+        ;; #t and #f are of the internal class <boolean>, as in a compiled
+        ;; program (#t before the SYMBOLP clause below can claim it).
+        ((or (eq obj t) (eq obj dylan%false)) <boolean>)
         ((slot? obj) <slot-descriptor>)
         ((consp obj) <pair>)
         ;; Unlike Scheme, Common Lisp strings *are* vectors, so the string

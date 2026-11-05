@@ -605,4 +605,26 @@ b-slot
 (#f #f #t)
 (#t #t #t #t)
 ")
+
+ ;; #t and #f are of an internal class, <boolean>, which no program can
+ ;; name; <object> is abstract, so make of it is an error.
+ (boolean-class-and-abstract-object
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (print (list (object-class #t) (object-class #f) (id? (object-class #t) (object-class #f))))
+   (print (list (all-superclasses (object-class #t)) (instance? #f <object>)))
+   (print (msg (method () (make (object-class #t)))))
+   (print (msg (method () (make <object>))))
+   (print (msg (method () (make <pair>))))
+   (define-class <plain> (<object>))
+   (print (object-class (make <plain>)))"
+  "({the class <boolean>} {the class <boolean>} #t)
+(() #t)
+\"cannot make an instance of this class: {the class <boolean>}\"
+\"cannot make an instance of this class: {the class <object>}\"
+\"cannot make an instance of this class: {the class <pair>}\"
+{the class <plain>}
+")
 )

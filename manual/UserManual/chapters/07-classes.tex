@@ -420,14 +420,14 @@ value computed at run time; a singleton owner may be any object.
 \end{dylan}
 
 \noindent None of the sequences these functions return should be modified.
-The two implementations give different answers for some built-in objects.
-In the compiler to C, \code{\#t} and \code{\#f} are instances of an
-internal class that prints as \code{\{the class <boolean>\}} but is not the
-value of any variable a program can name, while in the Common Lisp
-implementation their class is \code{<object>}; and the Common Lisp implementation seals the
-built-in classes that cannot be subclassed, such as \code{<integer>} and
-\code{<pair>}, so \code{all-superclasses} and \code{direct-superclasses} of
-them return empty sequences (Section~\ref{sec:classes-sealing}).
+\code{\#t} and \code{\#f} are instances of an internal class that prints
+as \code{\{the class <boolean>\}} but is not the value of any variable a
+program can name; the manual names no class for them. The built-in
+classes that cannot be subclassed, such as \code{<integer>} and
+\code{<pair>}, are sealed, so \code{all-superclasses} and
+\code{direct-superclasses} of them return empty sequences
+(Section~\ref{sec:classes-sealing}). \code{<object>} is abstract:
+\code{(make <object>)} is an error.
 
 \subsection{Slot descriptors}\label{sec:classes-slot-descriptors}
 
@@ -597,7 +597,7 @@ implementation differs, a note says so.
 %! skip
 \begin{dylan}
 <object>
-  <boolean>                          (compiler to C only; internal)
+  <boolean>                          (internal)
   <number>
     <complex>
       <real>

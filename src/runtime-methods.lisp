@@ -301,7 +301,7 @@ same."
 (defun dylan%make-<object> (class &rest rest)
   (dylan%keyword-validate nil rest t)
   (when (class.abstract? class)
-    (dylan-call dylan/error "make -- cannot instantiate this class" class))
+    (dylan-call dylan/error "cannot make an instance of this class: ~s" class))
   ;; MIT Scheme's (MAKE-VECTOR n) left the elements #F, and the slot
   ;; initialisation relies on that for the slots it does not touch.
   (let ((instance-data (make-array (class.instance-data-size class)

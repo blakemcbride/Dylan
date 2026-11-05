@@ -444,9 +444,9 @@ name. In this Dylan is like Scheme and unlike Common Lisp:
 
 \noindent The arguments are evaluated from left to right. The manual allows
 the operator to be evaluated at any time before, during or after the
-arguments, and the two implementations differ: the compiler to C evaluates
-the operator first, and the Common Lisp implementation evaluates it last. A
-program should not depend on either order.
+arguments; both implementations evaluate it first, so a call is evaluated
+from left to right, operator and all. A program meant for other Dylans
+should not depend on it.
 
 %! pre: (define trail '())
 %! pre: (define-method note (x) (set! trail (cons x trail)) x)

@@ -215,10 +215,14 @@ path."
 (defun dylan%function (f)
   "F, which a call calls: an error unless it is a function.  (FUNCALL
 would call a symbol's Lisp function.)"
-  (if (functionp f) f (dylan%error "not a function" f)))
+  (if (functionp f) f (dylan%error "not a function: ~s" f)))
 
 (defmacro dylan%call (multiple-values? operator &rest operands)
-  (let* ((vars (loop repeat (length operands) collect (gensym "ARG")))
+  ;; Chapter 3 lets the function be evaluated before, during or after the
+  ;; arguments; it is evaluated first, as in a compiled program, and then
+  ;; the arguments, left to right.
+  (let* ((fn (gensym "FN"))
+         (vars (loop repeat (length operands) collect (gensym "ARG")))
          (nargs (length operands))
          (fast (and (symbolp operator)
                     (or (remove-if-not (lambda (entry)
@@ -230,13 +234,13 @@ would call a symbol's Lisp function.)"
                                               (and (eq (first entry) operator)
                                                    (eq (second entry) :n-ary)))
                                             *fast-paths*)))))
-         (general `(funcall (dylan%function ,operator) ,multiple-values?
+         (general `(funcall (dylan%function ,fn) ,multiple-values?
                             next-method/not-generic ,@vars)))
     (flet ((call (entry fn)
              (if (eq (second entry) :n-ary)
                  (funcall fn vars)
                  (apply fn vars))))
-      `(let* ,(mapcar #'list vars operands)
+      `(let* ((,fn ,operator) ,@(mapcar #'list vars operands))
          (cond ,@(mapcar (lambda (entry)
                            `((and ,(third entry) ,(call entry (fourth entry)))
                              ,(call entry (fifth entry))))
@@ -308,10 +312,11 @@ would call a symbol's Lisp function.)"
   `(setf (char ,s ,i) ,c))
 
 (defun dylan%apply (multiple-values? operator-thunk &rest operand-thunks)
-  "Used for combinations.  Forces left-to-right evaluation, and adds an
-initial NIL next-method argument."
-  (let ((rands (mapcar #'funcall operand-thunks)))
-    (apply (funcall operator-thunk)
+  "Used for combinations.  Forces left-to-right evaluation, the operator
+first, and adds an initial NIL next-method argument."
+  (let* ((operator (funcall operator-thunk))
+         (rands (mapcar #'funcall operand-thunks)))
+    (apply operator
            multiple-values?
            next-method/not-generic
            rands)))

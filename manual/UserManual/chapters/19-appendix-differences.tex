@@ -202,9 +202,6 @@ manual leaves a choice open or where the host shows through. A portable
 program depends on none of these; each is described where it arises.
 
 \begin{itemize}
-\item The operator of a call is evaluated first by the compiler to C
-  and last by the interactive implementation; arguments are evaluated
-  left to right in both (Section~\ref{sec:syntax-calls}).
 \item A handler that returns from the error \code{check-type} signals
   leaves it unhandled in the compiler to C; in the interactive
   implementation \code{check-type} answers what the handler returned

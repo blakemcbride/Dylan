@@ -307,4 +307,29 @@ caught
   "(set! (VV 1) 2)"
   ""
   :error "the variable (setter VV)@dylan-user has no value")
+
+ ;; Chapter 3 lets the function of a call be evaluated before, during or
+ ;; after the arguments; both evaluate it first.
+ (call-operator-first
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (define trail '())
+   (define-method note (x) (set! trail (cons x trail)) x)
+   (define f (method (a b) (list 'f a b)))
+   (define g (method (a b) (list 'g a b)))
+   ((note f) (note 1) (note 2))
+   (print (map (method (x) (if (instance? x <function>) 'fn x)) (reverse trail)))
+   (print (f (begin (set! f g) 1) 2))
+   (set! trail '())
+   (print (msg (method () (5 (note 'arg)))))
+   (print (msg (method () (undefined-function (note 'never)))))
+   (print (reverse trail))"
+  "(fn 1 2)
+(f 1 2)
+\"not a function: 5\"
+\"the variable undefined-function@dylan-user has no value\"
+(arg)
+")
 )

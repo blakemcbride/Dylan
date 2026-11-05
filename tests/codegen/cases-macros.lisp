@@ -124,4 +124,26 @@ two
   "(define-macro m () 1)
    (define m 2)"
   ""
-  :compile-error "m is a macro"))
+  :compile-error "m is a macro")
+
+ ;; ,@ splices the elements of any collection, not only a list's
+ (splice-collections
+  "(print `(1 ,@(vector 2 3 4) 5))
+   (print `(1 ,@(list 2 3) 5))
+   (print `(1 ,@(range from: 2 up-to: 5) 5))
+   (print `(1 ,@\"ab\" 5))
+   (print `(,@(list 1 2) . 3))
+   (print `#(1 ,@(vector 2 3)))
+   (define l (list 9 8))
+   (print (id? (cdr `(0 ,@l)) l))
+   (print (handler-case `(1 ,@5) ((<error>) 'error)))"
+  "(1 2 3 4 5)
+(1 2 3 5)
+(1 2 3 4 5)
+(1 #\\a #\\b 5)
+(1 2 . 3)
+#(1 2 3)
+#f
+error
+")
+)

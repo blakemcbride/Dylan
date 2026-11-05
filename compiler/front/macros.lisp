@@ -363,7 +363,10 @@ anything to evaluate (if not, the expansion is X quoted)."
          (if (and (= depth 1) (unquote-form-p (car x) 'dylan::unquote-splicing))
              (multiple-value-bind (rest live) (quasi (cdr x) depth)
                (declare (ignore live))
-               (values `(%primitive :append2 ,(cadr (car x)) ,rest) t))
+               ;; Any collection's elements are spliced, in the order
+               ;; it iterates them, as the interactive implementation
+               ;; splices them: (as <list> x), which is X if a list.
+               (values `(%primitive :append2 (,(g "as") ,(g "<list>") ,(cadr (car x))) ,rest) t))
              (multiple-value-bind (head head-live) (quasi (car x) depth)
                (multiple-value-bind (rest rest-live) (quasi (cdr x) depth)
                  (if (or head-live rest-live)

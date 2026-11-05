@@ -310,7 +310,8 @@ x@dylan-user
  ;; Backquote.
  (quasiquote
   "`(a ,b ,@c d) `(1 2) `#(x ,y) `(a . ,b) `(a `(b ,(c ,d)))"
-  "(%primitive pair 'a (%primitive pair b@dylan-user (%primitive append2 c@dylan-user '(d))))
+  "(%primitive pair 'a
+ (%primitive pair b@dylan-user (%primitive append2 (as@dylan <list>@dylan c@dylan-user) '(d))))
 '(1 2)
 (%primitive list->vector (%primitive pair 'x (%primitive pair y@dylan-user ())))
 (%primitive pair 'a b@dylan-user)

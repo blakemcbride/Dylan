@@ -51,9 +51,15 @@
 
 (defun compile-set!-form (e mod-vars bound-vars compiler
                           multiple-values? continue)
-  (must-be-list-of-length e 2 "SET! -- invalid syntax")
+  (unless (list-of-length? e 2)
+    (dylan%error "set!: needs a place and a new value"))
   (let ((place (car e))
         (value (cadr e)))
+    ;; Chapter 7: a place is a variable or (name argument ...).
+    (unless (or (variable-name? place)
+                (and (consp place) (symbolp (car place)) (variable-name? (car place))
+                     (null (cdr (cl:last place)))))
+      (dylan%error "set!: bad place" place))
     (funcall
      compiler value mod-vars bound-vars nil
      (lambda (value-code module-vars)
@@ -99,7 +105,7 @@
                                        ,@temps !saved-value)
                            !saved-value)
                         mod-vars)))))
-         (t (dylan%error "SET! -- bad place specification")))))))
+         (t (dylan%error "set!: bad place" place)))))))
 
 ;;; COND
 

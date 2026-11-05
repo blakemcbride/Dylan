@@ -907,7 +907,8 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-if-form (forms module-vars bound-vars really-compile
                         multiple-values? continue)
-  (must-be-list-of-length forms 3 "IF: invalid syntax")
+  (unless (list-of-length? forms 3)
+    (dylan%error "if: needs a test, a consequent and an alternative"))
   (let ((pred (car forms))
         (conseq (cadr forms))
         (alter (caddr forms)))

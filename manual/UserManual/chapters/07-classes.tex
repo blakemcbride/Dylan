@@ -439,7 +439,10 @@ language.)
 
 \begin{description}
 \item[\code{(slot-descriptors \meta{class})}] all the slots of the class,
-  inherited ones included.
+  inherited ones included: those of each direct superclass in turn, each
+  slot where it first appears, and then the class's own. A slot redefined
+  more specifically keeps its place. The built-in classes' own slots,
+  which no program can name, are not among them.
 \item[\code{(slot-descriptor \meta{instance} \meta{getter})}] the slot that
   \meta{getter} reads in \meta{instance}, or \code{\#f}.
 \item[\code{(slot-getter \meta{sd})}, \code{(slot-setter \meta{sd})}] the

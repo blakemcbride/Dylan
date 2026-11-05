@@ -110,6 +110,7 @@
                     (make-param-list `((restart ,<restart>)) nil nil nil)
                     nil))
 
+(setf (gethash dylan/restart-condition *private-slot-getters*) t)
 (dylan%add-slot <restart>
                 nil 'instance nil dylan/restart-condition
                 'restart-condition dylan%false t nil :condition nil)

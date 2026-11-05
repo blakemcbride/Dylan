@@ -492,6 +492,39 @@ slot features the superior definition specified."
                        (class-info-slot-offsets (gclass-info g))
                        (and (plusp count) offsets)))))))
 
+(defun library-private-slot-p (sd)
+  "Is SD a slot of the library's own, which no program can name: one whose
+getter is the DYLAN module's and not exported?  slot-descriptors leaves
+such slots out, as the interpreter does."
+  (let ((getter (sdef-getter sd)))
+    (and (eq (module-var-module getter) (dylan-module))
+         (not (member (module-var-name getter) (module-exports (dylan-module))
+                      :test #'equal)))))
+
+(defun reported-slot-definitions (info &optional (memo (make-hash-table :test 'eq)))
+  "The definitions slot-descriptors answers for the class INFO, in the
+interpreter's order: the slots of each direct superclass in turn, each slot
+where it first appears -- a more specific definition reached later taking
+its place -- and then the class's own, a redefinition in the place of
+the slot it redefines."
+  (or (gethash info memo)
+      (setf (gethash info memo)
+            (let ((effective '()))
+              (flet ((put (sd own)
+                       (let ((old (find (sdef-getter sd) effective :key #'sdef-getter)))
+                         (cond ((null old) (setf effective (append effective (list sd))))
+                               ((or own (and (not (eq (sdef-class sd) (sdef-class old)))
+                                             (subclass-info-p (sdef-class sd) (sdef-class old))))
+                                (setf effective (substitute sd old effective)))))))
+                (dolist (super (class-info-supers info))
+                  (dolist (sd (reported-slot-definitions super memo))
+                    (put sd nil)))
+                (let ((g (class-gclass info)))
+                  (when g
+                    (dolist (sd (gclass-sdefs g))
+                      (put sd t)))))
+              effective))))
+
 (defun class-gclass (info)
   (loop for g being the hash-values of *gclasses*
         when (eq (gclass-info g) info) return g))
@@ -1269,15 +1302,8 @@ objects, makers."
     (emit-object "    if (dy_kind_p(a0, DY_KIND_CLASS) && ((DyClass *)DY_PTR(a0))->sealed) return ~a;"
                  (address (c-vector *cdata* '())))
     (loop for g being the hash-values of *gclasses*
-          do (let ((effective '()))
-               (dolist (c (reverse (class-info-cpl (gclass-info g))))
-                 (let ((cg (class-gclass c)))
-                   (when cg
-                     (dolist (sd (gclass-sdefs cg))
-                       (let ((old (find (sdef-getter sd) effective :key #'sdef-getter)))
-                         (if old
-                             (setf effective (substitute sd old effective))
-                             (setf effective (append effective (list sd)))))))))
+          do (let ((effective (remove-if #'library-private-slot-p
+                                         (reported-slot-definitions (gclass-info g)))))
                (emit-object "    if (a0 == ~a) return ~a;"
                             (address (class-c-name (gclass-info g)))
                             (address (c-vector *cdata* (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))

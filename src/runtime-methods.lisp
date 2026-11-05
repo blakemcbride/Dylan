@@ -600,13 +600,21 @@ irrational functions; an exact real stays exact."
 (defparameter dylan/object-class
   (dylan%generic-fn 'object-class one-object #'get-type))
 
+(defvar *private-slot-getters* (make-hash-table :test 'eq)
+  "The getters of the runtime's own slots, which no program can name:
+slot-descriptors leaves them out, as a compiled program does.")
+
 (defparameter dylan/slot-descriptors
   (dylan%generic-fn 'slot-descriptors one-class
                     (lambda (class)
                       (if (class.sealed? class)
                           (vector)
                           ;; REMOVE-SLOT leaves empty entries behind.
-                          (remove nil (class.slots class))))))
+                          (remove-if (lambda (slot)
+                                       (or (null slot)
+                                           (gethash (slot.getter slot)
+                                                    *private-slot-getters*)))
+                                     (class.slots class))))))
 
 (defvar *sealed-classes* '()
   "The classes SEAL has sealed.")

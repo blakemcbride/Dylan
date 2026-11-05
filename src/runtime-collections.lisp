@@ -123,6 +123,7 @@ generic functions to be used for the slot."
                                                (value ,<object>))
                                              nil nil nil)
                             nil)))
+    (setf (gethash the-getter *private-slot-getters*) t)
     (dylan%add-slot owner type-restriction 'instance the-setter the-getter
                     (new-name "" name "") nil nil nil nil nil)
     (funcall continue the-setter the-getter)))

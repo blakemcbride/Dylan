@@ -627,4 +627,40 @@ b-slot
 \"cannot make an instance of this class: {the class <pair>}\"
 {the class <plain>}
 ")
+
+ ;; slot-descriptors: the slots of each direct superclass in turn, each
+ ;; where it first appears (a more specific definition in its place), then
+ ;; the class's own; the runtime's own slots, which no program can name,
+ ;; are left out.
+ (slot-descriptors-order
+  "(define-method names (c)
+     (map (method (s) (list (slot-getter s) (slot-type s))) (slot-descriptors c)))
+   (define-class <a> (<object>) (a))
+   (define-class <b> (<object>) (b))
+   (define-class <ab> (<a> <b>) (c))
+   (define-class <x> (<a>) (x))
+   (define-class <xy> (<x> <b>) (y))
+   (define-class <base> (<object>) (s type: <number>))
+   (define-class <b1> (<base>) (t1))
+   (define-class <b3> (<base>) (s type: <integer>) (t3))
+   (define-class <e> (<b1> <b3>) (w))
+   (define-class <a2> (<object>) (p) (q))
+   (define-class <v2> (<a2>) (p) (r))
+   (define-class <my-error> (<simple-error>) (extra))
+   (define-class <pc> (<object>) (%secret))
+   (for-each ((c (list <ab> <xy> <e> <v2> <my-error> <pc>))) ()
+     (print (map first (names c))))
+   (print (second (first (names <e>))))
+   (print (map (method (c) (size (slot-descriptors c)))
+               (list <array> <vector> <table> <deque> <stretchy-vector> <range>
+                     <restart> <simple-restart>)))"
+  "#({the generic function a} {the generic function b} {the generic function c})
+#({the generic function a} {the generic function x} {the generic function b} {the generic function y})
+#({the generic function s} {the generic function t1} {the generic function t3} {the generic function w})
+#({the generic function p} {the generic function q} {the generic function r})
+#({the generic function condition-format-string} {the generic function condition-format-arguments} {the generic function extra})
+#({the generic function %secret})
+{the class <integer>}
+(0 0 0 0 0 0 0 0)
+")
 )

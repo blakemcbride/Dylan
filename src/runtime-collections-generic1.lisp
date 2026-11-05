@@ -117,15 +117,6 @@
 (add-method
  dylan/shallow-copy
  (dylan%function->method
-  (make-param-list `((collection ,<collection>)) nil nil nil)
-  (lambda (coll)
-    (dylan-call dylan/error
-                "shallow-copy -- not specialized for this collection type"
-                coll))))
-
-(add-method
- dylan/shallow-copy
- (dylan%function->method
   (make-param-list `((sequence ,<sequence>)) nil nil nil)
   (lambda (seq) (dylan-call dylan/copy-sequence seq))))
 

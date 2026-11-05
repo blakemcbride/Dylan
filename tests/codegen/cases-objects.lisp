@@ -729,4 +729,43 @@ b-slot
   "\"2.5 is not an instance of {the class <integer>}\"
 \"\\\"str\\\" is not an instance of {the class <integer>}\"
 ")
+ ;; shallow-copy copies collections (an array with its own elements) and
+ ;; instances of any class, and signals an error for anything else.
+ (shallow-copy-kinds
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <pt> (<object>) (x init-keyword: x:))
+(print (try (method () (shallow-copy 5))))
+(print (try (method () (shallow-copy car))))
+(print (try (method () (shallow-copy 'sym))))
+(print (try (method () (shallow-copy #\\a))))
+(print (try (method () (shallow-copy #t))))
+(print (try (method () (shallow-copy <pt>))))
+(print (try (method () (shallow-copy (singleton 3)))))
+(print (try (method () (bind ((p (make <pt> x: 1)) (q (shallow-copy p))) (list (id? p q) (x q))))))
+(print (try (method () (shallow-copy '()))))
+(print (try (method () (shallow-copy '(1 2)))))
+(print (try (method () (shallow-copy \"ab\"))))
+(print (try (method () (shallow-copy (range from: 1 size: 2)))))
+(print (try (method () (bind ((t (make <table>))) (set! (element t 'a) 1) (shallow-copy t)))))
+(print (try (method () (bind ((a (make <array> dimensions: '(2 2) fill: 0)) (b (shallow-copy a))) (set! (aref b 0 0) 9) (list a b (id? a b))))))
+(print (try (method () (bind ((c (make <simple-error> format-string: \"x\")) (d (shallow-copy c))) (list (id? c d) (condition-format-string d))))))
+(define-class <coll> (<explicit-key-collection>) (n init-keyword: n:))
+(print (try (method () (bind ((c (make <coll> n: 3))) (n (shallow-copy c))))))"
+  "\"ERR: shallow-copy: cannot copy: 5\"
+\"ERR: shallow-copy: cannot copy: {method car}\"
+\"ERR: shallow-copy: cannot copy: sym\"
+\"ERR: shallow-copy: cannot copy: #\\\\a\"
+\"ERR: shallow-copy: cannot copy: #t\"
+\"ERR: shallow-copy: cannot copy: {the class <pt>}\"
+\"ERR: shallow-copy: cannot copy: {singleton 3}\"
+(#f 1)
+()
+(1 2)
+\"ab\"
+{range 1 by 1 size 2}
+{table a => 1}
+({<array> 0 0 0 0} {<array> 9 0 0 0} #f)
+(#f \"x\")
+3
+")
 )

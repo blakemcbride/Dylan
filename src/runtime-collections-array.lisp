@@ -378,3 +378,11 @@ in a compiled program."
                        (concatenate 'string "(setter current-element) -- " message)
                        array state)))
       (setf (aref row index) new-value)))))
+
+;;; A copy has its own elements, as in a compiled program
+(add-method
+ dylan/shallow-copy
+ (dylan%function->method
+  (make-param-list `((array ,<%general-array>)) nil nil nil)
+  (lambda (array)
+    (dylan-call dylan/map-as <array> dylan/identity array))))

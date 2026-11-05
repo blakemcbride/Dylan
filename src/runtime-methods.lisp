@@ -875,8 +875,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                 (copy (make-dylan-instance class nil (copy-seq (instance.data obj)))))
            (add-new-to-population! (class.instances class) copy)
            copy)
-         (dylan-call dylan/error
-                     "shallow-copy -- not specialized for this object type" obj)))))
+         (dylan-call dylan/error "shallow-copy: cannot copy: ~s" obj)))))
 
 (defparameter dylan/binary-gcd (dylan%generic-fn 'binary-gcd two-integers #'gcd))
 (defparameter dylan/binary-lcm (dylan%generic-fn 'binary-lcm two-integers #'lcm))

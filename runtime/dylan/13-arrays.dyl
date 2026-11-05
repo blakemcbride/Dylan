@@ -70,6 +70,9 @@ module: dylan
 
 (define-method size ((a <%general-array>)) (%vector-size (%data a)))
 
+;;; A copy has its own elements
+(define-method shallow-copy ((a <%general-array>)) (map-as <array> identity a))
+
 (define-method element ((a <%general-array>) (indices <sequence>) #key (default %no-default))
   (bind ((l (as <list> indices)))
     (if (and (= (size l) (size (%dimensions a)))

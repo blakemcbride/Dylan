@@ -489,11 +489,12 @@ language.)
 \subsection{Copying and converting}
 
 \code{(shallow-copy \meta{object})} returns a new object with the same
-contents, made with \code{make} on \code{(class-for-copy \meta{object})},
-which by default is the object's class. The library has methods for
-collections. For other objects the 1992 manual leaves the method to the
-programmer, and that is so in the Common Lisp implementation; the compiler
-to C has a default method that copies any instance's slots.
+contents. The library has methods for collections; a sequence's copy is
+a new instance of its \code{class-for-copy}, and an array's has its own
+elements. A copy of an instance of any other class has the same slot
+values, which it shares with the original. Any other object, such as a
+number, a symbol, a class or a function, cannot be copied:
+\code{(shallow-copy 5)} signals an error.
 
 \code{(as \meta{class} \meta{object})} converts \meta{object} to
 \meta{class}, returning it unchanged if it is already an instance. Its

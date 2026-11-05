@@ -729,11 +729,12 @@ PRIMITIVE(singleton_object) {
 PRIMITIVE(function_p) { need(self, argc, 1, 1); return DY_BOOL(dy_function_p(a0)); }
 
 /* (%shallow-copy x): a new object with the same contents -- for pairs,
- * the runtime's vectors and strings, and instances of the program's
- * classes; anything else (numbers, symbols, ...) is itself. */
+ * the runtime's vectors and strings, and instances of classes; anything
+ * else (a number, a symbol, a function, ...) cannot be copied. */
+_Noreturn static void cannot_copy(D x) { dy_error("shallow-copy: cannot copy", x); }
 PRIMITIVE(shallow_copy) {
     need(self, argc, 1, 1);
-    if (!DY_IS_POINTER(a0) || a0 == DY_TRUE || a0 == DY_FALSE || a0 == DY_EMPTY) return a0;
+    if (!DY_IS_POINTER(a0) || a0 == DY_TRUE || a0 == DY_FALSE || a0 == DY_EMPTY) cannot_copy(a0);
     DyWrapper *w = dy_wrapper_of(a0);
     switch (w->kind) {
     case DY_KIND_PAIR: return dy_pair(dy_head(a0), dy_tail(a0));
@@ -757,7 +758,7 @@ PRIMITIVE(shallow_copy) {
         memcpy(copy, DY_PTR(a0), bytes);
         return DY_OBJ(copy);
     }
-    default: return a0;
+    default: cannot_copy(a0);
     }
 }
 

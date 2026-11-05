@@ -88,8 +88,14 @@ module: dylan
 
 (define-generic-function integral? (number))
 (define-method integral? ((n <rational>)) (%instance? n <integer>))
+;;; A float is integral if it is finite and has no fraction.  Every float
+;;; of 2^52 or more is an integer, and is not divided, since the quotient
+;;; may be beyond 63 bits.
 (define-method integral? ((x <float>))
-  (bind ((q r (%divide 3 x 1))) (zero? r)))
+  (cond ((not (= x x)) #f)                          ; NaN
+        ((= x (* x 2)) (zero? x))                   ; zero, or infinite
+        ((not (< -4503599627370496.0 x 4503599627370496.0)) #t)
+        (else: (bind ((q r (%divide 3 x 1))) (zero? r)))))
 
 ;;; Division (chapter 14: as Common Lisp's floor, ceiling, round and
 ;;; truncate).  %divide answers the quotient and the remainder.
@@ -251,7 +257,11 @@ module: dylan
       (error "numerator, denominator: ~s is not a finite number" x))
     (for ((n x (* n 2))
           (d (+ (- x x) 1) (* d 2)))
-         ((integral? n) (values n d)))))
+         ((integral? n)
+          ;; A subnormal's denominator is beyond the floats of its format
+          (when (= d (* d 2))
+            (error "numerator, denominator: the denominator of ~s is too large for a float" x))
+          (values n d)))))
 
 (define-generic-function rationalize (number))
 (define-method rationalize ((x <real>)) (%rationalize x))

@@ -752,4 +752,26 @@ found
 (-3 -1.5s0)
 0.33333325s0
 ")
+
+ ;; integral?, numerator and denominator of floats beyond 63-bit integers
+ (large-floats
+  "(print (integral? 1.0e20))
+   (print (integral? 2.5))
+   (print (integral? -4503599627370495.5))
+   (print (integral? 1.0e300))
+   (print (numerator 1.0e20))
+   (print (denominator 1.0e20))
+   (print (numerator 1.0s30))
+   (print (denominator 0.75s0))
+   (print (handler-case (denominator 1.0e-310) ((<error>) 'error)))"
+  "#t
+#f
+#f
+#t
+1.0e20
+1.0
+1.0s30
+4.0s0
+error
+")
 )

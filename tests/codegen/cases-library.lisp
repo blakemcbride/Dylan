@@ -1127,4 +1127,31 @@ error
 neg
 #f
 ")
+
+ ;; Chapter 10: function-arguments of a generic function made with make,
+ ;; and of the predefined functions written in C
+ (function-arguments-made
+  "(define fa (method (f) (bind ((r rest keys (function-arguments f))) (list r rest keys))))
+   (print (fa (make <generic-function> required: 2 rest?: #t)))
+   (print (fa (make <generic-function> required: 1 key?: #t)))
+   (print (fa (make <generic-function> required: 1 key?: '(a: b:))))
+   (print (fa (make <generic-function> required: 1)))
+   (for-each ((f (list id? not identity list cons car cdr vector values apply singleton)))
+     () (print (fa f)))"
+  "(2 #t #f)
+(1 #f #())
+(1 #f (a: b:))
+(1 #f #f)
+(2 #t #f)
+(1 #f #f)
+(1 #f #f)
+(0 #t #f)
+(2 #f #f)
+(1 #f #f)
+(1 #f #f)
+(0 #t #f)
+(0 #t #f)
+(1 #t #f)
+(1 #f #f)
+")
 )

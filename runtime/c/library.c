@@ -764,6 +764,35 @@ PRIMITIVE(shallow_copy) {
  * takes #rest, and its keywords (#f if it has no #key) -- for a function
  * the compiler knows the parameters of; a function written in C answers
  * 0, #t and #f, since it may take anything. */
+/* The arguments of the predefined functions a program can name that are
+ * written in C, which their objects do not record: as the manual gives
+ * them, which is how need() checks them but for id? (at least one
+ * object, where the manual's takes two) and apply (a function and the
+ * sequence, where the manual's #rest args takes the sequence among
+ * them).  The rest -- list, vector, values -- take any number. */
+extern DyFunction dy_prim_id, dy_prim_not, dy_prim_identity, dy_prim_cons, dy_prim_car,
+    dy_prim_cdr, dy_prim_apply, dy_prim_singleton, dy_prim_seal, dy_prim_do_handlers,
+    dy_prim_current_thread, dy_prim_thread_yield, dy_prim_acquire_lock,
+    dy_prim_release_lock, dy_prim_wait_condition_variable,
+    dy_prim_notify_condition_variable, dy_prim_notify_all_condition_variable,
+    dy_prim_atomic_value, dy_prim_atomic_add, dy_prim_atomic_compare_and_swap,
+    dy_prim_current_milliseconds;
+
+static const struct { DyFunction *f; int required; bool rest; } primitive_arguments[] = {
+    { &dy_prim_id, 2, true }, { &dy_prim_not, 1, false }, { &dy_prim_identity, 1, false },
+    { &dy_prim_cons, 2, false }, { &dy_prim_car, 1, false }, { &dy_prim_cdr, 1, false },
+    { &dy_prim_apply, 1, true }, { &dy_prim_singleton, 1, false },
+    { &dy_prim_seal, 1, false }, { &dy_prim_do_handlers, 1, false },
+    { &dy_prim_current_thread, 0, false }, { &dy_prim_thread_yield, 0, false },
+    { &dy_prim_acquire_lock, 1, false }, { &dy_prim_release_lock, 1, false },
+    { &dy_prim_wait_condition_variable, 2, false },
+    { &dy_prim_notify_condition_variable, 1, false },
+    { &dy_prim_notify_all_condition_variable, 1, false },
+    { &dy_prim_atomic_value, 1, false }, { &dy_prim_atomic_add, 2, false },
+    { &dy_prim_atomic_compare_and_swap, 3, false },
+    { &dy_prim_current_milliseconds, 0, false },
+};
+
 PRIMITIVE(function_arguments) {
     need(self, argc, 1, 1);
     D info = DY_FALSE;
@@ -773,6 +802,11 @@ PRIMITIVE(function_arguments) {
     DyThread *t = dy_thread;
     if (info == 0 || info == DY_FALSE) {
         t->mv[0] = DY_INT(0); t->mv[1] = DY_TRUE; t->mv[2] = DY_FALSE;
+        for (size_t i = 0; i < sizeof primitive_arguments / sizeof primitive_arguments[0]; i++)
+            if (DY_PTR(a0) == (void *)primitive_arguments[i].f) {
+                t->mv[0] = DY_INT(primitive_arguments[i].required);
+                t->mv[1] = DY_BOOL(primitive_arguments[i].rest);
+            }
     } else {
         DyVector *v = DY_PTR(info);
         t->mv[0] = v->data[0]; t->mv[1] = v->data[1]; t->mv[2] = v->data[2];

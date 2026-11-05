@@ -185,7 +185,7 @@ static D no_methods_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 }
 
 PRIMITIVE(make_generic_function) {
-    need(self, argc, 2, 2);
+    need(self, argc, 4, 4);
     if (!DY_IS_INT(a0) || DY_INT_VALUE(a0) < 0) dy_error("make: bad required:", a0);
     if (a1 != DY_FALSE && !dy_kind_p(a1, DY_KIND_SYMBOL))
         dy_error("make: debug-name: must be a symbol", a1);
@@ -194,8 +194,11 @@ PRIMITIVE(make_generic_function) {
     g->name = a1;
     g->methods = dy_make_vector(0, DY_FALSE);
     g->required = DY_INT_VALUE(a0);
+    /* #(required rest? keys), keys #f for no #key */
     D info = dy_make_vector(3, DY_FALSE);
     ((DyVector *)DY_PTR(info))->data[0] = a0;
+    ((DyVector *)DY_PTR(info))->data[1] = a2;
+    ((DyVector *)DY_PTR(info))->data[2] = a3;
     g->info = info;
     return DY_OBJ(g);
 }

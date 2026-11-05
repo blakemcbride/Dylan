@@ -135,11 +135,16 @@ module: dylan
 ;;; So is <generic-function> (chapter 10), though in a static program one
 ;;; made at run time has no methods, and none can be added.
 
+;;; rest?: and key?: are what function-arguments tells of it (chapter 10);
+;;; key? may be, as in the interactive implementation, the keys themselves.
 (define-method make ((class (singleton <generic-function>)) #key (required %no-default)
-                     debug-name)
+                     debug-name rest? key?)
   (unless (and (%instance? required <integer>) (not (negative? required)))
     (error "make: a <generic-function> needs required:, an integer not below 0"))
-  (%make-generic-function required debug-name))
+  (%make-generic-function required debug-name (if rest? #t #f)
+                          (cond ((not key?) #f)
+                                ((%instance? key? <sequence>) key?)
+                                (else: #()))))
 
 ;;; initialize (chapter 6).  Its method on <object>, which does nothing,
 ;;; is the compiler's own.

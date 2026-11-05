@@ -131,7 +131,7 @@
       (when (or (not (integerp size)) (minusp size))
         (dylan-call
          dylan/error
-         "(make (singleton <simple-object-vector>)) -- size: invalid" size))
+         "make: size: must be a non-negative integer: ~s" size))
       (make-array size :initial-element fill)))))
 
 ;;;
@@ -152,7 +152,7 @@
           (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error
-                    "(make (singleton <stretchy-vector>)) size: invalid" size))
+                    "make: size: must be a non-negative integer: ~s" size))
       (let ((instance (dylan%make-<object> <stretchy-vector>)))
         (dylan-call dylan/set-array-value! instance
                     (make-array size :initial-element fill))

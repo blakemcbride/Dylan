@@ -103,7 +103,7 @@
     (let ((size (dylan%find-keyword rest :size (lambda () 0)))
           (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
-        (dylan-call dylan/error "make -- list size: invalid" size))
+        (dylan-call dylan/error "make: size: must be a non-negative integer: ~s" size))
       (make-list size :initial-element fill)))))
 
 ;;;

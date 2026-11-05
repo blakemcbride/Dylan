@@ -1708,4 +1708,25 @@ error
 (4 {<stretchy-vector> 1 2 #f #f} \"(setter size): the size must be a non-negative integer: -1\" {<stretchy-vector> 1 2 #f #f})
 \"(setter size): the size must be a non-negative integer: x\"
 ")
+
+ (make-size-messages
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (for-each ((c (list <list> <vector> <simple-object-vector> <byte-string> <unicode-string>
+                       <string> <stretchy-vector> <deque>)))
+             ()
+     (print (list (msg (method () (make c size: -1))) (msg (method () (make c size: 'x))))))
+   (print (msg (method () (make <unicode-string> size: 1 fill: 5))))"
+  "(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+(\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
+\"make: fill: must be a character: 5\"
+")
 )

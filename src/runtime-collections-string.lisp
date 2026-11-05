@@ -139,10 +139,12 @@ the keyword arguments REST."
                                    (lambda () (setf have-fill? nil) nil))))
     (when (or (not (integerp size)) (minusp size))
       (dylan-call dylan/error
-                  "(make (singleton <string>)) -- size: invalid" size))
+                  "make: size: must be a non-negative integer: ~s" size))
     (when have-fill?
-      (check-byte-character (if unicode? (make-unicode-string 0 #\Space) "")
-                            fill "make: "))
+      (if unicode?
+          (unless (characterp fill)
+            (dylan-call dylan/error "make: fill: must be a character: ~s" fill))
+          (check-byte-character "" fill "make: ")))
     ;; As in the compiler to C, the fill is a space unless given.
     (let ((fill (if have-fill? fill #\Space)))
       (if unicode?

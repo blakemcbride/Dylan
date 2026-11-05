@@ -364,15 +364,17 @@ PRIMITIVE(vector_element_setter) {
 
 PRIMITIVE(make_vector) {
     need(self, argc, 2, 2);
-    intptr_t n = int_arg(a0);
-    if (n < 0) dy_error("make: negative size", a0);
+    if (!DY_IS_INT(a0) || DY_INT_VALUE(a0) < 0)
+        dy_error("make: size: must be a non-negative integer", a0);
+    intptr_t n = DY_INT_VALUE(a0);
     return dy_make_vector(n, a1);
 }
 
 PRIMITIVE(make_byte_string) {
     need(self, argc, 2, 2);
-    intptr_t n = int_arg(a0);
-    if (n < 0) dy_error("make: negative size", a0);
+    if (!DY_IS_INT(a0) || DY_INT_VALUE(a0) < 0)
+        dy_error("make: size: must be a non-negative integer", a0);
+    intptr_t n = DY_INT_VALUE(a0);
     if (!DY_IS_CHAR(a1) || DY_CHAR_CODE(a1) > 255)
         dy_error("make: a <byte-string> holds only 8-bit characters", a1);
     char *bytes = dy_alloc_bytes(n + 1);
@@ -382,8 +384,9 @@ PRIMITIVE(make_byte_string) {
 
 PRIMITIVE(make_unicode_string) {
     need(self, argc, 2, 2);
-    intptr_t n = int_arg(a0);
-    if (n < 0) dy_error("make: negative size", a0);
+    if (!DY_IS_INT(a0) || DY_INT_VALUE(a0) < 0)
+        dy_error("make: size: must be a non-negative integer", a0);
+    intptr_t n = DY_INT_VALUE(a0);
     if (!DY_IS_CHAR(a1)) dy_error("make: fill: must be a character", a1);
     /* (N + 1) * 4 must not wrap around */
     if ((size_t)n > (size_t)DY_INT_MAX / 4) dy_error("string too large", a0);

@@ -52,6 +52,8 @@ module: dylan
     (walk l index)))
 
 (define-method make ((class (singleton <list>)) #key (size 0) (fill #f))
+  (unless (and (%instance? size <integer>) (not (negative? size)))
+    (error "make: size: must be a non-negative integer: ~s" size))
   (for ((i 0 (binary+ i 1))
         (l '() (cons fill l)))
        ((not (binary< i size)) l)))

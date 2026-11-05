@@ -135,19 +135,23 @@
 (create-private-slot <range> <object> "internal-range-start"
                      (lambda (set get)
                        (setf dylan/set-range-start! set)
-                       (setf dylan/get-range-start get)))
+                       (setf dylan/get-range-start get))
+                     :init (lambda () 0))
 (create-private-slot <range> <object> "internal-range-step"
                      (lambda (set get)
                        (setf dylan/set-range-step! set)
-                       (setf dylan/get-range-step get)))
+                       (setf dylan/get-range-step get))
+                     :init (lambda () 1))
 (create-private-slot <range> <object> "internal-range-end"
                      (lambda (set get)
                        (setf dylan/set-range-end! set)
-                       (setf dylan/get-range-end get)))
+                       (setf dylan/get-range-end get))
+                     :init (lambda () nil))
 (create-private-slot <range> <object> "internal-range-count"
                      (lambda (set get)
                        (setf dylan/set-range-count! set)
-                       (setf dylan/get-range-count get)))
+                       (setf dylan/get-range-count get))
+                     :init (lambda () nil))
 
 (defun zero-step? (range)
   (zerop (dylan-call dylan/get-range-step range)))

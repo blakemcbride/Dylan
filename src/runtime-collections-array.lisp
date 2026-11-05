@@ -100,11 +100,13 @@
 (create-private-slot <array> <simple-object-vector> "internal-array-value"
                      (lambda (set get)
                        (setf dylan/set-array-value! set)
-                       (setf dylan/get-array-value get)))
+                       (setf dylan/get-array-value get))
+                     :init (lambda () (vector)))
 (create-private-slot <array> <list> "internal-array-dimensions"
                      (lambda (set get)
                        (setf dylan/set-array-dimensions! set)
-                       (setf dylan/get-array-dimensions get)))
+                       (setf dylan/get-array-dimensions get))
+                     :init (lambda () (list 0)))
 
 (define-direct-slot stretchy-value set-stretchy-value! <stretchy-vector>
   dylan/get-array-value dylan/set-array-value!)

@@ -92,11 +92,13 @@
 (create-private-slot <deque> <object> "internal-deque-front"
                      (lambda (set get)
                        (setf dylan/set-deque-front! set)
-                       (setf dylan/get-deque-front get)))
+                       (setf dylan/get-deque-front get))
+                     :init (lambda () '()))
 (create-private-slot <deque> <object> "internal-deque-last"
                      (lambda (set get)
                        (setf dylan/set-deque-last! set)
-                       (setf dylan/get-deque-last get)))
+                       (setf dylan/get-deque-last get))
+                     :init (lambda () '()))
 
 (add-method
  dylan/make

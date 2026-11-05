@@ -352,7 +352,7 @@ than the default accepts."
                                       (or (eq key (slot.init-keyword slot))
                                           (eq key (slot.required-init-keyword slot))))))
                              (coerce (class.slots class) 'list)))
-              do (dylan-call dylan/error "keyword argument not accepted" key)))))
+              do (dylan-call dylan/error "keyword argument not accepted: ~s" key)))))
 
 (defparameter dylan/make
   (dylan%generic-fn 'make

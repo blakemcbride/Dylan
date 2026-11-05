@@ -110,9 +110,12 @@
                  value)
            (dylan-call ,setter object value)))))
 
-(defun create-private-slot (owner type-restriction name continue)
+(defun create-private-slot (owner type-restriction name continue &key init)
   "Add a new slot to an existing class, and return the getter and setter
-generic functions to be used for the slot."
+generic functions to be used for the slot.  INIT, a Lisp function of no
+arguments, makes the slot's initial value, so that an instance of a
+program's subclass, which the default make makes, is ready for use, as in
+a compiled program."
   (let ((the-getter
           (dylan%generic-fn (new-name "dylan/" name "-getter")
                             (make-param-list `((array ,<object>)) nil nil nil)
@@ -125,5 +128,8 @@ generic functions to be used for the slot."
                             nil)))
     (setf (gethash the-getter *private-slot-getters*) t)
     (dylan%add-slot owner type-restriction 'instance the-setter the-getter
-                    (new-name "" name "") nil nil nil nil nil)
+                    (new-name "" name "") nil nil
+                    (and init (dylan%function->method
+                               (make-param-list '() nil nil nil) init))
+                    nil nil)
     (funcall continue the-setter the-getter)))

@@ -6,10 +6,12 @@ module: dylan
 ;;; possibly unbounded.  Element i is from + i * by; the size is #f if the
 ;;; range has no bound.  The iteration state is the index.
 
+;;; The slots take no init-keywords: make of a program's subclass of
+;;; <range> takes only the subclass's own, as for the other collections.
 (define-class <range> (<sequence>)
-  (%from init-keyword: from: init-value: 0)
-  (%by init-keyword: by: init-value: 1)
-  (%size init-keyword: size: init-value: #f))
+  (%from init-value: 0)
+  (%by init-value: 1)
+  (%size init-value: #f))
 
 (define-method class-for-copy ((r <range>)) <list>)
 
@@ -27,12 +29,14 @@ module: dylan
         (limit (max 0 (ceiling/ (binary- up-to from) by))))
       (when through
         (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))
-      (%make <range> from: from by: by size: count))))
+      (bind ((r (%make <range>)))
+        (set! (%from r) from)
+        (set! (%by r) by)
+        (set! (%size r) count)
+        r))))
 
 (define-method make ((class (singleton <range>)) #rest arguments)
-  (if (or (member? up-to: arguments) (member? through: arguments))
-      (apply range arguments)
-      (apply %make <range> arguments)))
+  (apply range arguments))
 
 (define %range-element (method (r i) (binary+ (%from r) (binary* i (%by r)))))
 

@@ -353,7 +353,7 @@ VALIDATE-KEYWORDS reports them, worded as the compiler to C words them."
          (dylan-call dylan/error
                      "the arguments after the required ones are not keyword/value pairs"))
         ((string= message "illegal keyword argument")
-         (dylan-call dylan/error "keyword argument not accepted" (car args)))
+         (dylan-call dylan/error "keyword argument not accepted: ~s" (car args)))
         (t (dylan-apply dylan/error (cons message args)))))
 
 (defun check-extra-arguments (data extra cached)

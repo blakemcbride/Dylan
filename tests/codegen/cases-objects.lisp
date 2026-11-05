@@ -663,4 +663,36 @@ b-slot
 {the class <integer>}
 (0 0 0 0 0 0 0 0)
 ")
+
+ (subclasses-of-library-collections
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (define-class <my-table> (<table>) (label init-value: 'x))
+   (define-class <my-deque> (<deque>) (label init-value: 'd))
+   (define-class <my-sv> (<stretchy-vector>) (label init-value: 's))
+   (define-class <my-range> (<range>) (label init-value: 'r))
+   (bind ((t (make <my-table>)))
+     (set! (element t 'a) 1)
+     (print (list (label t) (element t 'a) (size t))))
+   (bind ((d (make <my-deque>)))
+     (push d 1) (push-last d 2)
+     (print (list (label d) (size d) (as <list> d))))
+   (bind ((v (make <my-sv>)))
+     (add! v 1) (add! v 2)
+     (print (list (label v) (size v) (as <list> v))))
+   (bind ((r (make <my-range>)))
+     (print (list (label r) (size r) (first r) (element r 5))))
+   (print (msg (method () (make <my-sv> size: 2))))
+   (print (msg (method () (make <my-range> from: 3))))
+   (print (as <list> (make <range> from: 3 by: 2 size: 3)))"
+  "(x 1 1)
+(d 2 (1 2))
+(s 2 (1 2))
+(r #f 0 5)
+\"keyword argument not accepted: size:\"
+\"keyword argument not accepted: from:\"
+(3 5 7)
+")
 )

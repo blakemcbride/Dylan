@@ -96,7 +96,9 @@
 (create-private-slot <table> <vector> "internal-hash-table"
                      (lambda (set get)
                        (setf dylan/set-hash-table! set)
-                       (setf dylan/get-hash-table get)))
+                       (setf dylan/get-hash-table get))
+                     :init (lambda ()
+                             (make-array *hash-table-size* :initial-element '())))
 
 (add-method
  dylan/make
@@ -104,10 +106,8 @@
   (make-param-list `((table ,(dylan%make-singleton <table>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class rest))
-    (let ((instance (dylan%make-<object> <table>)))
-      (dylan-call dylan/set-hash-table! instance
-                  (make-array *hash-table-size* :initial-element '()))
-      instance))))
+    ;; The slot's init-function makes the hash table.
+    (dylan%make-<object> <table>))))
 
 ;;;;
 ;;;; Operations on Tables (page 120)

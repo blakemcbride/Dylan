@@ -297,15 +297,18 @@ returns the instance; what \code{initialize} returns is ignored. Making an
 instance of an abstract class, such as \code{<number>} or
 \code{<collection>}, is an error. Built-in instantiable classes have
 \code{make} methods of their own, described with them
-(Chapter~\ref{ch:collections}).
+(Chapter~\ref{ch:collections}). Those methods are for the classes
+themselves: an instance of a program's subclass of \code{<table>},
+\code{<deque>}, \code{<stretchy-vector>} or \code{<range>} is made by
+the default \code{make}, which takes only the init-keywords of the
+subclass's own slots. The new instance starts empty; a range starts at 0,
+by 1, without end.
 
 The keywords \code{make} accepts are the init-keywords of the class's slots,
 inherited slots included, and the keywords accepted by the applicable
 \code{initialize} methods. An \code{initialize} method with \code{\#rest}
 accepts any keyword. Any other keyword is an error, as the manual
-specifies: the compiler to C reports \code{keyword argument not accepted:
-y:}, the Common Lisp implementation \code{make -{}- illegal keyword
-argument y:}.
+specifies: \code{keyword argument not accepted: y:}.
 
 Programs customize instance creation by adding methods to
 \code{initialize}, not to \code{make}. An \code{initialize} method normally

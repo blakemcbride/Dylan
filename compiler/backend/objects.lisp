@@ -663,13 +663,18 @@ slot SD in the object VAR."
       (when (and (eq (sdef-allocation sd) :instance) (sdef-class sd)
                  (or (slot-spec-init-value spec) (slot-spec-init-function spec)))
         ;; An instance made before define-slot added the slot takes its
-        ;; initial value now (chapter 6).
-        (emit-object "    if (*place == DY_UNBOUND && ~a != DY_UNBOUND)"
+        ;; initial value now (chapter 6), checked against the slot's type
+        ;; as make checks it.
+        (emit-object "    if (*place == DY_UNBOUND && ~a != DY_UNBOUND) {"
                      (sdef-c sd (if (slot-spec-init-value spec) "init" "initfn")))
-        (emit-object "        *place = ~a;"
+        (emit-object "        D value = ~a;"
                      (if (slot-spec-init-value spec)
                          (sdef-c sd "init")
-                         (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))))
+                         (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))
+        (when (slot-spec-type spec)
+          (emit-object "        if (~a != DY_UNBOUND) dy_check_type(value, ~a);"
+                       (sdef-c sd "type") (sdef-c sd "type")))
+        (emit-object "        *place = value;~%    }")))
     (emit-object "    if (DY_UNLIKELY(*place == DY_UNBOUND)) dy_unbound_slot(~a);" (slot-name-c sd))
     (emit-object "    return *place;~%}")
     (push (make-gmethod :specs (list (owner-or-class-spec sd))

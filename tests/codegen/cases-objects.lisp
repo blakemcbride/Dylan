@@ -712,4 +712,21 @@ b-slot
   "(\"the slot x is not initialized\" ())
 {instance of <b>}
 ")
+
+ ;; Chapter 6, "Adding Slots After Instance Creation": an instance made
+ ;; before define-slot added a typed slot takes its initial value when it
+ ;; is updated (whenever that is), and the value is checked against the
+ ;; slot's type, as make checks it.
+ (define-slot-initial-value-type
+  "(define-method msg (thunk) (handler-case (thunk) ((<error> condition: c) (format #f \"~a\" c))))
+   (define-class <b> (<object>))
+   (define b (make <b>))
+   (print (msg (method () (define-slot <b> t type: <integer> init-value: 2.5) (+ (t b) 1))))
+   (define-class <c> (<object>))
+   (define c (make <c>))
+   (print (msg (method () (define-slot <c> u type: <integer> init-function: (method () \"str\"))
+                          (+ (u c) 1))))"
+  "\"2.5 is not an instance of {the class <integer>}\"
+\"\\\"str\\\" is not an instance of {the class <integer>}\"
+")
 )

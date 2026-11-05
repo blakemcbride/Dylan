@@ -249,7 +249,8 @@ new instance of CLASS, by default FIRST's class-for-copy."
           (let ((result
                   ;; An array is made with the first array's dimensions.
                   (if (subclass? class <array>)
-                      (dylan-call dylan/make class
+                      (dylan-call dylan/make
+                                  (if (eq class <%general-array>) <array> class)
                                   :dimensions (dylan-call dylan/dimensions
                                                           first))
                       (dylan-call dylan/make class))))

@@ -107,6 +107,11 @@
   (make-dylan-class '<range> (list <sequence>) '() nil))
 (defparameter <stretchy-vector>
   (make-dylan-class '<stretchy-vector> (list <vector>) '() nil))
+(defparameter <%general-array>          ; Internal: an array not of one dimension
+  ;; make of <array> answers a <simple-object-vector> for one dimension
+  ;; and an instance of this class for any other number, as in a compiled
+  ;; program; no program can name it.
+  (make-dylan-class '<%general-array> (list <array>) '() nil))
 
 ;;; Sealed
 

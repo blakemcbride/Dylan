@@ -1504,4 +1504,47 @@ error
 (#t (3 2 1))
 ({the class <pair>} (1 2 3) (3 2 1))
 ")
+
+ (arrays-the-same-in-both
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<type-error> condition: c) (object-class c))
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (define a (make <array> dimensions: '(2 3) fill: 0))
+   (print (list a (object-class a) (class-for-copy a) (instance? a <array>) (instance? a <vector>)))
+   (bind ((v (make <array> dimensions: '(3) fill: 1)))
+     (set! (element v 0) 3)
+     (print (list v (object-class v) (dimensions v) (aref v 0))))
+   (print (make <array> dimensions: '(0)))
+   (print (map + a a))
+   (print (as <array> '(1 2)))
+   (print (msg (method () (make <array>))))
+   (print (msg (method () (make <array> dimensions: 5))))
+   (print (msg (method () (make <array> dimensions: '(2 -1)))))
+   (print (msg (method () (element a '(1 5)))))
+   (print (msg (method () (set! (element a '(1 9)) 3))))
+   (print (msg (method () (aref a 1))))
+   (print (msg (method () (aref a 9 1))))
+   (print (msg (method () (set! (aref a 1 'x) 0))))
+   (print (msg (method () (aref #(1 2) 1 1))))
+   (print (msg (method () (dimensions 5))))
+   (print (msg (method () (aref 5 1))))"
+  "({<array> 0 0 0 0 0 0} {the class <%general-array>} {the class <%general-array>} #t #f)
+(#(3 1 1) {the class <simple-object-vector>} (3) 3)
+#()
+{<array> 0 0 0 0 0 0}
+#(1 2)
+\"make: <array> requires dimensions:\"
+\"make: the dimensions of an <array> are not non-negative integers: 5\"
+\"make: the dimensions of an <array> are not non-negative integers: (2 -1)\"
+\"element: there is no element at (1 5)\"
+\"element: there is no element at (1 9)\"
+\"aref: the wrong number of indices for {<array> 0 0 0 0 0 0}\"
+\"aref: the index 9 is out of bounds\"
+\"aref: the index x is out of bounds\"
+\"aref: the wrong number of indices for #(1 2)\"
+{the class <type-error>}
+{the class <type-error>}
+")
 )

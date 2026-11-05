@@ -13,14 +13,24 @@ module: dylan
 
 (define-method make ((class (singleton <array>)) #key dimensions (fill #f))
   (unless dimensions (error "make: <array> requires dimensions:"))
+  (unless (and (%instance? dimensions <sequence>)
+               (every? (method (d) (and (%instance? d <integer>) (not (negative? d))))
+                       dimensions))
+    (error "make: the dimensions of an <array> are not non-negative integers: ~s"
+           dimensions))
   (bind ((dims (as <list> dimensions)))
     (if (and (%pair? dims) (id? (cdr dims) '()))
         (%make-vector (car dims) fill)
         (%make <%general-array> dimensions: dims
                data: (%make-vector (reduce binary* 1 dims) fill)))))
 
+;;; A collection as an array: a vector of its elements, an array of one
+;;; dimension.
+(define-method as ((class (singleton <array>)) (c <collection>))
+  (if (%instance? c <array>) c (as <simple-object-vector> c)))
+
 (define dimensions
-  (method (array)
+  (method ((array <array>))
     (if (%instance? array <%general-array>)
         (%dimensions array)
         (list (size array)))))
@@ -40,7 +50,7 @@ module: dylan
       (index (%dimensions array) indices 0))))
 
 (define aref
-  (method (array #rest indices)
+  (method ((array <array>) #rest indices)
     (if (%instance? array <%general-array>)
         (%vector-element (%data array) (%row-major array indices))
         (if (and (%pair? indices) (id? (cdr indices) '()))
@@ -48,7 +58,7 @@ module: dylan
             (error "aref: the wrong number of indices for ~s" array)))))
 
 (define (setter aref)
-  (method (array #rest indices-and-new-value)
+  (method ((array <array>) #rest indices-and-new-value)
     (bind ((new-value (last indices-and-new-value))
            (indices (copy-sequence indices-and-new-value
                                    end: (binary- (%list-length indices-and-new-value) 1))))
@@ -71,7 +81,12 @@ module: dylan
             default))))
 
 (define-method (setter element) ((a <%general-array>) (indices <sequence>) new-value)
-  (apply (setter aref) a (append (as <list> indices) (list new-value))))
+  (bind ((l (as <list> indices)))
+    (unless (and (= (size l) (size (%dimensions a)))
+                 (every? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
+                         l (%dimensions a)))
+      (error "element: there is no element at ~s" indices))
+    (apply (setter aref) a (append l (list new-value)))))
 
 ;;; Row-major iteration; the state is the row-major index.
 (define-method initial-state ((a <%general-array>)) (if (zero? (size a)) #f 0))

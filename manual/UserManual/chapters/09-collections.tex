@@ -806,7 +806,12 @@ of indices. \code{make} takes \code{dimensions:} (required) and
 \code{fill:} (default \code{\#f}). \code{aref} reads the element at
 indices given as separate arguments, \code{(setter aref)} sets it, and
 \code{dimensions} answers the dimensions as a list. A vector is an array
-of one dimension.
+of one dimension: \code{make} of \code{<array>} with one dimension, and
+\code{as} of \code{<array>}, answer a \code{<simple-object-vector>}. An
+array of any other number of dimensions is an instance of an internal
+subclass of \code{<array>}, \code{<\%general-array>}, which no program
+can name; it prints as \code{\{<array> ...\}}. \code{aref} of a vector
+takes one index and finds it as \code{element} does.
 
 \begin{dylan}
 (define a (make <array> dimensions: '(2 3) fill: 0))

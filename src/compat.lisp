@@ -448,7 +448,7 @@ it."
 
 
 (declaim (special <condition> <simple-error> <simple-warning> <type-error>
-                  <range> <table> <sequence> <array>
+                  <range> <table> <sequence> <array> <%general-array>
                   dylan/print-object dylan/initial-state dylan/next-state
                   dylan/current-element dylan/current-key dylan/size))
 
@@ -548,7 +548,10 @@ it."
             (write-char #\} stream))
            ;; Any other sequence, or an array: its class and its elements
            ((or (subclass? class <sequence>) (subclass? class <array>))
-            (format stream "{~a" (dylan-class-name class))
+            ;; The internal class of an array prints as <array>.
+            (format stream "{~a" (if (eq class <%general-array>)
+                                     "<array>"
+                                     (dylan-class-name class)))
             (let ((size (dylan-call dylan/size object)))
               (cond ((false? size)
                      (out " ..."))

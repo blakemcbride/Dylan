@@ -173,6 +173,7 @@ simple object vector."
                    nil nil '(:dimensions :fill))
   (lambda (multiple-values next-method class &rest rest)
     (declare (ignore multiple-values))
+   (block make-array-method
     (labels ((make-multi-dimensional-array (dimensions fill)
                ;; An array of no dimensions has one element, kept in a
                ;; vector of one (see LOCATE-ARRAY-ELEMENT).
@@ -193,28 +194,33 @@ simple object vector."
               (dylan%find-keyword
                rest :dimensions
                (lambda ()
-                 (dylan-call dylan/error "make -- array needs dimensions"
-                             class rest))))
+                 (dylan-call dylan/error "make: <array> requires dimensions:"))))
             (fill-value (dylan%find-keyword rest :fill (lambda () dylan%false))))
+        (declare (ignore class))
+        (flet ((bad-dimensions ()
+                 (dylan-call dylan/error
+                             "make: the dimensions of an <array> are not non-negative integers: ~s"
+                             dimensions)))
         (unless (subclass? (get-type dimensions) <sequence>)
-          (dylan-call dylan/error "make -- array dimensions not a sequence"
-                      class dimensions))
-        (let ((instance (dylan%make-<object> <array>))
+          (bad-dimensions))
+        (let ((instance (dylan%make-<object> <%general-array>))
               (dim-list
                 (iterate->list
                  (lambda (elem)
                    ;; Chapter 12: non-negative integers.
                    (if (not (and (integerp elem) (not (minusp elem))))
-                       (dylan-call
-                        dylan/error
-                        "make -- dimension elements not all non-negative integers"
-                        class dimensions elem)
+                       (bad-dimensions)
                        elem))
                  dimensions)))
+          ;; One dimension: a <simple-object-vector>, as in a compiled
+          ;; program (a vector is an array of one dimension).
+          (when (and (consp dim-list) (null (cdr dim-list)))
+            (return-from make-array-method
+              (make-array (car dim-list) :initial-element fill-value)))
           (dylan-call dylan/set-array-value! instance
                       (make-multi-dimensional-array dim-list fill-value))
           (dylan-call dylan/set-array-dimensions! instance dim-list)
-          instance))))))
+          instance))))))))
 
 ;;;;
 ;;;; Operations on Arrays (page 113)
@@ -229,35 +235,51 @@ simple object vector."
 
 (defun locate-array-element (array-instance indices fail)
   "Answer the row vector holding element INDICES of ARRAY-INSTANCE and the
-index within it, or call FAIL with an error message if INDICES are the
-wrong number or out of bounds (chapter 12)."
+index within it, or call FAIL with :COUNT, or :BOUNDS and the first index
+not within its dimension, if INDICES are the wrong number or out of bounds
+(chapter 12).  The indices are checked in turn against the dimensions, as
+in a compiled program."
   (let ((dimensions (dylan-call dylan/get-array-dimensions array-instance)))
-    (cond ((/= (length indices) (length dimensions))
-           (funcall fail "wrong number of subscripts"))
-          ((notevery (lambda (index dimension)
-                       (and (integerp index) (< -1 index dimension)))
-                     indices dimensions)
-           (funcall fail "subscript out of range"))
-          ((null indices)               ; No dimensions: the one element
-           (values (dylan-call dylan/get-array-value array-instance) 0))
-          (t (let ((row (dylan-call dylan/get-array-value array-instance)))
-               (dolist (index (butlast indices))
-                 (setf row (aref row index)))
-               (values row (car (cl:last indices))))))))
+    (loop for ds = dimensions then (cdr ds)
+          for is = indices then (cdr is)
+          until (and (null ds) (null is))
+          do (cond ((or (null ds) (null is))
+                    (return (funcall fail :count nil)))
+                   ((not (and (integerp (car is)) (< -1 (car is) (car ds))))
+                    (return (funcall fail :bounds (car is))))))
+    (if (null indices)                  ; No dimensions: the one element
+        (values (dylan-call dylan/get-array-value array-instance) 0)
+        (let ((row (dylan-call dylan/get-array-value array-instance)))
+          (dolist (index (butlast indices))
+            (setf row (aref row index)))
+          (values row (car (cl:last indices)))))))
+
+(defun general-array-p (object)
+  (and (instance? object) (eq (instance.class object) <%general-array>)))
+
+(defun aref-error (array kind index)
+  (if (eq kind :count)
+      (dylan-call dylan/error "aref: the wrong number of indices for ~s" array)
+      (dylan-call dylan/error "aref: the index ~s is out of bounds" index)))
 
 ;;; Chapter 12: aref and dimensions are functions, not generic functions.
 (defparameter dylan/aref
   (dylan%function->method
    (make-param-list `((array ,<array>)) nil t nil)
+   ;; An array not of one dimension is found by its indices; any other,
+   ;; a vector, by its one index, as element finds it -- as in a compiled
+   ;; program.
    (lambda (array-instance &rest indices)
      (dylan-call dylan/check-type array-instance <array>)
-     (multiple-value-bind (row index)
-         (locate-array-element
-          array-instance indices
-          (lambda (message)
-            (dylan-call dylan/error (concatenate 'string "aref -- " message)
-                        array-instance indices)))
-       (aref row index)))))
+     (cond ((general-array-p array-instance)
+            (multiple-value-bind (row index)
+                (locate-array-element
+                 array-instance indices
+                 (lambda (kind index) (aref-error array-instance kind index)))
+              (aref row index)))
+           ((and (consp indices) (null (cdr indices)))
+            (dylan-call dylan/element array-instance (car indices)))
+           (t (aref-error array-instance :count nil))))))
 
 (defparameter dylan/setter/aref/
   (dylan%function->method
@@ -270,14 +292,16 @@ wrong number or out of bounds (chapter 12)."
                    array-instance))
      (let ((new-value (car (cl:last indices-and-new-value)))
            (indices (butlast indices-and-new-value)))
-       (multiple-value-bind (row index)
-           (locate-array-element
-            array-instance indices
-            (lambda (message)
-              (dylan-call dylan/error
-                          (concatenate 'string "(setter aref) -- " message)
-                          array-instance indices)))
-         (setf (aref row index) new-value))))))
+       (cond ((general-array-p array-instance)
+              (multiple-value-bind (row index)
+                  (locate-array-element
+                   array-instance indices
+                   (lambda (kind index) (aref-error array-instance kind index)))
+                (setf (aref row index) new-value)))
+             ((and (consp indices) (null (cdr indices)))
+              (dylan-call dylan/setter/element/ array-instance (car indices)
+                          new-value))
+             (t (aref-error array-instance :count nil)))))))
 
 (defparameter dylan/dimensions
   (dylan%function->method
@@ -303,14 +327,30 @@ wrong number or out of bounds (chapter 12)."
         (multiple-value-bind (row index)
             (locate-array-element
              array-instance (iterate->list #'identity index-sequence)
-             (lambda (message)
+             (lambda (kind index)
+               (declare (ignore kind index))
                (return-from element
                  (if (eq default no-default)
-                     (dylan-call dylan/error
-                                 (concatenate 'string "element -- " message)
-                                 array-instance index-sequence)
+                     (dylan-call dylan/error "element: there is no element at ~s"
+                                 index-sequence)
                      default))))
           (aref row index)))))))
+
+(add-method
+ dylan/setter/element/
+ (dylan%function->method
+  (make-param-list `((array ,<%general-array>) (index ,<sequence>)
+                     (new-value ,<object>))
+                   nil nil nil)
+  (lambda (array-instance index-sequence new-value)
+    (multiple-value-bind (row index)
+        (locate-array-element
+         array-instance (iterate->list #'identity index-sequence)
+         (lambda (kind index)
+           (declare (ignore kind index))
+           (dylan-call dylan/error "element: there is no element at ~s"
+                       index-sequence)))
+      (setf (aref row index) new-value)))))
 
 (add-method
  dylan/current-key

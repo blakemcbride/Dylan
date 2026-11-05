@@ -112,12 +112,18 @@ a compiled program reports an unhandled error, and exit with status 1."
     (or (named-p input)
         (and (consp input) (null (cdr input)) (named-p (car input))))))
 
-;;; dylan:done leaves the loop; exit leaves Lisp as well.
+;;; dylan:done leaves the loop; exit leaves Lisp as well -- unless the
+;;; program has given the variable exit a value of its own, which (exit)
+;;; then calls.
+
 (defun rep-done-p (input)
   (rep-command-p input "DYLAN:DONE"))
 
 (defun rep-exit-p (input)
-  (and (consp input) (rep-command-p input "EXIT")))
+  (and (consp input) (rep-command-p input "EXIT")
+       (let ((variable (name->module-variable (variable->name (car input)))))
+         (not (and (boundp variable)
+                   (not (eq (symbol-value variable) the-unassigned-value)))))))
 
 ;;; (dylan:in-module name) switches the module later input is compiled in.
 (defun rep-in-module-p (input)

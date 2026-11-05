@@ -156,6 +156,11 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# (exit) is the loop's command to quit, unless the program defines exit
+printf "(print 'one)\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
+check "bin/dylan: (exit) quits" sh -c 'grep -q "^one" exit.out && ! grep -q "^two" exit.out'
+printf "(define-method exit () (print 'mine))\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
+check "bin/dylan: (exit) calls a program's exit" sh -c 'grep -q "^mine" exit.out && grep -q "^two" exit.out'
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

@@ -208,7 +208,8 @@ may also be typed in parentheses, as \code{(dylan:done)}.
 Typing \code{(exit)} quits altogether: it ends \file{bin/dylan}, and in a
 Lisp you loaded the system into, it ends the Lisp as well. It is a command
 of the loop, like \code{dylan:done}, not a Dylan function; a variable
-named \code{exit} is still evaluated when typed bare. Typing \code{(dylan:in-module \meta{name})} at the
+named \code{exit} is still evaluated when typed bare, and once your program
+has given \code{exit} a value, \code{(exit)} calls it instead. Typing \code{(dylan:in-module \meta{name})} at the
 \code{?} prompt changes the module later input is compiled in
 (Section~\ref{sec:modules-lisp}).
 

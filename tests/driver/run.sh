@@ -128,6 +128,24 @@ check "no files: status 2" test "$status" = 2
 "$dylanc" nonesuch.dyl >/dev/null 2>&1; status=$?
 check "a missing file: status 2" test "$status" = 2
 check "-h" sh -c "'$dylanc' -h | grep -q Usage"
+# No file of the user's is replaced or deleted but the executable
+cp main.dyl src
+"$dylanc" src >/dev/null 2>&1; status=$?
+check "an executable that would replace its source: status 2" test "$status" = 2
+check "the source kept" cmp -s main.dyl src
+"$dylanc" -o src greet.dyl src >/dev/null 2>&1; status=$?
+check "-o naming a source: status 2" test "$status" = 2
+check "that source kept" cmp -s main.dyl src
+echo '(print 3)' > three.c
+"$dylanc" -k three.c >/dev/null 2>&1; status=$?
+check "-k C that would replace its source: status 2" test "$status" = 2
+check "nothing written" test ! -e three.h -a ! -e three-dylan.c
+check "a source named .c" output_is 3 sh -c "'$dylanc' three.c && ./three"
+check "a source named .c kept" output_is '(print 3)' cat three.c
+echo mine > other.c; echo mine > other.h; cp main.dyl other.dyl
+check "other.c beside other.dyl" "$dylanc" greet.dyl other.dyl -o other
+check "other.c and other.h kept" sh -c 'test "$(cat other.c other.h)" = "mine
+mine"'
 # A file name with characters Common Lisp takes for wildcards, and ??,
 # which C takes for the start of a trigraph
 cp main.dyl 'w??!*[1].dyl'

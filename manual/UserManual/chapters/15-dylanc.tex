@@ -171,8 +171,10 @@ described below, with the occasions for using it.
   program runs. Section~\ref{sec:dylanc-debug} has more.
 
 \item[\cmd{-k}, \cmd{-{}-keep-c}]
-  Keeps the C files, which are otherwise deleted once the executable is
-  made. Use it to read what the compiler wrote
+  Keeps the C files, beside the executable. Without it they are written
+  in a temporary directory of the compiler's own and deleted with it once
+  the executable is made, so that no file but the executable is written.
+  Use it to read what the compiler wrote
   (Section~\ref{sec:internals-reading}), or to see what a debugger is
   showing you.
 
@@ -241,7 +243,8 @@ else is given; otherwise \cmd{-g} wins over \cmd{-Os}, and \cmd{-Os} over
 
 \index{C files}
 For a program whose executable is \meta{name}, the compiler writes these
-C files:
+C files (beside the executable with \cmd{-k} or \cmd{-C}; otherwise in a
+temporary directory, deleted after the build):
 
 \begin{description}
 \item[\file{\meta{name}.c}] The program's static data --- every class,
@@ -614,7 +617,10 @@ began earlier.
 the program had errors or the C compiler failed (``\code{dylanc: the C
 compiler failed.}''); and 2 for a bad command line --- an unknown option,
 an option missing its value, no files, or a file that does not exist ---
-after printing the usage summary.
+after printing the usage summary. It is 2 too, with nothing written, when
+the executable or one of the C files would replace one of the Dylan files
+being compiled (as \cmd{dylanc prog} would, for a file \file{prog} with no
+\file{.dyl}); name the executable with \cmd{-o}.
 
 \section{Errors when running}\label{sec:dylanc-runtime-errors}
 

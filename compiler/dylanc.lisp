@@ -15,6 +15,8 @@
 (let ((*standard-output* (make-broadcast-stream)))
   (load (merge-pathnames "load.lisp" (or *load-truename* *default-pathname-defaults*))))
 
+(require :sb-posix)
+
 (in-package #:dylan-compiler)
 
 (defparameter *usage* "Usage: dylanc [options] file.dyl ...
@@ -103,6 +105,30 @@ Options:
   (let ((p (native-pathname file)))
     (native-name (make-pathname :type nil :defaults p))))
 
+(defun refuse (control &rest arguments)
+  "Report a command line that would destroy a file, and exit with 2."
+  (format *error-output* "dylanc: ~?.~%" control arguments)
+  (sb-ext:exit :code 2 :abort t))
+
+(defun input-truenames (files)
+  (mapcar (lambda (f) (probe-file (native-pathname f))) files))
+
+(defun temporary-directory ()
+  "A new, empty directory of this process's own, for the C of a build
+that does not keep it, so that no file of the user's is written or
+deleted but the executable."
+  (let ((base (or (sb-ext:posix-getenv "TMPDIR") "/tmp")))
+    (sb-ext:parse-native-namestring
+     (concatenate 'string
+                  (sb-posix:mkdtemp (concatenate 'string (string-right-trim "/" base)
+                                                 "/dylanc-XXXXXX"))
+                  "/"))))
+
+(defun file-basename (name)
+  "The last component of the file name NAME."
+  (let ((slash (position #\/ name :from-end t)))
+    (if slash (subseq name (1+ slash)) name)))
+
 (defun expand-only (files)
   "Write each use of the program's macros in FILES and its expansion."
   (let* ((program (let ((*expansion-trace* *standard-output*))
@@ -116,34 +142,54 @@ Options:
          (*gc* (or (getf options :gc) *gc*))
          (files (getf options :files))
          (output (or (getf options :output) (default-output (first files))))
-         (c-file (concatenate 'string output ".c"))
+         (*protected-files* (input-truenames files))
          (variant (progn (when (getf options :expand) (expand-only files))
                          (getf options :variant)))
-         (*separate-library* (separate-library-p (getf options :size) (getf options :whole)))
-         (c-files (let ((*debug* (or (getf options :debug) (member variant '(:address :thread))))
-                        (*emit-lines* (not (getf options :no-lines))))
-                    (compile-files files c-file))))
-    (unless c-files (sb-ext:exit :code 1 :abort t))
-    (unless (getf options :c-only)
-      (let ((ok (handler-case
-                    (build-c c-files output
-                             :trampoline (getf options :trampoline)
-                             :cc (getf options :cc)
-                             :optimize (getf options :optimize)
-                             :size (getf options :size)
-                             :debug (getf options :debug)
-                             :variant variant
-                             :lto (getf options :lto))
-                  (build-failure (e)
-                    (format *error-output* "dylanc: ~a.~%" e)
-                    :reported))))
-        (unless (getf options :keep)
-          (dolist (f (cons (header-pathname c-file) c-files))
-            (when (probe-file f) (delete-file f))))
-        (unless (eq ok t)
-          (unless ok (format *error-output* "dylanc: the C compiler failed.~%"))
-          (sb-ext:exit :code 1 :abort t))))
-    (finish-output)
-    (sb-ext:exit :code 0)))
+         (keep-c (or (getf options :keep) (getf options :c-only)))
+         ;; The C is written beside the executable only when it is kept;
+         ;; otherwise in a directory of dylanc's own, removed afterwards
+         (c-directory (unless keep-c (temporary-directory)))
+         (c-file (if c-directory
+                     (concatenate 'string (native-name c-directory) (file-basename output) ".c")
+                     (concatenate 'string output ".c")))
+         (*separate-library* (separate-library-p (getf options :size) (getf options :whole))))
+    (flet ((finish (code)
+             (when c-directory
+               (sb-ext:delete-directory c-directory :recursive t))
+             (finish-output)
+             (sb-ext:exit :code code :abort (/= code 0))))
+      (unless (getf options :c-only)
+        (let ((existing (probe-file (native-pathname output))))
+          (when (and existing (member existing *protected-files* :test #'equal))
+            (when c-directory
+              (sb-ext:delete-directory c-directory :recursive t))
+            (refuse "the executable ~a would replace the input of that name; name another with -o"
+                    output))))
+      (let ((c-files (handler-case
+                         (let ((*debug* (or (getf options :debug)
+                                            (member variant '(:address :thread))))
+                               (*emit-lines* (not (getf options :no-lines))))
+                           (compile-files files c-file))
+                       (protected-file (e)
+                         (format *error-output* "dylanc: ~a.~%" e)
+                         (finish 2)))))
+        (unless c-files (finish 1))
+        (unless (getf options :c-only)
+          (let ((ok (handler-case
+                        (build-c c-files output
+                                 :trampoline (getf options :trampoline)
+                                 :cc (getf options :cc)
+                                 :optimize (getf options :optimize)
+                                 :size (getf options :size)
+                                 :debug (getf options :debug)
+                                 :variant variant
+                                 :lto (getf options :lto))
+                      (build-failure (e)
+                        (format *error-output* "dylanc: ~a.~%" e)
+                        :reported))))
+            (unless (eq ok t)
+              (unless ok (format *error-output* "dylanc: the C compiler failed.~%"))
+              (finish 1))))
+        (finish 0)))))
 
 (main (rest sb-ext:*posix-argv*))

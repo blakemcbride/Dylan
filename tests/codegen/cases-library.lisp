@@ -1478,4 +1478,30 @@ error
 \"add: the range is unbounded\"
 \"concatenate: the range is unbounded\"
 ")
+
+ (reverse!-and-sort!-in-place
+  "(define-method sv (l) (bind ((v (make <stretchy-vector>))) (for-each ((e l)) () (add! v e)) v))
+   (define-method dq (l) (bind ((v (make <deque>))) (for-each ((e l)) () (push-last v e)) v))
+   (define-method try (name make)
+     (bind ((a (make)) (r (reverse! a)) (b (make)) (s (sort! b)) (c (make)) (u (sort! c test: >)))
+       (print (list name (as <list> a) (id? a r) (as <list> r)
+                    (as <list> b) (id? b s) (as <list> s) (as <list> u)))))
+   (try 'sov (method () (vector 3 1 2)))
+   (try 'str (method () (as <byte-string> (list #\\c #\\a #\\b))))
+   (try 'sv (method () (sv '(3 1 2))))
+   (try 'dq (method () (dq '(3 1 2))))
+   (try 'list (method () (list 3 1 2)))
+   (bind ((v (sv '(5 4 3 2 1)))) (set! (size v) 3) (reverse! v) (add! v 9) (print (as <list> v)))
+   (bind ((r (range from: 1 size: 3))) (print (list (id? r (reverse! r)) (as <list> r))))
+   (bind ((r (range from: 3 by: -1 size: 3)) (s (sort! r)))
+     (print (list (object-class s) s (as <list> r))))"
+  "(sov (2 1 3) #t (2 1 3) (1 2 3) #t (1 2 3) (3 2 1))
+(str (#\\b #\\a #\\c) #t (#\\b #\\a #\\c) (#\\a #\\b #\\c) #t (#\\a #\\b #\\c) (#\\c #\\b #\\a))
+(sv (2 1 3) #t (2 1 3) (1 2 3) #t (1 2 3) (3 2 1))
+(dq (2 1 3) #t (2 1 3) (1 2 3) #t (1 2 3) (3 2 1))
+(list (3) #f (2 1 3) (1 2 3) #t (1 2 3) (3 2 1))
+(3 4 5 9)
+(#t (3 2 1))
+({the class <pair>} (1 2 3) (3 2 1))
+")
 )

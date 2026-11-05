@@ -644,11 +644,16 @@ constant; see section~\ref{sec:collections-strings}.)
 \subsection{Reversing and sorting}
 
 \index{reverse}\index{reverse"!}\index{sort}\index{sort"!}
-\code{reverse} answers the elements in the opposite order and
-\code{reverse!} may reuse the sequence's storage. \code{sort} answers the
-elements in ascending order by \code{test:}, which defaults to \code{<};
-\code{sort!} may reuse the storage. Both sorts are stable, keeping equal
-elements in their original order, whether or not \code{stable:} is given.
+\code{reverse} answers the elements in the opposite order. \code{sort}
+answers the elements in ascending order by \code{test:}, which defaults
+to \code{<}. Both sorts are stable, keeping equal elements in their
+original order, whether or not \code{stable:} is given.
+\code{reverse!} and \code{sort!} reuse the storage of a mutable
+sequence: they put its elements in the new order and answer the
+sequence itself, except that \code{reverse!} of a list relinks its pairs
+and answers the new first pair, so the variable that held the list then
+holds its last pair. On a range they answer what \code{reverse} and
+\code{sort} do.
 
 \begin{dylan}
 (define x '(bim bam boom))
@@ -656,6 +661,9 @@ elements in their original order, whether or not \code{stable:} is given.
 x                            ; => (bim bam boom)
 (reverse "abc")              ; => "cba"
 (reverse! (list 1 2 3))      ; => (3 2 1)
+(define v (vector 3 1 2))
+(sort! v)                    ; => #(1 2 3)
+v                            ; => #(1 2 3)
 (define nums '(3 1 4 1 5 9))
 (sort nums)                  ; => (1 1 3 4 5 9)
 nums                         ; => (3 1 4 1 5 9)

@@ -182,6 +182,19 @@ module: dylan
 (define-generic-function reverse! (sequence))
 (define-method reverse! ((s <sequence>)) (reverse s))
 
+;;; Sequences that can reuse storage for reverse! and sort! should
+;;; (chapter 12): a mutable sequence gets its elements back in the new
+;;; order, and is the result.
+(define %replace-elements!
+  (method (s l)
+    (for ((state (initial-state s) (next-state s state))
+          (l l (cdr l)))
+         ((or (not state) (id? l '())) s)
+      (set! (current-element s state) (car l)))))
+
+(define-method reverse! ((s <mutable-sequence>))
+  (%replace-elements! s (%list-reverse (%elements s))))
+
 ;;; A stable merge sort of V, a fresh simple object vector: runs of
 ;;; WIDTH merged into runs twice as long, from one vector to the other, an
 ;;; element of the first run going first when neither is less.  Answers
@@ -231,6 +244,12 @@ module: dylan
 (define-generic-function sort! (sequence #key test stable))
 (define-method sort! ((s <sequence>) #key (test <) stable)
   (sort s test: test))
+
+(define-method sort! ((s <mutable-sequence>) #key (test <) stable)
+  (bind ((v (%sort-vector (%elements-vector s) (if (id? test <) binary< test))))
+    (%replace-elements! s (for ((i (binary- (size v) 1) (binary- i 1))
+                                (l '() (cons (element v i) l)))
+                               ((binary< i 0) l)))))
 
 ;;; Particular elements
 

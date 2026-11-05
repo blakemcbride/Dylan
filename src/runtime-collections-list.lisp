@@ -201,6 +201,19 @@
 
 (add-method dylan/reverse (dylan%function->method one-list #'reverse))
 
+;; The pairs themselves, relinked, as in a compiled program.
+(add-method dylan/reverse!
+            (dylan%function->method
+             one-list
+             (lambda (list)
+               (let ((result '()))
+                 (loop while (consp list)
+                       do (let ((next (cdr list)))
+                            (setf (cdr list) result
+                                  result list
+                                  list next)))
+                 result))))
+
 ;;;;
 ;;;; Operations on LISTS (page 115)
 ;;;;

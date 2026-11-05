@@ -404,9 +404,24 @@
    (lambda (seq-1)
      (list->sequence-like seq-1 (reverse (sequence->list seq-1))))))
 
+;;; Sequences that can reuse storage for reverse! and sort! should
+;;; (chapter 12): a mutable sequence gets its elements back in the new
+;;; order, and is the result, as in a compiled program.
+(defun mutable-sequence-p (sequence)
+  (true? (dylan-call dylan/instance? sequence <mutable-sequence>)))
+
+(defun replace-elements! (sequence elements)
+  (loop for state = (initial-state sequence) then (next-state sequence state)
+        while (and state elements)
+        do (set-current-element sequence state (pop elements)))
+  sequence)
+
 (defparameter dylan/reverse!
   (dylan%generic-fn 'reverse! one-sequence
-                    (lambda (seq-1) (dylan-call dylan/reverse seq-1))))
+                    (lambda (seq-1)
+                      (if (mutable-sequence-p seq-1)
+                          (replace-elements! seq-1 (reverse (sequence->list seq-1)))
+                          (dylan-call dylan/reverse seq-1)))))
 
 (defparameter dylan/sort
   (dylan%generic-fn
@@ -441,9 +456,12 @@
   (lambda (multiple-values next-method seq &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :stable))
-    (let ((test? (dylan%find-keyword rest :test (lambda () dylan/<)))
-          (stable (dylan%find-keyword rest :stable (lambda () dylan%false))))
-      (dylan-call dylan/sort seq :test test? :stable stable)))))
+    (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/<)))
+           (stable (dylan%find-keyword rest :stable (lambda () dylan%false)))
+           (sorted (dylan-call dylan/sort seq :test test? :stable stable)))
+      (if (mutable-sequence-p seq)
+          (replace-elements! seq (sequence->list sorted))
+          sorted)))))
 
 ;;; First, second, third and last take default: (design note 2): the value
 ;;; when the sequence has no such element, which is otherwise an error.

@@ -2,10 +2,12 @@
 # Copyright 2026 Blake McBride.  See ../../LICENSE.
 #
 # Tests of the compiler's command line, bin/dylanc (CompilerPlan.md,
-# Phase 10):  sh tests/driver/run.sh
+# Phase 10), and of bin/dylan reading a file:  sh tests/driver/run.sh
+# (bin/dylan is built by make)
 
 here=$(dirname "$(readlink -f "$0")")
 dylanc="$here/../../bin/dylanc"
+dylan="$here/../../bin/dylan"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work" || exit 1
@@ -138,6 +140,22 @@ check "a missing file with ? in its name: status 2" test "$status" = 2
 check "no C compiler: status 1" test "$status" = 1
 check "no C compiler: reported plainly" sh -c '! grep -q Backtrace nocc.out && grep -q "the C compiler failed" nocc.out'
 check "no C compiler: no C left" test ! -e nocc.c -a ! -e nocc.h
+# bin/dylan < file: an unhandled error ends the run, as it ends a
+# compiled program, and break carries on
+cat > batch.dyl <<'EOF'
+(print 1)
+(break "look ~a" 42)
+(print 2)
+(car 5)
+(print 3)
+EOF
+"$dylan" < batch.dyl > batch.out 2> batch.err; status=$?
+check "bin/dylan < file: an error's status is 1" test "$status" = 1
+check "bin/dylan < file: stops at the error" sh -c 'grep -q "^2" batch.out && ! grep -q "^3" batch.out'
+check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
+check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
+echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
+check "bin/dylan < file: status 0 without an error" test "$status" = 0
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

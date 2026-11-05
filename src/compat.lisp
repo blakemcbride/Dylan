@@ -1137,9 +1137,21 @@ native Lisp one.")
 (defun implementation-specific/get-dylan-handler-frames ()
   *dylan-handler-frames*)
 
+(defvar *batch* nil
+  "True when the read-eval-print loop reads a file, not a person at a
+terminal: bin/dylan < program.dyl.  No one is there to use the debugger,
+which would take the program's next forms for its commands, so break
+reports its message and carries on, and an unhandled error ends the run
+(END-BATCH-RUN), as each does in a compiled program.")
+
 (defun implementation-specific/enter-debugger (dylan-condition)
-  (break "Dylan breakpoint: ~a" (with-output-to-string (s)
-                                   (dylan-write dylan-condition s))))
+  (let ((message (with-output-to-string (s) (dylan-write dylan-condition s))))
+    (if *batch*
+        (progn
+          (finish-output *standard-output*)
+          (format *error-output* "~&Dylan break: ~a~%" message)
+          (finish-output *error-output*))
+        (break "Dylan breakpoint: ~a" message))))
 
 (declaim (special <restart>))
 

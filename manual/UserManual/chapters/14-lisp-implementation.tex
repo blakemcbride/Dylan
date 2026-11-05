@@ -330,7 +330,11 @@ handler still catches these errors as instances of \code{<error>}:
 \index{test@\code{dylan:test}}
 The loop reads from standard input, so \cmd{bin/dylan < fact.dyl} runs
 a file, printing each value as if it had been typed; at the end of the
-file the program exits. The loop has no command to load a file of Dylan.
+file the program exits. An unhandled error ends it there, with
+\code{Dylan error:} and its message on the standard error and status~1,
+and \code{break} prints its message and carries on, as in a compiled
+program, since the debugger would take the rest of the file for its
+commands. The loop has no command to load a file of Dylan.
 The regression test driver can do it: \code{dylan:test} reads a
 file form by form, echoes each form, runs it, and prints its value, or
 the message of an error, and goes on to the next form.

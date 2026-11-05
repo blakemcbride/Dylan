@@ -62,6 +62,29 @@ and their values."
       (makunbound (name->module-variable name))))
   (setf rep-module-variables '()))
 
+(defun batch-error-message (condition)
+  "The message of CONDITION, an error no handler took, as a compiled
+program reports it."
+  (typecase condition
+    (dylan-condition
+     (dylan-format-message (dylan-condition-message condition)
+                           (dylan-condition-irritants condition)))
+    (unhandled-dylan-condition
+     (let ((*dylan-debug-print* t))
+       (with-output-to-string (s)
+         (dylan-write (unhandled-dylan-condition-object condition) s))))
+    (t (princ-to-string condition))))
+
+(defun end-batch-run (condition hook)
+  "The debugger when the loop reads a file (*BATCH*): report CONDITION as
+a compiled program reports an unhandled error, and exit with status 1."
+  (declare (ignore hook))
+  (finish-output *standard-output*)
+  (format *error-output* "~&Dylan error: ~a~%" (batch-error-message condition))
+  (finish-output *error-output*)
+  #+sbcl (sb-ext:exit :code 1 :abort t)
+  #-sbcl (abort))
+
 (defun print-rep-result (result multiple-values)
   (if (eq result multiple-values)
       (progn

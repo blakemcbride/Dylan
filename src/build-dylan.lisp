@@ -12,7 +12,12 @@
 
 (defun dylan-main ()
   "The executable's entry: a read-eval-print loop, then exit.  The
-debugger's ABORT, or an interrupt while reading, starts the loop again."
+debugger's ABORT, or an interrupt while reading, starts the loop again.
+Reading a file, not a terminal, there is no debugger: an unhandled error
+ends the run with status 1 (DYLAN::*BATCH*)."
+  (unless (eql 1 (sb-unix:unix-isatty 0))
+    (setf dylan::*batch* t
+          sb-ext:*invoke-debugger-hook* #'dylan::end-batch-run))
   (loop
     (with-simple-restart (abort "Return to the Dylan read-eval-print loop.")
       (dylan:rep)

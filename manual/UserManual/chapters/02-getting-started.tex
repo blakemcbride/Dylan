@@ -249,8 +249,10 @@ $ bin/dylan < program.dyl
 \end{shell}
 
 Each form's value is printed after \code{;Value:}, as if you had typed it.
-An unhandled error prints the debugger's report and ends the run, since
-the debugger finds no more input.
+Since no one is there to use the debugger, an unhandled error ends the run
+as it ends a compiled program: it prints \code{Dylan error:} and its
+message on the standard error, and the status is~1. \code{break} prints
+\code{Dylan break:} and its message, and the run carries on.
 
 \section{Compiling a file to Lisp}\label{sec:start-compile-file}
 

@@ -1341,6 +1341,18 @@ error
 error
 ")
 
+ ;; Chapter 9: id? takes object1 object2 #rest objects, as = and < do.
+ (id-needs-two-arguments
+  "(define-method try (f)
+     (handler-case (f 1) ((<error>) 'error)))
+   (print (map try (list id? = < > <= >=)))
+   (print (handler-case (id? 1) ((<error>) 'error)))
+   (print (list (id? 1 1) (id? 1 1 1) (id? 1 1 2)))"
+  "(error error error error error error)
+error
+(#t #t #f)
+")
+
  ;; A real argument never gives a complex result: no compiled program has
  ;; complex numbers, so both signal the same error.
  (real-arguments-real-results

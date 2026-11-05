@@ -16,7 +16,7 @@
 /* id? (chapter 9): identity, except that numbers of one class and value
  * are id?. */
 PRIMITIVE(id) {
-    need(self, argc, 1, -1);
+    need(self, argc, 2, -1);    /* chapter 9: object1 object2 #rest objects */
     for (intptr_t i = 0; i + 1 < argc; i++)
         if (!dy_identical(ARG(i), ARG(i + 1))) return DY_FALSE;
     return DY_TRUE;

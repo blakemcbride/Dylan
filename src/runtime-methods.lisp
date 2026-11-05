@@ -185,8 +185,9 @@
 (defparameter dylan/id?
   (dylan%function->method
    at-least-two-objects
-   (lambda (obj1 &rest others)
-     (bool (every (lambda (x) (id? obj1 x)) others)))))
+   (lambda (obj1 obj2 &rest others)
+     (bool (and (id? obj1 obj2)
+                (every (lambda (x) (id? obj1 x)) others))))))
 
 (defparameter dylan/min
   (dylan%function->method

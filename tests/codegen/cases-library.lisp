@@ -1219,4 +1219,38 @@ neg
 (#(2 1 3) #(1 2 3) #(30 10 20) #(3 1 2 4))
 (#(3 1 2) #(0 3 1 2) #(3 2) #(3 1))
 ")
+
+ ;; A <unicode-string> holds characters above code 255 however it is
+ ;; made -- make, as, concatenate, map -- and the sequence functions
+ ;; answer <unicode-string>s of them.
+ (wide-unicode-strings
+  "(define try (method (f) (handler-case (f) ((<error>) 'error))))
+   (define lam (as <character> 955))
+   (print (make <unicode-string> size: 2 fill: lam))
+   (print (list (concatenate \"λ\" \"λ\") (object-class (concatenate \"λ\" \"λ\"))))
+   (print (try (method () (concatenate \"ab\" \"λ\"))))
+   (print (as <unicode-string> (list lam #\\a)))
+   (print (map identity (as <unicode-string> (list lam))))
+   (print (concatenate (as <unicode-string> \"ab\") (list lam)))
+   (print (try (method () (as <byte-string> (list lam)))))
+   (print (map-as <unicode-string> (method (c) lam) \"ab\"))
+   (print (bind ((s (make <unicode-string> size: 1))) (set! (element s 0) lam) s))
+   (print (try (method () (bind ((s (make <byte-string> size: 1))) (set! (element s 0) lam) s))))
+   (define u (as <unicode-string> (list #\\b lam #\\a)))
+   (print (map (method (x) (list x (object-class x)))
+               (list (reverse u) (add u #\\z) (copy-sequence u start: 1) (as-uppercase u)
+                     (choose (method (c) #t) u) (remove u #\\a) (sort u)
+                     (as <unicode-string> \"ba\"))))"
+  "\"λλ\"
+(\"λλ\" {the class <unicode-string>})
+error
+\"λa\"
+\"λ\"
+\"abλ\"
+error
+\"λλ\"
+\"λ\"
+error
+((\"aλb\" {the class <unicode-string>}) (\"zbλa\" {the class <unicode-string>}) (\"λa\" {the class <unicode-string>}) (\"BΛA\" {the class <unicode-string>}) (\"bλa\" {the class <unicode-string>}) (\"bλ\" {the class <unicode-string>}) (\"abλ\" {the class <unicode-string>}) (\"ba\" {the class <unicode-string>}))
+")
 )

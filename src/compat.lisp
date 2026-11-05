@@ -787,7 +787,10 @@ consuming it, or NIL at end of file."
 
 (defun as-unicode-string (string)
   "A new <unicode-string> of the characters of STRING."
-  (replace (make-unicode-string (length string)) string))
+  ;; Not REPLACE's value, which may be the new string's simple data vector
+  (let ((new (make-unicode-string (length string))))
+    (replace new string)
+    new))
 
 (defun read-dylan-string (stream)
   (let ((string (read-dylan-string-characters stream)))

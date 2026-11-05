@@ -76,7 +76,15 @@
     (declare (ignore class))
     (if (unicode-string? collection)
         collection
-        (as-unicode-string (dylan-call dylan/as <byte-string> collection))))))
+        ;; Its characters directly, not by way of a <byte-string>, which
+        ;; cannot hold those above code 255.
+        (let ((characters (iterate->list
+                           (lambda (element) (dylan-call dylan/as <character> element))
+                           collection)))
+          ;; (REPLACE's value may be the string's simple data vector.)
+          (let ((string (make-unicode-string (length characters))))
+            (replace string characters)
+            string))))))
 
 (defun check-byte-character (string character &optional (prefix ""))
   "Signal an error, as the compiler to C does, if CHARACTER is to go into
@@ -108,6 +116,29 @@ STRING, a <byte-string>, and its code is above 255."
 ;;;
 ;;; size keyword overrides inherited dimensions keyword (which is not used)
 ;;;
+(defun make-dylan-string (unicode? next-method rest)
+  "make of a <byte-string>, or with UNICODE? a <unicode-string>, given
+the keyword arguments REST."
+  (dylan%keyword-validate next-method rest '(:size :fill))
+  (let* ((size (dylan%find-keyword rest :size (lambda () 0)))
+         (have-fill? t)
+         (fill (dylan%find-keyword rest :fill
+                                   (lambda () (setf have-fill? nil) nil))))
+    (when (or (not (integerp size)) (minusp size))
+      (dylan-call dylan/error
+                  "(make (singleton <string>)) -- size: invalid" size))
+    (when (and have-fill? (not (characterp fill)))
+      (dylan-call dylan/error
+                  "(make (singleton <string>)) -- fill: not a character"
+                  fill))
+    (when (and have-fill? (not unicode?))
+      (check-byte-character "" fill "make: "))
+    ;; As in the compiler to C, the fill is a space unless given.
+    (let ((fill (if have-fill? fill #\Space)))
+      (if unicode?
+          (make-unicode-string size fill)
+          (make-string size :initial-element fill)))))
+
 (add-method
  dylan/make
  (dylan%dylan-callable->method
@@ -115,21 +146,7 @@ STRING, a <byte-string>, and its code is above 255."
                    nil nil '(:size :fill))
   (lambda (multiple-values next-method class &rest rest)
     (declare (ignore multiple-values class))
-    (dylan%keyword-validate next-method rest '(:size :fill))
-    (let* ((size (dylan%find-keyword rest :size (lambda () 0)))
-           (have-fill? t)
-           (fill (dylan%find-keyword rest :fill
-                                     (lambda () (setf have-fill? nil) nil))))
-      (when (or (not (integerp size)) (minusp size))
-        (dylan-call dylan/error
-                    "(make (singleton <string>)) -- size: invalid" size))
-      (when (and have-fill? (not (characterp fill)))
-        (dylan-call dylan/error
-                    "(make (singleton <string>)) -- fill: not a character"
-                    fill))
-      (when have-fill? (check-byte-character "" fill "make: "))
-      ;; As in the compiler to C, the fill is a space unless given.
-      (make-string size :initial-element (if have-fill? fill #\Space))))))
+    (make-dylan-string nil next-method rest))))
 
 ;;;
 ;;; STRING SPECIALIZED MAKE
@@ -144,17 +161,16 @@ STRING, a <byte-string>, and its code is above 255."
     (dylan-apply dylan/make <byte-string> rest))))
 
 ;;;
-;;; UNICODE-STRING SPECIALIZED MAKE: a <byte-string>'s characters in a
-;;; <unicode-string>
+;;; UNICODE-STRING SPECIALIZED MAKE, whose fill: may be any character
 ;;;
 (add-method
  dylan/make
- (dylan%function->method
+ (dylan%dylan-callable->method
   (make-param-list `((unicode ,(dylan%make-singleton <unicode-string>)))
-                   nil nil :any)
-  (lambda (class &rest rest)
-    (declare (ignore class))
-    (as-unicode-string (dylan-apply dylan/make <byte-string> rest)))))
+                   nil nil '(:size :fill))
+  (lambda (multiple-values next-method class &rest rest)
+    (declare (ignore multiple-values class))
+    (make-dylan-string t next-method rest))))
 
 ;;;
 ;;; FUNCTIONS FOR COLLECTIONS (page 99)
@@ -209,7 +225,7 @@ STRING, a <byte-string>, and its code is above 255."
   (lambda (string-1 &rest rest)
     (as-unicode-string
      (apply #'concatenate 'string string-1
-            (mapcar (lambda (seq) (dylan-call dylan/as <byte-string> seq)) rest))))))
+            (mapcar (lambda (seq) (dylan-call dylan/as <unicode-string> seq)) rest))))))
 
 ;;; Any other <string>, of a class of the program's own
 (add-method

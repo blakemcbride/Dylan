@@ -145,12 +145,7 @@ PRIMITIVE(unhandled) {
     }
     fflush(stdout);
     fputs("Dylan error: ", stderr);
-    if (dy_kind_p(a1, DY_KIND_BYTE_STRING)) {
-        DyByteString *s = DY_PTR(a1);
-        fwrite(s->data, 1, DY_INT_VALUE(s->size), stderr);
-    } else {
-        dy_debug_write(stderr, a1);
-    }
+    if (!dy_put_string(stderr, a1)) dy_debug_write(stderr, a1);
     fputc('\n', stderr);
     exit(1);
 }

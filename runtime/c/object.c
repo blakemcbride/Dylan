@@ -88,9 +88,39 @@ D dy_make_vector(size_t size, D fill) {
 
 /* ---------------------------------------------------------- Debugging */
 
+void dy_put_char(FILE *out, uint32_t c) {
+    if (c < 0x80) fputc((int)c, out);
+    else if (c < 0x800) { fputc(0xC0 | (c >> 6), out); fputc(0x80 | (c & 0x3F), out); }
+    else if (c < 0x10000) {
+        fputc(0xE0 | (c >> 12), out); fputc(0x80 | ((c >> 6) & 0x3F), out);
+        fputc(0x80 | (c & 0x3F), out);
+    } else {
+        fputc(0xF0 | (c >> 18), out); fputc(0x80 | ((c >> 12) & 0x3F), out);
+        fputc(0x80 | ((c >> 6) & 0x3F), out); fputc(0x80 | (c & 0x3F), out);
+    }
+}
+
+bool dy_put_string(FILE *out, D s) {
+    if (dy_kind_p(s, DY_KIND_BYTE_STRING)) {
+        DyByteString *b = DY_PTR(s);
+        intptr_t n = DY_INT_VALUE(b->size);
+        for (intptr_t i = 0; i < n; i++) {
+            unsigned char c = (unsigned char)b->data[i];
+            if (c < 0x80) fputc(c, out);
+            else dy_put_char(out, c);
+        }
+        return true;
+    }
+    if (dy_kind_p(s, DY_KIND_UNICODE_STRING)) {
+        DyUnicodeString *u = DY_PTR(s);
+        for (intptr_t i = 0; i < DY_INT_VALUE(u->size); i++) dy_put_char(out, u->data[i]);
+        return true;
+    }
+    return false;
+}
+
 static void print_symbol_name(FILE *out, D name) {
-    DyByteString *s = DY_PTR(name);
-    fwrite(s->data, 1, DY_INT_VALUE(s->size), out);
+    dy_put_string(out, name);
 }
 
 static void write_number(FILE *out, D x) {
@@ -104,9 +134,23 @@ void dy_debug_write(FILE *out, D x) {
         return;
     }
     if (DY_IS_CHAR(x)) {
+        /* As print does (14-printing.dyl) */
         uint32_t c = DY_CHAR_CODE(x);
-        if (c >= 32 && c < 127) fprintf(out, "#\\%c", (int)c);
-        else fprintf(out, "#\\U+%04X", (unsigned)c);
+        const char *name = NULL;
+        switch (c) {
+        case ' ': name = "space"; break;
+        case '\n': name = "newline"; break;
+        case 9: name = "tab"; break;
+        case 13: name = "return"; break;
+        case 12: name = "page"; break;
+        case 0: name = "null"; break;
+        case 127: name = "rubout"; break;
+        case 8: name = "backspace"; break;
+        case 27: name = "escape"; break;
+        }
+        fputs("#\\", out);
+        if (name) fputs(name, out);
+        else dy_put_char(out, c);
         return;
     }
     if (x == DY_TRUE) { fputs("#t", out); return; }
@@ -136,20 +180,17 @@ void dy_debug_write(FILE *out, D x) {
     case DY_KIND_EXTENDED_FLOAT:
         write_number(out, x);
         return;
-    case DY_KIND_BYTE_STRING: {
-        DyByteString *s = DY_PTR(x);
-        fputc('"', out);
-        fwrite(s->data, 1, DY_INT_VALUE(s->size), out);
-        fputc('"', out);
-        return;
-    }
+    case DY_KIND_BYTE_STRING:
     case DY_KIND_UNICODE_STRING: {
-        DyUnicodeString *s = DY_PTR(x);
+        /* As print does: " and \ escaped, the rest as they are */
+        bool wide = w->kind == DY_KIND_UNICODE_STRING;
+        intptr_t n = DY_INT_VALUE(((DyByteString *)DY_PTR(x))->size);
         fputc('"', out);
-        for (intptr_t i = 0; i < DY_INT_VALUE(s->size); i++) {
-            uint32_t c = s->data[i];
-            if (c < 128) fputc((int)c, out);
-            else fprintf(out, "\\U+%04X", (unsigned)c);
+        for (intptr_t i = 0; i < n; i++) {
+            uint32_t c = wide ? ((DyUnicodeString *)DY_PTR(x))->data[i]
+                              : (unsigned char)((DyByteString *)DY_PTR(x))->data[i];
+            if (c == '"' || c == '\\') fputc('\\', out);
+            dy_put_char(out, c);
         }
         fputc('"', out);
         return;

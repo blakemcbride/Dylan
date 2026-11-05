@@ -553,4 +553,28 @@ found
 (3 30)
 (0 5)
 ")
+
+ ;; Text goes out as UTF-8, a byte string's characters beyond ASCII too;
+ ;; a directive format does not know is written as it is.
+ (text-output
+  "(format #t \"~a|~s|~a~%\" \"café\" \"café\" #\\é)
+   (print #\\é)
+   (format #t \"[~X] [~Q]~%\")"
+  "café|\"café\"|é
+#\\é
+[~X] [~Q]
+")
+
+ ;; In a condition's message, ~a writes a string's or a character's own
+ ;; text, and ~s writes it as print does.
+ (text-in-messages
+  "(error \"x ~a ~a ~s ~s ~s\" (as <character> 955) (as <unicode-string> \"abc\") #\\é #\\newline \"q\\\"r\")"
+  ""
+  :error "x λ abc #\\é #\\newline \"q\\\"r\"")
+
+ ;; A name with a ~ in it is not a directive.
+ (tilde-in-names
+  "(define-generic-function frob~a~s (x)) (frob~a~s 'q)"
+  ""
+  :error "no applicable method for frob~a~s")
 )

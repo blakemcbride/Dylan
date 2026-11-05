@@ -492,26 +492,7 @@ PRIMITIVE(string_hash) {
 /* -------------------------------------------------------------- Output */
 
 static void write_bytes(D s) {
-    if (dy_kind_p(s, DY_KIND_BYTE_STRING)) {
-        DyByteString *b = DY_PTR(s);
-        fwrite(b->data, 1, DY_INT_VALUE(b->size), stdout);
-    } else if (dy_kind_p(s, DY_KIND_UNICODE_STRING)) {
-        DyUnicodeString *u = DY_PTR(s);
-        for (intptr_t i = 0; i < DY_INT_VALUE(u->size); i++) {
-            uint32_t c = u->data[i];
-            if (c < 0x80) putchar((int)c);
-            else if (c < 0x800) { putchar(0xC0 | (c >> 6)); putchar(0x80 | (c & 0x3F)); }
-            else if (c < 0x10000) {
-                putchar(0xE0 | (c >> 12)); putchar(0x80 | ((c >> 6) & 0x3F));
-                putchar(0x80 | (c & 0x3F));
-            } else {
-                putchar(0xF0 | (c >> 18)); putchar(0x80 | ((c >> 12) & 0x3F));
-                putchar(0x80 | ((c >> 6) & 0x3F)); putchar(0x80 | (c & 0x3F));
-            }
-        }
-    } else {
-        dy_error("not a string", s);
-    }
+    if (!dy_put_string(stdout, s)) dy_error("not a string", s);
 }
 
 /* (%write-string s) */
@@ -521,9 +502,7 @@ PRIMITIVE(write_string) { need(self, argc, 1, 1); write_bytes(a0); return a0; }
 PRIMITIVE(write_char) {
     need(self, argc, 1, 1);
     if (!DY_IS_CHAR(a0)) dy_error("not a character", a0);
-    uint32_t c = DY_CHAR_CODE(a0);
-    D s = dy_make_unicode_string(&c, 1);
-    write_bytes(s);
+    dy_put_char(stdout, DY_CHAR_CODE(a0));
     return a0;
 }
 
@@ -757,30 +736,8 @@ PRIMITIVE(write_fd) {
     need(self, argc, 2, 2);
     FILE *out = int_arg(a0) == 2 ? stderr : stdout;
     if (out == stderr) fflush(stdout);
-    if (DY_IS_CHAR(a1)) {
-        uint32_t c = DY_CHAR_CODE(a1);
-        a1 = dy_make_unicode_string(&c, 1);
-    }
-    if (dy_kind_p(a1, DY_KIND_BYTE_STRING)) {
-        DyByteString *b = DY_PTR(a1);
-        fwrite(b->data, 1, DY_INT_VALUE(b->size), out);
-    } else if (dy_kind_p(a1, DY_KIND_UNICODE_STRING)) {
-        DyUnicodeString *u = DY_PTR(a1);
-        for (intptr_t i = 0; i < DY_INT_VALUE(u->size); i++) {
-            uint32_t c = u->data[i];
-            if (c < 0x80) fputc((int)c, out);
-            else if (c < 0x800) { fputc(0xC0 | (c >> 6), out); fputc(0x80 | (c & 0x3F), out); }
-            else if (c < 0x10000) {
-                fputc(0xE0 | (c >> 12), out); fputc(0x80 | ((c >> 6) & 0x3F), out);
-                fputc(0x80 | (c & 0x3F), out);
-            } else {
-                fputc(0xF0 | (c >> 18), out); fputc(0x80 | ((c >> 12) & 0x3F), out);
-                fputc(0x80 | ((c >> 6) & 0x3F), out); fputc(0x80 | (c & 0x3F), out);
-            }
-        }
-    } else {
-        dy_error("not a string or character", a1);
-    }
+    if (DY_IS_CHAR(a1)) dy_put_char(out, DY_CHAR_CODE(a1));
+    else if (!dy_put_string(out, a1)) dy_error("not a string or character", a1);
     return a1;
 }
 

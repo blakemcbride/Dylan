@@ -11,6 +11,7 @@
  */
 
 #include "dylan.h"
+#include <stdlib.h>
 #include <string.h>
 
 D dy_make_byte_string(const char *bytes, size_t size) {
@@ -31,6 +32,41 @@ D dy_make_unicode_string(const uint32_t *chars, size_t size) {
                                                DY_INT(size));
     memcpy(s->data, chars, size * 4);
     return DY_OBJ(s);
+}
+
+D dy_make_string_from_utf8(const char *bytes, size_t size) {
+    uint32_t *chars = malloc((size ? size : 1) * sizeof(uint32_t));
+    if (!chars) dy_error("out of memory", 0);
+    const unsigned char *b = (const unsigned char *)bytes;
+    size_t n = 0;
+    bool wide = false;
+    for (size_t i = 0; i < size; ) {
+        uint32_t c = b[i];
+        /* the continuation bytes a lead byte says follow */
+        size_t more = c >= 0xF8 ? 0 : c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC0 ? 1 : 0;
+        bool ok = more > 0 && i + more < size;
+        uint32_t v = c & (0x3F >> more);
+        for (size_t k = 1; ok && k <= more; k++) {
+            if ((b[i + k] & 0xC0) != 0x80) ok = false;
+            else v = (v << 6) | (b[i + k] & 0x3F);
+        }
+        if (ok) { c = v; i += more + 1; }
+        else i++;
+        if (c > 0xFF) wide = true;
+        chars[n++] = c;
+    }
+    D string;
+    if (wide) {
+        string = dy_make_unicode_string(chars, n);
+    } else {
+        char *narrow = malloc(n ? n : 1);
+        if (!narrow) dy_error("out of memory", 0);
+        for (size_t i = 0; i < n; i++) narrow[i] = (char)chars[i];
+        string = dy_make_byte_string(narrow, n);
+        free(narrow);
+    }
+    free(chars);
+    return string;
 }
 
 /* ------------------------------------------------------------ Symbols */

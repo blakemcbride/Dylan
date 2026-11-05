@@ -234,11 +234,18 @@ _Noreturn void dy_error(const char *message, D irritant) {
     DyThread *t = dy_thread;
     if (error_hook && t && t->error_depth < 4) {
         t->error_depth++;
-        size_t n = strlen(message);
-        char *format = dy_alloc_bytes(n + 5);
-        memcpy(format, message, n);
-        strcpy(format + n, irritant ? ": ~s" : "");
-        DY_CALL(error_hook, dy_make_c_string(format),
+        /* MESSAGE, which may hold a name with a ~ in it, is text: each ~
+         * is doubled to stand for itself in the format string. */
+        size_t n = strlen(message), tildes = 0;
+        for (size_t i = 0; i < n; i++) tildes += message[i] == '~';
+        char *format = dy_alloc_bytes(n + tildes + 5);
+        size_t j = 0;
+        for (size_t i = 0; i < n; i++) {
+            format[j++] = message[i];
+            if (message[i] == '~') format[j++] = '~';
+        }
+        strcpy(format + j, irritant ? ": ~s" : "");
+        DY_CALL(error_hook, dy_make_string_from_utf8(format, strlen(format)),
                 irritant ? dy_pair(irritant, DY_EMPTY) : DY_EMPTY, 0, 0, 2);
     }
     report("error", message, irritant);
@@ -262,35 +269,34 @@ void dy_check_type(D value, D type) {
 
 /* ---------------------------------------------------------- Messages */
 
+/* As ~a (print without escapes) writes X: a string's or a character's
+ * own text, anything else as ~s. */
 static void display(FILE *out, D x) {
-    if (dy_kind_p(x, DY_KIND_BYTE_STRING)) {
-        DyByteString *s = DY_PTR(x);
-        fwrite(s->data, 1, DY_INT_VALUE(s->size), out);
-    } else if (DY_IS_CHAR(x) && DY_CHAR_CODE(x) < 256) {
-        fputc((int)DY_CHAR_CODE(x), out);
-    } else {
-        dy_debug_write(out, x);
-    }
+    if (DY_IS_CHAR(x)) dy_put_char(out, DY_CHAR_CODE(x));
+    else if (!dy_put_string(out, x)) dy_debug_write(out, x);
 }
 
 /* (%format-message string arguments): STRING with ~a (display), ~s
  * (write), ~d, ~% and ~~ done, as the manual's examples use them;
- * arguments no directive uses follow, each after a space. */
+ * arguments no directive uses follow, each after a space.  The text is
+ * made as UTF-8, and the string answered holds its characters. */
 PRIMITIVE(format_message) {
     need(self, argc, 2, 2);
     char *buffer = NULL;
     size_t size = 0;
     FILE *out = open_memstream(&buffer, &size);
     D args = a1;
-    if (!dy_kind_p(a0, DY_KIND_BYTE_STRING)) {
+    bool narrow = dy_kind_p(a0, DY_KIND_BYTE_STRING);
+    if (!narrow && !dy_kind_p(a0, DY_KIND_UNICODE_STRING)) {
         display(out, a0);
     } else {
-        DyByteString *s = DY_PTR(a0);
-        intptr_t n = DY_INT_VALUE(s->size);
+        intptr_t n = DY_INT_VALUE(((DyByteString *)DY_PTR(a0))->size);
+#define CHAR_AT(i) (narrow ? (uint32_t)(unsigned char)((DyByteString *)DY_PTR(a0))->data[i] \
+                           : ((DyUnicodeString *)DY_PTR(a0))->data[i])
         for (intptr_t i = 0; i < n; i++) {
-            char c = s->data[i];
-            if (c != '~' || i + 1 == n) { fputc(c, out); continue; }
-            char d = s->data[++i];
+            uint32_t c = CHAR_AT(i);
+            if (c != '~' || i + 1 == n) { dy_put_char(out, c); continue; }
+            uint32_t d = CHAR_AT(++i);
             switch (d) {
             case 'a': case 'A': case 'd': case 'D': case 's': case 'S':
                 if (dy_kind_p(args, DY_KIND_PAIR)) {
@@ -301,16 +307,17 @@ PRIMITIVE(format_message) {
                 break;
             case '%': case '&': fputc('\n', out); break;
             case '~': fputc('~', out); break;
-            default: fputc('~', out); fputc(d, out);
+            default: fputc('~', out); dy_put_char(out, d);
             }
         }
+#undef CHAR_AT
     }
     for (; dy_kind_p(args, DY_KIND_PAIR); args = dy_tail(args)) {
         fputc(' ', out);
         display(out, dy_head(args));
     }
     fclose(out);
-    D string = dy_make_byte_string(buffer, size);
+    D string = dy_make_string_from_utf8(buffer, size);
     free(buffer);
     return string;
 }

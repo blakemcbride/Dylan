@@ -434,9 +434,11 @@ cache's entry for the call."
                  original-args)))
       (unless (consp applicable-methods)
         (dylan-call dylan/error
+                    ;; The name is text: a ~ in it stands for itself.
                     (format nil "no applicable method for ~a"
-                            (or (generic-function-print-name generic-function)
-                                "an anonymous generic function"))
+                            (double-tildes
+                             (or (generic-function-print-name generic-function)
+                                 "an anonymous generic function")))
                     original-args))
       (when (> ngiven nreq)             ; More supplied than required
         (let ((non-req-args (but-first nreq original-args)))

@@ -701,6 +701,10 @@ bool dy_number_less(D a, D b);                  /* < */
 D dy_make_byte_string(const char *bytes, size_t size);
 D dy_make_c_string(const char *s);
 D dy_make_unicode_string(const uint32_t *chars, size_t size);
+/* A string of the characters the UTF-8 BYTES encode: a <byte-string> if
+ * each fits in a byte, else a <unicode-string>.  A byte that is not part
+ * of a UTF-8 sequence stands for itself. */
+D dy_make_string_from_utf8(const char *bytes, size_t size);
 D dy_make_vector(size_t size, D fill);
 D dy_pair(D head, D tail);
 
@@ -1139,5 +1143,9 @@ void dy_debug_print(D x);
 /* A number as the library prints it (runtime/c/library.c) */
 D dy_number_string(D x);
 void dy_debug_write(FILE *out, D x);
+/* Text goes out as UTF-8: a <byte-string>'s characters are the first 256
+ * code points, a <unicode-string>'s any. */
+void dy_put_char(FILE *out, uint32_t c);
+bool dy_put_string(FILE *out, D s);     /* false if S is not a string */
 
 #endif

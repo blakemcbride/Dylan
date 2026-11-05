@@ -255,7 +255,10 @@ static void test_strings_and_symbols(void) {
     CHECK_PRINTS(s, "\"hello\"");
     CHECK(((DyByteString *)DY_PTR(s))->data[5] == '\0');
     uint32_t lambda[] = { 0x3BB, 'x' };
-    CHECK_PRINTS(dy_make_unicode_string(lambda, 2), "\"\\U+03BBx\"");
+    CHECK_PRINTS(dy_make_unicode_string(lambda, 2), "\"\xCE\xBB" "x\"");
+    CHECK_PRINTS(dy_make_c_string("a\"b"), "\"a\\\"b\"");
+    CHECK_PRINTS(DY_CHAR(0x3BB), "#\\\xCE\xBB");
+    CHECK_PRINTS(DY_CHAR('\n'), "#\\newline");
 
     D a = dy_intern_symbol("Hello", 5), b = dy_intern_symbol("HELLO", 5);
     CHECK(a == b);

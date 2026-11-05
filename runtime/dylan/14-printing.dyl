@@ -346,7 +346,9 @@ module: dylan
                                          ((id? d #\s) (print-object (next-argument) s #t))
                                          ((or (id? d #\%) (id? d #\&)) (%put s #\newline))
                                          ((id? d #\~) (%put s #\~))
-                                         (else: (%put s c) (%put s d))))
+                                         ;; Any other: as it is written
+                                         (else: (%put s c)
+                                                (%put s (element control (binary+ i 1))))))
                                  (scan (binary+ i 2)))
                                (begin (%put s c) (scan (binary+ i 1))))))))
         (scan 0))

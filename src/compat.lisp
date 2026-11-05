@@ -451,8 +451,6 @@ shown as Dylan writes them."
       ((symbolp object) (out (dylan-symbol->string object)))
       ((stringp object)
        (cond ((not *dylan-print-escape*) (out object))
-             (*dylan-debug-print*
-              (write-char #\" stream) (out object) (write-char #\" stream))
              (t
               (write-char #\" stream)
               (loop for ch across object
@@ -462,10 +460,6 @@ shown as Dylan writes them."
               (write-char #\" stream))))
       ((characterp object)
        (cond ((not *dylan-print-escape*) (write-char object stream))
-             (*dylan-debug-print*
-              (if (<= 32 (char-code object) 126)
-                  (format stream "#\\~c" object)
-                  (format stream "#\\U+~4,'0X" (char-code object))))
              (t (out "#\\") (out (char-name-or-self object)))))
       ((consp object)
        (write-char #\( stream)
@@ -1059,6 +1053,14 @@ this to report errors by file and line.")
 ;;; prints nothing, and arguments no directive consumes follow the message,
 ;;; each after a space, as the runtime's own MIT-style error calls
 ;;; (message, then irritants) expect.
+
+(defun double-tildes (string)
+  "STRING with each ~ doubled, so that, as a format string, it stands for
+itself."
+  (with-output-to-string (out)
+    (loop for c across string
+          do (write-char c out)
+             (when (char= c #\~) (write-char #\~ out)))))
 
 (defun dylan-format-message (control arguments)
   (let ((*dylan-debug-print* t)

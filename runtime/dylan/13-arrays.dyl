@@ -80,6 +80,7 @@ module: dylan
 (define-method current-element ((a <%general-array>) (i <integer>)) (%vector-element (%data a) i))
 (define-method (setter current-element) ((a <%general-array>) (i <integer>) new-value)
   (%vector-element-setter (%data a) i new-value))
+;;; A key is a vector of the indexes, as in the interactive implementation
 (define-method current-key ((a <%general-array>) (i <integer>))
   (bind-methods ((split (dims k)
                    (if (id? dims '())
@@ -87,4 +88,4 @@ module: dylan
                        (bind ((inner (reduce binary* 1 (cdr dims))))
                          (bind ((q r (truncate/ k inner)))
                            (cons q (split (cdr dims) r)))))))
-    (split (%dimensions a) i)))
+    (as <simple-object-vector> (split (%dimensions a) i))))

@@ -52,10 +52,13 @@ module: dylan
 
 (define-generic-function key-sequence (collection))
 
+;;; In the order of iteration: chapter 12 says a collection stable under
+;;; iteration gives its keys in its natural order.  (The chapter's sample
+;;; method, which conses them up, would reverse them.)
 (define-method key-sequence ((c <explicit-key-collection>))
   (for ((state (initial-state c) (next-state c state))
         (keys '() (cons (current-key c state) keys)))
-       ((not state) keys)))
+       ((not state) (%list-reverse keys))))
 
 (define-method key-sequence ((c <sequence>))
   (bind ((n (size c)))

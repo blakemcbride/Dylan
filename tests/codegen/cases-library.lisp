@@ -1016,4 +1016,28 @@ error
 #(1 2 3 4)
 (1 2 3)
 ")
+
+ ;; Chapter 12: a collection stable under iteration gives its keys in its
+ ;; natural order; an array's key is a vector of its indexes.
+ (key-sequence-order
+  "(define a (make <array> dimensions: '(2 2) fill: 0))
+   (print (key-sequence a))
+   (define t (make <table>))
+   (set! (element t 'only) 1)
+   (print (key-sequence t))
+   (print (element a (list 1 0)))
+   (print (element a (vector 1 0)))
+   (define b (make <array> dimensions: '(2 3) fill: 1))
+   (print (key-sequence b))
+   (print (as <list> (map + b b)))
+   (do (method (k) (set! (element b k) (reduce + 0 k))) (key-sequence b))
+   (print b)"
+  "(#(0 0) #(0 1) #(1 0) #(1 1))
+(only)
+0
+0
+(#(0 0) #(0 1) #(0 2) #(1 0) #(1 1) #(1 2))
+(2 2 2 2 2 2)
+{<array> 0 1 2 1 2 3}
+")
 )

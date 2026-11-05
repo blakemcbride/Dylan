@@ -186,6 +186,9 @@ module: dylan
 (define-generic-function map-as (class procedure collection #rest more-collections))
 
 (define-method map-as ((class <class>) (f <function>) (c <collection>) #rest more)
+  ;; Chapter 12: CLASS must be a subclass of <mutable-collection>
+  (unless (%subclass? class <mutable-collection>)
+    (error "map-as: the class is not a mutable collection: ~s" class))
   (bind ((collections (cons c more)))
     ;; A vector is a sequence, though also (as an array) an explicit-key
     ;; collection: sequences first.
@@ -378,7 +381,7 @@ module: dylan
 
 (define-method as ((class <class>) (c <collection>))
   (cond ((%instance? c class) c)
-        ((%subclass? class <sequence>)
+        ((%subclass? class <mutable-sequence>)
          (bind ((result (map-as class identity c)))
            (if (%instance? result class)
                result

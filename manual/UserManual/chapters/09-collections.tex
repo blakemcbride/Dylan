@@ -180,7 +180,7 @@ another:
 \end{description}
 
 \noindent And collections that can be walked backward, the vectors, the
-strings, the deques and the bounded ranges, also have:
+strings, the deques, the arrays and the bounded ranges, also have:
 
 \begin{description}
 \item[\code{(final-state \meta{collection})}]\index{final-state}
@@ -393,7 +393,9 @@ each group of corresponding elements, for effect, and answers
 \index{map}\index{map-as}
 \code{map} answers a new collection of the results, of the
 \code{class-for-copy} of the first collection; \code{map-as} takes the
-class of the result as its first argument:
+class of the result as its first argument, which must be a subclass of
+\code{<mutable-collection>} that \code{make} can make (not
+\code{<range>}, for example):
 
 \begin{dylan}
 (map + '(100 100 200 200) '(1 2 3 4))              ; => (101 102 203 204)
@@ -536,7 +538,8 @@ answers the collection:
 \index{fill"!}
 \code{(fill! \meta{collection} \meta{value})} stores the value under
 every key. For a sequence, \code{start:} (inclusive, default 0) and
-\code{end:} (exclusive, default the size) limit it to a part. A
+\code{end:} (exclusive, default the size) limit it to a part; any other
+collection, such as an array of two dimensions, is filled whole. A
 \code{start:} or \code{end:} that is not an index of the sequence, or an
 \code{end:} before \code{start:}, is an error, here and for
 \code{copy-sequence}:

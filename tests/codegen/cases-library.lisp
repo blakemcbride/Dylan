@@ -2018,4 +2018,95 @@ error
 (1 2 3 4)
 (1 3 4)
 ")
+ ;; Backward iteration of arrays and bounded ranges; map-as only to a
+ ;; mutable collection make can make, sequences in order and anything else by
+ ;; key; as to a sequence class only if mutable; fill!'s start: and end: only
+ ;; for a sequence.
+ (collection-classes
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define a (make <array> dimensions: '(2 2) fill: 0))
+(print (try (method () (key-sequence a))))
+(print (try (method () (element a '(1 1)))))
+(print (try (method () (element a 1))))
+(print (try (method () (instance? a <sequence>))))
+(print (try (method () (instance? a <mutable-sequence>))))
+(print (try (method () (instance? a <explicit-key-collection>))))
+(print (try (method () (fill! a 1 start: 2))))
+(print (try (method () (as <list> a))))
+(print (try (method () (final-state (range from: 1 up-to: 4)))))
+(print (try (method () (bind ((r (range from: 1 up-to: 4)) (s (final-state r))) (current-element r (previous-state r s))))))
+(print (try (method () (map-as <range> identity '(1 2)))))
+(print (try (method () (map-as <sequence> identity '(1 2)))))
+(print (try (method () (as <range> '(1 2)))))
+(print (try (method () (as <sequence> '(1 2)))))
+(print (try (method () (map identity a))))
+(print (try (method () (size a))))
+(print (try (method () (dimensions (map identity a)))))
+(print (try (method () (subclass? <array> <sequence>))))
+(print (try (method () (subclass? <vector> <mutable-explicit-key-collection>))))
+(print (try (method () (bind ((r <list> '())) (for ((s (final-state a) (previous-state a s)) (n 0 (+ n 1))) ((not s) n))))))
+(print (try (method () (final-state (range from: 1)))))
+(print (try (method () (final-state (range from: 1 size: 0)))))
+(print (try (method () (as <sequence> (make <table>)))))
+(print (try (method () (map-as <mutable-sequence> identity '(1 2)))))
+(print (try (method () (map-as <vector> identity '(1 2)))))
+(print (try (method () (map-as <table> identity '(1 2)))))
+(print (try (method () (fill! (list 1 2 3) 0 start: 1))))
+(print (try (method () (bind ((t (make <table>))) (set! (element t 'a) 1) (fill! t 0 start: 5) (element t 'a)))))
+(define b (make <array> dimensions: '(2 3)))
+(for ((i 0 (+ i 1))) ((= i 6)) (set! (aref b (floor/ i 3) (modulo i 3)) i))
+(print (for ((s (final-state b) (previous-state b s)) (l '() (cons (current-element b s) l))) ((not s) l)))
+(print (bind ((r (range from: 10 by: -2 size: 3))) (for ((s (final-state r) (previous-state r s)) (l '() (cons (current-element r s) l))) ((not s) l))))
+(print (try (method () (map-as <mutable-collection> identity '(1 2)))))
+(print (try (method () (as <mutable-sequence> (make <table>)))))
+(define-class <bag> (<sequence>) (items init-keyword: items: init-value: '()))
+(define-method initial-state ((b <bag>)) (initial-state (items b)))
+(define-method next-state ((b <bag>) s) (next-state (items b) s))
+(define-method current-element ((b <bag>) s) (current-element (items b) s))
+(define-method class-for-copy ((b <bag>)) <table>)
+(print (map (method (x) (* x 10)) (make <bag> items: '(1 2 3))))
+(print (map + '(1 2) #(10 20 30)))
+(print (map + (make <table>) '(1)))
+(print (map-as <deque> + '(1 2) #(10 20)))
+(print (map-as <string> as-uppercase \"ab\"))
+(print (map-as <list> identity (range from: 1 size: 3)))"
+  "(#(0 0) #(0 1) #(1 0) #(1 1))
+0
+\"ERR: element: there is no element for the key 1\"
+#f
+#f
+#t
+{<array> 1 1 1 1}
+(1 1 1 1)
+2
+2
+\"ERR: map-as: the class is not a mutable collection: {the class <range>}\"
+\"ERR: map-as: the class is not a mutable collection: {the class <sequence>}\"
+{range 1 by 1 size 2}
+(1 2)
+{<array> 1 1 1 1}
+4
+(2 2)
+#f
+#t
+4
+\"ERR: final-state: the range is unbounded\"
+#f
+\"ERR: as: {instance of <table>} cannot be converted to {the class <sequence>}\"
+\"ERR: cannot make an instance of this class: {the class <mutable-sequence>}\"
+#(1 2)
+{table 0 => 1 1 => 2}
+(1 0 0)
+0
+(0 1 2 3 4 5)
+(10 8 6)
+\"ERR: cannot make an instance of this class: {the class <mutable-collection>}\"
+\"ERR: cannot make an instance of this class: {the class <mutable-sequence>}\"
+{table 0 => 10 1 => 20 2 => 30}
+(11 22)
+{table}
+{<deque> 11 22}
+\"AB\"
+(1 2 3)
+")
 )

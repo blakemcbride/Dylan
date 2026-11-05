@@ -114,18 +114,21 @@
           (dylan-call dylan/add! seq object))))))
 
 (defun copy-like (sequence elements)
-  "A new instance of SEQUENCE's class-for-copy holding the list ELEMENTS,
-in order: made with its size and filled through the iteration protocol,
-as the compiled library's %from-list does."
-  (let ((class (dylan-call dylan/class-for-copy sequence)))
-    (if (subclass? class <list>)
-        (dylan-call dylan/as class elements)
-        (let ((result (dylan-call dylan/make class :size (length elements))))
-          (loop for state = (initial-state result) then (next-state result state)
-                for rest on elements
-                while state
-                do (set-current-element result state (car rest)))
-          result))))
+  "A new instance of SEQUENCE's class-for-copy holding the list ELEMENTS."
+  (sequence-of-class (dylan-call dylan/class-for-copy sequence) elements))
+
+(defun sequence-of-class (class elements)
+  "A new instance of the sequence CLASS holding the list ELEMENTS, in order:
+made with its size and filled through the iteration protocol, as the
+compiled library's %from-list does."
+  (if (subclass? class <list>)
+      (dylan-call dylan/as class elements)
+      (let ((result (dylan-call dylan/make class :size (length elements))))
+        (loop for state = (initial-state result) then (next-state result state)
+              for rest on elements
+              while state
+              do (set-current-element result state (car rest)))
+        result)))
 
 (defparameter dylan/remove
   (dylan%generic-fn

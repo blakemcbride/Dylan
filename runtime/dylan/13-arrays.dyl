@@ -92,6 +92,8 @@ module: dylan
 (define-method initial-state ((a <%general-array>)) (if (zero? (size a)) #f 0))
 (define-method next-state ((a <%general-array>) (i <integer>))
   (bind ((j (binary+ i 1))) (if (binary< j (size a)) j #f)))
+(define-method final-state ((a <%general-array>)) (if (zero? (size a)) #f (binary- (size a) 1)))
+(define-method previous-state ((a <%general-array>) (i <integer>)) (if (zero? i) #f (binary- i 1)))
 (define-method current-element ((a <%general-array>) (i <integer>)) (%vector-element (%data a) i))
 (define-method (setter current-element) ((a <%general-array>) (i <integer>) new-value)
   (%vector-element-setter (%data a) i new-value))

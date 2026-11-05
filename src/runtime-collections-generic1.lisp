@@ -160,7 +160,7 @@
   (make-param-list `((class ,<class>) (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (cond ((true? (dylan-call dylan/instance? collection class)) collection)
-          ((subclass? class <sequence>)
+          ((subclass? class <mutable-sequence>)
            (let* ((elements (iterate->list #'identity collection))
                   (result (dylan-call dylan/make class :size (length elements)))
                   (state (initial-state result)))
@@ -260,19 +260,19 @@ new instance of CLASS, by default FIRST's class-for-copy."
 (defun map-to-class (class proc li rest)
   "The results of PROC on the elements of LI and the REST of the
 collections, in a new instance of CLASS (by default LI's class-for-copy)."
-     (let ((all-lists (cons li rest)))
-       (if (not (every #'sequence? all-lists))
-           (if class
-               (map-aligned-by-keys proc li all-lists class)
-               (map-aligned-by-keys proc li all-lists))
+     (let ((all-lists (cons li rest))
+           (class (or class (dylan-call dylan/class-for-copy li))))
+       ;; Sequences into a sequence in their natural order; anything else
+       ;; by key, into a collection made by make (chapter 12).
+       (if (or (not (every #'sequence? all-lists))
+               (not (subclass? class <sequence>)))
+           (map-aligned-by-keys proc li all-lists class)
            (loop with result = '()
                  with next-states = (mapcar (lambda (li)
                                               (initial-state li))
                                             all-lists)
                  do (if (any? #'not next-states)
-                        (return (dylan-call dylan/as
-                                            (or class (dylan-call dylan/class-for-copy li))
-                                            (reverse result)))
+                        (return (sequence-of-class class (reverse result)))
                         (let ((next-value
                                 (dylan-call dylan/apply
                                             proc
@@ -299,6 +299,10 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
                       (collection ,<collection>))
                     nil t nil)
    (lambda (class proc collection &rest rest)
+     ;; Chapter 12: CLASS must be a subclass of <mutable-collection>
+     (unless (subclass? class <mutable-collection>)
+       (dylan-call dylan/error "map-as: the class is not a mutable collection: ~s"
+                   class))
      (map-to-class class proc collection rest))))
 
 (defparameter dylan/map-into
@@ -551,8 +555,10 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
   (lambda (multiple-values next-method collection new-value &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:start :end))
-    (let* ((start (dylan%find-keyword rest :start (lambda () 0)))
-           (end (if (true? (dylan-call dylan/instance? collection <sequence>))
+    ;; Chapter 12: start: and end: are for a mutable sequence only
+    (let* ((sequence? (true? (dylan-call dylan/instance? collection <sequence>)))
+           (start (if sequence? (dylan%find-keyword rest :start (lambda () 0)) 0))
+           (end (if sequence?
                     (check-start-end "fill!: bad start: or end: for ~s: ~s ~s"
                                      collection start
                                      (dylan%find-keyword rest :end

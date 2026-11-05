@@ -212,9 +212,6 @@ unbounded collection)."
 ;;
 (defparameter dylan/final-state (dylan%generic-fn 'final-state one-object nil))
 
-(add-method dylan/final-state
-            (state-method-1 'empty-list <empty-list>
-                     (lambda (emp-list) (declare (ignore emp-list)) nil)))
 ;;; Not specified in the manual; only for efficiency:
 ;;; (add-method dylan/final-state
 ;;;             (state-method-1 'string <byte-string>
@@ -234,6 +231,15 @@ unbounded collection)."
                                 (iterate->list
                                  #'identity
                                  (dylan-call dylan/dimensions array)))))))
+(add-method dylan/final-state
+            (state-method-1 'range <range>
+                     (lambda (range)
+                       (let ((size (collection-size range)))
+                         (cond ((null size)
+                                (dylan-call dylan/error
+                                            "final-state: the range is unbounded"))
+                               ((zerop size) nil)
+                               (t (- size 1)))))))
 (add-method dylan/final-state
             (state-method-1 'deque <deque>
                      (lambda (deque)
@@ -344,12 +350,6 @@ unbounded collection)."
                        do (setf (aref previous i) (- (nth i dimensions) 1)))
                  (return previous)
             finally (return nil))))))
-
-(add-method
- dylan/previous-state
- (state-method
-  (make-param-list `((null ,<empty-list>) (state ,<object>)) nil nil nil)
-  (lambda (emp-list state) (declare (ignore emp-list state)) nil)))
 
 (add-method
  dylan/previous-state

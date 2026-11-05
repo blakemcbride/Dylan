@@ -1456,4 +1456,26 @@ error
 ((3 1 2) (1 2))
 (#(3 1 2) \"cab\" (3 1 2))
 ")
+
+ (add-and-concatenate-on-ranges
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (define-method show (r) (list (object-class r) r))
+   (print (show (add (range from: 1 through: 3) 0)))
+   (print (show (add (range from: 1 size: 2) 9)))
+   (print (show (add! (range from: 1 size: 2) 'a)))
+   (print (show (concatenate (range from: 1 size: 2) (range from: 3 size: 2))))
+   (print (show (concatenate (range from: 1 size: 2) #(7) \"ab\")))
+   (print (msg (method () (add (range from: 1) 0))))
+   (print (msg (method () (concatenate (range from: 1) '(1)))))"
+  "({the class <pair>} (0 1 2 3))
+({the class <pair>} (9 1 2))
+({the class <pair>} (a 1 2))
+({the class <pair>} (1 2 3 4))
+({the class <pair>} (1 2 7 #\\a #\\b))
+\"add: the range is unbounded\"
+\"concatenate: the range is unbounded\"
+")
 )

@@ -47,6 +47,16 @@ module: dylan
 
 (define-method size ((r <range>)) (%size r))
 
+;;; add and concatenate answer a list, the class-for-copy, as for any
+;;; sequence (chapter 12); an unbounded range has no end to stop at.
+(define-method add ((r <range>) new-element)
+  (unless (%size r) (error "add: the range is unbounded"))
+  (next-method))
+
+(define-method concatenate ((r <range>) #rest more)
+  (unless (%size r) (error "concatenate: the range is unbounded"))
+  (next-method))
+
 ;;; A collection as a range: its numbers must go up or down by one step.
 (define-method as ((class (singleton <range>)) (c <collection>))
   (if (%instance? c <range>)

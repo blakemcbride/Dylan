@@ -253,95 +253,12 @@
  dylan/add
  (dylan%function->method
   one-range-and-an-object
+  ;; A list, the class-for-copy of a range, as for any sequence (chapter
+  ;; 12); add! makes one too.
   (lambda (the-range new-element)
-    (unless (true? (dylan-call dylan/subclass?
-                        (dylan-call dylan/object-class new-element) <number>))
-      (dylan-call dylan/error
-                  "(add <range> <object>) -- new element not a number"
-                  the-range new-element))
-    (let ((size (collection-size the-range))
-          (start (dylan-call dylan/get-range-start the-range))
-          (end (dylan-call dylan/get-range-end the-range))
-          (step (dylan-call dylan/get-range-step the-range)))
-      (cond ((and (zerop step) (or (not size) (> size 1)))
-             (if (= new-element start)
-                 (zero-step-range start (and size (+ size 1)))
-                 (dylan-call dylan/error
-                             "(add <range> <object>) -- cannot add this number to range"
-                             the-range new-element)))
-            ((and (eql size 1) (= new-element start))
-             (zero-step-range start 2))
-            ((not size)
-             (if (= start (+ new-element step))
-                 (dylan-call dylan/range :from new-element :by step)
-                 (dylan-call dylan/error
-                             "(add <range> <object>) -- cannot add this number to unbound range"
-                             the-range new-element)))
-            ((= size 0)
-             (dylan-call dylan/range :from new-element :through new-element
-                         :by 1))
-            ((= size 1)
-             (dylan-call dylan/range :from new-element :through start
-                         :by (- start new-element)))
-            (t
-             (if (= start (+ new-element step))
-                 (dylan-call dylan/range :from new-element :through end :by step)
-                 (if (= end (- new-element step))
-                     (dylan-call dylan/range :from start :through new-element
-                                 :by step)
-                     (dylan-call dylan/error
-                                 "(add <range> <object>) -- cannot add this number to range"
-                                 the-range new-element)))))))))
-
-(add-method
- dylan/add!
- (dylan%function->method
-  one-range-and-an-object
-  (lambda (the-range new-element)
-    (unless (true? (dylan-call dylan/subclass?
-                        (dylan-call dylan/object-class new-element) <number>))
-      (dylan-call dylan/error
-                  "(add! <range> <object>) -- new element not a number"
-                  the-range new-element))
-    (let ((size (collection-size the-range))
-          (start (dylan-call dylan/get-range-start the-range))
-          (end (dylan-call dylan/get-range-end the-range))
-          (step (dylan-call dylan/get-range-step the-range)))
-      (cond ((and (zerop step) (or (not size) (> size 1)))
-             (if (= new-element start)
-                 (when size
-                   (dylan-call dylan/set-range-count! the-range (+ size 1)))
-                 (dylan-call dylan/error
-                             "(add! <range> <object>) -- cannot add this number to range"
-                             the-range new-element)))
-            ((and (eql size 1) (= new-element start))
-             (dylan-call dylan/set-range-end! the-range start)
-             (dylan-call dylan/set-range-step! the-range 0)
-             (dylan-call dylan/set-range-count! the-range 2))
-            ((not size)
-             (if (= start (+ new-element step))
-                 (dylan-call dylan/set-range-start! the-range new-element)
-                 (dylan-call dylan/error
-                             "(add <range> <object>) -- cannot add this number to unbound range"
-                             the-range new-element)))
-            ((= size 0)
-             (dylan-call dylan/set-range-start! the-range new-element)
-             (dylan-call dylan/set-range-end! the-range new-element)
-             (dylan-call dylan/set-range-step! the-range 1)
-             (dylan-call dylan/set-range-count! the-range nil))
-            ((= size 1)
-             (dylan-call dylan/set-range-start! the-range new-element)
-             (dylan-call dylan/set-range-end! the-range start)
-             (dylan-call dylan/set-range-step! the-range (- start new-element)))
-            (t
-             (if (= start (+ new-element step))
-                 (dylan-call dylan/set-range-start! the-range new-element)
-                 (if (= end (- new-element step))
-                     (dylan-call dylan/set-range-end! the-range new-element)
-                     (dylan-call dylan/error
-                                 "(add <range> <object>) -- cannot add this number to range"
-                                 the-range new-element)))))
-      the-range))))                     ; Return the modified range
+    (unless (collection-size the-range)
+      (dylan-call dylan/error "add: the range is unbounded"))
+    (cons new-element (sequence->list the-range)))))
 
 (add-method
  dylan/remove!
@@ -398,57 +315,12 @@
  dylan/concatenate
  (dylan%function->method
   (make-param-list `((range ,<range>)) nil 'rest nil)
-  ;; Ranges that continue one another's arithmetic run make a range; any
-  ;; other arguments give the elements as a <list>, the range's
-  ;; class-for-copy (chapter 12).
+  ;; A list, the class-for-copy of a range, as for any sequence (chapter
+  ;; 12).
   (lambda (range-1 &rest rest)
-   (block range-concatenate
-    (let ((end-1 (dylan-call dylan/get-range-end range-1))
-          (step-1 (dylan-call dylan/get-range-step range-1))
-          (result (dylan-call dylan/copy-sequence range-1)))
-      (unless end-1
-        (dylan-call dylan/error
-                    "(concatenate <range> !rest) -- range is unbound"
-                    range-1 rest))
-      (flet ((elements ()
-               (return-from range-concatenate
-                 (mapcan #'sequence->list (cons range-1 rest)))))
-       (unless (every (lambda (collection)
-                        (true? (dylan-call dylan/instance? collection <range>)))
-                      rest)
-         (elements))
-       (loop with rest-ranges = rest
-             do (if (null rest-ranges)
-                    (return result)
-                    (let* ((next-range (car rest-ranges))
-                           (start-2 (dylan-call dylan/get-range-start next-range))
-                           (end-2 (dylan-call dylan/get-range-end next-range))
-                           (step-2 (dylan-call dylan/get-range-step next-range))
-                           (size (collection-size next-range)))
-                      (unless end-2
-                        (dylan-call
-                         dylan/error
-                         "(concatenate <range> !rest) -- range is unbound"
-                         next-range range-1 rest))
-                      (if (plusp size)
-                          (if (and (zerop step-1) (zerop step-2)
-                                   (= start-2 end-1))
-                              ;; Runs of the same value join up.
-                              (progn
-                                (dylan-call dylan/set-range-count!
-                                            result
-                                            (+ (collection-size result)
-                                               size))
-                                (pop rest-ranges))
-                          (if (and (not (zerop step-1))
-                                   (= start-2 (+ end-1 step-1))
-                                   (or (= step-1 step-2) (= size 1)))
-                              (progn
-                                (dylan-call dylan/set-range-end! result end-2)
-                                (setf end-1 end-2)
-                                (pop rest-ranges))
-                              (elements)))
-                          (pop rest-ranges)))))))))))
+    (unless (collection-size range-1)
+      (dylan-call dylan/error "concatenate: the range is unbounded"))
+    (mapcan #'sequence->list (cons range-1 rest)))))
 
 (add-method
  dylan/reverse

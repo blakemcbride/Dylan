@@ -266,4 +266,23 @@ aborted
   "2
 "
   :error "needs required:, an integer not below 0")
+
+ ;; Chapter 13: a <simple-error> or <simple-warning> made without a
+ ;; format string has an empty message; check-type signals an error, from
+ ;; which a handler may not return.
+ (condition-defaults-and-check-type
+  "(print (make <simple-error>))
+   (print (make <simple-warning>))
+   (print (list (condition-format-string (make <simple-error>))
+                (condition-format-arguments (make <simple-warning>))))
+   (print (handler-case (check-type 'a <integer>) ((<type-error>) 'caught)))
+   (handler-bind (<type-error> (method (c next) 'returned))
+     (print (check-type 'a <integer>)))
+   (print 'not-reached)"
+  "
+
+(\"\" ())
+caught
+"
+  :error "a handler returned from error: a is not an instance of {the class <integer>}")
 )

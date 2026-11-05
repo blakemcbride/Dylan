@@ -1208,8 +1208,10 @@ debugger -- without signalling again, which would only find the same
 handlers."
   (invoke-debugger
    (make-condition 'dylan-condition
-                   :message "a handler returned from ERROR, which may not return:"
-                   :irritants (list dylan-condition))))
+                   :message "a handler returned from error: ~a"
+                   :irritants (list (if (instance? dylan-condition)
+                                        (condition-message dylan-condition)
+                                        dylan-condition)))))
 
 (defun implementation-specific/signal-unhandled-dylan-condition (dylan-condition)
   (call-with-dylan-restarts

@@ -69,9 +69,11 @@
                  "(condition-format-arguments <condition>) -- no specialization"
                  condition))))
 
+;;; A format string not given is empty, as in the compiled library, so
+;;; that such a condition still has a message.
 (dylan%add-slot <simple-error>
                 nil 'instance nil dylan/condition-format-string
-                'condition-format-string nil nil nil :format-string nil)
+                'condition-format-string "" t nil :format-string nil)
 (dylan%add-slot <simple-error>
                 nil 'instance nil dylan/condition-format-arguments
                 'condition-format-arguments '() t nil :format-arguments nil)
@@ -114,7 +116,7 @@
 
 (dylan%add-slot <simple-warning>
                 nil 'instance nil dylan/condition-format-string
-                'condition-format-string nil nil nil :format-string nil)
+                'condition-format-string "" t nil :format-string nil)
 (dylan%add-slot <simple-warning>
                 nil 'instance nil dylan/condition-format-arguments
                 'condition-format-arguments '() t nil :format-arguments nil)
@@ -221,9 +223,11 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (make-dylan-callable
    (lambda (value type)
      (if (false? (dylan-call dylan/instance? value type))
+         ;; Chapter 13: check-type signals an error, which a handler may
+         ;; not return from.
          (let ((condition (dylan-call dylan/make <type-error>
                                       :value value :type type)))
-           (dylan-call dylan/signal condition))
+           (dylan-call dylan/error condition))
          value))
    2))
 

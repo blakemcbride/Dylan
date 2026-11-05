@@ -336,4 +336,52 @@ other
 7
 #(9 7 7)
 ")
+
+ ;; Names that are Lisp's own in the interactive implementation: keyword
+ ;; parameters named t, nil and a@b are passed as t:, nil: and a@b:;
+ ;; &rest, &key and the like are ordinary names; a parameter may be named
+ ;; next-method, which then is not the next method.
+ (lisp-like-names
+  "(define-method k1 (#key t nil a@b) (list t nil a@b))
+   (print (list (k1) (k1 t: 1 nil: 2 a@b: 3)))
+   (define-method k2 (#key (t 7) (nil 8) (%%x 9)) (list t nil %%x))
+   (print (list (k2) (k2 t: 1 nil: 2 %%x: 3)))
+   (define-generic-function gk (x #key t a@b))
+   (define-method gk (x #key t a@b) (list t a@b))
+   (print (gk 1 t: 2 a@b: 3))
+   (bind ((#rest r (function-arguments gk))) (print r))
+   (bind ((&rest 2) (&key 3) (&aux 4) (&body 5) (&optional 6))
+     (print (list &rest &key &aux &body &optional)))
+   (print ((method (&optional &rest) (list &optional &rest)) 6 7))
+   (define &key 8)
+   (print &key)
+   (define-method nm (next-method) next-method)
+   (define-method nm2 ((next-method <integer>) #rest r) (list next-method r))
+   (define-method nm3 (x #key next-method) (list x next-method))
+   (define-method nm4 ((x <integer>)) (list x (next-method)))
+   (define-method nm4 (x) (list 'top x))
+   (print (list (nm 4) (nm2 4 5) (nm3 4 next-method: 5) (nm4 3)))"
+  "((#f #f #f) (1 2 3))
+((7 8 9) (1 2 3))
+(2 3)
+(1 #f (t: a@b:))
+(2 3 4 5 6)
+(6 7)
+8
+(4 (4 (5)) (4 5) (3 (top 3)))
+")
+
+ ;; #t is not a variable name.
+ (true-not-a-variable
+  "(define #t 3)"
+  ""
+  :compile-error "#t")
+ (true-not-a-parameter
+  "(print ((method (#t) #t) 2))"
+  ""
+  :compile-error "#t")
+ (true-not-bound
+  "(bind ((#t 3)) (print #t))"
+  ""
+  :compile-error "#t")
 )

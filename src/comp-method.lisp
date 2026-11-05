@@ -293,10 +293,26 @@
                                   mod-vars))))))
     (walk '() forms names bound-vars module-vars)))
 
+(defun parameter-names (params)
+  "The names of the variables a method's parameter list PARAMS binds."
+  (let ((names '()) (mode 'required))
+    (dolist (p params names)
+      (if (member p '(!next !rest !key))
+          (setf mode p)
+          (push (cond ((not (consp p)) p)
+                      ((and (eq mode '!key) (keyword? (car p))) (cadr p))
+                      (t (car p)))
+                names)))))
+
 (defun compile-define-method-form (e mod-vars bound-vars compiler
                                    multiple-values? continue)
   (declare (ignore multiple-values?))   ; Doesn't reduce
   (labels ((rebuild-param-list (params)
+             ;; next-method is bound to the next method, unless #next names
+             ;; another variable for it, or a parameter is named next-method.
+             (when (and (listp params)
+                        (member 'next-method (parameter-names params)))
+               (return-from rebuild-param-list params))
              (loop with result = '()
                    with so-far = params
                    do (if (null so-far)

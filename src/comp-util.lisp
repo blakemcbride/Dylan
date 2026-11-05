@@ -91,9 +91,12 @@ current module: see comp-module.lisp."
 ;;; holds these lexical names.
 
 (defun name->lexical (name)
+  ;; Also Lisp's lambda-list keywords, which Dylan names &rest and &key
+  ;; read as, and which cannot be bound by LAMBDA.
   (if (or (member name dylan%predefined-variables)
           (constantp name)
-          (globally-special-p name))
+          (globally-special-p name)
+          (member name lambda-list-keywords))
       (new-name "!local/" name "/")
       name))
 
@@ -118,6 +121,7 @@ current module: see comp-module.lisp."
            (and (symbolp x)
                 (not (null x))
                 (not (keyword? x))
+                (not (eq x t))         ; #t, which a Dylan name T is not
                 (not (eq x 'setter))   ; Chapter 3: never a variable name
                 (not (dylan-special-name? x)))))
     (or (simple-variable-name? x)
@@ -126,7 +130,17 @@ current module: see comp-module.lisp."
              (simple-variable-name? (cadr x))))))
 
 (defun name->keyword (symbol)
-  (intern (symbol-name symbol) :keyword))
+  "The keyword a call writes for the parameter SYMBOL, NAME: for the
+variable NAME.  The reader makes that keyword of the name as written,
+where it makes the variable's name t or nil for T and NIL, and puts %%
+before one that looks like the compiler's own (DYLAN-USER-SYMBOL)."
+  (let ((name (symbol-name symbol)))
+    (intern (cond ((member name '("t" "nil") :test #'string=)
+                   (string-upcase name))
+                  ((and (>= (length name) 2) (string= "%%" name :end2 2))
+                   (subseq name 2))
+                  (t name))
+            :keyword)))
 
 (defun dylan-special-name? (x)
   "Is X one of the compiler's own names?  Dylan's #rest and friends are

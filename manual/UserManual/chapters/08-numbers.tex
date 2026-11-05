@@ -571,8 +571,13 @@ is an integer, and answers a float otherwise:
 (expt 2.0 0.5)   ; => 1.4142135623730951
 \end{dylan}
 
-\noindent Where the true result is not a real number, or not finite, the
-implementations behave differently:
+\noindent A float result too large for its format is an error in both
+implementations, as Common Lisp signals floating-point overflow ---
+\code{(exp 1000)}, \code{(* 1.0e308 10.0)} --- and so is an operation
+with no real result, \code{(/ 0.0 0.0)}, an invalid operation; a program
+never has an infinity or a NaN. Where the true result is not a real
+number, or is too large an integer, the implementations behave
+differently:
 
 \begin{center}
 \begin{tabular}{lp{0.25\textwidth}p{0.43\textwidth}}
@@ -581,7 +586,6 @@ Expression & Compiler to C & Common Lisp implementation \\
 \midrule
 \code{(sqrt -4)} & error: the result would be complex & \code{\#c(0.0 2.0)} \\
 \code{(log 0)} & error: the argument must be positive & error (Lisp's division by zero) \\
-\code{(exp 1000)} & \code{+infinity} & error (Lisp's floating-point overflow) \\
 \code{(expt 2 100)} & error: integer overflow & \code{1267650600228229401496703205376} \\
 \bottomrule
 \end{tabular}
@@ -718,9 +722,7 @@ A float prints in fixed notation when its magnitude is at least
 $10^{-5}$ and less than $10^{16}$, or it is zero, and otherwise with an
 exponent. A double-float, the default format, is marked only by its
 exponent, written with \code{e}; a single-float ends in \code{s0} (or
-\code{s}\meta{n} with an exponent), an extended-float in \code{l0}. An
-infinity prints as \code{+infinity} or \code{-infinity} and a NaN as
-\code{+nan}; neither can be read back.
+\code{s}\meta{n} with an exponent), an extended-float in \code{l0}.
 
 \begin{center}
 \begin{tabular}{ll}

@@ -1066,4 +1066,36 @@ none
 1
 k
 ")
+
+ ;; Chapter 14, as Common Lisp: a float result too large for its format is
+ ;; an error, floating-point overflow, and so is an invalid operation;
+ ;; inline arithmetic on doubles as well.
+ (float-overflow
+  "(define err (method (thunk) (handler-case (thunk) ((<error>) 'error))))
+   (print (err (method () (* 1.0e308 10.0))))
+   (print (err (method () (+ 1.0e308 1.0e308))))
+   (print (err (method () (* 3.0s38 10.0s0))))
+   (print (err (method () (expt 10.0 400))))
+   (print (err (method () (expt 0.0 -1))))
+   (print (err (method () (exp 1000.0))))
+   (print (err (method () (as <single-float> 1.0e300))))
+   (print (err (method () (/ 0.0 0.0))))
+   (print (err (method () (/ 1.0 0.0))))
+   (define-method dmul ((x <double-float>) (y <double-float>)) (* x y))
+   (print (err (method () (dmul 1.0e200 1.0e200))))
+   (print (* 1.0e-200 1.0e-200))
+   (print (dmul 1.5 2.0))"
+  "error
+error
+error
+error
+error
+error
+error
+error
+error
+error
+0.0
+3.0
+")
 )

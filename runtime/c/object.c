@@ -6,6 +6,7 @@
 #include "dylan.h"
 #include <stdio.h>
 #include <locale.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
@@ -66,6 +67,13 @@ _Noreturn void dy_integer_overflow(void) {
 
 _Noreturn void dy_division_by_zero(void) {
     dy_error("division by zero", 0);
+}
+
+/* The messages are the interactive implementation's, which reports
+ * SBCL's conditions. */
+_Noreturn void dy_float_trap(double result) {
+    dy_error(isnan(result) ? "arithmetic error: floating-point-invalid-operation"
+                           : "arithmetic error: floating-point-overflow", 0);
 }
 
 _Noreturn void dy_representation_error(const char *expected, D x) {

@@ -36,8 +36,14 @@ static bool float_p(D x) {
 }
 
 /* A float of the format of X (or a double-float if X is rational). */
+/* A single-float's value is checked once made one: a double can be
+ * finite and too large for it. */
+static D single_float(double value) {
+    return dy_make_single_float((float)dy_finite((float)value));
+}
+
 static D float_like(D x, double value) {
-    if (dy_kind_p(x, DY_KIND_SINGLE_FLOAT)) return dy_make_single_float((float)value);
+    if (dy_kind_p(x, DY_KIND_SINGLE_FLOAT)) return single_float(value);
     if (dy_kind_p(x, DY_KIND_EXTENDED_FLOAT)) return dy_make_extended_float(value);
     return dy_make_double_float(value);
 }
@@ -48,7 +54,7 @@ static D float_like2(D x, D y, double value) {
     if (dy_kind_p(x, DY_KIND_DOUBLE_FLOAT) || dy_kind_p(y, DY_KIND_DOUBLE_FLOAT))
         return dy_make_double_float(value);
     if (dy_kind_p(x, DY_KIND_SINGLE_FLOAT) || dy_kind_p(y, DY_KIND_SINGLE_FLOAT))
-        return dy_make_single_float((float)value);
+        return single_float(value);
     return dy_make_double_float(value);
 }
 
@@ -154,11 +160,12 @@ PRIMITIVE(math) {
         if (argc != 3 || !dy_number_p(a2)) dy_error("expt: not a number", a2);
         double y = dy_float_value(a2);
         if (x < 0 && y != floor(y)) dy_error("expt: the result would be complex", a1);
-        return float_like2(a1, a2, pow(x, y));
+        if (x == 0 && y < 0) dy_division_by_zero();
+        return float_like2(a1, a2, dy_finite(pow(x, y)));
     }
     default: dy_error("%math: unknown operation", a0);
     }
-    return float_like(a1, r);
+    return float_like(a1, dy_finite(r));
 }
 
 PRIMITIVE(float_p) { need(self, argc, 1, 1); return DY_BOOL(float_p(a0)); }
@@ -169,7 +176,7 @@ PRIMITIVE(to_float) {
     need(self, argc, 2, 2);
     if (!dy_number_p(a0)) dy_error("not a number", a0);
     switch (int_arg(a1)) {
-    case 0: return dy_make_single_float(dy_single_value(a0));
+    case 0: return single_float(dy_single_value(a0));
     case 2: return dy_make_extended_float(dy_float_value(a0));
     default: return dy_make_double_float(dy_float_value(a0));
     }

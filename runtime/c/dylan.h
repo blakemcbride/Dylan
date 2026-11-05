@@ -348,6 +348,14 @@ void dy_init(void);
 _Noreturn void dy_error(const char *message, D irritant);
 _Noreturn void dy_integer_overflow(void);
 _Noreturn void dy_division_by_zero(void);
+/* A float operation's result neither finite nor exact -- an infinity or a
+ * NaN -- is an error, as Common Lisp signals it (chapter 14): overflow,
+ * or an invalid operation.  The program never makes one any other way. */
+_Noreturn void dy_float_trap(double result);
+static inline double dy_finite(double result) {
+    if (__builtin_expect(!__builtin_isfinite(result), 0)) dy_float_trap(result);
+    return result;
+}
 
 /* ---------------------------------------------------------- Allocation */
 

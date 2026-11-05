@@ -44,28 +44,31 @@
 (chapter 14), as calls of the binary generic function.")
 
 
+;;; A double's sum, difference, product or quotient is checked by
+;;; dy_finite: an infinity or a NaN is an error (chapter 14, as Common Lisp
+;;; signals it).
 (defparameter *method-inlines*
   `(("binary+" 2
      (("<integer>" "<integer>") "<integer>" "dy_int_add({0}, {1})" :fold ,#'+)
-     (("<double-float>" "<double-float>") "<double-float>" "{d0} + {d1}")
-     (("<integer>" "<double-float>") "<double-float>" "(double)DY_INT_VALUE({0}) + {d1}")
-     (("<double-float>" "<integer>") "<double-float>" "{d0} + (double)DY_INT_VALUE({1})"))
+     (("<double-float>" "<double-float>") "<double-float>" "dy_finite({d0} + {d1})")
+     (("<integer>" "<double-float>") "<double-float>" "dy_finite((double)DY_INT_VALUE({0}) + {d1})")
+     (("<double-float>" "<integer>") "<double-float>" "dy_finite({d0} + (double)DY_INT_VALUE({1}))"))
     ("binary-" 2
      (("<integer>" "<integer>") "<integer>" "dy_int_sub({0}, {1})" :fold ,#'-)
-     (("<double-float>" "<double-float>") "<double-float>" "{d0} - {d1}")
-     (("<integer>" "<double-float>") "<double-float>" "(double)DY_INT_VALUE({0}) - {d1}")
-     (("<double-float>" "<integer>") "<double-float>" "{d0} - (double)DY_INT_VALUE({1})"))
+     (("<double-float>" "<double-float>") "<double-float>" "dy_finite({d0} - {d1})")
+     (("<integer>" "<double-float>") "<double-float>" "dy_finite((double)DY_INT_VALUE({0}) - {d1})")
+     (("<double-float>" "<integer>") "<double-float>" "dy_finite({d0} - (double)DY_INT_VALUE({1}))"))
     ("binary*" 2
      (("<integer>" "<integer>") "<integer>" "dy_int_mul({0}, {1})" :fold ,#'*)
-     (("<double-float>" "<double-float>") "<double-float>" "{d0} * {d1}")
-     (("<integer>" "<double-float>") "<double-float>" "(double)DY_INT_VALUE({0}) * {d1}")
-     (("<double-float>" "<integer>") "<double-float>" "{d0} * (double)DY_INT_VALUE({1})"))
+     (("<double-float>" "<double-float>") "<double-float>" "dy_finite({d0} * {d1})")
+     (("<integer>" "<double-float>") "<double-float>" "dy_finite((double)DY_INT_VALUE({0}) * {d1})")
+     (("<double-float>" "<integer>") "<double-float>" "dy_finite({d0} * (double)DY_INT_VALUE({1}))"))
     ("binary/" 2
-     (("<double-float>" "<double-float>") "<double-float>" "{d0} / {d1}"
+     (("<double-float>" "<double-float>") "<double-float>" "dy_finite({d0} / {d1})"
       :extra "{d1} != 0.0")
-     (("<integer>" "<double-float>") "<double-float>" "(double)DY_INT_VALUE({0}) / {d1}"
+     (("<integer>" "<double-float>") "<double-float>" "dy_finite((double)DY_INT_VALUE({0}) / {d1})"
       :extra "{d1} != 0.0")
-     (("<double-float>" "<integer>") "<double-float>" "{d0} / (double)DY_INT_VALUE({1})"
+     (("<double-float>" "<integer>") "<double-float>" "dy_finite({d0} / (double)DY_INT_VALUE({1}))"
       :extra "{1} != DY_INT(0)"))
     ("binary<" 2
      (("<integer>" "<integer>") "<boolean>" "DY_BOOL((intptr_t)({0}) < (intptr_t)({1}))"

@@ -310,10 +310,13 @@ static D arith(int op, D a, D b) {
             case OP_SUB: r = x - y; break;
             case OP_MUL: r = x * y; break;
             default:
-                if (y == 0.0f) dy_division_by_zero();
+                if (y == 0.0f) {
+                    if (x == 0.0f) dy_float_trap(NAN);
+                    dy_division_by_zero();
+                }
                 r = x / y;
             }
-            return dy_make_single_float(r);
+            return dy_make_single_float((float)dy_finite(r));
         }
         double x = to_double(a, ka), y = to_double(b, kb), r;
         switch (op) {
@@ -321,10 +324,13 @@ static D arith(int op, D a, D b) {
         case OP_SUB: r = x - y; break;
         case OP_MUL: r = x * y; break;
         default:
-            if (y == 0.0) dy_division_by_zero();
+            if (y == 0.0) {
+                if (x == 0.0) dy_float_trap(NAN);
+                dy_division_by_zero();
+            }
             r = x / y;
         }
-        return make_float(kind, r);
+        return make_float(kind, dy_finite(r));
     }
     if (ka == N_INT && kb == N_INT && op != OP_DIV) {
         switch (op) {

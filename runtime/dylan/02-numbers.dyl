@@ -136,7 +136,8 @@ module: dylan
 (define-method magnitude ((x <real>)) (abs x))
 
 (define-generic-function abs (number))
-(define-method abs ((x <real>)) (if (negative? x) (unary- x) x))
+;;; As Common Lisp's: (abs -0.0) is 0.0, which 0 - x gives and -x would not.
+(define-method abs ((x <real>)) (if (or (negative? x) (zero? x)) (binary- 0 x) x))
 
 ;;; The irrational functions, as Common Lisp's; a rational argument gives
 ;;; a <double-float>.

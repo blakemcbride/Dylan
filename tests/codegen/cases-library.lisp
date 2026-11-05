@@ -1098,4 +1098,33 @@ error
 0.0
 3.0
 ")
+
+ ;; Chapter 9: a float and its negative zero are = but not id?; abs, as
+ ;; Common Lisp's, makes -0.0 0.0.
+ (negative-zero
+  "(print (id? 0.0 -0.0))
+   (print (id? 0.0 0.0))
+   (print (id? -0.0 -0.0))
+   (print (id? 1.5 1.5))
+   (print (id? 0.0s0 -0.0s0))
+   (print (= 0.0 -0.0))
+   (define-method z ((x (singleton 0.0))) 'zero)
+   (define-method z (x) 'other)
+   (print (list (z 0.0) (z -0.0)))
+   (print (list (abs -0.0) (abs 0.0) (abs -0.0s0) (abs -3) (abs 0) (abs -1/2) (abs -2.5)))
+   (bind ((q r (floor/ -0.0 1))) (print (list q r)))
+   (print (case -0.0 ((0.0) 'pos) ((-0.0) 'neg) (else: 'none)))
+   (print (member? -0.0 (list 0.0)))"
+  "#f
+#t
+#t
+#t
+#f
+#t
+(zero other)
+(0.0 0.0 0.0s0 3 0 1/2 2.5)
+(0 -0.0)
+neg
+#f
+")
 )

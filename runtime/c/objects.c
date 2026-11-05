@@ -7,13 +7,22 @@
  */
 
 #include "dylan.h"
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
+/* id? (chapter 9): objects no program can tell apart.  Numbers of one
+ * class and value are; but not a float and its negative zero, which are =
+ * yet print differently. */
 bool dy_identical(D x, D y) {
     if (x == y) return true;
-    if (dy_number_p(x) && dy_number_p(y) && dy_wrapper_of(x) == dy_wrapper_of(y))
-        return dy_compare(x, y) == 0;
+    if (dy_number_p(x) && dy_number_p(y) && dy_wrapper_of(x) == dy_wrapper_of(y)) {
+        if (dy_compare(x, y) != 0) return false;
+        if (dy_kind_p(x, DY_KIND_SINGLE_FLOAT) || dy_kind_p(x, DY_KIND_DOUBLE_FLOAT)
+            || dy_kind_p(x, DY_KIND_EXTENDED_FLOAT))
+            return signbit(dy_float_value(x)) == signbit(dy_float_value(y));
+        return true;
+    }
     return false;
 }
 

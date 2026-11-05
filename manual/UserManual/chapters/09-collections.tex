@@ -555,9 +555,8 @@ default it to \code{id?}.
 \code{(add \meta{sequence} \meta{element})} answers a new sequence with
 the element added; \code{add!} may add it to the sequence itself. Where
 the element goes depends on the class: at the front of a list, a vector,
-a string and a deque. \code{add!} on a stretchy vector adds at the end;
-\code{add} on one adds at the end in the compiler to C and at the front
-in the Common Lisp implementation.
+a string and a deque. \code{add} and \code{add!} on a stretchy vector
+add at the end.
 \code{add-new} and \code{add-new!} add the element only if the sequence
 does not already have it (by \code{test:}).
 

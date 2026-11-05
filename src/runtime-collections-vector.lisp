@@ -194,15 +194,16 @@
  dylan/add
  (dylan%function->method
   one-stretchy-vector-and-an-object
+  ;; At the end, where add! adds, as in a compiled program.
   (lambda (s-vector new-element)
     (let ((new-vector (dylan-call dylan/make <stretchy-vector>))
           (size (car (dylan-call dylan/get-array-dimensions s-vector))))
       (dylan-call dylan/set-array-value! new-vector
-                  (coerce (cons new-element
-                                (coerce (dylan-call dylan/get-array-value
-                                                    s-vector)
-                                        'list))
-                          'simple-vector))
+                  (concatenate 'simple-vector
+                               (subseq (dylan-call dylan/get-array-value
+                                                   s-vector)
+                                       0 size)
+                               (list new-element)))
       (dylan-call dylan/set-array-dimensions! new-vector (list (+ size 1)))
       new-vector))))
 

@@ -1444,4 +1444,16 @@ error
   "(print (list (min 1 1.0) (min 1.0 1) (max 1 1.0) (max 1.0 1) (min 2 1.0 1) (max 1 2.0 2)))"
   "(1 1.0 1 1.0 1.0 2.0)
 ")
+
+ (add-places
+  "(bind ((v (make <stretchy-vector>)) (d (make <deque>)))
+     (add! v 1) (add! v 2)
+     (push-last d 1) (push-last d 2)
+     (print (list (as <list> (add v 3)) (as <list> v) (as <list> (add! v 3))))
+     (print (list (as <list> (add d 3)) (as <list> d)))
+     (print (list (add #(1 2) 3) (add \"ab\" #\\c) (add '(1 2) 3))))"
+  "((1 2 3) (1 2) (1 2 3))
+((3 1 2) (1 2))
+(#(3 1 2) \"cab\" (3 1 2))
+")
 )

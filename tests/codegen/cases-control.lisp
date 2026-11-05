@@ -185,4 +185,20 @@ aborted
   "before
 "
   :error "Dylan error: something \"x\" went wrong")
+
+ ;; Chapters 2 and 13: the abstract condition classes cannot be made;
+ ;; their subclasses can.
+ (abstract-conditions
+  "(define try (method (c) (handler-case (begin (make c) 'made) ((<error>) 'refused))))
+   (print (map try (list <condition> <serious-condition> <error> <warning> <restart>)))
+   (define-class <my-error> (<error>))
+   (print (instance? (make <my-error>) <error>))
+   (print (instance? (make <simple-error> format-string: \"x\") <error>))
+   (define-class <my-restart> (<restart>))
+   (print (instance? (make <my-restart>) <restart>))"
+  "(refused refused refused refused refused)
+#t
+#t
+#t
+")
 )

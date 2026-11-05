@@ -41,6 +41,16 @@ module: dylan
 (define-class <simple-restart> (<restart>))
 (define-class <abort> (<restart>))
 
+;;; Chapter 13 makes these abstract classes, which cannot be the first
+;;; argument to make (chapter 2); their subclasses can.
+(define %abstract
+  (method (class) (error "make: ~s is an abstract class, which cannot be instantiated" class)))
+(define-method make ((class (singleton <condition>)) #rest arguments) (%abstract class))
+(define-method make ((class (singleton <serious-condition>)) #rest arguments) (%abstract class))
+(define-method make ((class (singleton <error>)) #rest arguments) (%abstract class))
+(define-method make ((class (singleton <warning>)) #rest arguments) (%abstract class))
+(define-method make ((class (singleton <restart>)) #rest arguments) (%abstract class))
+
 ;;; Messages: what the debugger of last resort reports.
 
 (define-generic-function %condition-message (condition))

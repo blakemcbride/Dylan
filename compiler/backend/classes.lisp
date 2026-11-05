@@ -192,10 +192,18 @@ single_float; a character that cannot appear in one is _xHH."
                      ((char= ch #\-) (write-char #\_ out))
                      (t (format out "_x~2,'0x" (char-code ch))))))))
 
+(defparameter *reserved-class-stems* '("cell" "count" "of" "subtype")
+  "The stems no class may have for its C names (dy_wrapper_STEM,
+dy_class_STEM and the rest), since the runtime uses those names for
+other things: dy_wrapper_cell, dy_class_count, dy_wrapper_of and
+dy_wrapper_subtype (runtime/c/dylan.h).  A class whose name would give
+one of them -- <cell>, say -- gets cell_1.")
+
 (defun prepare-classes (classes)
   "Compute the precedence list, id, subtree and C name of each of
 CLASSES, which must include <object> and every superclass of each."
   (let ((used (make-hash-table :test #'equal)))
+    (dolist (stem *reserved-class-stems*) (setf (gethash stem used) t))
     (dolist (c classes)
       (setf (class-info-cpl c) (compute-cpl c)
             (class-info-subclasses c) '())

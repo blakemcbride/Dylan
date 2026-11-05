@@ -403,4 +403,17 @@ not-a-singleton
   (define-method f ((x <integer>)) (+ x k)))"
   ""
   :compile-error ":4:3: error: define-method: the method refers to local variables (k)"
-  :compiler-only t))
+  :compiler-only t)
+
+ ;; Classes whose C names would be names the runtime uses for other things
+ (runtime-c-names
+  "(define-class <cell> (<object>) (v init-keyword: v:))
+   (define-class <count> (<object>) (n init-value: 3))
+   (define-class <of> (<object>))
+   (define-class <subtype> (<of>))
+   (print (list (v (make <cell> v: 1)) (n (make <count>)) (make <of>) (make <subtype>)))
+   (print (instance? (make <subtype>) <of>))"
+  "(1 3 {instance of <of>} {instance of <subtype>})
+#t
+")
+)

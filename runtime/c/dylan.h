@@ -324,7 +324,14 @@ extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
 extern DySymbol *const dy_static_symbols[];
 extern const size_t dy_static_symbol_count;
 
-/* Every class of the program, in id order. */
+/* Every class of the program, in id order.
+ *
+ * A class's C names are dy_wrapper_STEM, dy_class_STEM, dy_maker_STEM,
+ * dy_fill_STEM and dy_slot_offsets_STEM, the stem made from its name
+ * (<single-float>: single_float).  Any other name of the runtime's with
+ * one of those beginnings must have its stem in the compiler's
+ * *reserved-class-stems* (compiler/backend/classes.lisp): now
+ * dy_class_count, dy_wrapper_of, dy_wrapper_subtype and dy_wrapper_cell. */
 extern DyClass *const dy_all_classes[];
 extern const size_t dy_class_count;
 

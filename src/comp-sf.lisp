@@ -87,12 +87,18 @@
            `((setter ,(car place)) ,@(cdr place))
            module-vars bound-vars compiler nil
            (lambda (subform-codes mod-vars)
-             (funcall continue
-                      `(let ((!saved-value ,value-code))
-                         (dylan%call ,multiple-values? ,@subform-codes
-                                     !saved-value)
-                         !saved-value)
-                      mod-vars))))
+             ;; Chapter 7: the form means ((setter name) arg ... value), so
+             ;; the place's arguments are evaluated before the new value,
+             ;; left to right (chapter 3).
+             (let ((temps (loop for i from 1 to (length (cdr subform-codes))
+                                collect (new-name "!set/" (princ-to-string i) "/"))))
+               (funcall continue
+                        `(let* (,@(mapcar #'list temps (cdr subform-codes))
+                                (!saved-value ,value-code))
+                           (dylan%call ,multiple-values? ,(car subform-codes)
+                                       ,@temps !saved-value)
+                           !saved-value)
+                        mod-vars)))))
          (t (dylan%error "SET! -- bad place specification")))))))
 
 ;;; COND

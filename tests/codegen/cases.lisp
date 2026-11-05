@@ -314,4 +314,26 @@ other
 (c 4)
 (#f)
 ")
+
+ ;; Chapter 7: (set! (name arg ...) value) means ((setter name) arg ...
+ ;; value), so its arguments are evaluated left to right, the place's
+ ;; before the new value.
+ (set-place-order
+  "(define v (vector 1 2 3))
+   (define order '())
+   (define note (method (x tag) (set! order (cons tag order)) x))
+   (set! (element (note v 'coll) (note 0 'idx)) (note 9 'val))
+   (print (list v (reverse order)))
+   (set! order '())
+   (define-class <p> (<object>) (x init-value: 0))
+   (define p (make <p>))
+   (set! (x (note p 'obj)) (note 5 'val))
+   (print (list (x p) (reverse order)))
+   (print (set! (element v 1) (set! (element v 2) 7)))
+   (print v)"
+  "(#(9 2 3) (coll idx val))
+(5 (obj val))
+7
+#(9 7 7)
+")
 )

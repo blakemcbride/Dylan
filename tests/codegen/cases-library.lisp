@@ -1610,4 +1610,21 @@ error
 #(a 2 z)
 (\"element: there is no element at the index 1\" \"last: the sequence is empty\")
 ")
+
+ (range-by-zero-with-a-bound
+  "(define-method show (r)
+     (list (size r) (if (size r) (as <list> r) (list (first r) (element r 100)))))
+   (print (show (range from: 1 up-to: 5 by: 0)))
+   (print (show (range from: 5 up-to: 5 by: 0)))
+   (print (show (range from: 1 through: 1 by: 0)))
+   (print (show (range from: 2 through: 1 by: 0)))
+   (print (show (range from: 1 up-to: 5 by: 0 size: 3)))
+   (print (show (make <range> from: 1 through: 5 by: 0)))"
+  "(#f (1 1))
+(0 ())
+(#f (1 1))
+(0 ())
+(3 (1 1 1))
+(#f (1 1))
+")
 )

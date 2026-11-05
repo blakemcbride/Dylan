@@ -23,12 +23,16 @@ module: dylan
 (define-method range (#key (from 0) up-to through (by 1) size)
   (bind ((count size))
     (bind-methods ((limit (n) (when (or (not count) (binary< n count)) (set! count n))))
-      (when (or up-to through)
-        (when (zero? by) (error "range: by: must not be 0 with up-to: or through:")))
+      ;; With by: 0 every value is FROM: the range is unbounded if FROM is
+      ;; within the bound, and empty if not.
       (when up-to
-        (limit (max 0 (ceiling/ (binary- up-to from) by))))
+        (if (zero? by)
+            (unless (binary< from up-to) (limit 0))
+            (limit (max 0 (ceiling/ (binary- up-to from) by)))))
       (when through
-        (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))
+        (if (zero? by)
+            (when (binary< through from) (limit 0))
+            (limit (max 0 (binary+ (floor/ (binary- through from) by) 1)))))
       (bind ((r (%make <range>)))
         (set! (%from r) from)
         (set! (%by r) by)

@@ -732,7 +732,18 @@ slot SD in the object VAR."
                    (not (eq (and variable t) (gfun-variable-p g))))
                (let ((*location* (or (gmethod-location m) *location*)))
                  (compile-error "the parameter list of a method of ~a is not congruent with its generic function"
-                                (name-string (module-var-name var))))))))
+                                (name-string (module-var-name var)))))))
+      ;; Chapter 6: if define-generic-function names keys, every method
+      ;; must accept them, by naming them after #key or by #rest.
+      (let ((declared (gfun-declared-keys g)))
+        (when (and (consp declared) (eq (gmethod-kind m) :ir)
+                   (not (gmethod-rest-p m)) (listp (gmethod-keys m)))
+          (let ((missing (set-difference declared (gmethod-keys m))))
+            (when missing
+              (let ((*location* (or (gmethod-location m) *location*)))
+                (compile-error "a method of ~a does not accept the keys its generic function names: ~a"
+                               (name-string (module-var-name var))
+                               (format nil "~{~a~^ ~}" (mapcar #'dylan-string missing)))))))))
     (unless (gfun-required g) (setf (gfun-required g) 0))
     (setf (gethash var *constant-globals*) (address (gfun-c-name g)))))
 

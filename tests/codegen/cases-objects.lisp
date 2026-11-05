@@ -441,4 +441,27 @@ not-a-singleton
 {the class <object>} 1 0 0
 () () 0
 ")
+
+ ;; Chapter 6: a generic function's keys must be accepted by each of its
+ ;; methods, by naming them after #key or by #rest.
+ (generic-keys-accepted
+  "(define-generic-function g (a #key foo))
+   (define-method g (a #key bar foo) (list bar foo))
+   (define-method g ((a <integer>) #rest r) r)
+   (print (g 'x foo: 1))
+   (print (g 3 foo: 2))
+   (define-generic-function h (a #key))
+   (define-method h (a #key z) z)
+   (print (h 1 z: 5))"
+  "(#f 1)
+(foo: 2)
+5
+")
+
+ (generic-keys-not-accepted
+  "(define-generic-function g (a #key foo))
+   (define-method g (a #key bar) 1)
+   (print (g 1))"
+  ""
+  :compile-error "generic function")
 )

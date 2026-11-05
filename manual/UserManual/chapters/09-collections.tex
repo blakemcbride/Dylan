@@ -992,7 +992,9 @@ that runs downward, with the bounds below it. With \code{by:} 0 every
 element is \code{from:}, so \code{up-to:} or \code{through:} leaves the
 range unbounded if \code{from:} is within the bound and empty if not;
 \code{size:} still limits it. \code{make} of \code{<range>} takes the
-same keywords.
+same keywords. Element \meta{i} is \code{from:} + \meta{i} $\times$
+\code{by:}, the first one too, so a range with a float step has only
+float elements.
 
 \begin{dylan}
 (as <list> (range from: 1 up-to: 4))              ; => (1 2 3)
@@ -1002,6 +1004,7 @@ same keywords.
 (as <list> (make <range> from: 2 size: 3))        ; => (2 3 4)
 (size (range from: 1))                            ; => #f
 (element (range from: 10 by: 5) 100)              ; => 510
+(first (range from: 1 by: 0.5))                   ; => 1.0
 \end{dylan}
 
 \noindent Several functions treat ranges specially so that they finish

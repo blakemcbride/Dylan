@@ -156,12 +156,6 @@
 (defun zero-step? (range)
   (zerop (dylan-call dylan/get-range-step range)))
 
-(defun zero-step-range (value count)
-  "A range of COUNT copies of VALUE; unbounded if COUNT is NIL."
-  (if count
-      (dylan-call dylan/range :from value :by 0 :size count)
-      (dylan-call dylan/range :from value :by 0)))
-
 (add-method
  dylan/make
  (dylan%function->method
@@ -324,14 +318,13 @@
     (let ((start (dylan-call dylan/get-range-start range))
           (end (dylan-call dylan/get-range-end range))
           (step (dylan-call dylan/get-range-step range)))
+      ;; From the last element by -BY, as many as there are
       (cond ((not end)
-             (dylan-call dylan/error
-                         "(reverse <range>) -- can't reverse unbounded range"
-                         range))
-            ((zerop step)
-             (zero-step-range start (collection-size range)))
-            (t (dylan-call dylan/range :from end :through start
-                           :by (- step))))))))
+             (dylan-call dylan/error "reverse: the range is unbounded"))
+            ((zerop (collection-size range))
+             (dylan-call dylan/range :from start :by step :size 0))
+            (t (dylan-call dylan/range :from end :by (- step)
+                           :size (collection-size range))))))))
 
 (add-method
  dylan/reverse!
@@ -388,14 +381,15 @@
          (up-to (false->nil (dylan%find-keyword rest :up-to (lambda () nil))))
          (through (false->nil (dylan%find-keyword rest :through (lambda () nil))))
          (size (false->nil (dylan%find-keyword rest :size (lambda () nil))))
+         (by (dylan%find-keyword rest :by (lambda () 0)))
          (count (if (or (and up-to (not (< from up-to)))
                         (and through (not (<= from through))))
                     0
                     size))
          (range (dylan%make-<object> <range>)))
     (dylan-call dylan/set-range-start! range from)
-    (dylan-call dylan/set-range-step! range 0)
-    (dylan-call dylan/set-range-end! range (and count from))
+    (dylan-call dylan/set-range-step! range by)
+    (dylan-call dylan/set-range-end! range (and count (+ from by)))
     (dylan-call dylan/set-range-count! range count)
     range))
 

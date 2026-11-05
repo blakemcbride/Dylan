@@ -1886,4 +1886,55 @@ error
 0
 \"ERR: subsequence-position: count: must be an integer: 1.5\"
 ")
+ ;; Element i of a range is from + i*by, the first one too (with a float
+ ;; step, a float), and reverse runs from the last by -by.
+ (range-elements
+  "(define r (range from: 1 by: 0.5 up-to: 3))
+(print (first r))
+(print (member? (first r) r))
+(print (as <list> r))
+(define q (range from: 0 by: 0.1 size: 4))
+(print (list (last q) (element q 3) (first q)))
+(print (as <list> (reverse q)))
+(print (first (range from: 1 by: 0.0 size: 2)))
+(print (as <list> (range from: 1 by: 0.0 size: 2)))
+(print (first (range from: 1/2 by: 1)))
+(print (for-each ((x (range from: 1 by: 0.5 size: 1))) () (print x)))
+(print (map identity (range from: 1 by: 0.5 size: 2)))
+(define z (range from: 1 by: 0.0 size: 3))
+(print (list (last z) (element z 2) (size z) (member? 1 z) (member? 1.0 z)))
+(print (as <list> (reverse z)))
+(print (as <list> (range from: 2 by: 0 size: 2)))
+(print (size (range from: 2 by: 0.0 up-to: 1)))
+(print (as <list> (copy-sequence z)))
+(print (= z (range from: 1 by: 0.0 size: 3)))
+(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (reverse (range from: 1)))))
+(print (as <list> (reverse (range from: 1 by: 0.1 size: 5))))
+(print (as <list> (reverse (range from: 5 by: -2 through: -1))))
+(print (size (reverse (range from: 1 size: 0))))
+(print (as <list> (reverse! (range from: 1 by: 0.5 up-to: 3))))"
+  "1.0
+#t
+(1.0 1.5 2.0 2.5)
+(0.30000000000000004 0.30000000000000004 0.0)
+(0.30000000000000004 0.20000000000000004 0.10000000000000003 0.0)
+1.0
+(1.0 1.0)
+1/2
+1.0
+#f
+(1.0 1.5)
+(1.0 1.0 3 #t #f)
+(1.0 1.0 1.0)
+(2 2)
+0
+(1.0 1.0 1.0)
+#t
+\"ERR: reverse: the range is unbounded\"
+(1.4 1.2999999999999998 1.2 1.0999999999999999 0.9999999999999999)
+(-1 1 3 5)
+0
+(2.5 2.0 1.5 1.0)
+")
 )

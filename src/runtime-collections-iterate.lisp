@@ -147,11 +147,7 @@
          (svref collection (svref state 0)))
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
-         (let ((step (range-step collection)))
-           ;; The first element is FROM itself, exact or not.
-           (if (or (zerop step) (zerop state))
-               (range-start collection)
-               (+ (range-start collection) (* state step)))))
+         (+ (range-start collection) (* state (range-step collection))))
         (t (dylan-call dylan/current-element collection
                        (dylan-state state)))))
 (defun current-key (collection state)
@@ -431,11 +427,9 @@ unbounded collection)."
  (dylan%function->method
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
-    (let ((step (dylan-call dylan/get-range-step range)))
-      ;; The first element is FROM itself, exact or not.
-      (if (or (zerop step) (zerop state))
-          (dylan-call dylan/get-range-start range)
-          (+ (dylan-call dylan/get-range-start range) (* state step)))))))
+    ;; FROM + k*BY, the first element too, as element answers.
+    (+ (dylan-call dylan/get-range-start range)
+       (* state (dylan-call dylan/get-range-step range))))))
 (add-method
  dylan/current-element
  (dylan%function->method

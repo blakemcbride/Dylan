@@ -106,6 +106,9 @@ module: dylan
 
 (define-generic-function concatenate-as (class sequence1 #rest more-sequences))
 (define-method concatenate-as ((class <class>) (s <sequence>) #rest more)
+  ;; Chapter 12: CLASS must be a subclass of <mutable-sequence>
+  (unless (%subclass? class <mutable-sequence>)
+    (error "concatenate-as: the class is not a mutable sequence: ~s" class))
   (bind ((sequences (cons s more)))
     (bind-methods ((gather (sequences r)
                      (if (id? sequences '())

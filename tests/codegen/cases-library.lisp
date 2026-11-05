@@ -944,4 +944,20 @@ Zip:
 (1 4)
 (2 3)
 ")
+
+ ;; Chapter 12: concatenate-as needs a subclass of <mutable-sequence>
+ (concatenate-as-class
+  "(print (handler-case (concatenate-as <table> '(a b c)) ((<error>) 'error)))
+   (print (handler-case (concatenate-as <range> '(1 2)) ((<error>) 'error)))
+   (print (concatenate-as <string> '(#\\n #\\o #\\n) '(#\\f #\\a #\\t)))
+   (print (concatenate-as <vector> '(0 1 2) '(3 4 5) '(6 7 8)))
+   (print (concatenate-as <list> #(1) '(2)))
+   (print (concatenate-as <deque> #(1) '(2)))"
+  "error
+error
+\"nonfat\"
+#(0 1 2 3 4 5 6 7 8)
+(1 2)
+{<deque> 1 2}
+")
 )

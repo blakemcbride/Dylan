@@ -1418,4 +1418,24 @@ error
 (48 {the class <unicode-string>})
 (48 {the class <unicode-string>})
 ")
+
+ ;; An argument-count error's message holds the count, and its condition
+ ;; has no format arguments.
+ (argument-count-condition
+  "(define-method show (thunk)
+     (print (handler-case (thunk)
+              ((<error> condition: c)
+               (list (condition-format-string c) (condition-format-arguments c))))))
+   (define-method one (x) x)
+   (define-generic-function gf (a b))
+   (define-method gf ((a <integer>) b) a)
+   (show (method () (car 1 2)))
+   (show (method () (one)))
+   (show (method () (gf 1)))
+   (show (method () (gf 1 2 3)))"
+  "(\"wrong number of arguments (2)\" ())
+(\"wrong number of arguments (0)\" ())
+(\"wrong number of arguments (1)\" ())
+(\"wrong number of arguments (3)\" ())
+")
 )

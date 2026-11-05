@@ -1309,9 +1309,12 @@ for the Lisp handlers to have back if no Dylan handler takes it."
        ;; the multiple-values vector and the next method -- and then the
        ;; Dylan ones, which are what the count is of.
        (if (and (stringp control) (search "invalid number of arguments" control))
-           (values "wrong number of arguments (~a)"
-                   (list (let ((n (car (simple-condition-format-arguments condition))))
-                           (if (and (integerp n) (>= n 2)) (- n 2) n))))
+           ;; The count is in the message, which has no arguments, as
+           ;; in a compiled program.
+           (values (format nil "wrong number of arguments (~a)"
+                           (let ((n (car (simple-condition-format-arguments condition))))
+                             (if (and (integerp n) (>= n 2)) (- n 2) n)))
+                   '())
            (values *reflected-error-tag* (list condition)))))
     (division-by-zero (values "division by zero" '()))
     (arithmetic-error

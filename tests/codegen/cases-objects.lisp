@@ -574,4 +574,35 @@ b-slot
    (define-generic-function g1 (x y))"
   ""
   :compile-error "is not congruent with its generic function")
+
+ ;; The reflective functions: define-slot answers the slot's name
+ ;; (chapter 6); function-arguments of the predefined functions follows
+ ;; their signatures (chapter 10); a slot made without a type is of type
+ ;; <object>; find-method with a list of the wrong length answers #f;
+ ;; as answers an object already of the class unchanged (chapter 11).
+ (reflection-results
+  "(define-class <pt> (<object>))
+   (print (list (define-slot <pt> px init-value: 1) (define-slot <pt> getter: py)))
+   (for-each ((f (list make initialize error signal cerror range)))
+     ()
+     (bind ((#rest r (function-arguments f))) (print r)))
+   (print (map slot-type (slot-descriptors <simple-error>)))
+   (define-method fm (x y) 1)
+   (print (list (find-method fm (list <object>)) (find-method fm (list <object> <object> <object>))
+                (instance? (find-method fm (list <object> <object>)) <method>)))
+   (define v (vector 1))
+   (define l (list 1))
+   (print (list (id? (as <collection> v) v) (id? (as <explicit-key-collection> v) v)
+                (id? (as <sequence> v) v) (id? (as <collection> l) l)))"
+  "(px py)
+(1 #t #f)
+(1 #t #f)
+(1 #t #f)
+(1 #t #f)
+(2 #t #f)
+(0 #f (from: up-to: through: by: size:))
+#({the class <object>} {the class <object>})
+(#f #f #t)
+(#t #t #t #t)
+")
 )

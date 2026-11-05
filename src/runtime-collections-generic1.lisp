@@ -131,14 +131,14 @@
 
 (add-method
  dylan/as
- ;; This requires specialization of AS for classes that are not
- ;; superclasses of list (such as array, table, ...)
+ ;; Chapter 11: an object already of the class is answered unchanged, and
+ ;; every collection is a <collection>.
  (dylan%function->method
   (make-param-list `((class ,(dylan%make-singleton <collection>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
-    (dylan-call dylan/as <list> collection))))
+    collection)))
 
 (add-method
  dylan/as
@@ -146,8 +146,9 @@
   (make-param-list `((class ,(dylan%make-singleton <explicit-key-collection>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
-    (declare (ignore class))
-    (dylan-call dylan/as <vector> collection))))
+    (if (true? (dylan-call dylan/instance? collection class))
+        collection
+        (dylan-call dylan/as <vector> collection)))))
 
 (add-method
  dylan/as

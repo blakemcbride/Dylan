@@ -152,8 +152,13 @@
                     (make-param-list `((generic-function ,<generic-function>)
                                        (specializers ,<list>))
                                      nil nil nil)
+                    ;; Chapter 10: #f for a list of the wrong length too,
+                    ;; which no method of the generic function has.
                     (lambda (generic-function specializers)
-                      (or-false (find-method generic-function specializers)))))
+                      (or-false
+                       (and (= (length specializers)
+                               (generic-function.nrequired generic-function))
+                            (find-method generic-function specializers))))))
 
 (defparameter dylan/generic-function-methods
   (dylan%generic-fn 'generic-function-methods
@@ -215,8 +220,10 @@
 
 (defun keyword-sequence (keys)
   "Chapter 10: function-arguments' third value -- #f without #key, else the
-keywords, a sequence that may be empty."
-  (cond ((null keys) dylan%false)
+keywords, a sequence that may be empty.  :ANY, with which the runtime's
+own functions such as make take any keyword arguments, is #rest without
+#key in Dylan's terms: #f."
+  (cond ((or (null keys) (eq keys :any)) dylan%false)
         ((consp keys) keys)
         (t '())))
 
@@ -228,7 +235,7 @@ keywords, a sequence that may be empty."
     (lambda (multiple-values next-method method)
       (dylan-full-call dylan/values multiple-values next-method
                        (method.nrequired method)
-                       (bool (method.rest? method))
+                       (bool (or (method.rest? method) (eq (method.keys method) :any)))
                        (keyword-sequence (method.keys method))))))
   (add-method
    dylan/function-arguments
@@ -237,8 +244,10 @@ keywords, a sequence that may be empty."
     (lambda (multiple-values next-method generic-function)
       (dylan-full-call dylan/values multiple-values next-method
                        (generic-function.nrequired generic-function)
-                       (bool (generic-function.rest? generic-function))
-                       (or-false (generic-function.keys generic-function)))))))
+                       (bool (or (generic-function.rest? generic-function)
+                                 (eq (generic-function.keys generic-function) :any)))
+                       (let ((keys (generic-function.keys generic-function)))
+                         (if (eq keys :any) dylan%false (or-false keys))))))))
 
 (defparameter dylan/make-polar
   (dylan%generic-fn 'make-polar two-reals

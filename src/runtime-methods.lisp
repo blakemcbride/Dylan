@@ -583,7 +583,10 @@ irrational functions; an exact real stays exact."
                           dylan%false
                           (or-false (slot.setter slot))))))
 (defparameter dylan/slot-type
-  (dylan%generic-fn 'slot-type one-slot #'slot.type))
+  ;; A slot made without a type -- the predefined conditions' -- is of
+  ;; type <object>.
+  (dylan%generic-fn 'slot-type one-slot
+                    (lambda (slot) (or (slot.type slot) <object>))))
 (defparameter dylan/slot-allocation
   (dylan%generic-fn 'slot-allocation one-slot #'slot.allocation))
 

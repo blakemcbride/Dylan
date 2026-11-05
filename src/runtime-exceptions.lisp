@@ -391,9 +391,11 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
           function)))
   (methodize dylan/values '() t)
   (methodize dylan/not '(thing) nil)
-  (methodize dylan/signal '() t)
-  (methodize dylan/error '() t)
-  (methodize dylan/cerror '(restart-description) t)
+  ;; Chapter 13: signal and error take a condition or a format string
+  ;; first, and cerror a restart description and then one of those.
+  (methodize dylan/signal '(condition) t)
+  (methodize dylan/error '(condition) t)
+  (methodize dylan/cerror '(restart-description condition) t)
   (methodize dylan/break '() t)
   (methodize dylan/check-type '(value type) nil)
   (methodize dylan/abort '() nil)

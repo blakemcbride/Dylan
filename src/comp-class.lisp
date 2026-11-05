@@ -527,8 +527,16 @@
     ;; to work because a Dylan module variable compiled to a Scheme
     ;; variable of the same name.  Module variables have names of their own
     ;; here, so the owner expression is compiled like any other.
-    (funcall compiler owner mod-vars bound-vars nil
-             (lambda (compiled-owner mod-vars)
-               (make-add-slot-call
-                (expand-slot (if (keyword? (car slot)) slot `(:getter ,@slot)))
-                compiled-owner bound-vars mod-vars compiler continue)))))
+    ;; Chapter 6: define-slot answers the slot's name, its getter.
+    (let ((expanded (expand-slot (if (keyword? (car slot)) slot `(:getter ,@slot)))))
+      (funcall compiler owner mod-vars bound-vars nil
+               (lambda (compiled-owner mod-vars)
+                 (make-add-slot-call
+                  expanded compiled-owner bound-vars mod-vars compiler
+                  (lambda (code mod-vars)
+                    (funcall continue
+                             `(progn ,code
+                                     ,(if (slot.getter expanded)
+                                          `',(slot.getter expanded)
+                                          'dylan%false))
+                             mod-vars))))))))

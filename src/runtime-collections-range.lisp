@@ -505,7 +505,11 @@
 ;;;; Operations on Ranges (page 118)
 ;;;;
 
-(defparameter dylan/range (dylan%generic-fn 'range only-rest-args nil))
+;;; Chapter 12: range #key from up-to through by size
+(defparameter dylan/range
+  (dylan%generic-fn 'range
+                    (make-param-list '() nil nil '(:from :up-to :through :by :size))
+                    nil))
 
 ;;; by: 0 repeats FROM.  Chapter 12's bounds then admit either every
 ;;; element or none: up-to admits them if FROM is below it, through if FROM

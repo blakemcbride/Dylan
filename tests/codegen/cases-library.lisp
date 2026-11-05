@@ -812,4 +812,24 @@ quux
 Zip:
 Zip:
 ")
+
+ ;; Chapter 9: collections of the same size whose keys differ are not =
+ (collection-equality
+  "(define x (make <table>)) (define y (make <table>))
+   (set! (element x 1) 'a) (set! (element y 2) 'a)
+   (print (= x y))
+   (set! (element y 1) 'a) (set! (element x 2) 'a)
+   (print (= x y))
+   (define a1 (make <array> dimensions: '(2 2) fill: 0))
+   (define a2 (make <array> dimensions: '(2 2) fill: 0))
+   (print (= a1 a2))
+   (set! (aref a2 1 1) 5)
+   (print (= a1 a2))
+   (print (= a1 (make <array> dimensions: '(1 4) fill: 0)))"
+  "#f
+#t
+#t
+#f
+#f
+")
 )

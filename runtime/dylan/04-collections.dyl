@@ -306,10 +306,13 @@ module: dylan
 
 (define-method binary= ((x <collection>) (y <collection>))
   (and (= (size x) (size y))
-       (every? (method (key)
-                 (bind ((other (element y key default: %no-default)))
-                   (and (not (id? other %no-default)) (= (element x key) other))))
-               (key-sequence x))))
+       ;; A default no element of Y can be.  (%no-default is element's
+       ;; own mark for no default, which signals an error.)
+       (bind ((absent (list #f)))
+         (every? (method (key)
+                   (bind ((other (element y key default: absent)))
+                     (and (not (id? other absent)) (= (element x key) other))))
+                 (key-sequence x)))))
 
 (define-method binary= ((x <sequence>) (y <sequence>))
   (bind-exit (return)

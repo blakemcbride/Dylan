@@ -156,6 +156,10 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# The C compiler's warnings about a constant vector the library's bounds
+# checks guard are not shown
+echo '(print (third #(1 2) default: 5))' > bounds.dyl
+check "no C warning for a guarded constant vector" sh -c '"$0" -o bounds bounds.dyl > bounds.out 2>&1 && ! grep -q warning bounds.out && [ "$(./bounds)" = 5 ]' "$dylanc"
 # A program may change a literal; the host compiler's warning about it is
 # not part of the output
 echo '(print (bind ((s "cab")) (set! (element s 0) #\z) s))' | "$dylan" > literal.out 2>&1

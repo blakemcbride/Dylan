@@ -172,6 +172,11 @@ built for debugging or testing."
           (list "-std=c11" "-pthread"
                 "-Wall" "-Wno-unused-variable" "-Wno-unused-but-set-variable"
                 "-Wno-unused-label"
+                ;; The library's bounds checks guard each vector access;
+                ;; GCC, seeing a constant vector inlined, warns of an
+                ;; access the check rules out, as for (third #(1 2)
+                ;; default: 5).
+                "-Wno-array-bounds"
                 (format nil "-I~a" (native-name (merge-pathnames "c/" *runtime-directory*))))
           (and trampoline (list "-DDY_TRAMPOLINE"))
           (and (mps-p)

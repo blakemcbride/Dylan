@@ -675,14 +675,17 @@ next-method, given the keyword arguments it takes, if any."
 
 (defun resolved-keywords-p (m pairs)
   "Are PAIRS, the keyword arguments of a call, constant keywords M takes?
-Then a check of them against every applicable method's would pass."
+Then a check of them against every applicable method's would pass.  M
+takes any keyword if it has #rest; else those it names, and none if it
+has #key alone (chapter 6)."
   (or (null pairs)
       (let ((keys (gmethod-keys m)))
         (and keys
              (loop for (k) on pairs by #'cddr
                    always (let ((c (and (not (c-atom-p k)) (constant-atom* k))))
-                            (and c (or (eq keys :any) (gmethod-rest-p m)
-                                       (member (const-value c) keys)))))))))
+                            (and c (keywordp (const-value c))
+                                 (or (gmethod-rest-p m)
+                                     (and (listp keys) (member (const-value c) keys))))))))))
 
 (defun slot-getter-type (g args)
   "If every method of G is the getter of a slot whose type is a class

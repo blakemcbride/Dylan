@@ -459,4 +459,39 @@ handled
 \"ERR: the variable ff@dylan-user has no value\"
 (ok 1 2)
 ")
+ ;; Chapter 6: with #key, the arguments after the required ones are
+ ;; keyword/value pairs, with #rest too; #key alone accepts no keyword,
+ ;; however the method is called
+ (keyword-pairs-checked
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define mr (method (#rest r #key a) (list r a)))
+(print (try (method () (mr 1 2))))
+(print (try (method () (mr b: 1 a: 2))))
+(define-method gk (#key) 'ok)
+(print (try (method () (gk 2 3))))
+(print (try (method () (gk))))
+(define-method h (x #key) x)
+(print (try (method () (h 1 color: 'red))))
+(print (try (method () ((identity h) 1 a: 2))))
+(print (try (method () ((method (a #key b) a) 1 2 3))))
+(print (try (method () ((method (a #key b) (list a b)) 1 b: 3))))
+(define-method k2 (x #key y) (list x y))
+(print (try (method () (k2 1 2 3))))
+(print (try (method () (k2 1 y: 3))))
+(define-method k3 (x #rest r #key y) (list x r y))
+(print (try (method () (k3 1 2 3))))
+(print (try (method () (k3 1 z: 3))))"
+  "\"ERR: the arguments after the required ones are not keyword/value pairs\"
+((b: 1 a: 2) 2)
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+ok
+\"ERR: keyword argument not accepted: color:\"
+\"ERR: keyword argument not accepted: a:\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+(1 3)
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+(1 3)
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+(1 (z: 3) #f)
+")
 )

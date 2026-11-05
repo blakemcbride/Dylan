@@ -1015,7 +1015,8 @@ with the arguments FN was given?"
 (defun gen-keyword-scan (fn start)
   ;; Chapter 6: a method accepts the keywords it names, or any if it has
   ;; #rest; called through its generic function, it accepts what that
-  ;; has checked.  The arguments from START on are keyword/value pairs.
+  ;; has checked.  The arguments from START on are keyword/value pairs,
+  ;; each a keyword and its value.
   (let* ((keys (ir-fn-keys fn))
          (any (or (ir-fn-rest fn) (gethash fn *method-of-fn*)))
          (keys (if (listp keys) keys '()))
@@ -1026,6 +1027,7 @@ with the arguments FN was given?"
     (indented
       (emit "if (~a + 1 >= argc) dy_odd_keyword_arguments(self);" i)
       (emit "~a = dy_argument(~a, a0, a1, a2, a3);" key i)
+      (emit "if (!dy_kind_p(~a, DY_KIND_KEYWORD)) dy_odd_keyword_arguments(self);" key)
       (if (and (null keys) any)
           nil
           (progn

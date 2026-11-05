@@ -120,7 +120,7 @@
   (lisp-state (dylan-call dylan/final-state collection)))
 (defun next-state (collection state)
   (cond ((and (listp collection) *fast-iterate-list*)
-         (and (consp state) (cdr state)))
+         (and (consp state) (list-rest (cdr state))))
         ((and (simple-vector-p collection) *fast-iterate-vector*
               (simple-vector-p state) (= (length state) 1)
               (typep (svref state 0) 'fixnum)
@@ -139,7 +139,7 @@
   (lisp-state (dylan-call dylan/copy-state collection (dylan-state state))))
 (defun current-element (collection state)
   (cond ((and (listp collection) *fast-iterate-list*)
-         (if (consp state) (car state) state))
+         (car state))
         ((and (simple-vector-p collection) *fast-iterate-vector*
               (simple-vector-p state) (= (length state) 1)
               (typep (svref state 0) 'fixnum)
@@ -255,13 +255,7 @@ unbounded collection)."
   (make-param-list `((list ,<list>) (state ,<object>)) nil nil nil)
   (lambda (list state)
     (declare (ignore list))
-    (if (not (consp state))
-        nil                             ; If dotted list, and reached end
-        (let ((left (cdr state)))
-          (cond ((null left) nil)
-                ;; For now: if not a pair, return the atom
-                ((not (consp left)) left)
-                (t left)))))))
+    (and (consp state) (list-rest (cdr state))))))
 
 (add-method                             ; Array => "Odometer style"
  dylan/next-state
@@ -412,9 +406,7 @@ unbounded collection)."
   (make-param-list `((list ,<list>) (state ,<object>)) nil nil nil)
   (lambda (list state)
     (declare (ignore list))
-    (if (consp state)
-        (car state)
-        state))))                       ; If reached dotted list end...
+    (car state))))
 (add-method
  dylan/current-element
  (dylan%function->method

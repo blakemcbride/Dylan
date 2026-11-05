@@ -87,7 +87,9 @@
      (("<empty-list>") "<boolean>" "DY_FALSE")
      (("<simple-object-vector>") nil "(DY_VECTOR_SIZE({0}) > 0 ? DY_INT(0) : DY_FALSE)"))
     ("next-state" 2
-     (("<pair>" "<pair>") nil "(dy_kind_p(dy_tail({1}), DY_KIND_PAIR) ? dy_tail({1}) : DY_FALSE)")
+     ;; Any other tail, of an improper list, is the library method's error
+     (("<pair>" "<pair>") nil "(dy_kind_p(dy_tail({1}), DY_KIND_PAIR) ? dy_tail({1}) : DY_FALSE)"
+      :extra "(dy_kind_p(dy_tail({1}), DY_KIND_PAIR) || dy_tail({1}) == DY_EMPTY)")
      (("<simple-object-vector>" "<integer>") nil
       "(DY_INT_VALUE({1}) + 1 < DY_VECTOR_SIZE({0}) ? DY_INT(DY_INT_VALUE({1}) + 1) : DY_FALSE)"))
     ("current-element" 2

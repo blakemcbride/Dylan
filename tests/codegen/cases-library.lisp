@@ -1786,4 +1786,77 @@ error
 \"ERR: out of memory\"
 1000000
 ")
+ ;; Walking onto the tail of a dotted list is a <type-error> of the tail
+ ;; (design note 16); finishing before it answers normally.
+ (improper-lists
+  "(define-method try (f) (handler-case (f) ((<type-error> condition: c) (format #f \"TYPE-ERR: ~a\" c)) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (append '(1 . 2) '(3)))))
+(print (try (method () (element '(1 2 . 3) 1))))
+(print (try (method () (element '(1 2 . 3) 2))))
+(print (try (method () (element '(1 2 . 3) 2 default: 0))))
+(print (try (method () (apply list 1 '(2 . 3)))))
+(print (try (method () `(1 ,@'(2 . 3) 4))))
+(print (try (method () (size '(1 2 . 3)))))
+(print (try (method () (concatenate '(1 . 2) '(3)))))
+(print (try (method () (reverse '(1 2 . 3)))))
+(print (try (method () (map identity '(1 2 . 3)))))
+(print (try (method () (member? 3 '(1 2 . 3)))))
+(print (try (method () (as <vector> '(1 2 . 3)))))
+(print (try (method () (last '(1 2 . 3)))))
+(print (try (method () (copy-sequence '(1 2 . 3)))))
+(print (try (method () (do (method (x) x) '(1 2 . 3)))))
+(print (try (method () (for-each ((x '(1 2 . 3))) () x))))
+(print (try (method () (remove! '(1 2 . 3) 2))))
+(print (try (method () (find-pair 5 '((1 . 2) . 3)))))
+(print (try (method () (bind ((l (list 1 2))) (set! (cdr (cdr l)) 3) (set! (element l 2) 9) l))))
+(print (try (method () (bind ((l (list 1 2))) (set! (cdr (cdr l)) 3) (reverse! l)))))
+(print (try (method () (concatenate '(1) '(2 . 3)))))
+(print (try (method () (append '(1) '(2 . 3)))))
+(print (try (method () (member? 1 '(1 . 2)))))
+(print (try (method () (element '(1 2 . 3) -1 default: 0))))
+(print (try (method () (element '(1 2 . 3) 5 default: 0))))
+(print (try (method () (= '(1 2 . 3) '(1 2 . 3)))))
+(print (try (method () (bind ((p <pair> '(1 2 . 3)) (n 0)) (for-each ((x p)) () (set! n (+ n x))) n))))
+(print (try (method () (bind ((s 0)) (do (method (x) (set! s (+ s x))) '(1 2)) s))))
+(print (try (method () (apply list 1 '(2 3)))))
+(print (try (method () `(1 ,@'(2 3) . 4))))
+(print (try (method () (append '(1) 5 '(2)))))
+(print (try (method () (reverse '(1 2 3)))))
+(print (try (method () (any? even? '(1 2 . 3)))))
+(print (try (method () (any? odd? '(1 2 . 3)))))"
+  "\"TYPE-ERR: 2 is not an instance of {the class <list>}\"
+2
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 2 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+(1 2 . 3)
+(1 . 2)
+0
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+#t
+\"TYPE-ERR: 3 is not an instance of {the class <list>}\"
+3
+(1 2 3)
+(1 2 3 . 4)
+\"TYPE-ERR: 5 is not an instance of {the class <list>}\"
+(3 2 1)
+#t
+#t
+")
 )

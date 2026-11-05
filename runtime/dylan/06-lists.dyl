@@ -6,9 +6,16 @@ module: dylan
 ;;; are the runtime's.  A list's iteration state is the pair whose car is
 ;;; the current element.
 
+;;; A list ends in ().  Walking onto any other tail that is not a pair, the
+;;; list is improper: design note 16 makes that a <type-error>, of the tail.
+(define %improper-list-tail (method (tail) (%runtime-type-error tail <list>)))
+
 (define-method initial-state ((l <list>)) (if (%pair? l) l #f))
 (define-method next-state ((l <list>) (state <pair>))
-  (bind ((rest (cdr state))) (if (%pair? rest) rest #f)))
+  (bind ((rest (cdr state)))
+    (cond ((%pair? rest) rest)
+          ((id? rest '()) #f)
+          (else: (%improper-list-tail rest)))))
 (define-method current-element ((l <list>) (state <pair>)) (car state))
 (define-method (setter current-element) ((l <list>) (state <pair>) new-value)
   (%set-car! state new-value))
@@ -19,7 +26,7 @@ module: dylan
 ;;; has no size; design note 16 makes it a <type-error>, of the tail that
 ;;; is not a list.
 (define-method size ((l <list>))
-  (bind-methods ((end (tail n) (if (id? tail '()) n (%runtime-type-error tail <list>)))
+  (bind-methods ((end (tail n) (if (id? tail '()) n (%improper-list-tail tail)))
                  (loop (slow fast n)
                    (cond ((not (%pair? fast)) (end fast n))
                          ((not (%pair? (cdr fast))) (end (cdr fast) (binary+ n 1)))
@@ -34,9 +41,10 @@ module: dylan
 (define-method element ((l <list>) (index <integer>) #key (default %no-default))
   (bind-methods ((walk (l k)
                    (cond ((not (%pair? l))
-                          (if (id? default %no-default)
-                              (error "element: there is no element at the index ~s" index)
-                              default))
+                          (cond ((not (id? l '())) (%improper-list-tail l))
+                                ((id? default %no-default)
+                                 (error "element: there is no element at the index ~s" index))
+                                (else: default)))
                          ((zero? k) (car l))
                          (else: (walk (cdr l) (binary- k 1))))))
     (if (negative? index)
@@ -46,7 +54,9 @@ module: dylan
 (define-method (setter element) ((l <list>) (index <integer>) new-value)
   (bind-methods ((walk (l k)
                    (cond ((not (%pair? l))
-                          (error "element: there is no element at the index ~s" index))
+                          (if (id? l '())
+                              (error "element: there is no element at the index ~s" index)
+                              (%improper-list-tail l)))
                          ((zero? k) (%set-car! l new-value))
                          (else: (walk (cdr l) (binary- k 1))))))
     (walk l index)))
@@ -106,13 +116,16 @@ module: dylan
                          ((id? (cdr lists) '()) (car lists))
                          (else: (copy-onto (car lists) (join (cdr lists))))))
                  (copy-onto (l tail)
-                   (if (%pair? l) (cons (car l) (copy-onto (cdr l) tail)) tail)))
+                   (cond ((%pair? l) (cons (car l) (copy-onto (cdr l) tail)))
+                         ((id? l '()) tail)
+                         (else: (%improper-list-tail l)))))
     (join (cons l more))))
 
 (define-generic-function find-pair (item list #key test))
 (define-method find-pair (item (l <list>) #key (test id?))
   (bind-methods ((walk (l)
-                   (cond ((not (%pair? l)) #f)
+                   (cond ((id? l '()) #f)
+                         ((not (%pair? l)) (%improper-list-tail l))
                          ((not (%instance? (car l) <list>))
                           (error "find-pair: ~s is not a list" (car l)))
                          ((and (%pair? (car l)) (test item (car (car l)))) (car l))
@@ -122,7 +135,8 @@ module: dylan
 ;;; For lists, member? answers the tail whose car matched.
 (define-method member? (value (l <list>) #key (test id?))
   (bind-methods ((walk (l)
-                   (cond ((not (%pair? l)) #f)
+                   (cond ((id? l '()) #f)
+                         ((not (%pair? l)) (%improper-list-tail l))
                          ((test value (car l)) l)
                          (else: (walk (cdr l))))))
     (walk l)))
@@ -133,13 +147,19 @@ module: dylan
 (define-method remove! ((l <list>) value #key (test id?) count)
   (%remove-elements l value test count))
 
-(define-method reverse ((l <list>)) (%list-reverse l))
+(define-method reverse ((l <list>))
+  (bind-methods ((loop (l r)
+                   (cond ((%pair? l) (loop (cdr l) (cons (car l) r)))
+                         ((id? l '()) r)
+                         (else: (%improper-list-tail l)))))
+    (loop l '())))
 
 (define-method reverse! ((l <list>))
   (bind-methods ((loop (l r)
-                   (if (%pair? l)
-                       (bind ((next (cdr l))) (%set-cdr! l r) (loop next l))
-                       r)))
+                   (cond ((%pair? l)
+                          (bind ((next (cdr l))) (%set-cdr! l r) (loop next l)))
+                         ((id? l '()) r)
+                         (else: (%improper-list-tail l)))))
     (loop l '())))
 
 ;;; Dotted lists are = when their elements and final cdrs are.

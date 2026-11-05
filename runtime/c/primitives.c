@@ -94,7 +94,8 @@ static Spread spread_arguments(intptr_t argc, D a0, D a1, D a2, D a3) {
         last = DY_CALL(sequence_hook, last, 0, 0, 0, 1);
     }
     for (D l = last; l != DY_EMPTY; l = dy_tail(l)) {
-        if (!dy_kind_p(l, DY_KIND_PAIR)) dy_error("apply: not a list", ARG(argc - 1));
+        /* An improper list: a <type-error> of its tail (design note 16) */
+        if (!dy_kind_p(l, DY_KIND_PAIR)) dy_check_type(l, dy_wrapper_list.class);
         if (n == DY_MAX_ARGUMENTS) dy_too_many_arguments();
         args[n++] = dy_head(l);
     }

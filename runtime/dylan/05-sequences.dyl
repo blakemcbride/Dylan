@@ -44,6 +44,7 @@ module: dylan
   (method (elements value test count)
     (bind-methods ((loop (l left result)
                      (cond ((id? l '()) (%list-reverse result))
+                           ((not (%pair? l)) (%runtime-type-error l <list>))
                            ((and (or (not left) (binary< 0 left)) (test (car l) value))
                             (loop (cdr l) (and left (binary- left 1)) result))
                            (else: (loop (cdr l) left (cons (car l) result))))))

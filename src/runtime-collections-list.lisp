@@ -170,7 +170,7 @@
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method keys '(:test))
     (let ((test (dylan%find-keyword keys :test (lambda () dylan/id?))))
-      (loop for tail = list then (cdr tail)
+      (loop for tail = list then (list-rest (cdr tail))
             do (cond ((null tail) (return dylan%false))
                      ((true? (dylan-call test value (car tail))) (return tail))))))))
 
@@ -196,11 +196,24 @@
  (dylan%function->method
   at-least-one-list
   (lambda (list-1 &rest rest)
-    (let ((rest-lists (mapcar (lambda (seq) (dylan-call dylan/as <list> seq))
-                              rest)))
-      (apply #'append list-1 rest-lists)))))
+    ;; A new list: every list is copied, the last too.
+    (let ((result '()))
+      (dolist (l (cons list-1 (mapcar (lambda (seq) (dylan-call dylan/as <list> seq))
+                                      rest)))
+        (loop for tail = l then (list-rest (cdr tail))
+              while tail
+              do (push (car tail) result)))
+      (nreverse result)))))
 
-(add-method dylan/reverse (dylan%function->method one-list #'reverse))
+(add-method dylan/reverse
+            (dylan%function->method
+             one-list
+             (lambda (list)
+               (let ((result '()))
+                 (loop for tail = list then (list-rest (cdr tail))
+                       while tail
+                       do (push (car tail) result))
+                 result))))
 
 ;; The pairs themselves, relinked, as in a compiled program.
 (add-method dylan/reverse!
@@ -208,8 +221,8 @@
              one-list
              (lambda (list)
                (let ((result '()))
-                 (loop while (consp list)
-                       do (let ((next (cdr list)))
+                 (loop while list
+                       do (let ((next (list-rest (cdr list))))
                             (setf (cdr list) result
                                   result list
                                   list next)))
@@ -301,8 +314,19 @@
            '()                          ; Very peculiar ?
            (apply #'list-star args))))))
 
+(defun dylan-append (&rest lists)
+  "Each of LISTS but the last copied, onto the last, which the result shares."
+  (let* ((result (list nil)) (end result))
+    (loop for (l . more) on lists
+          do (if more
+                 (loop for tail = (list-rest l) then (list-rest (cdr tail))
+                       while tail
+                       do (setf end (setf (cdr end) (list (car tail)))))
+                 (setf (cdr end) l)))
+    (cdr result)))
+
 (defparameter dylan/append
-  (dylan%generic-fn 'append at-least-one-list #'append))
+  (dylan%generic-fn 'append at-least-one-list #'dylan-append))
 
 (defparameter dylan/find-pair
   (dylan%generic-fn
@@ -318,7 +342,7 @@
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
     (let ((test-fn (dylan%find-keyword rest :test (lambda () dylan/id?))))
-      (loop for rest-list = list then (cdr rest-list)
+      (loop for rest-list = list then (list-rest (cdr rest-list))
             do (cond ((null rest-list) (return dylan%false))
                      ;; N.B. the Scheme tested (car LIST) rather than
                      ;; (car REST-LIST) here; fixed.
@@ -343,15 +367,19 @@
   (lambda (multiple-values next-method list-1 index &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (let ((size (length list-1)))
-      (if (and (>= index 0) (< index size))
-          (nth index list-1)
-          (dylan%find-keyword
-           rest :default
-           (lambda ()
-             (dylan-call dylan/error
-                         "element: there is no element at the index ~s"
-                         index))))))))
+    (flet ((none ()
+             (dylan%find-keyword
+              rest :default
+              (lambda ()
+                (dylan-call dylan/error
+                            "element: there is no element at the index ~s"
+                            index)))))
+      (if (minusp index)
+          (none)
+          (loop for tail = list-1 then (list-rest (cdr tail))
+                for k downfrom index
+                do (cond ((null tail) (return (none)))
+                         ((zerop k) (return (car tail))))))))))
 
 ;;;
 ;;; Mutable Collection

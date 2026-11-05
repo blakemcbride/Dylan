@@ -782,6 +782,21 @@ of a circular list is \code{\#f}:
 (size circle)    ; => #f
 \end{dylan}
 
+\index{dotted list}
+\noindent A dotted list is a list only up to its final tail. A function
+that walks onto that tail, as the functions of collections and
+sequences, \code{apply} and \code{,@} do, signals a \code{<type-error>}
+whose value is the tail and whose type is \code{<list>}. One that
+finishes before the tail answers normally, and \code{append} shares its
+last list as it is:
+
+\begin{dylan}
+(size '(1 2 . 3))           ; => error: 3 is not an instance of <list>
+(element '(1 2 . 3) 1)      ; => 2
+(member? 1 '(1 . 2))        ; => (1 . 2)
+(append '(1) '(2 . 3))      ; => (1 2 . 3)
+\end{dylan}
+
 \begin{warnbox}
 Do not let the Common Lisp implementation's read-eval-print loop print a
 circular list, as it would by showing the value of the \code{set!} above

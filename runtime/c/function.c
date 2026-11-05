@@ -149,12 +149,14 @@ _Noreturn void dy_too_many_arguments(void) {
 
 D dy_append2(D list, D tail) {
     if (list == DY_EMPTY) return tail;
-    D head = dy_pair(dy_head(list), DY_EMPTY), last = head;
-    for (D l = dy_tail(list); dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) {
+    D head = dy_pair(dy_head(list), DY_EMPTY), last = head, l;
+    for (l = dy_tail(list); dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) {
         D cell = dy_pair(dy_head(l), DY_EMPTY);
         ((DyPair *)DY_PTR(last))->tail = cell;
         last = cell;
     }
+    /* An improper list: a <type-error> of its tail (design note 16) */
+    if (l != DY_EMPTY) dy_check_type(l, dy_wrapper_list.class);
     ((DyPair *)DY_PTR(last))->tail = tail;
     return head;
 }

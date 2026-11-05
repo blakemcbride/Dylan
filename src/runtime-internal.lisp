@@ -360,6 +360,16 @@ first, and adds an initial NIL next-method argument."
   (add-method generic-function method))
 (defun dylan%null? (x) (null x))                        ; COND
 
+;;; A list ends in ().  Walking onto any other tail that is not a pair, the
+;;; list is improper: design note 16 makes that a <type-error>, of the tail.
+(defun improper-list-tail (tail)
+  (dylan-call dylan/error
+              (dylan-call dylan/make <type-error> :value tail :type <list>)))
+(declaim (inline list-rest))
+(defun list-rest (rest)
+  "REST, the cdr of a pair of a list being walked, if a list."
+  (if (listp rest) rest (improper-list-tail rest)))
+
 (defvar *fast-iterate-vector* nil)
 (defvar *fast-iterate-list* nil)
 (defvar *fast-iterate-range* nil)
@@ -381,8 +391,8 @@ first, and adds an initial NIL next-method argument."
                (return-from dylan%for-each dylan%false))
               ((and (listp collection) *fast-iterate-list*
                     (>= (dylan-list-length collection) 0))
-               (loop for tail = collection then (cdr tail)
-                     while (consp tail)
+               (loop for tail = collection then (list-rest (cdr tail))
+                     while tail
                      do (visit (car tail)))
                (return-from dylan%for-each dylan%false))
               ;; Any other single collection, by the iteration protocol

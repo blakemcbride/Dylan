@@ -313,7 +313,7 @@ extern DyHeader dy_true_object, dy_false_object, dy_empty_list_object;
 /* The built-in classes the runtime itself refers to.  Defined by the
  * compiler's output. */
 extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
-    dy_wrapper_character, dy_wrapper_empty_list, dy_wrapper_pair,
+    dy_wrapper_character, dy_wrapper_list, dy_wrapper_empty_list, dy_wrapper_pair,
     dy_wrapper_ratio, dy_wrapper_single_float, dy_wrapper_double_float,
     dy_wrapper_extended_float, dy_wrapper_byte_string,
     dy_wrapper_unicode_string, dy_wrapper_simple_object_vector,

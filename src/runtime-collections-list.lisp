@@ -195,7 +195,7 @@
  (dylan%function->method
   at-least-one-list
   (lambda (list-1 &rest rest)
-    (let ((rest-lists (mapcar (lambda (seq) (dylan-call dylan/as <pair> seq))
+    (let ((rest-lists (mapcar (lambda (seq) (dylan-call dylan/as <list> seq))
                               rest)))
       (apply #'append list-1 rest-lists)))))
 

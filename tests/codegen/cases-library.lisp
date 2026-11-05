@@ -1729,4 +1729,19 @@ error
 (\"make: size: must be a non-negative integer: -1\" \"make: size: must be a non-negative integer: x\")
 \"make: fill: must be a character: 5\"
 ")
+
+ ;; Chapter 12, concatenate and sort!: an empty sequence after a list, and
+ ;; an empty stretchy vector, are no different from any other.
+ (concatenate-empty-onto-list
+  "(print (concatenate '(1) '()))
+   (print (concatenate '(1) (vector) \"\" (make <deque>) '(2)))
+   (print (concatenate '() '() '()))
+   (print (sort! (make <stretchy-vector>)))
+   (print (sort! (as <stretchy-vector> '(3 1 2))))"
+  "(1)
+(1 2)
+()
+{<stretchy-vector>}
+{<stretchy-vector> 1 2 3}
+")
 )

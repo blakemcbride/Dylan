@@ -82,6 +82,15 @@ module: dylan
   (set! (%count d) (binary+ (%count d) 1))
   d)
 
+;;; Size-setter for stretchy sequences (design note 12): elements are
+;;; dropped from the end, or #f added there, as make adds them without
+;;; fill:.
+(define-method (setter size) ((d <deque>) n)
+  (%check-new-size n)
+  (for () ((not (binary< n (%count d)))) (pop-last d))
+  (for () ((not (binary< (%count d) n))) (push-last d #f))
+  n)
+
 (define-generic-function pop (deque))
 (define-method pop ((d <deque>))
   (when (zero? (%count d)) (error "pop: the deque is empty"))

@@ -958,8 +958,9 @@ is an error to pop an empty deque. \code{add!} is \code{push}, and
 \end{dylan}
 
 \noindent A deque prints as \code{\{<deque> 0 1 2 3\}}.
-\code{make} takes \code{size:} and \code{fill:}. The Common Lisp
-implementation can also set a deque's size; the compiler to C cannot.
+\code{make} takes \code{size:} and \code{fill:}. A deque's size can be
+set, as a stretchy vector's can: a smaller size drops elements from the
+end, and a larger one adds \code{\#f} elements there.
 
 \section{Ranges}\label{sec:collections-ranges}
 

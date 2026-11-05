@@ -527,9 +527,11 @@
   (dylan%generic-fn 'setter/size/ one-sequence-and-an-object nil))
 
 (defun check-new-size (sequence n)
+  (declare (ignore sequence))
   (unless (and (integerp n) (not (minusp n)))
-    (dylan-call dylan/error "(setter size) -- not a non-negative integer"
-                sequence n)))
+    (dylan-call dylan/error
+                "(setter size): the size must be a non-negative integer: ~s"
+                n)))
 
 ;;; Design note 11.
 (defparameter dylan/setter/last/

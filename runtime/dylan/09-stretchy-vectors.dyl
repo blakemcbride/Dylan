@@ -28,9 +28,15 @@ module: dylan
 
 (define-method size ((v <stretchy-vector>)) (%count v))
 
-;;; Size-setter for stretchy sequences (a design note): grows with #f, or
+;;; Size-setter for stretchy sequences (design note 12): grows with #f, or
 ;;; shrinks.
-(define-method (setter size) ((v <stretchy-vector>) (n <integer>))
+(define %check-new-size
+  (method (n)
+    (unless (and (%instance? n <integer>) (not (negative? n)))
+      (error "(setter size): the size must be a non-negative integer: ~s" n))))
+
+(define-method (setter size) ((v <stretchy-vector>) n)
+  (%check-new-size n)
   (%stretchy-ensure v n)
   (bind ((data (%data v)))
     (for ((i (%count v) (binary+ i 1))) ((not (binary< i n))) (%vector-element-setter data i #f)))

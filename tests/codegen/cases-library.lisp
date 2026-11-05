@@ -1689,4 +1689,23 @@ error
 (\"no applicable method for condition-format-string\" ())
 (\"no applicable method for type-error-value\" ())
 ")
+
+ (size-setter-of-deques-and-stretchy-vectors
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (bind ((d (make <deque> size: 5 fill: 10)))
+     (print (list (set! (size d) 7) (as <list> d) (set! (size d) 3) (as <list> d)))
+     (push d 0) (set! (size d) 2) (push-last d 9)
+     (print (as <list> d)))
+   (bind ((v (make <stretchy-vector>)))
+     (add! v 1) (add! v 2)
+     (print (list (set! (size v) 4) v (msg (method () (set! (size v) -1))) v)))
+   (print (msg (method () (set! (size (make <deque>)) 'x))))"
+  "(7 (10 10 10 10 10 #f #f) 3 (10 10 10))
+(0 10 9)
+(4 {<stretchy-vector> 1 2 #f #f} \"(setter size): the size must be a non-negative integer: -1\" {<stretchy-vector> 1 2 #f #f})
+\"(setter size): the size must be a non-negative integer: x\"
+")
 )

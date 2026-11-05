@@ -239,7 +239,8 @@ many keys share a hash code; growing would not help them."
                    (setf key-sequence
                          (dylan-call dylan/intersection key-sequence
                                      (dylan-call dylan/key-sequence
-                                                 (car rest-coll))))
+                                                 (car rest-coll))
+                                     :test dylan/=))
                    (pop rest-coll))
                  (let ((all-collections (cons coll-1 rest)))
                    (return

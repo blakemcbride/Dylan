@@ -521,4 +521,36 @@ found
                 (element t (vector 'p 'q 'r))))"
   "(1 2 3)
 ")
+
+ ;; Chapter 12, "Collection Alignment": collections that are not all
+ ;; sequences are aligned by their common keys, compared with =, so that
+ ;; the keys of arrays, and of tables keyed by lists or strings, match.
+ ;; Mapping into a table stores each result under its key.
+ (aligned-keys
+  "(define a (make <array> dimensions: '(2 2) fill: 1))
+   (define b (make <array> dimensions: '(2 2) fill: 10))
+   (print (every? > a b))
+   (print (any? < a b))
+   (print (as <list> (map + a b)))
+   (define n 0)
+   (do (method (x y) (set! n (+ n x y))) a b)
+   (print n)
+   (define t1 (make <table>)) (define t2 (make <table>))
+   (set! (element t1 (list 1)) 1) (set! (element t2 (list 1)) 2)
+   (set! (element t1 \"k\") 10) (set! (element t2 \"k\") 20)
+   (print (sort (as <list> (map + t1 t2))))
+   (define t3 (make <table>))
+   (map-into t3 + t1 t2)
+   (print (list (element t3 (list 1) default: 'none) (element t3 \"k\" default: 'none)))
+   (define t4 (make <table>))
+   (set! (element t4 0) 'a) (set! (element t4 5) 'b)
+   (print (sort (as <list> (map (method (x i) i) t4 (range from: 0)))))"
+  "#f
+#t
+(11 11 11 11)
+44
+(3 30)
+(3 30)
+(0 5)
+")
 )

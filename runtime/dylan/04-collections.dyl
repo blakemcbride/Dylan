@@ -138,13 +138,22 @@ module: dylan
                   ()
           (function (%list-map (method (c) (element c key)) collections))))))
 
+;;; Keys are matched with =: a key-sequence is made afresh, and the keys
+;;; of an array, or of a table keyed by lists or strings, are not id? to
+;;; another's.  A key sequence of known size goes first, since the
+;;; intersection walks its first argument, and an unbounded range's would
+;;; not end.
 (define %common-keys
   (method (collections)
-    (bind-methods ((loop (keys more)
-                     (if (id? more '())
-                         keys
-                         (loop (intersection keys (key-sequence (car more))) (cdr more)))))
-      (loop (key-sequence (car collections)) (cdr collections)))))
+    (bind ((key-sequences (%list-map key-sequence collections))
+           (bounded (choose size key-sequences))
+           (unbounded (choose (method (k) (not (size k))) key-sequences))
+           (ordered (concatenate bounded unbounded)))
+      (bind-methods ((loop (keys more)
+                       (if (id? more '())
+                           keys
+                           (loop (intersection keys (car more) test: =) (cdr more)))))
+        (loop (car ordered) (cdr ordered))))))
 
 (define-generic-function do (procedure collection #rest more-collections))
 
@@ -196,7 +205,7 @@ module: dylan
                 (l (%list-reverse results) (cdr l)))
                ((or (not state) (id? l '())) target)
             (set! (current-element target state) (car l))))
-        (bind ((keys (intersection (key-sequence target) (%common-keys collections))))
+        (bind ((keys (intersection (key-sequence target) (%common-keys collections) test: =)))
           (for-each ((key keys))
                     ()
             (set! (element target key)

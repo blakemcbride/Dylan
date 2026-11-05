@@ -123,7 +123,8 @@ macro that never stops expanding is reported (``one never stops?'').
   interactive implementation a \code{define-macro} may replace a macro,
   as a \code{define} may replace a variable.
 \item A call of a macro must be a proper list, and must supply arguments
-  its parameter list accepts (``macro m: wrong number of arguments'').
+  its parameter list accepts (``macro m: wrong number of arguments in
+  (m 1 2)'').
 \item An error signalled by a macro's body is reported at the call, with
   the macro's name: \code{(define-macro m (a) (error "no
   good: \textasciitilde{}s" a))} and a call \code{(m 1)} report
@@ -253,7 +254,8 @@ class:
 Two consequences of running macro bodies in the interactive
 implementation are worth knowing. First, under the compiler,
 \code{gensym} and anything \code{define-for-macros} defines exist only
-at compile time; a compiled program cannot call \code{gensym}. Second,
+at compile time; a compiled program that calls \code{gensym} gets an
+error. Second,
 where the two implementations differ, a macro body sees the interactive
 one: it has bignums, for instance (Appendix~\ref{app:differences}).
 
@@ -351,7 +353,11 @@ its own stack, its own handlers and exits, and its own values of thread
 variables (Section~\ref{sec:ext-thread-variables}).
 
 The threads API is small. Table~\ref{tab:ext-threads} lists it; the
-sections after it explain each part.
+sections after it explain each part. The interactive implementation has
+the same names, so that a program may define none of them in either, but
+no threads: calling one of its functions, making one of its objects or
+running one of its forms there is an error (``make-thread: threads exist
+only in compiled programs'').
 
 \begin{table}[htbp]
 \centering

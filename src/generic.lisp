@@ -430,8 +430,12 @@ cache's entry for the call."
         (ngiven (length original-args)))
     (declare (fixnum nreq ngiven))
     ;; Worded as the compiler to C words it, with the count given in the
-    ;; message, which has no arguments
-    (when (> nreq ngiven)
+    ;; message, which has no arguments; checked before the methods, as
+    ;; the generic function's own parameters decide it.
+    (when (or (> nreq ngiven)
+              (and (> ngiven nreq)
+                   (not (generic-function-data.keys data))
+                   (not (generic-function-data.rest? data))))
       (dylan-call dylan/error (format nil "wrong number of arguments (~a)" ngiven)))
     (let* ((applicable (cached-applicable-methods data original-args))
            (entries (car applicable))
@@ -450,11 +454,7 @@ cache's entry for the call."
                                  "an anonymous generic function")))
                     original-args))
       (when (> ngiven nreq)             ; More supplied than required
-        (let ((non-req-args (but-first nreq original-args)))
-          (if (or (generic-function-data.keys data)
-                  (generic-function-data.rest? data))
-              (check-extra-arguments data non-req-args applicable)
-              (dylan-call dylan/error (format nil "wrong number of arguments (~a)" ngiven)))))
+        (check-extra-arguments data (but-first nreq original-args) applicable))
       (call-methods entries multiple-values original-args))))
 
 (defun call-methods (entries multiple-values arguments)

@@ -768,4 +768,27 @@ b-slot
 (#f \"x\")
 3
 ")
+
+ ;; Too many arguments to a generic function is an error of the count
+ ;; before any method is looked for, unless it takes #rest or #key; a
+ ;; generic function made by make honours rest?: and key?:.
+ (generic-argument-count
+  "(define-method kind (f)
+     (handler-case (begin (f) 'ok)
+       ((<error> condition: c)
+        (if (subsequence-position (format #f \"~a\" c) \"wrong number of arguments\")
+            'count
+            'other))))
+   (define-method f4 ((x <integer>)) x)
+   (define-generic-function g2 (x #rest r))
+   (define-method g2 ((x <integer>) #rest r) r)
+   (define h (make <generic-function> required: 1 rest?: #t))
+   (define h2 (make <generic-function> required: 1))
+   (define h3 (make <generic-function> required: 1 key?: #t))
+   (print (map (method (f) (kind f))
+               (list (method () (f4 1 2)) (method () (f4)) (method () (f4 'a))
+                     (method () (g2 1 2 3)) (method () (h 1 2 3)) (method () (h))
+                     (method () (h2 1 2)) (method () (h3 1 k: 2)))))"
+  "(count count other ok other count count other)
+")
 )

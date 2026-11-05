@@ -518,6 +518,9 @@ host Lisp.
   the wrong number.
 \end{description}
 
+\noindent A compiled program has these names too, but has no host Lisp:
+calling one there is an error.
+
 \begin{repl}
 ? (lisp-variable 'most-positive-fixnum)
 ;Value: 4611686018427387903
@@ -702,7 +705,9 @@ dynamic, as the 1992 manual allows:
 \paragraph{What only the compiler to C has.}
 Threads (Chapter~\ref{ch:extensions}): \code{make-thread} and the
 rest, locks, condition variables, atomic integers, thread variables and
-\code{dynamic-bind} do not exist in the Common Lisp implementation.
+\code{dynamic-bind} do not exist in the Common Lisp implementation. Their
+names do, so that a program may not define them, but using one is an
+error.
 Appendix~\ref{app:library} marks every name that only one
 implementation provides.
 

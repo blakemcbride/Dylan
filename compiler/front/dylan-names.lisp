@@ -81,7 +81,9 @@
     "write" "print-object" "format" "<stream>" "<string-stream>"
     "*standard-output*" "*standard-error*" "stream-contents"
     ;; Timing (Phase 9)
-    "current-milliseconds")
+    "current-milliseconds"
+    ;; The interactive implementation's (21-interactive.dyl)
+    "gensym" "lisp-variable" "lisp-procedure")
   "Variables the DYLAN module exports that the manual does not define.")
 
 (defparameter *dylan-module-internal-names*

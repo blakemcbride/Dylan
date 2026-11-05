@@ -181,7 +181,11 @@ PRIMITIVE(make) {
  * time, which has no methods. */
 static D no_methods_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     (void)a0; (void)a1; (void)a2; (void)a3;
-    if (argc != ((DyGeneric *)DY_PTR(self))->required) dy_wrong_argument_count(self, argc);
+    DyGeneric *g = DY_PTR(self);
+    D *info = ((DyVector *)DY_PTR(g->info))->data;
+    /* More than the required arguments only with #rest or #key */
+    if (argc < g->required || (argc > g->required && info[1] == DY_FALSE && info[2] == DY_FALSE))
+        dy_wrong_argument_count(self, argc);
     dy_no_applicable_method(self);
 }
 

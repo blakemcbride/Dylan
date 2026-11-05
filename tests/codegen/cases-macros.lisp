@@ -146,4 +146,18 @@ two
 #f
 error
 ")
+
+ ;; An error of the argument count in a macro's body is the body's, not
+ ;; the call's.
+ (macro-body-wrong-arguments
+  "(define-macro m (a) (car))
+   (m 1)"
+  ""
+  :compile-error "macro m: wrong number of arguments (0)")
+
+ (macro-wrong-arguments-form
+  "(define-macro m (a) a)
+   (m 1 2)"
+  ""
+  :compile-error "macro m: wrong number of arguments in (m 1 2)")
 )

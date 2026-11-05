@@ -169,10 +169,13 @@ string literals are id?."
     (dolist (clause clauses)
       (when (and (consp clause) (consp (car clause))
                  (null (cdr (cl:last (car clause)))))
-        (dolist (key (car clause))
-          (when (and (not (stringp key)) (member key seen :test #'eql))
-            (dylan%error "case: ~s appears in more than one match list" key))
-          (push key seen))))))
+        ;; One match list may repeat a key
+        (let ((mine '()))
+          (dolist (key (car clause))
+            (when (and (not (stringp key)) (member key seen :test #'eql))
+              (dylan%error "case: ~s appears in more than one match list" key))
+            (pushnew key mine :test #'eql))
+          (setf seen (append mine seen)))))))
 
 (defun compile-case-form (e module-vars bound-vars compiler
                           multiple-values? continue)

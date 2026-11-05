@@ -97,12 +97,14 @@ mention as they go. Each entry says which implementation it concerns:
 \item[Lisp access.] \code{lisp-variable} and \code{lisp-procedure}
   reach Common Lisp values and functions from Dylan. Lisp's \code{NIL}
   arrives as the empty list, not \code{\#f}
-  (Chapter~\ref{ch:lisp}).
+  (Chapter~\ref{ch:lisp}). A compiled program has the two names, but
+  calling one is an error.
 \item[\code{\#t} and \code{\#f}.] Their class, as \code{object-class}
   answers it, is \code{<object>}; the manual names no class for them.
   (The compiler differs; see below.)
 \item[No threads.] The interactive implementation has none of the
-  compiler's threads (Chapter~\ref{ch:extensions}).
+  compiler's threads (Chapter~\ref{ch:extensions}). It has their names,
+  but using one is an error.
 \end{description}
 
 \section{The compiler to C}\label{sec:diff-compiler}

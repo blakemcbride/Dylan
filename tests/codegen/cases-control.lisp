@@ -599,4 +599,39 @@ after
 #f
 yes
 ")
+
+ ;; Chapter 8 forbids a match in two match lists, not twice in one.
+ (case-repeated-match
+  "(print (case 1 ((1 1) 'a) (else: 'b)))
+   (print (case 2 ((1 2 2) 'x) ((3) 'y)))"
+  "a
+x
+")
+
+ (case-match-in-two-lists
+  "(print (case 1 ((1 2) 'a) ((3 1) 'b)))"
+  ""
+  :compile-error "case: 1 appears in more than one match list")
+
+ ;; Both dylan modules export the same names: the threads, gensym,
+ ;; lisp-variable and lisp-procedure, whether or not they work there.
+ (dylan-module-thread-names
+  "(define make-thread 3)"
+  ""
+  :compile-error "define of make-thread: the variable is imported from module dylan")
+
+ (dylan-module-interactive-names
+  "(define gensym 1)"
+  ""
+  :compile-error "define of gensym: the variable is imported from module dylan")
+
+ (dylan-module-thread-classes
+  "(print (list (instance? 1 <lock>) (subclass? <recursive-lock> <lock>)
+               (subclass? <thread-error> <error>)
+               (thread-error-condition (make <thread-error> condition: 5))))
+   (handler-case (error (make <thread-error> condition: 5))
+     ((<error> condition: c) (print (format #f \"~a\" c))))"
+  "(#f #t #t 5)
+\"a thread ended with an unhandled condition: 5\"
+")
 )

@@ -132,9 +132,16 @@ module the variable comes from created it for its users to define."
           (resolve-symbol (find-module *current-module*) symbol)
         (unless (or (eq (module.name owner) *current-module*)
                     (module-creates-p owner name))
-          (dylan%error (concatenate 'string form-name
-                                    " -- the variable is imported from module")
-                       dylan-variable (module.name owner)))))))
+          (dylan%error (format nil "~a of ~a: the variable is imported from module ~a"
+                               (string-downcase form-name)
+                               (definition-name-string dylan-variable)
+                               (dylan-symbol->string (module.name owner)))))))))
+
+(defun definition-name-string (dylan-variable)
+  "How a definition's name prints in its errors: x, or (setter x)."
+  (if (consp dylan-variable)
+      (format nil "(setter ~a)" (dylan-symbol->string (cadr dylan-variable)))
+      (dylan-symbol->string dylan-variable)))
 
 (defun resolve-variable-name (dylan-variable)
   "The Lisp name of the variable DYLAN-VARIABLE -- a symbol or (SETTER

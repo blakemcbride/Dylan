@@ -76,3 +76,71 @@
                               (symbol-function variable-name)
                               (symbol-value variable-name))))
    1))
+
+;;;; Threads
+;;;
+;;; Threads are an extension of the compiler to C (user manual, chapter
+;;; 16).  The dylan module here exports the same names, so that the two
+;;; implementations' dylan modules agree, but there are no threads:
+;;; calling a thread function, or making a thread object, is an error.
+;;; The classes exist, so that instance? and the like answer.
+
+(defun no-threads (name)
+  (dylan%error (format nil "~a: threads exist only in compiled programs" name)))
+
+(defparameter <thread> (make-dylan-class '<thread> (list <object>) '() nil))
+(defparameter <lock> (make-dylan-class '<lock> (list <object>) '() nil))
+(defparameter <recursive-lock> (make-dylan-class '<recursive-lock> (list <lock>) '() nil))
+(defparameter <condition-variable>
+  (make-dylan-class '<condition-variable> (list <object>) '() nil))
+(defparameter <atomic-integer>
+  (make-dylan-class '<atomic-integer> (list <object>) '() nil))
+(defparameter <thread-error> (make-dylan-class '<thread-error> (list <error>) '() nil))
+
+(dolist (class (list <thread> <recursive-lock> <condition-variable> <atomic-integer>))
+  (setf (class.sealed? class) t))
+
+(dolist (class (list <thread> <lock> <recursive-lock> <condition-variable>
+                     <atomic-integer>))
+  (add-method
+   dylan/make
+   (dylan%function->method
+    (make-param-list `((class ,(dylan%make-singleton class))) nil nil :any)
+    (lambda (class &rest rest)
+      (declare (ignore class rest))
+      (no-threads "make")))))
+
+(defparameter dylan/thread-error-thread
+  (dylan%generic-fn 'thread-error-thread
+                    (make-param-list `((condition ,<object>)) nil nil nil)
+                    nil))
+(defparameter dylan/thread-error-condition
+  (dylan%generic-fn 'thread-error-condition
+                    (make-param-list `((condition ,<object>)) nil nil nil)
+                    nil))
+(dylan%add-slot <thread-error> nil 'instance nil dylan/thread-error-thread
+                'thread-error-thread nil nil nil :thread nil)
+(dylan%add-slot <thread-error> nil 'instance nil dylan/thread-error-condition
+                'thread-error-condition nil nil nil :condition nil)
+
+(defmacro define-no-thread-function (name &rest parameters)
+  `(defparameter ,(intern (format nil "DYLAN/~a" name) '#:dylan)
+     (dylan%function->method
+      (make-param-list (list ,@(mapcar (lambda (p) `(list ',p <object>)) parameters))
+                       nil nil nil)
+      (lambda ,parameters
+        (declare (ignore ,@parameters))
+        (no-threads ,(string-downcase (symbol-name name)))))))
+
+(define-no-thread-function make-thread function)
+(define-no-thread-function join-thread thread)
+(define-no-thread-function current-thread)
+(define-no-thread-function thread-yield)
+(define-no-thread-function acquire-lock lock)
+(define-no-thread-function release-lock lock)
+(define-no-thread-function wait-condition-variable variable lock)
+(define-no-thread-function notify-condition-variable variable)
+(define-no-thread-function notify-all-condition-variable variable)
+(define-no-thread-function atomic-value atomic)
+(define-no-thread-function atomic-add! atomic n)
+(define-no-thread-function atomic-compare-and-swap! atomic old new)

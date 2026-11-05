@@ -475,7 +475,7 @@ Name & Description & \\
 
 \section{Threads}\label{sec:lib-threads}
 
-{\sloppy An extension of the compiler to C (Chapter~\ref{ch:extensions}). The special forms \code{with-lock}, \code{define-thread-variable} and \code{dynamic-bind} are in Section~\ref{sec:lib-forms}.\par}
+{\sloppy An extension of the compiler to C (Chapter~\ref{ch:extensions}). The special forms \code{with-lock}, \code{define-thread-variable} and \code{dynamic-bind} are in Section~\ref{sec:lib-forms}. The interactive implementation has these names too, but no threads: using one there is an error.\par}
 
 {\small\frenchspacing
 \begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}
@@ -509,7 +509,8 @@ Name & Description & \\
 \section{Other extensions}\label{sec:lib-other}
 
 {\sloppy Extensions of the library beyond the manual's, in both
-implementations unless marked.\par}
+implementations unless marked. The compiler to C has the names marked
+\textsc{l} too, but a compiled program that calls one gets an error.\par}
 
 {\small\frenchspacing
 \begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}

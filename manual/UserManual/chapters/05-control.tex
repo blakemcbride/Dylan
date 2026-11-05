@@ -376,8 +376,8 @@ signaled.
 numbers, characters, symbols, keywords, \code{\#t}, \code{\#f} or
 \code{()}. Strings and lists are not suitable: two strings with the same
 characters need not be the same object. The same match may not appear in
-two clauses; the compiler to C reports that when compiling, and the Common
-Lisp implementation uses the first.
+two clauses (``case: 1 appears in more than one match list''); one match
+list may repeat a match.
 
 \subsection{select}
 

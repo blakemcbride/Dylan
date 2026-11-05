@@ -588,7 +588,9 @@ it; the last result form delivers MULTIPLE-VALUES?."
     (define-method  . compile-define-method-form)
     (define-module  . compile-define-module-form)
     (define-slot    . compile-define-slot-form)
+    (define-thread-variable . compile-define-thread-variable-form)
     (dotimes        . compile-dotimes-form)
+    (dynamic-bind   . compile-dynamic-bind-form)
     (for            . compile-for-form)
     (for-each       . compile-for-each-form)
     (handler-bind   . compile-handler-bind-form)
@@ -607,7 +609,24 @@ it; the last result form delivers MULTIPLE-VALUES?."
     (until          . compile-until-form)
     (unwind-protect . compile-unwind-protect-form)
     (when           . compile-when-form)
-    (while          . compile-while-form)))
+    (while          . compile-while-form)
+    (with-lock      . compile-with-lock-form)))
+
+;;; The compiler to C's thread forms (user manual, chapter 16).  There are
+;;; no threads here (runtime-extensions.lisp): running one is an error.
+
+(defmacro define-no-thread-form (function name)
+  `(defun ,function (forms module-vars bound-vars really-compile
+                     multiple-values? continue)
+     (declare (ignore forms bound-vars really-compile multiple-values?))
+     (funcall continue
+              '(dylan%error ,(format nil "~a: threads exist only in compiled programs"
+                                     name))
+              module-vars)))
+
+(define-no-thread-form compile-with-lock-form "with-lock")
+(define-no-thread-form compile-dynamic-bind-form "dynamic-bind")
+(define-no-thread-form compile-define-thread-variable-form "define-thread-variable")
 
 (defparameter compiled-sharp-f
   (really-compile dylan%false '() '() nil
@@ -738,7 +757,8 @@ it; the last result form delivers MULTIPLE-VALUES?."
   (when (and (symbolp dylan-variable)
              (gethash (name->module-variable (variable->name dylan-variable))
                       *dylan-macros*))
-    (dylan%error (format nil "~a -- ~a is a macro" form-name
+    (dylan%error (format nil "~a of ~a: ~a is a macro" (string-downcase form-name)
+                         (dylan-symbol->string dylan-variable)
                          (dylan-symbol->string dylan-variable)))))
 
 (defun macro-call? (e bound-vars)
@@ -752,11 +772,32 @@ current module, and not a lexical variable, which hides the macro?"
               (gethash (name->module-variable name) *dylan-macros*)))))
 
 (defun condition-text (condition)
-  "The message of CONDITION on one line, without its Error: prefix."
-  (let ((text (string-trim '(#\Space #\Newline #\Tab) (format nil "~a" condition))))
+  "The message of CONDITION on one line, without its Error: prefix.  A
+call with the wrong number of arguments is worded as a Dylan program's
+error is."
+  (let ((text (string-trim '(#\Space #\Newline #\Tab) (host-error-text condition))))
     (if (and (> (length text) 7) (string= "Error: " text :end2 7))
         (subseq text 7)
         text)))
+
+(defun host-error-text (condition)
+  "The text of the Lisp CONDITION, a call with the wrong number of
+arguments worded as a Dylan program's error is."
+  (multiple-value-bind (control arguments)
+      (if (typep condition 'program-error)
+          (implementation-specific/reflect-condition condition)
+          (values *reflected-error-tag* nil))
+    (if (eq control *reflected-error-tag*)
+        (format nil "~a" condition)
+        (dylan-format-message control arguments))))
+
+(defun macro-arguments-fit-p (expander count)
+  "May the macro EXPANDER, a method, be called with COUNT arguments?  So
+that a call with the wrong number is told from an error in the body."
+  (and (>= count (method.nrequired expander))
+       (or (= count (method.nrequired expander))
+           (method.rest? expander)
+           (method.keys expander))))
 
 (defun expand-macro-call (e)
   "The expansion of E, a call of a macro: its expander applied to the
@@ -770,9 +811,11 @@ call, with the macro's name, as the compiler to C reports it."
     (when (> (incf *expansions*) +max-expansions+)
       (dylan%error (format nil "macro ~a: macros expanded ~d times in one form -- one never stops?"
                            name +max-expansions+)))
+    (unless (macro-arguments-fit-p (cdr macro) (length (cdr e)))
+      (dylan%error (format nil "macro ~a: wrong number of arguments in ~a" name
+                           (with-output-to-string (s)
+                             (let ((*standard-output* s)) (dylan-write e))))))
     (handler-case (apply (cdr macro) nil next-method/not-generic (cdr e))
-      (program-error ()
-        (dylan%error (format nil "macro ~a: wrong number of arguments" name)))
       (error (condition)
         (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
 

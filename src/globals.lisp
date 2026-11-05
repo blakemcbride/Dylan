@@ -118,6 +118,9 @@
           <unicode-string>
           <vector>
           <warning>
+          ;; Threads (runtime-extensions.lisp)
+          <thread> <lock> <recursive-lock> <condition-variable>
+          <atomic-integer> <thread-error>
           ))
 
 ;;;; The Dylan-visible runtime procedures (runtime-*.lisp)
@@ -395,6 +398,13 @@
           dylan/truncate/
           dylan/type-error-expected-type
           dylan/type-error-value
+          ;; Threads (runtime-extensions.lisp)
+          dylan/make-thread dylan/join-thread dylan/current-thread
+          dylan/thread-yield dylan/thread-error-thread
+          dylan/thread-error-condition dylan/acquire-lock dylan/release-lock
+          dylan/wait-condition-variable dylan/notify-condition-variable
+          dylan/notify-all-condition-variable dylan/atomic-value
+          dylan/atomic-add! dylan/atomic-compare-and-swap!
           dylan/unary-
           dylan/unary/
           dylan/union

@@ -622,6 +622,10 @@ it together (chapter 13)."
             "~s is not an instance of ~s"
             (list (dylan-call dylan/type-error-value object)
                   (dylan-call dylan/type-error-expected-type object))))
+          ((subclass? class <thread-error>)
+           (dylan-format-message
+            "a thread ended with an unhandled condition: ~a"
+            (list (dylan-call dylan/thread-error-condition object))))
           ;; A condition with no message: its class
           (t (format nil "{instance of ~a}" (dylan-class-name class))))))
 
@@ -1457,4 +1461,26 @@ can be read back."
 (defparameter implementation-specific/additional-dylan-bindings
   '((pp dylan/pp)
     (lisp-variable dylan/lisp-variable)
-    (lisp-procedure dylan/lisp-procedure)))
+    (lisp-procedure dylan/lisp-procedure)
+    ;; The compiler to C's threads, which do not exist here
+    ;; (runtime-extensions.lisp), so that both dylan modules export them
+    (<thread> <thread>)
+    (<lock> <lock>)
+    (<recursive-lock> <recursive-lock>)
+    (<condition-variable> <condition-variable>)
+    (<atomic-integer> <atomic-integer>)
+    (<thread-error> <thread-error>)
+    (make-thread dylan/make-thread)
+    (join-thread dylan/join-thread)
+    (current-thread dylan/current-thread)
+    (thread-yield dylan/thread-yield)
+    (thread-error-thread dylan/thread-error-thread)
+    (thread-error-condition dylan/thread-error-condition)
+    (acquire-lock dylan/acquire-lock)
+    (release-lock dylan/release-lock)
+    (wait-condition-variable dylan/wait-condition-variable)
+    (notify-condition-variable dylan/notify-condition-variable)
+    (notify-all-condition-variable dylan/notify-all-condition-variable)
+    (atomic-value dylan/atomic-value)
+    (atomic-add! dylan/atomic-add!)
+    (atomic-compare-and-swap! dylan/atomic-compare-and-swap!)))

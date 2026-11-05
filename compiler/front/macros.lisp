@@ -109,13 +109,16 @@ clause's body (or :NONE)."
 (define-dylan-macro case (form)
   (require-list form 2 "case")
   (multiple-value-bind (clauses else) (check-clauses (cddr form) "case")
+    ;; Chapter 8 forbids a match in two match lists; one list may repeat it.
     (let ((seen '()))
       (dolist (clause clauses)
         (with-form (clause)
-          (dolist (match (car clause))
-            (when (member match seen)
-              (compile-error "case: ~a appears in more than one match list" match))
-            (push match seen)))))
+          (let ((mine '()))
+            (dolist (match (car clause))
+              (when (member match seen)
+                (compile-error "case: ~a appears in more than one match list" match))
+              (pushnew match mine))
+            (setf seen (append mine seen))))))
     (let ((key (temp "key")))
       `(dylan::bind ((,key ,(second form)))
          ,(reduce (lambda (clause rest)
@@ -463,7 +466,7 @@ it has yet to be set up.")
 
 (defun condition-text (e)
   "The message of the condition E, on one line."
-  (let* ((text (format nil "~a" e))
+  (let* ((text (dylan::host-error-text e))
          (text (if (and (> (length text) 7) (string= "Error: " text :end2 7))
                    (subseq text 7)
                    text)))
@@ -532,12 +535,12 @@ value.  An error in it is a compile error, its message beginning with WHAT."
   (let ((macro (user-macro (car form) '())))
     (unless (proper-list-p form)
       (compile-error "~a: a call of a macro must be a proper list" (car form)))
+    (unless (dylan::macro-arguments-fit-p (cdr macro) (length (cdr form)))
+      (compile-error "macro ~a: wrong number of arguments in ~a"
+                     (car macro) (dylan-form-string form)))
     (let ((expansion
             (handler-case (apply (cdr macro) nil dylan::next-method/not-generic (cdr form))
               (compile-error (e) (error e))
-              (program-error ()
-                (compile-error "macro ~a: wrong number of arguments in ~a"
-                               (car macro) (dylan-form-string form)))
               (error (e)
                 (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))
       (when *expansion-trace*

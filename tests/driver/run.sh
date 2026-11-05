@@ -160,6 +160,9 @@ check "bin/dylan < file: status 0 without an error" test "$status" = 0
 # checks guard are not shown
 echo '(print (third #(1 2) default: 5))' > bounds.dyl
 check "no C warning for a guarded constant vector" sh -c '"$0" -o bounds bounds.dyl > bounds.out 2>&1 && ! grep -q warning bounds.out && [ "$(./bounds)" = 5 ]' "$dylanc"
+# An unhandled warning is reported as a compiled program reports it
+echo '(signal "low ~a" 1)' | "$dylan" > warn.out 2> warn.err
+check "bin/dylan: an unhandled warning" grep -q "^Dylan warning: low 1$" warn.err
 # A program may change a literal; the host compiler's warning about it is
 # not part of the output
 echo '(print (bind ((s "cab")) (set! (element s 0) #\z) s))' | "$dylan" > literal.out 2>&1

@@ -1277,7 +1277,11 @@ handlers."
      (error 'unhandled-dylan-condition :dylan-condition dylan-condition))))
 
 (defun implementation-specific/warning (format-string format-args)
-  (warn "~a" (dylan-format-message format-string format-args)))
+  "An unhandled warning's report, on the standard error, as a compiled
+program prints it."
+  (format *error-output* "~&Dylan warning: ~a~%"
+          (dylan-format-message format-string format-args))
+  (force-output *error-output*))
 
 (defun implementation-specific/catch-all-errors (handler thunk)
   ;; A handler that returns normally declines, and the condition goes on to

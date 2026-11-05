@@ -774,4 +774,14 @@ found
 4.0s0
 error
 ")
+
+ ;; A size whose bytes wrap around is an error, not a write past the end
+ (huge-unicode-string
+  "(print (handler-case (make <unicode-string> size: 4611686018427387903 fill: #\\a)
+            ((<error>) 'error)))
+   (print (size (make <unicode-string> size: 3 fill: #\\a)))"
+  "error
+3
+"
+  :compiler-only t)
 )

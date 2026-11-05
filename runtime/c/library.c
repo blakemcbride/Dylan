@@ -378,7 +378,9 @@ PRIMITIVE(make_unicode_string) {
     intptr_t n = int_arg(a0);
     if (n < 0) dy_error("make: negative size", a0);
     if (!DY_IS_CHAR(a1)) dy_error("make: fill: must be a character", a1);
-    uint32_t *chars = (uint32_t *)dy_alloc_bytes((n + 1) * 4);
+    /* (N + 1) * 4 must not wrap around */
+    if ((size_t)n > (size_t)DY_INT_MAX / 4) dy_error("string too large", a0);
+    uint32_t *chars = (uint32_t *)dy_alloc_bytes(((size_t)n + 1) * 4);
     for (intptr_t i = 0; i < n; i++) chars[i] = DY_CHAR_CODE(a1);
     return dy_make_unicode_string(chars, n);
 }

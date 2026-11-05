@@ -373,9 +373,9 @@ a descriptor of a class INSTANCE is not an instance of is an error."
                                 slot-desc allocation)))))
          ;; Chapter 6: getting an uninitialized slot is an error.
          (if (eq value *the-uninitialized-slot-value*)
+             ;; As a compiled program words it
              (dylan-call dylan/error
-                         (format nil "the slot ~a is not initialized"
-                                 (dylan-symbol->string (slot.debug-name slot-desc)))
+                         "slot-value: the slot is not initialized: ~s"
                          instance)
              value))))))
 

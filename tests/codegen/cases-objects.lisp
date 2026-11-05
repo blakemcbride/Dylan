@@ -695,4 +695,21 @@ b-slot
 \"keyword argument not accepted: from:\"
 (3 5 7)
 ")
+
+ (define-class-slot-twice
+  "(define-class <a> (<object>) (x) (x init-value: 2))"
+  ""
+  :compile-error "define-class slots: x appears twice")
+
+ (uninitialized-slot-messages
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (list (condition-format-string c) (condition-format-arguments c)))))
+   (define-class <b> (<object>) (x))
+   (print (msg (method () (x (make <b>)))))
+   (print (first (second (msg (method () (slot-value (make <b>) (first (slot-descriptors <b>))))))))"
+  "(\"the slot x is not initialized\" ())
+{instance of <b>}
+")
 )

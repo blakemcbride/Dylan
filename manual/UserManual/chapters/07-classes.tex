@@ -99,7 +99,10 @@ A slot specification takes one of three forms:
 \noindent The slot name is a symbol and is not evaluated. It supplies the
 default getter name, \meta{slot-name}, and the default setter name,
 \code{(setter \meta{slot-name})}. In the third form there is no slot name,
-and \code{getter:} must be given. Each option may be given at most once.
+and \code{getter:} must be given. Each option may be given at most once,
+and two slots of one \code{define-class} may not have the same getter:
+\code{(define-class <a> (<object>) (x) (x))} is an error,
+\code{define-class slots: x appears twice}.
 
 \begin{description}
 \item[\code{getter:} \meta{name}] The variable to which the getter method

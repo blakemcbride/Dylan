@@ -1151,11 +1151,13 @@ it has now)."
   (make-param-list `((obj ,class) (value ,<object>)) nil nil nil))
 
 (defun object-ref (data offset object name)
+  (declare (ignore object))
   (let ((value (aref data offset)))
     (if (eq value *the-uninitialized-slot-value*)
+        ;; As in a compiled program: the slot's name, not the object
         (dylan-call dylan/error
-                    (format nil "the slot ~a is not initialized" (dylan-symbol->string name))
-                    object)
+                    (format nil "the slot ~a is not initialized"
+                            (dylan-symbol->string name)))
         value)))
 
 (defun make-class-getter (class offset name)

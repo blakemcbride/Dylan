@@ -495,6 +495,8 @@
   (must-be-list-of-at-least-length e 2 "DEFINE-CLASS: invalid syntax")
   (let ((superclasses (cadr e))
         (slots (expand-slots (cddr e))))
+    ;; Two slots with one getter would be one slot (chapter 6).
+    (check-names-once "define-class slots" (mapcar #'slot.getter slots))
     (compile-forms
      superclasses mod-vars bound-vars compiler nil
      (lambda (supers mod-vars)

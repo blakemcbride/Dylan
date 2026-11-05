@@ -999,4 +999,21 @@ error
 {range 2 by 1 size 2}
 {range 2 by 1}
 ")
+
+ ;; replace-subsequence! with too little room changes nothing
+ (replace-subsequence-room
+  "(define v (vector 1 2 3))
+   (print (handler-case (replace-subsequence! v '(a b c) start: 1) ((<error>) 'error)))
+   (print v)
+   (define phrase \"I hate oatmeal.\")
+   (print (replace-subsequence! phrase \"like\" start: 2))
+   (define w (vector 1 2 3 4))
+   (print (replace-subsequence! w w start: 0))
+   (print (replace-subsequence! (list 1 2 3) '() start: 3))"
+  "error
+#(1 2 3)
+\"I like oatmeal.\"
+#(1 2 3 4)
+(1 2 3)
+")
 )

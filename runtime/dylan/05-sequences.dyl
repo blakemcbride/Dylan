@@ -156,18 +156,23 @@ module: dylan
         (apply concatenate-as class s more))))
 
 (define-generic-function replace-subsequence! (mutable-sequence insert-sequence #key start))
+;;; The error for too short a target is signalled before anything is
+;;; written; INSERT's elements are taken first, as it may be TARGET.
 (define-method replace-subsequence! ((target <mutable-sequence>) (insert <sequence>)
                                      #key (start 0))
-  (bind ((state (for ((state (initial-state target) (next-state target state))
+  (bind ((elements (%elements insert))
+         (state (for ((state (initial-state target) (next-state target state))
                       (index 0 (binary+ index 1)))
                      ((or (not state) (= index start)) state))))
-    (for-each ((e insert))
-              ()
-      (unless state
-        (error "replace-subsequence!: the sequence is too short"))
-      (set! (current-element target state) e)
-      (set! state (next-state target state)))
-    target))
+    (for ((s state (next-state target s))
+          (l elements (cdr l)))
+         ((id? l '()))
+      (unless s
+        (error "replace-subsequence!: the sequence is too short")))
+    (for ((s state (next-state target s))
+          (l elements (cdr l)))
+         ((id? l '()) target)
+      (set! (current-element target s) (car l)))))
 
 ;;; Reversing and sorting
 

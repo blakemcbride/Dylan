@@ -466,7 +466,7 @@ Dylan & Common Lisp \\
 integers & integers, fixnums or bignums: there is no limit on size \\
 ratios & ratios \\
 floats & \code{double-float}s \\
-complex numbers & complex numbers; \code{(sqrt -4)} is \code{\#c(0.0 2.0)} \\
+complex numbers & complex numbers; \code{(make-rectangular 1 2)} is \code{\#c(1 2)} \\
 characters & characters \\
 strings & Lisp strings \\
 \code{<simple-object-vector>} & simple vectors \\
@@ -696,7 +696,7 @@ dynamic, as the 1992 manual allows:
   can be replaced (Section~\ref{sec:lisp-rep}).
 \item Integers have no limit on size, and complex numbers exist:
   \code{(* 99999999999 99999999999)} is \code{9999999999800000000001},
-  and \code{(sqrt -4)} is \code{\#c(0.0 2.0)}. The compiler to C has
+  and \code{(make-rectangular 1 2)} is \code{\#c(1 2)}. The compiler to C has
   63-bit integers, where overflow is an error, and no complex numbers.
 \item \code{lisp-variable} and \code{lisp-procedure} reach the host
   Lisp.

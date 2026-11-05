@@ -150,7 +150,7 @@ Name & Description & \\
 
 \section{Numbers}\label{sec:lib-numbers}
 
-{\sloppy The number classes and arithmetic (\dylanbook{chapter 14}). In the compiler to C integers are 63 bits, overflow is an error, and there are no complex numbers: \code{<complex>} has no instances, \code{make-rectangular} and \code{make-polar} signal an error unless the result is real, and so do the functions whose result would be complex, such as \code{(sqrt -4)}. The interactive implementation has Common Lisp's unlimited integers and complex numbers.\par}
+{\sloppy The number classes and arithmetic (\dylanbook{chapter 14}). In the compiler to C integers are 63 bits, overflow is an error, and there are no complex numbers: \code{<complex>} has no instances, \code{make-rectangular} and \code{make-polar} signal an error unless the result is real. The interactive implementation has Common Lisp's unlimited integers and complex numbers. In both, a function whose result would be complex for a real argument, such as \code{(sqrt -4)}, signals an error.\par}
 
 {\small\frenchspacing
 \begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}

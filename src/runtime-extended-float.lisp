@@ -26,10 +26,11 @@
 arguments."
   (lambda (multiple-values next-method &rest arguments)
     (declare (ignore next-method))
-    (let ((result (apply generic-function multiple-values next-method/not-generic
-                         (mapcar (lambda (x)
-                                   (if (extended-float? x) (extended-float-value x) x))
-                                 arguments))))
+    (let ((result (let ((*extended-float-arguments* arguments))
+                    (apply generic-function multiple-values next-method/not-generic
+                           (mapcar (lambda (x)
+                                     (if (extended-float? x) (extended-float-value x) x))
+                                   arguments)))))
       (if (and multiple-values (eq result multiple-values))
           ;; Every value: the vector holds the first ones and, in its last
           ;; element, the list of the rest (DYLAN/VALUES).

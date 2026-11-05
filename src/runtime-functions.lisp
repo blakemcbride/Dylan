@@ -170,11 +170,15 @@
 ;;; arguments made double-floats as for the others in runtime-methods.lisp.
 
 (defparameter dylan/acosh
-  (dylan%generic-fn 'acosh one-number (inexact-function #'acosh)))
+  (dylan%generic-fn 'acosh one-number
+                    (real-domain-function #'acosh (lambda (x) (< x 1))
+                                          "acosh: the result would be complex: ~s")))
 (defparameter dylan/asinh
   (dylan%generic-fn 'asinh one-number (inexact-function #'asinh)))
 (defparameter dylan/atanh
-  (dylan%generic-fn 'atanh one-number (inexact-function #'atanh)))
+  (dylan%generic-fn 'atanh one-number
+                    (real-domain-function #'atanh (lambda (x) (>= (abs x) 1))
+                                          "atanh: the argument is out of range: ~s")))
 (defparameter dylan/cosh
   (dylan%generic-fn 'cosh one-number (inexact-function #'cosh)))
 (defparameter dylan/sinh

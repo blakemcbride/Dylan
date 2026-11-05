@@ -1340,4 +1340,33 @@ error
 \"as: \\\"abc\\\" cannot be converted to {the class <integer>}\"
 error
 ")
+
+ ;; A real argument never gives a complex result: no compiled program has
+ ;; complex numbers, so both signal the same error.
+ (real-arguments-real-results
+  "(define-method show (thunk)
+     (print (handler-case (thunk)
+              ((<error> condition: c)
+               (apply format #f (condition-format-string c) (condition-format-arguments c))))))
+   (show (method () (sqrt -4)))
+   (show (method () (sqrt -0.0)))
+   (show (method () (log 0)))
+   (show (method () (asin 2)))
+   (show (method () (acos -1.5s0)))
+   (show (method () (acosh 0.5)))
+   (show (method () (atanh 1)))
+   (show (method () (expt -8 1/3)))
+   (show (method () (expt -8 2.0)))
+   (show (method () (sqrt (as <extended-float> -4))))"
+  "\"sqrt: the result would be complex: -4\"
+-0.0
+\"log: the argument must be positive: 0\"
+\"asin: the result would be complex: 2\"
+\"acos: the result would be complex: -1.5s0\"
+\"acosh: the result would be complex: 0.5\"
+\"atanh: the argument is out of range: 1\"
+\"expt: the result would be complex: -8\"
+64.0
+\"sqrt: the result would be complex: -4.0l0\"
+")
 )

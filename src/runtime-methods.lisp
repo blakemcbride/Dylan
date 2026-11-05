@@ -449,6 +449,34 @@ format, so that (expt 2.0s0 2) and (atan2 1.0s0 1) answer single-floats."
 (defun inexact-function (fn)
   (lambda (&rest numbers) (apply fn (->inexact-arguments numbers))))
 
+;;; A real argument outside the real domain of the function is an error,
+;;; as in a compiled program, which has no complex numbers: (sqrt -4) is
+;;; not #c(0.0 2.0).  Complex arguments, which only this implementation
+;;; has, still give complex results.  The test is made on the argument as
+;;; a float, as the compiled program makes it.
+
+(defvar *extended-float-arguments* nil
+  "While an <extended-float> method calls its generic function again on
+the doubles its arguments hold, the arguments as they were given, for the
+message of a domain error.")
+
+(defun domain-error (message position number)
+  (let ((given (nth position *extended-float-arguments*)))
+    (dylan-call dylan/error message
+                (if (and (extended-float? given)
+                         (eql (extended-float-value given) number))
+                    given
+                    number))))
+
+(defun real-domain-function (fn bad message)
+  "The irrational function FN of one argument, made an error, with MESSAGE,
+for a real argument at which BAD is true."
+  (let ((inexact (inexact-function fn)))
+    (lambda (number)
+      (when (and (realp number) (funcall bad (->inexact-argument number)))
+        (domain-error message 0 number))
+      (funcall inexact number))))
+
 (defun complex-magnitude (number)
   "ABS, with an exact complex argument made inexact first, as for the other
 irrational functions; an exact real stays exact."
@@ -459,24 +487,40 @@ irrational functions; an exact real stays exact."
 (defparameter dylan/cos (dylan%generic-fn 'cos one-number (inexact-function #'cos)))
 (defparameter dylan/tan (dylan%generic-fn 'tan one-number (inexact-function #'tan)))
 (defparameter dylan/asin
-  (dylan%generic-fn 'asin one-number (inexact-function #'asin)))
+  (dylan%generic-fn 'asin one-number
+                    (real-domain-function #'asin (lambda (x) (> (abs x) 1))
+                                          "asin: the result would be complex: ~s")))
 (defparameter dylan/acos
-  (dylan%generic-fn 'acos one-number (inexact-function #'acos)))
+  (dylan%generic-fn 'acos one-number
+                    (real-domain-function #'acos (lambda (x) (> (abs x) 1))
+                                          "acos: the result would be complex: ~s")))
 (defparameter dylan/atan
   (dylan%generic-fn 'atan one-number (inexact-function #'atan)))
 (defparameter dylan/atan2
   (dylan%generic-fn 'atan2 two-numbers (inexact-function #'atan)))
 (defparameter dylan/exp (dylan%generic-fn 'exp one-number (inexact-function #'exp)))
-(defparameter dylan/log (dylan%generic-fn 'log one-number (inexact-function #'log)))
+(defparameter dylan/log
+  (dylan%generic-fn 'log one-number
+                    (real-domain-function #'log (lambda (x) (<= x 0))
+                                          "log: the argument must be positive: ~s")))
 (defparameter dylan/expt
   ;; Exact for an exact base and integer power, as in Common Lisp.
   (dylan%generic-fn 'expt two-numbers
                     (lambda (base power)
-                      (if (and (rationalp base) (integerp power))
-                          (expt base power)
-                          (apply #'expt (->inexact-arguments (list base power)))))))
+                      (cond ((and (rationalp base) (integerp power))
+                             (expt base power))
+                            ((and (realp base) (realp power)
+                                  (minusp base)
+                                  (let ((y (->inexact-argument power)))
+                                    (/= y (ffloor y))))
+                             (domain-error "expt: the result would be complex: ~s"
+                                           0 base))
+                            (t (apply #'expt
+                                      (->inexact-arguments (list base power))))))))
 (defparameter dylan/sqrt
-  (dylan%generic-fn 'sqrt one-number (inexact-function #'sqrt)))
+  (dylan%generic-fn 'sqrt one-number
+                    (real-domain-function #'sqrt #'minusp
+                                          "sqrt: the result would be complex: ~s")))
 
 (defparameter dylan/modulo
   (dylan%generic-fn

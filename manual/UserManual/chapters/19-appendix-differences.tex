@@ -145,9 +145,10 @@ to change them; a compiled program cannot:
 \item \textbf{No complex numbers.} \code{<complex>} exists, abstract, as
   the superclass of \code{<real>} (so \code{(instance? 3 <complex>)}
   \yields{} \code{\#t}), but it has no instances. A complex literal is a
-  compile error, and a function whose result would be complex signals an
-  error: \code{(sqrt -4.0)} signals ``sqrt: the result would be complex''
-  where the interactive implementation answers \code{\#c(0.0 2.0)}.
+  compile error, and \code{make-rectangular} with a non-zero imaginary
+  part is an error. A function whose result would be complex signals an
+  error in both implementations: \code{(sqrt -4.0)} signals ``sqrt: the
+  result would be complex''.
 \item \code{<single-float>} is a C \code{float}; \code{<double-float>}
   and \code{<extended-float>} are both a C \code{double}. Floats print
   as the shortest decimal that reads back: \code{21.0}, and \code{1.5s0}
@@ -211,10 +212,8 @@ program depends on none of these; each is described where it arises.
 \item Equal string literals may be one object in the compiler to C;
   in the interactive implementation each is its own
   (Section~\ref{sec:collections-strings}).
-\item \code{min} and \code{max} of equal numbers of different classes,
-  and functions whose true result is complex or infinite, answer
-  differently (Sections~\ref{sec:numbers-misc}
-  and~\ref{sec:numbers-transcendental}).
+\item \code{min} and \code{max} of equal numbers of different classes
+  answer differently (Section~\ref{sec:numbers-misc}).
 \item Assigning a read-only module variable is a compile error in the
   compiler to C and an error when it runs in the interactive
   implementation, which also needs modules declared before use

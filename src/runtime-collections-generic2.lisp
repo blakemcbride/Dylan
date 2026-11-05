@@ -538,7 +538,8 @@ as the compiled library's %from-list does."
   (unless (and (integerp n) (not (minusp n)))
     (dylan-call dylan/error
                 "(setter size): the size must be a non-negative integer: ~s"
-                n)))
+                n))
+  (check-room n 8))
 
 ;;; Design note 11.
 (defparameter dylan/setter/last/

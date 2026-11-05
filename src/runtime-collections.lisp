@@ -133,3 +133,16 @@ a compiled program."
                                (make-param-list '() nil nil nil) init))
                     nil nil)
     (funcall continue the-setter the-getter)))
+
+;;; A collection too large for the heap is the error "out of memory", which
+;;; a handler can catch, as in a compiled program, not the host's heap
+;;; exhaustion.  Only a request of a megabyte or more is checked: a large
+;;; object needs room of its own, a tenth of the heap's being kept for the
+;;; collector.
+
+(defun check-room (count bytes-each)
+  "Signal out of memory if COUNT elements of BYTES-EACH would not fit."
+  (let ((bytes (* count bytes-each)))
+    (when (and (>= bytes (* 1024 1024))
+               (> bytes (floor (* 9 (implementation-specific/heap-room)) 10)))
+      (dylan-call dylan/error "out of memory"))))

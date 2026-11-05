@@ -88,7 +88,7 @@ D dy_pair(D head, D tail) {
 }
 
 D dy_make_vector(size_t size, D fill) {
-    if (size > (size_t)DY_INT_MAX / sizeof(D)) dy_error("vector too large", 0);
+    if (size > (size_t)DY_INT_MAX / sizeof(D)) dy_error("out of memory", 0);
     D length = DY_INT(size);
     return DY_OBJ(dy_alloc_init(&dy_wrapper_simple_object_vector,
                                 sizeof(DyVector) + size * sizeof(D), &length, 1, fill));

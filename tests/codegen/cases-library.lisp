@@ -1763,4 +1763,27 @@ error
 ({<deque> x 1 1} {<deque> x} {<deque> y x 1 1})
 2000
 ")
+ ;; A collection too large for memory is the error out of memory, which a
+ ;; handler can catch
+ (out-of-memory
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define huge 1000000000000000)
+(print (try (method () (size (make <vector> size: huge)))))
+(print (try (method () (size (make <byte-string> size: huge)))))
+(print (try (method () (size (make <unicode-string> size: huge)))))
+(print (try (method () (size (make <array> dimensions: (list 100000 100000 100000))))))
+(print (try (method () (size (make <stretchy-vector> size: huge)))))
+(print (try (method () (size (make <deque> size: huge)))))
+(define sv (make <stretchy-vector>))
+(print (try (method () (set! (size sv) huge))))
+(print (size (make <vector> size: 1000000)))"
+  "\"ERR: out of memory\"
+\"ERR: out of memory\"
+\"ERR: out of memory\"
+\"ERR: out of memory\"
+\"ERR: out of memory\"
+\"ERR: out of memory\"
+\"ERR: out of memory\"
+1000000
+")
 )

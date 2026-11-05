@@ -132,6 +132,7 @@
         (dylan-call
          dylan/error
          "make: size: must be a non-negative integer: ~s" size))
+      (check-room size 8)
       (make-array size :initial-element fill)))))
 
 ;;;
@@ -153,6 +154,7 @@
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error
                     "make: size: must be a non-negative integer: ~s" size))
+      (check-room size 8)
       (let ((instance (dylan%make-<object> <stretchy-vector>)))
         (dylan-call dylan/set-array-value! instance
                     (make-array size :initial-element fill))

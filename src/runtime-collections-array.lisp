@@ -212,6 +212,7 @@ simple object vector."
                        (bad-dimensions)
                        elem))
                  dimensions)))
+          (check-room (cl:reduce #'* dim-list) 8)
           ;; One dimension: a <simple-object-vector>, as in a compiled
           ;; program (a vector is an array of one dimension).
           (when (and (consp dim-list) (null (cdr dim-list)))

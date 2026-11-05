@@ -418,6 +418,8 @@ static inline bool dy_mps_commit(mps_ap_t ap, mps_addr_t p, size_t bytes) {
 extern _Thread_local mps_ap_t dy_mps_ap[2];   /* the thread's: EXACT, LEAF */
 void *dy_mps_alloc_shared(int pool, DyWrapper *wrapper, size_t bytes);
 _Noreturn void dy_mps_out_of_memory(void);
+/* The memory system refused BYTES (gc-mps.c). */
+_Noreturn void dy_mps_cannot_allocate(size_t bytes);
 void dy_mps_stress(void);
 void *dy_alloc_root(size_t bytes);
 void dy_free_root(void *p);
@@ -433,7 +435,7 @@ static inline void *dy_mps_alloc(int pool, DyWrapper *wrapper, size_t bytes,
     bytes = DY_ALIGN(bytes);
     mps_addr_t p;
     do {
-        if (!dy_mps_reserve(&p, ap, bytes)) dy_mps_out_of_memory();
+        if (!dy_mps_reserve(&p, ap, bytes)) dy_mps_cannot_allocate(bytes);
         if (pool == DY_POOL_EXACT) memset(p, 0, bytes);
         ((DyHeader *)p)->wrapper = wrapper;
         if (offset) *(D *)((char *)p + offset) = value;
@@ -461,7 +463,7 @@ static inline void *dy_alloc_init(DyWrapper *wrapper, size_t bytes, const D *fie
     size_t words = bytes / sizeof(D);
     mps_addr_t p;
     do {
-        if (!dy_mps_reserve(&p, ap, bytes)) dy_mps_out_of_memory();
+        if (!dy_mps_reserve(&p, ap, bytes)) dy_mps_cannot_allocate(bytes);
         D *w = p;
         w[0] = (D)wrapper;
         size_t i = 1;

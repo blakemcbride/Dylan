@@ -140,6 +140,7 @@ the keyword arguments REST."
     (when (or (not (integerp size)) (minusp size))
       (dylan-call dylan/error
                   "make: size: must be a non-negative integer: ~s" size))
+    (check-room size (if unicode? 4 1))
     (when have-fill?
       (if unicode?
           (unless (characterp fill)

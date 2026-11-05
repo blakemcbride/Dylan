@@ -104,6 +104,7 @@
           (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error "make: size: must be a non-negative integer: ~s" size))
+      (check-room size 16)
       (make-list size :initial-element fill)))))
 
 ;;;

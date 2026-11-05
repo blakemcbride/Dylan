@@ -281,6 +281,17 @@ _Noreturn void dy_mps_out_of_memory(void) {
     exit(1);
 }
 
+/* A request of a megabyte or more that the memory system refused is the
+ * error "out of memory", which a handler can catch: the program may well
+ * have room for its handlers yet.  A smaller one means that memory is
+ * gone, and is reported. */
+#define DY_LARGE_REQUEST (1024 * 1024)
+
+_Noreturn void dy_mps_cannot_allocate(size_t bytes) {
+    if (bytes >= DY_LARGE_REQUEST) dy_error("out of memory", 0);
+    dy_mps_out_of_memory();
+}
+
 static void check(mps_res_t res, const char *what) {
     if (res != MPS_RES_OK) {
         fflush(stdout);

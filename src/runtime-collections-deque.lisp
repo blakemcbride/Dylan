@@ -112,6 +112,7 @@
           (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error "make: size: must be a non-negative integer: ~s" size))
+      (check-room size 16)
       (let ((instance (dylan%make-<object> <deque>)))
         (dylan-call dylan/set-deque-front! instance '())
         (dylan-call dylan/set-deque-last! instance '())

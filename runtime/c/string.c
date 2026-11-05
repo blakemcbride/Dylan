@@ -17,7 +17,7 @@
 #include <wctype.h>
 
 D dy_make_byte_string(const char *bytes, size_t size) {
-    if (size > (size_t)DY_INT_MAX) dy_error("string too large", 0);
+    if (size > (size_t)DY_INT_MAX) dy_error("out of memory", 0);
     DyByteString *s = dy_alloc_atomic_sized(&dy_wrapper_byte_string,
                                             sizeof(DyByteString) + size + 1, DY_INT(size));
     memcpy(s->data, bytes, size);
@@ -28,7 +28,7 @@ D dy_make_byte_string(const char *bytes, size_t size) {
 D dy_make_c_string(const char *s) { return dy_make_byte_string(s, strlen(s)); }
 
 D dy_make_unicode_string(const uint32_t *chars, size_t size) {
-    if (size > (size_t)DY_INT_MAX / 4) dy_error("string too large", 0);
+    if (size > (size_t)DY_INT_MAX / 4) dy_error("out of memory", 0);
     DyUnicodeString *s = dy_alloc_atomic_sized(&dy_wrapper_unicode_string,
                                                sizeof(DyUnicodeString) + size * 4,
                                                DY_INT(size));

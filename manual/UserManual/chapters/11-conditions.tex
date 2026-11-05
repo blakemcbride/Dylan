@@ -333,6 +333,11 @@ exit to a frame well above that point makes the room again for another
 such error. If the handlers themselves use up what is left, the error is
 reported, as an unhandled one is, and the program ends.
 
+\index{memory, exhausted}
+Likewise a request for more memory than there is --- \code{(make
+<vector> size: \meta{n})} with an \meta{n} too large, say --- is the
+\code{<simple-error>} ``out of memory'', which a handler can catch.
+
 \section{Default handlers}\label{sec:conditions-default-handler}
 
 \index{default-handler}

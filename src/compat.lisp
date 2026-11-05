@@ -1260,6 +1260,11 @@ Choosing one signals an instance of the handler's restart class."
                                sb-vm::thread-control-stack-end-slot))))
     (values low (- high low))))
 
+(defun implementation-specific/heap-room ()
+  "How many bytes of the heap are free, after a full collection."
+  (sb-ext:gc :full t)
+  (- (sb-ext:dynamic-space-size) (sb-kernel:dynamic-usage)))
+
 (declaim (type fixnum *stack-guard* *stack-hard*))
 (defvar *stack-guard* 0
   "The soft limit of the stack (DYLAN%CHECK-STACK), or 0 if not found yet.")

@@ -494,4 +494,20 @@ ok
 \"ERR: the arguments after the required ones are not keyword/value pairs\"
 (1 (z: 3) #f)
 ")
+ ;; A recursion too deep for the stack is an error a handler can catch,
+ ;; again and again
+ (stack-exhausted
+  "(define-method count-up (n) (if (= n 0) 0 (+ 1 (count-up (- n 1)))))
+(print (handler-case (count-up 100000000) ((<error> condition: c) (list 'caught c))))
+(print (count-up 1000))
+(print (handler-case (count-up 100000000) ((<error> condition: c) (list 'again c))))
+(define-method deep (n) (handler-case (if (= n 0) 0 (+ 1 (deep (- n 1)))) ((<error>) 'inner)))
+(print (handler-case (deep 100000000) ((<error>) 'outer)))
+(print 'after)"
+  "(caught the stack is exhausted)
+1000
+(again the stack is exhausted)
+inner
+after
+")
 )

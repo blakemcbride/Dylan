@@ -325,6 +325,14 @@ signal a restart that the signaller handles
 which signals a condition of its own class, or causes an error it also
 handles, can recurse until the stack is exhausted.
 
+\index{stack, exhausted}
+A recursion too deep for the stack is an error a handler can catch: the
+\code{<simple-error>} ``the stack is exhausted'' is signalled while
+some of the stack is left, and its handlers run in what is left. Each
+exit to a frame well above that point makes the room again for another
+such error. If the handlers themselves use up what is left, the error is
+reported, as an unhandled one is, and the program ends.
+
 \section{Default handlers}\label{sec:conditions-default-handler}
 
 \index{default-handler}

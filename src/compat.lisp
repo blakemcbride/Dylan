@@ -1191,6 +1191,7 @@ native Lisp one.")
 (defvar *dylan-handler-frames* '())
 
 (defun implementation-specific/push-handler (type function test description thunk)
+  (dylan%check-binding-stack)
   (let ((*dylan-handler-frames*
           (cons (list type function test description) *dylan-handler-frames*)))
     (funcall thunk)))
@@ -1243,6 +1244,41 @@ Choosing one signals an instance of the handler's restart class."
                          (bind (cdr frames)))
                        (bind (cdr frames)))))))
     (bind (reverse *dylan-handler-frames*))))
+
+;;; The control stack, which grows down (DYLAN%CHECK-STACK).
+
+(declaim (inline implementation-specific/stack-pointer))
+(defun implementation-specific/stack-pointer ()
+  "The address the calling function's frame is at."
+  (sb-sys:sap-int (sb-vm::current-sp)))
+
+(defun implementation-specific/stack-bounds ()
+  "The lowest address of the calling thread's control stack, and its size."
+  (let ((low (sb-sys:sap-int (sb-vm::current-thread-offset-sap
+                              sb-vm::thread-control-stack-start-slot)))
+        (high (sb-sys:sap-int (sb-vm::current-thread-offset-sap
+                               sb-vm::thread-control-stack-end-slot))))
+    (values low (- high low))))
+
+(declaim (type fixnum *stack-guard* *stack-hard*))
+(defvar *stack-guard* 0
+  "The soft limit of the stack (DYLAN%CHECK-STACK), or 0 if not found yet.")
+(defvar *stack-hard* 0 "The hard limit.")
+
+(defun find-stack ()
+  "Set the limits from the calling thread's stack: two reserves at its
+end, each an eighth of it, at most 1 MB and 4 MB (an interpreted frame is
+larger than a compiled one), above the host's guard pages."
+  (multiple-value-bind (low size) (implementation-specific/stack-bounds)
+    (let* ((eighth (floor size 8))
+           (hard (+ low (min eighth (* 1024 1024)))))
+      (setf *stack-hard* hard
+            *stack-guard* (+ hard (min eighth (* 4 1024 1024)))))))
+
+(defun implementation-specific/binding-stack-room ()
+  "How many bytes are left of the calling thread's stack of dynamic
+bindings, each handler's among them: SBCL's is 1 MB."
+  (- (* 1024 1024) (sb-kernel::binding-stack-usage)))
 
 (defun implementation-specific/induce-error (format-string format-args)
   (call-with-dylan-restarts
@@ -1386,6 +1422,7 @@ the host compiler would produce for it are muffled.  So is the host's
 warning that a literal is changed: a Dylan program may change one, and
 the warning is not the program's output."
   (let ((result nil))
+    (when (zerop *stack-hard*) (find-stack))
     (handler-bind ((style-warning #'muffle-warning)
                    #+sbcl (sb-int:constant-modified #'muffle-warning))
       (dolist (form forms result)

@@ -422,3 +422,36 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (methodize dylan/do-handlers '(function) nil)
   (methodize dylan/lisp-variable '(name) nil)
   (methodize dylan/lisp-procedure '(name) nil))
+
+;;; A recursion too deep is an error a handler can catch, as in a compiled
+;;; program (runtime/c/control.c): each method checks, on entry, that the
+;;; stack is above *STACK-GUARD*, the soft limit.  While the error is
+;;; handled the guard is the hard limit, below which the stack is reported
+;;; exhausted, not signalled (FIND-STACK, in compat.lisp, sets them for the
+;;; loop, or the first form evaluated).  Handlers are dynamic bindings,
+;;; whose stack is apart: one is established only with 128 KB of it left,
+;;; or 32 KB while the error is handled.
+
+(defvar *binding-guard* (* 128 1024) "The room a handler needs.")
+(defconstant +binding-hard+ (* 32 1024))
+
+(define-condition stack-exhausted (storage-condition) ()
+  (:report "the stack is exhausted")
+  (:documentation "The stack exhausted below the hard limit: not an
+error, which a Dylan handler would see, but the end of the run."))
+
+(defun dylan%stack-exhausted ()
+  (if (or (< (implementation-specific/stack-pointer) *stack-hard*)
+          (< (implementation-specific/binding-stack-room) +binding-hard+))
+      (error 'stack-exhausted)
+      (let ((*stack-guard* *stack-hard*)
+            (*binding-guard* +binding-hard+))
+        (dylan-call dylan/error "the stack is exhausted"))))
+
+(defun dylan%check-binding-stack ()
+  (when (< (implementation-specific/binding-stack-room) *binding-guard*)
+    (dylan%stack-exhausted)))
+
+(defmacro dylan%check-stack ()
+  `(when (< (implementation-specific/stack-pointer) *stack-guard*)
+     (dylan%stack-exhausted)))

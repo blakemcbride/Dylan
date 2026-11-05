@@ -235,6 +235,7 @@
                                                  ,@(if (and (not rest) keys)
                                                        (list '!keys)
                                                        '())))
+                             (dylan%check-stack)
                              ;; #next is #f for the last method of a
                              ;; dispatch, as for a direct call.
                              (let ((,next (dylan%next-method-value !raw-next)))

@@ -414,6 +414,20 @@ own --- a wrong argument count, a type error, an overflow --- it calls
 back into that Dylan code, so the error is an ordinary
 \code{<simple-error>} or \code{<type-error>} that handlers can catch.
 
+\paragraph{The end of the stack.}
+\index{stack, exhausted}
+A function that may call another other than in tail position --- only
+such a call can deepen a recursion --- begins with
+\code{DY\_CHECK\_STACK}, which compares the stack pointer with the
+thread's \code{dy\_stack\_guard}: one load, at a fixed offset from the
+thread pointer, a compare and a branch. Each thread finds its stack's
+bounds as it starts (\code{dy\_find\_stack}), and keeps two reserves at
+its end, an eighth of the stack each, at most 64~KB and 192~KB. Reaching
+the upper one signals ``the stack is exhausted'' and lowers the guard to
+the lower one, so that the handlers have room; an exit to a frame above
+the upper reserve raises it again. Below the lower reserve the runtime
+reports its errors instead of signalling them.
+
 \section{The garbage collector}\label{sec:internals-gc}
 
 \index{garbage collection}\index{Memory Pool System}

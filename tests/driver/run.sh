@@ -193,6 +193,20 @@ check "bin/dylan: (exit) calls a program's exit" sh -c 'grep -q "^mine" exit.out
 # bin/dylan recurses as deep as a compiled program: a million calls
 printf '(define-method count-up (n) (if (= n 0) 0 (+ 1 (count-up (- n 1)))))\n(print (count-up 1000000))\n' | "$dylan" > deep.out 2>&1; status=$?
 check "bin/dylan: a recursion a million calls deep" sh -c "test $status = 0 && grep -q 1000000 deep.out"
+# A recursion too deep is an error; one in its handler too is reported,
+# and ends the run, in both
+cat > deeper.dyl <<'EOF2'
+(define-method count-up (n) (if (= n 0) 0 (+ 1 (count-up (- n 1)))))
+(print 'before)
+(handler-bind (<error> (method (c next) (count-up 100000000))) (count-up 100000000))
+(print 'after)
+EOF2
+"$dylanc" -o deeper deeper.dyl >/dev/null 2>&1; ./deeper > deeper.out 2> deeper.err; status=$?
+check "the stack exhausted in a handler: status 1" test "$status" = 1
+check "the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deeper.out && ! grep -q after deeper.out && grep -q "^Dylan error: the stack is exhausted" deeper.err'
+"$dylan" < deeper.dyl > deeper.out 2> deeper.err; status=$?
+check "bin/dylan: the stack exhausted in a handler: status 1" test "$status" = 1
+check "bin/dylan: the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deeper.out && ! grep -q after deeper.out && grep -q "^Dylan error: the stack is exhausted" deeper.err'
 # dylan:empty-environment! forgets what the loop defined, so that each
 # name can be defined again: classes, generic functions and macros too
 echo "(load \"$here/../../src/load-dylan.lisp\")" > empty.lisp

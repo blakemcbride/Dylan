@@ -110,6 +110,8 @@ D dy_call_with_exit(D body) {
     }
     DyThread *t = dy_thread;
     t->frames = f.prev;
+    /* Out of the error's handling, if it left a recursion too deep */
+    if ((char *)&f > t->stack_soft) dy_stack_guard = t->stack_soft;
     return t->mv_count > 0 ? t->mv[0] : DY_FALSE;
 }
 
@@ -239,28 +241,49 @@ static _Noreturn void report(const char *kind, const char *message, D irritant) 
     exit(1);
 }
 
-/* How much of a thread's stack signalling leaves for reporting.  There is
- * no "condition wall" (chapter 13): every handler is in force while a
- * handler runs, so an error a handler causes, and also handles, recurs
- * until the stack is exhausted.  The runtime's own errors stop being
- * signalled this near its end, and are reported. */
-#define DY_STACK_RESERVE (64 * 1024)
+/* The end of a thread's stack, as two reserves above its lowest address.
+ * A recursion that reaches the upper one, the soft limit, signals an
+ * error, which its handlers have the space between the two to handle.
+ * There is no "condition wall" (chapter 13): every handler is in force
+ * while a handler runs, so an error a handler causes, and also handles,
+ * recurs until the stack is exhausted.  Below the lower one, the hard
+ * limit, the runtime's errors are reported, not signalled.  Each reserve
+ * is an eighth of the stack, at most 64 KB and 192 KB. */
+#define DY_HARD_RESERVE (64 * 1024)
+#define DY_SOFT_RESERVE (192 * 1024)
 
-/* The lowest address the calling thread's stack may reach, or NULL if it
- * cannot be found. */
-static char *stack_limit(void) {
+_Thread_local char *dy_stack_guard;
+
+void dy_find_stack(void) {
+    DyThread *t = dy_thread;
+    char *low;
+    size_t size;
 #ifdef __APPLE__
     pthread_t self = pthread_self();
-    return (char *)pthread_get_stackaddr_np(self) - pthread_get_stacksize_np(self);
+    size = pthread_get_stacksize_np(self);
+    low = (char *)pthread_get_stackaddr_np(self) - size;
 #else
     pthread_attr_t attributes;
     void *base;
-    size_t size;
-    if (pthread_getattr_np(pthread_self(), &attributes) != 0) return NULL;
+    if (pthread_getattr_np(pthread_self(), &attributes) != 0) return;
     int found = pthread_attr_getstack(&attributes, &base, &size);
     pthread_attr_destroy(&attributes);
-    return found == 0 ? base : NULL;
+    if (found != 0) return;
+    low = base;
 #endif
+    size_t eighth = size / 8;
+    size_t hard = eighth < DY_HARD_RESERVE ? eighth : DY_HARD_RESERVE;
+    size_t soft = eighth < DY_SOFT_RESERVE ? eighth : DY_SOFT_RESERVE;
+    t->stack_hard = low + hard;
+    t->stack_soft = dy_stack_guard = low + hard + soft;
+}
+
+/* The guard is lowered to the hard limit while the error is handled, and
+ * raised again by an exit to a frame above the soft limit
+ * (dy_call_with_exit). */
+_Noreturn void dy_stack_exhausted(void) {
+    dy_stack_guard = dy_thread->stack_hard;
+    dy_error("the stack is exhausted", 0);
 }
 
 /* Whether a runtime error can be signalled: the library is ready, and the
@@ -268,9 +291,8 @@ static char *stack_limit(void) {
 static bool can_signal(D hook) {
     DyThread *t = dy_thread;
     if (!hook || !t) return false;
-    if (!t->stack_limit) t->stack_limit = stack_limit();
     char here;
-    return !t->stack_limit || &here - t->stack_limit > DY_STACK_RESERVE;
+    return !t->stack_hard || &here > t->stack_hard;
 }
 
 /* Signal a <simple-error> through the library, if it is ready and the

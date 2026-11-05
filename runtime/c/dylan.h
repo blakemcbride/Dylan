@@ -839,8 +839,13 @@ typedef struct DyThread {
     /* The dynamic chain: exits, cleanups and handlers, innermost first */
     struct DyFrame *frames;
     uint64_t frame_serial;
-    char *stack_limit;             /* how far its stack may grow, or 0
-                                      until found: see dy_error          */
+    /* Its stack's limits (control.c), or 0 if they cannot be found.  A
+       function that finds its frame below dy_stack_guard signals that
+       the stack is exhausted (DY_CHECK_STACK).  The guard is STACK_SOFT,
+       or STACK_HARD while that error is handled; below STACK_HARD errors
+       are reported, not signalled. */
+    char *stack_soft;
+    char *stack_hard;
     /* Threads (Phase 7) */
     struct DyThreadObject *self;   /* this thread's <thread>             */
     struct DyFrame *top_frame;     /* where an unhandled condition ends
@@ -889,6 +894,33 @@ D dy_handler_bind(D type, D function, D test, D description, D thunk);
  * scans it. */
 extern _Thread_local DyThread *dy_thread;
 void dy_init_thread(void);
+/* Find the calling thread's stack limits (control.c). */
+void dy_find_stack(void);
+
+/* A recursion too deep is an error a handler can catch: each function
+ * that makes calls other than tail calls checks, on entry, that its
+ * frame is above its thread's guard.  The guard is a variable of its own,
+ * at a fixed place from the thread pointer (a program is an executable,
+ * not a shared library), so that the check is a compare and a branch. */
+#if defined(__GNUC__) || defined(__clang__)
+extern _Thread_local char *dy_stack_guard __attribute__((tls_model("local-exec")));
+#else
+extern _Thread_local char *dy_stack_guard;
+#endif
+_Noreturn void dy_stack_exhausted(void);
+/* The stack pointer, read from its register where that can be done:
+ * taking a frame's address would cost the function its frame pointer
+ * register. */
+#if defined(__GNUC__) && defined(__x86_64__)
+#define DY_STACK_POINTER(sp) __asm__("movq %%rsp, %0" : "=r"(sp))
+#elif defined(__GNUC__) && defined(__aarch64__)
+#define DY_STACK_POINTER(sp) __asm__("mov %0, sp" : "=r"(sp))
+#else
+#define DY_STACK_POINTER(sp) do { char dy_here_; (sp) = &dy_here_; } while (0)
+#endif
+#define DY_CHECK_STACK() \
+    do { char *dy_sp_; DY_STACK_POINTER(dy_sp_); \
+         if (DY_UNLIKELY(dy_sp_ < dy_stack_guard)) dy_stack_exhausted(); } while (0)
 void dy_end_thread(void);
 
 #ifdef DY_MPS

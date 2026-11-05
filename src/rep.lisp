@@ -159,6 +159,7 @@ a compiled program reports an unhandled error, and exit with status 1."
   (terpri)
   (write-line "Entering Dylan read-eval-print-loop.")
   (write-line "Leave by typing \"(exit)\"")
+  (find-stack)
   (dylan%catch-all-conditions
    (lambda ()
      (loop

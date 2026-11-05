@@ -898,6 +898,11 @@ specialized entry, made with *SPEC* SPEC."
          (keys (ir-fn-keys fn)))
     (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn)
           (cfun-extra-locals cfun) '())
+    ;; A function that may call one other than in tail position may be
+    ;; part of a recursion, which ends with an error when the stack is
+    ;; nearly exhausted.
+    (when (cfun-needs-mv-reset cfun)
+      (emit "DY_CHECK_STACK();"))
     ;; Arguments
     (cond (spec
            (loop for var in required

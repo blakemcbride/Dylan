@@ -18,6 +18,7 @@ void dy_init_thread(void) {
     dy_thread = dy_alloc_root(sizeof(DyThread));
     memset(dy_thread, 0, sizeof(DyThread));
     dy_thread->mv_count = 1;
+    dy_find_stack();
 #ifdef DY_MPS
     dy_mps_thread_start();
 #endif

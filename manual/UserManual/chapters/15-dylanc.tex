@@ -671,15 +671,14 @@ The message names the generic function \code{binary+}: a call of
 unhandled serious condition ends only that thread; see
 Chapter~\ref{ch:extensions}.
 
-\begin{warnbox}
-A recursion that is \emph{not} in tail position uses C stack, and a
-program that recurses too deeply --- millions of frames --- overflows the
-stack and is killed by the operating system with a segmentation fault,
-not a Dylan error. Output it had printed but not yet flushed is lost.
-Calls in tail position never do this: they run in constant space however
-deep they go. Write deep recursions as tail calls, or raise the stack
-limit with \cmd{ulimit -s}.
-\end{warnbox}
+\begin{notebox}
+A recursion that is \emph{not} in tail position uses C stack, and one
+too deep for it --- with the usual 8~MB, some hundreds of thousands of
+frames --- signals the error ``the stack is exhausted''
+(Chapter~\ref{ch:conditions}). Calls in tail position never do this:
+they run in constant space however deep they go. Write deep recursions
+as tail calls, or raise the stack limit with \cmd{ulimit -s}.
+\end{notebox}
 
 \section{What a compiled program cannot do}\label{sec:dylanc-static}
 

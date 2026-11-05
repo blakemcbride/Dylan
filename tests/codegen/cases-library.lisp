@@ -508,4 +508,17 @@ found
 (a \"b\" (quote c))
 {<array> 0 0 0 0}
 ")
+
+ ;; Keys that are sequences of symbols, strings and characters, whose
+ ;; hashes are large: hashing them must not overflow.
+ (table-sequence-keys
+  "(define t (make <table>))
+   (set! (element t (list 'x 'y)) 1)
+   (set! (element t (list \"ab\" #\\c 'zz 'yy 'xx 'ww 'vv 'uu 'tt)) 2)
+   (set! (element t (vector 'p 'q 'r)) 3)
+   (print (list (element t (list 'x 'y))
+                (element t (list \"ab\" #\\c 'zz 'yy 'xx 'ww 'vv 'uu 'tt))
+                (element t (vector 'p 'q 'r))))"
+  "(1 2 3)
+")
 )

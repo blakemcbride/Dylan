@@ -310,11 +310,13 @@ module: dylan
       (unless (= (current-element x sx) (current-element y sy))
         (return #f)))))
 
+;;; The hash is kept below 2^56, so that h * 31 stays well inside a
+;;; 63-bit integer whatever the elements' hashes are.
 (define-method =hash ((s <sequence>))
   (for ((state (initial-state s) (next-state s state))
         (n 0 (binary+ n 1))
         (h 17 (%logand (%logxor (binary* h 31) (=hash (current-element s state)))
-                       1152921504606846975)))
+                       72057594037927935)))
        ((or (not state) (= n 8)) h)))
 
 ;;; Conversion of collections by as: to a sequence class, the elements in

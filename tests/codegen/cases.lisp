@@ -384,4 +384,12 @@ other
   "(bind ((#t 3)) (print #t))"
   ""
   :compile-error "#t")
+
+ ;; bind-methods with no body answers #f, as a method's empty body does.
+ (bind-methods-without-body
+  "(print (bind-methods ((f () 1))))
+   (print (bind-methods ((f () 1) (g () (f))) (g)))"
+  "#f
+1
+")
 )

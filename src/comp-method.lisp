@@ -361,9 +361,9 @@
 
 (defun compile-bind-methods-form (e mod-vars bound-vars compiler
                                   multiple-values? continue)
-  (must-be-list-of-at-least-length e 2 "BIND-METHODS -- bad syntax")
+  (must-be-list-of-at-least-length e 1 "BIND-METHODS -- bad syntax")
   (let ((bindings (car e))
-        (forms (cdr e)))
+        (forms (or (cdr e) (list dylan%false))))   ; An empty body answers #f
     (dolist (binding bindings)
       (must-be-list-of-at-least-length binding 3
                                        "BIND-METHODS -- illegal binding syntax"))

@@ -161,6 +161,17 @@ printf "(print 'one)\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
 check "bin/dylan: (exit) quits" sh -c 'grep -q "^one" exit.out && ! grep -q "^two" exit.out'
 printf "(define-method exit () (print 'mine))\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
 check "bin/dylan: (exit) calls a program's exit" sh -c 'grep -q "^mine" exit.out && grep -q "^two" exit.out'
+# dylan:empty-environment! forgets what the loop defined, so that each
+# name can be defined again: classes, generic functions and macros too
+echo "(load \"$here/../../src/load-dylan.lisp\")" > empty.lisp
+cat >> empty.lisp <<'EOF'
+(in-package :dylan)
+(defun run (text) (with-input-from-string (*standard-input* text) (rep)))
+(run "(define-class <foo> (<object>)) (define-macro twice (x) `(begin ,x ,x)) (define-generic-function gg (x))")
+(empty-environment!)
+(run "(define <foo> 3) (define twice 4) (define gg 5) (print (list <foo> twice gg))")
+EOF
+check "dylan:empty-environment!" sh -c 'sbcl --script empty.lisp 2>&1 | grep -q "^(3 4 5)"'
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

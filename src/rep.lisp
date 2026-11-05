@@ -56,10 +56,16 @@
 
 (defun empty-environment! ()
   "Forget the module variables created by previous DYLAN:REP interactions,
-and their values."
+and their values: they are read-only no longer, as define-class and
+define-generic-function made them, and the macros defined are forgotten
+too, so that each name can be defined afresh.  (Every macro is a
+program's; the system defines none.)"
   (dolist (name rep-module-variables)
     (unless (member name dylan%predefined-variables)
-      (makunbound (name->module-variable name))))
+      (let ((variable (name->module-variable name)))
+        (makunbound variable)
+        (remhash variable *read-only-variables*))))
+  (clrhash *dylan-macros*)
   (setf rep-module-variables '()))
 
 (defun batch-error-message (condition)

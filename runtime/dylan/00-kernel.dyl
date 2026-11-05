@@ -82,13 +82,15 @@ module: dylan
   (method (predicate)
     (method (#rest arguments) (not (apply predicate arguments)))))
 
+;;; disjoin and conjoin are like or and and (chapter 17): the last
+;;; predicate's values are all answered.
 (define disjoin
   (method (predicate #rest more)
     (bind ((predicates (cons predicate more)))
       (method (#rest arguments)
         (bind-methods ((try (ps)
-                         (if (id? ps '())
-                             #f
+                         (if (id? (cdr ps) '())
+                             (apply (car ps) arguments)
                              (or (apply (car ps) arguments) (try (cdr ps))))))
           (try predicates))))))
 
@@ -96,12 +98,11 @@ module: dylan
   (method (predicate #rest more)
     (bind ((predicates (cons predicate more)))
       (method (#rest arguments)
-        (bind-methods ((try (ps value)
-                         (if (id? ps '())
-                             value
-                             (bind ((v (apply (car ps) arguments)))
-                               (if v (try (cdr ps) v) #f)))))
-          (try predicates #t))))))
+        (bind-methods ((try (ps)
+                         (cond ((id? (cdr ps) '()) (apply (car ps) arguments))
+                               ((apply (car ps) arguments) (try (cdr ps)))
+                               (else: #f))))
+          (try predicates))))))
 
 (define curry
   (method (function #rest curried)

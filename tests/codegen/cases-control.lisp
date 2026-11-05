@@ -568,4 +568,35 @@ after
 \"ERR: nested {pt 1} is not an instance of {the class <integer>}\"
 \"ERR: SB!\"
 ")
+ ;; disjoin and conjoin answer all the values of the last predicate, as or
+ ;; and and do, and are new functions even of one predicate.
+ (disjoin-conjoin-values
+  "(define two (method (x) (values x 'second)))
+(define no (method (x) #f))
+(define yes (method (x) 'yes))
+(print (bind ((a b ((disjoin no two) 1))) (list a b)))
+(print (bind ((a b ((disjoin two no) 1))) (list a b)))
+(print (bind ((a b ((conjoin yes two) 1))) (list a b)))
+(print (bind ((a b ((conjoin no two) 1))) (list a b)))
+(print (bind ((a b ((disjoin two) 1))) (list a b)))
+(print (bind ((a b ((conjoin two) 1))) (list a b)))
+(print (id? (disjoin even?) even?))
+(print (id? (conjoin even?) even?))
+(print (map (disjoin even? zero?) '(1 2 3)))
+(print (map (conjoin odd? (method (x) (> x 1))) '(1 2 3)))
+(print ((disjoin no no) 1))
+(print ((conjoin yes yes) 1))"
+  "(1 second)
+(1 #f)
+(1 second)
+(#f #f)
+(1 second)
+(1 second)
+#f
+#f
+(#f #t #f)
+(#f #f #t)
+#f
+yes
+")
 )

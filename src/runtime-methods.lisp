@@ -1142,37 +1142,37 @@ slot-descriptors leaves them out, as a compiled program does.")
 (defparameter dylan/disjoin
   (dylan%function->method
    at-least-one-function
+   ;; A new function, even of one predicate, as the compiled library makes;
+   ;; the last predicate's values are all answered.
    (lambda (fn &rest rest-fns)
-     (if (null rest-fns)
-         fn
-         (lambda (multiple-values next-method &rest args)
-           (declare (ignore next-method))
-           (loop with current = fn
-                 with remaining = rest-fns
-                 do (if (null remaining)
-                        (return (dylan-mv-apply current multiple-values args))
-                        (let ((value (dylan-apply current args)))
-                          (if (true? value)
-                              (return value)
-                              (progn (setf current (car remaining))
-                                     (pop remaining)))))))))))
+     (lambda (multiple-values next-method &rest args)
+       (declare (ignore next-method))
+       (loop with current = fn
+             with remaining = rest-fns
+             do (if (null remaining)
+                    (return (dylan-mv-apply current multiple-values args))
+                    (let ((value (dylan-apply current args)))
+                      (if (true? value)
+                          (return value)
+                          (progn (setf current (car remaining))
+                                 (pop remaining))))))))))
 
 (defparameter dylan/conjoin
   (dylan%function->method
    at-least-one-function
+   ;; A new function, even of one predicate, as the compiled library makes;
+   ;; the last predicate's values are all answered.
    (lambda (fn &rest rest-fns)
-     (if (null rest-fns)
-         fn
-         (lambda (multiple-values next-method &rest args)
-           (declare (ignore next-method))
-           (loop with current = fn
-                 with remaining = rest-fns
-                 do (if (null remaining)
-                        (return (dylan-mv-apply current multiple-values args))
-                        (if (true? (dylan-apply current args))
-                            (progn (setf current (car remaining))
-                                   (pop remaining))
-                            (return dylan%false)))))))))
+     (lambda (multiple-values next-method &rest args)
+       (declare (ignore next-method))
+       (loop with current = fn
+             with remaining = rest-fns
+             do (if (null remaining)
+                    (return (dylan-mv-apply current multiple-values args))
+                    (if (true? (dylan-apply current args))
+                        (progn (setf current (car remaining))
+                               (pop remaining))
+                        (return dylan%false))))))))
 
 (defparameter dylan/curry
   (dylan%function->method

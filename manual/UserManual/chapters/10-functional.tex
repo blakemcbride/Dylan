@@ -67,7 +67,9 @@ otherwise:
 \code{(disjoin \meta{p} \meta{q} ...)} answers the \term{disjunction}
 of its predicates: a function that calls them in order on its arguments
 and answers the first true value any of them returns, without calling
-the rest, or \code{\#f} if none does. It is like an \code{or} of calls.
+the rest, or \code{\#f} if none does. It is like an \code{or} of calls:
+the last predicate's values are all answered. It is a new function even
+of one predicate.
 
 \begin{dylan}
 (define small-or-even? (disjoin (curry > 3) even?))
@@ -79,8 +81,8 @@ the rest, or \code{\#f} if none does. It is like an \code{or} of calls.
 \index{conjoin}
 \code{(conjoin \meta{p} \meta{q} ...)} answers the \term{conjunction}:
 a function that calls the predicates in order and answers \code{\#f} as
-soon as one does, or else the value of the last. It is like an
-\code{and} of calls.
+soon as one does, or else the values of the last. It is like an
+\code{and} of calls, and is a new function even of one predicate.
 
 \begin{dylan}
 (define positive-integer? (conjoin (rcurry instance? <integer>) positive?))

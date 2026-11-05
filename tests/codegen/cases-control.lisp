@@ -376,4 +376,23 @@ caught
 body
 handled
 ")
+
+ ;; Chapter 13 has no condition wall: an error a handler causes is
+ ;; signalled to the handlers, however deeply such errors nest -- the
+ ;; runtime's own errors (here no method for binary+, and a type error)
+ ;; as much as error's.
+ (handler-error-nesting
+  "(define count 0)
+   (print (bind-exit (k)
+     (handler-bind (<error> (method (c next) (set! count (+ count 1))
+                              (if (< count 50) (+ count 'x) (k count))))
+       (+ 0 'x))))
+   (set! count 0)
+   (print (bind-exit (k)
+     (handler-bind (<error> (method (c next) (set! count (+ count 1))
+                              (if (< count 50) (check-type count <string>) (k count))))
+       (check-type 1 <string>))))"
+  "50
+50
+")
 )

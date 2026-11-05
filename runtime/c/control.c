@@ -18,6 +18,9 @@
  * functions it uses to signal the errors it detects itself.
  */
 
+#if !defined(__APPLE__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE                /* pthread_getattr_np */
+#endif
 #include "primitive.h"
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +32,6 @@ static void push_frame(DyFrame *f, int kind) {
     f->kind = kind;
     f->prev = t->frames;
     f->serial = ++t->frame_serial;
-    f->error_depth = t->error_depth;
     t->frames = f;
 }
 
@@ -108,7 +110,6 @@ D dy_call_with_exit(D body) {
     }
     DyThread *t = dy_thread;
     t->frames = f.prev;
-    t->error_depth = f.error_depth;
     return t->mv_count > 0 ? t->mv[0] : DY_FALSE;
 }
 
@@ -235,12 +236,44 @@ static _Noreturn void report(const char *kind, const char *message, D irritant) 
     exit(1);
 }
 
-/* Signal a <simple-error> through the library, if it is ready and this is
- * not an error in signalling one; else report it and stop. */
-_Noreturn void dy_error(const char *message, D irritant) {
+/* How much of a thread's stack signalling leaves for reporting.  There is
+ * no "condition wall" (chapter 13): every handler is in force while a
+ * handler runs, so an error a handler causes, and also handles, recurs
+ * until the stack is exhausted.  The runtime's own errors stop being
+ * signalled this near its end, and are reported. */
+#define DY_STACK_RESERVE (64 * 1024)
+
+/* The lowest address the calling thread's stack may reach, or NULL if it
+ * cannot be found. */
+static char *stack_limit(void) {
+#ifdef __APPLE__
+    pthread_t self = pthread_self();
+    return (char *)pthread_get_stackaddr_np(self) - pthread_get_stacksize_np(self);
+#else
+    pthread_attr_t attributes;
+    void *base;
+    size_t size;
+    if (pthread_getattr_np(pthread_self(), &attributes) != 0) return NULL;
+    int found = pthread_attr_getstack(&attributes, &base, &size);
+    pthread_attr_destroy(&attributes);
+    return found == 0 ? base : NULL;
+#endif
+}
+
+/* Whether a runtime error can be signalled: the library is ready, and the
+ * stack has room for it. */
+static bool can_signal(D hook) {
     DyThread *t = dy_thread;
-    if (error_hook && t && t->error_depth < 4) {
-        t->error_depth++;
+    if (!hook || !t) return false;
+    if (!t->stack_limit) t->stack_limit = stack_limit();
+    char here;
+    return !t->stack_limit || &here - t->stack_limit > DY_STACK_RESERVE;
+}
+
+/* Signal a <simple-error> through the library, if it is ready and the
+ * stack is not nearly exhausted; else report it and stop. */
+_Noreturn void dy_error(const char *message, D irritant) {
+    if (can_signal(error_hook)) {
         /* MESSAGE, which may hold a name with a ~ in it, is text: each ~
          * is doubled to stand for itself in the format string. */
         size_t n = strlen(message), tildes = 0;
@@ -260,9 +293,7 @@ _Noreturn void dy_error(const char *message, D irritant) {
 
 void dy_check_type(D value, D type) {
     if (dy_specializer_matches(value, type)) return;
-    DyThread *t = dy_thread;
-    if (type_error_hook && t && t->error_depth < 4) {
-        t->error_depth++;
+    if (can_signal(type_error_hook)) {
         DY_CALL(type_error_hook, value, type, 0, 0, 2);
     }
     fflush(stdout);

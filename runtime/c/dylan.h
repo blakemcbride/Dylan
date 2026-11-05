@@ -839,7 +839,8 @@ typedef struct DyThread {
     /* The dynamic chain: exits, cleanups and handlers, innermost first */
     struct DyFrame *frames;
     uint64_t frame_serial;
-    int error_depth;               /* run-time errors being signalled    */
+    char *stack_limit;             /* how far its stack may grow, or 0
+                                      until found: see dy_error          */
     /* Threads (Phase 7) */
     struct DyThreadObject *self;   /* this thread's <thread>             */
     struct DyFrame *top_frame;     /* where an unhandled condition ends
@@ -865,7 +866,6 @@ enum { DY_FRAME_EXIT, DY_FRAME_CLEANUP, DY_FRAME_HANDLER };
 typedef struct DyFrame {
     struct DyFrame *prev;
     int kind;
-    int error_depth;               /* the thread's, when established     */
     uint64_t serial;               /* unique in the thread                */
     jmp_buf jump;                  /* DY_FRAME_EXIT                       */
     D a, b, c, d;                  /* CLEANUP: a the cleanup; HANDLER:

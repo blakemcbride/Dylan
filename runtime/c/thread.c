@@ -56,7 +56,6 @@ static void *thread_main(void *arg) {
     top.kind = DY_FRAME_EXIT;
     top.prev = NULL;
     top.serial = ++dy_thread->frame_serial;
-    top.error_depth = 0;
     dy_thread->frames = &top;
     dy_thread->top_frame = &top;
     if (_setjmp(top.jump) == 0) {

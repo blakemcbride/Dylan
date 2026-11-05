@@ -51,7 +51,7 @@
 (defparameter dylan/stream-contents
   (dylan%function->method
    (make-param-list `((stream ,<string-stream>)) nil nil nil)
-   #'dylan-stream-string))
+   #'dylan-stream-result))
 
 ;;; print-object
 
@@ -211,4 +211,4 @@
                              (write-char (char control (1+ i)) out)))
                           (incf i 2))
                         (progn (write-char c out) (incf i))))))
-       (if (false? stream) (dylan-stream-string target) dylan%false)))))
+       (if (false? stream) (dylan-stream-result target) dylan%false)))))

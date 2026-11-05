@@ -304,7 +304,17 @@ the keyword arguments REST."
    dylan/as-uppercase
    (dylan%function->method
     (make-param-list `((byte-string ,class)) nil nil nil)
-    (lambda (string) (string-like string (map 'string #'char-upcase string))))))
+    (lambda (string)
+      ;; A <byte-string> holds only 8-bit characters, and the upper case of
+      ;; y with diaeresis (code 255) is not one: an error, as in a compiled
+      ;; program.
+      (string-like string
+                   (map 'string
+                        (lambda (c)
+                          (let ((upper (char-upcase c)))
+                            (check-byte-character string upper)
+                            upper))
+                        string))))))
 
 (defparameter dylan/as-uppercase!
   (dylan%generic-fn 'as-uppercase! one-string nil))
@@ -317,7 +327,9 @@ the keyword arguments REST."
     (lambda (string)
       (do ((index 0 (+ index 1)))
           ((>= index (length string)) string)
-        (setf (char string index) (char-upcase (char string index))))))))
+        (let ((upper (char-upcase (char string index))))
+          (check-byte-character string upper)
+          (setf (char string index) upper)))))))
 
 ;;; PREVIOUS-STATE for strings is the array method: string states are
 ;;; index vectors.  (The Scheme had a method here specialized on integer

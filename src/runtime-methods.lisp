@@ -1066,7 +1066,7 @@ irrational functions; an exact real stays exact."
                (lambda (class symbol)
                  (declare (ignore class))
                  ;; A copy: changing it must not rename the symbol.
-                 (copy-seq (dylan-symbol->string symbol)))))
+                 (new-dylan-string (dylan-symbol->string symbol)))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <string>))
@@ -1075,7 +1075,17 @@ irrational functions; an exact real stays exact."
                  (declare (ignore class))
                  ;; A Dylan keyword is a Common Lisp keyword here, so
                  ;; unlike the Scheme there is no trailing colon to strip.
-                 (copy-seq (dylan-symbol->string keyword)))))
+                 (new-dylan-string (dylan-symbol->string keyword)))))
+  ;; A <byte-string> of a name, which must be of 8-bit characters.
+  (dolist (class (list <symbol> <keyword>))
+    (add-method dylan/as
+                (dylan%function->method
+                 (make-param-list `((class ,(dylan%make-singleton <byte-string>))
+                                    (name ,class)) nil nil nil)
+                 (lambda (class name)
+                   (declare (ignore class))
+                   (dylan-call dylan/as <byte-string>
+                               (new-dylan-string (dylan-symbol->string name)))))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <symbol>))

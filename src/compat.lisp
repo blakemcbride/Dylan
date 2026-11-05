@@ -394,6 +394,22 @@ its class.")
                          (get-output-stream-string output))))
     (copy-seq (dylan-stream-contents stream))))
 
+(defun new-dylan-string (string)
+  "A new Dylan string of the characters of STRING: a <byte-string> if every
+character's code is below 256, and a <unicode-string> if not, as a
+compiled program makes the contents of a string stream (runtime/dylan,
+stream-contents) and the name of a symbol."
+  (if (every (lambda (c) (< (char-code c) 256)) string)
+      (let ((new (make-string (length string))))
+        (replace new string)
+        new)
+      (as-unicode-string string)))
+
+(defun dylan-stream-result (stream)
+  "The string the Dylan string stream STREAM holds, for stream-contents and
+format #f."
+  (new-dylan-string (dylan-stream-string stream)))
+
 (defun dylan-function-name (name)
   "The Dylan name of a generic function the runtime knows as NAME: the
 compiler's Lisp names for (SETTER FOO) -- dylan/setter/foo/, or setter/foo/

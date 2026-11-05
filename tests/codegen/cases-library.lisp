@@ -1381,4 +1381,41 @@ error
 64.0
 \"sqrt: the result would be complex: -4.0l0\"
 ")
+
+ ;; A <byte-string> holds only 8-bit characters: a string made with a wider
+ ;; one is a <unicode-string>, or, where the class must be <byte-string>,
+ ;; an error.
+ (wide-characters-not-in-byte-strings
+  "(define wide (as <character> 300))
+   (define u (as <unicode-string> (list #\\a wide)))
+   (define-method show (thunk)
+     (bind ((x (handler-case (thunk)
+                 ((<error> condition: c)
+                  (apply format #f (condition-format-string c)
+                         (condition-format-arguments c))))))
+       (print (list (size x) (object-class x)))))
+   (show (method () (format #f \"~a\" wide)))
+   (show (method () (format #f \"x~ay\" (as <character> 255))))
+   (show (method ()
+           (bind ((s (make <string-stream>)))
+             (format s \"~a~a\" wide u)
+             (stream-contents s))))
+   (show (method () (as <string> (as <symbol> u))))
+   (show (method () (as <string> (as <keyword> u))))
+   (show (method () (as <byte-string> 'abc)))
+   (show (method () (as <byte-string> (as <symbol> u))))
+   (show (method () (as-uppercase (as <unicode-string> (list (as <character> 255))))))
+   (show (method () (as-uppercase (as <byte-string> (list (as <character> 255))))))
+   (show (method () (as-uppercase! (as <byte-string> (list (as <character> 255))))))"
+  "(1 {the class <unicode-string>})
+(3 {the class <byte-string>})
+(3 {the class <unicode-string>})
+(2 {the class <unicode-string>})
+(2 {the class <unicode-string>})
+(3 {the class <byte-string>})
+(48 {the class <unicode-string>})
+(1 {the class <unicode-string>})
+(48 {the class <unicode-string>})
+(48 {the class <unicode-string>})
+")
 )

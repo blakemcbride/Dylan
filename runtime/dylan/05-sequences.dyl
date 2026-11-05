@@ -307,10 +307,16 @@ module: dylan
                            (else: #f)))
                    (search (b index left)
                      (cond ((matches? b p)
-                            (if (= left 1) index (search (cdr b) (binary+ index 1) (binary- left 1))))
+                            (cond ((= left 1) index)
+                                  ;; An empty pattern matches at the end too, and no further
+                                  ((id? b '()) #f)
+                                  (else: (search (cdr b) (binary+ index 1) (binary- left 1)))))
                            ((id? b '()) #f)
                            (else: (search (cdr b) (binary+ index 1) left)))))
-      (search b 0 count))))
+      ;; The countth place, counting from 1: there is none before the first.
+      (unless (%instance? count <integer>)
+        (error "subsequence-position: count: must be an integer: ~s" count))
+      (if (binary< count 1) #f (search b 0 count)))))
 
 ;;; A shallow copy of a sequence is a copy of it.
 (define-method shallow-copy ((s <sequence>)) (copy-sequence s))

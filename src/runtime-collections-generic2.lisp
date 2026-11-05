@@ -590,6 +590,12 @@ as the compiled library's %from-list does."
       (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
             (count (dylan%find-keyword rest :count (lambda () 1)))
             (init-state-pattern (initial-state pattern)))
+        ;; The countth place, counting from 1: there is none before the first.
+        (unless (integerp count)
+          (dylan-call dylan/error "subsequence-position: count: must be an integer: ~s"
+                      count))
+        (when (< count 1)
+          (return-from subsequence-position dylan%false))
         (when (null init-state-pattern)
           ;; An empty pattern occurs at every index, up to the size of BIG.
           (return-from subsequence-position

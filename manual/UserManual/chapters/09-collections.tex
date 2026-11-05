@@ -710,7 +710,9 @@ l                             ; => (one 2 three)
 \index{subsequence-position}
 \code{(subsequence-position \meta{big} \meta{pattern})} answers the index
 at which \meta{pattern} first occurs in \meta{big}, or the
-\code{count:}th occurrence, or \code{\#f}:
+\code{count:}th occurrence, or \code{\#f}. Occurrences are counted from
+1, so a \code{count:} below 1 answers \code{\#f}, and an empty pattern
+occurs at every index up to the size of \meta{big}:
 
 \begin{dylan}
 (subsequence-position "Ralph Waldo Emerson" "Waldo")   ; => 6

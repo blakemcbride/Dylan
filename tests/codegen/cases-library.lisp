@@ -1859,4 +1859,31 @@ error
 #t
 #t
 ")
+ ;; count: is the countth occurrence, counting from 1: below 1 there is none,
+ ;; and an empty pattern occurs at each index up to the size and no further.
+ (subsequence-position-count
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (subsequence-position \"ab\" \"\" count: 4))
+(print (subsequence-position \"ab\" \"\" count: 3))
+(print (subsequence-position \"ab\" \"\" count: 1))
+(print (subsequence-position '(1 2 3) '(2) count: 0))
+(print (subsequence-position \"ab\" \"\" count: 0))
+(print (subsequence-position '(1 2 3) '(2) count: -2))
+(print (subsequence-position \"abab\" \"ab\" count: 2))
+(print (subsequence-position \"abab\" \"ab\" count: 3))
+(print (subsequence-position \"aaa\" \"aa\" count: 2))
+(print (subsequence-position \"abab\" \"ab\"))
+(print (try (method () (subsequence-position \"abab\" \"ab\" count: 1.5))))"
+  "#f
+2
+0
+#f
+#f
+#f
+2
+#f
+1
+0
+\"ERR: subsequence-position: count: must be an integer: 1.5\"
+")
 )

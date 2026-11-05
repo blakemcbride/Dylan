@@ -382,7 +382,11 @@ every use of VAR has instead, or something without effect no one uses?"
   "Give DEST the values of EXPR, a C call of something that answers
 values as a Dylan function does."
   (case (dest-kind dest)
-    (:return (emit "return ~a;" expr))
+    ;; Its values are the function's, so the count is set to 1 before
+    ;; the call, as for a call of a Dylan function (GEN-CALL): what it
+    ;; calls may answer one value without touching the count.
+    (:return (when (cfun-needs-mv-reset *cfun*) (emit "dy_thread->mv_count = 1;"))
+             (emit "return ~a;" expr))
     (:mv (emit "dy_thread->mv_count = 1;")
          (emit "~a = ~a;" (dest-var dest) expr)
          (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))

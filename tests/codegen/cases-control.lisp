@@ -395,4 +395,27 @@ handled
   "50
 50
 ")
+
+ ;; Chapter 8, unwind-protect, and chapter 13, handler-bind: they return
+ ;; the values of their forms, and a bind-exit the values of its body, even
+ ;; at the end of a function that had called one returning two values.
+ (protected-values-at-return
+  "(define-method two () (values 1 2))
+   (define-method g (x) (two) (unwind-protect x 'cleanup))
+   (define-method h (x) (two) (handler-bind (<error> (method (c n) 'h)) x))
+   (define keep #f)
+   (define-method k (x) (two) (bind-exit (e) (set! keep e) x))
+   (bind ((a b (apply g '(5)))) (print (list a b)))
+   (bind ((a b (apply h '(5)))) (print (list a b)))
+   (bind ((a b (apply k '(5)))) (print (list a b)))
+   (bind ((a b (g 5))) (print (list a b)))
+   (bind ((a b (h 5))) (print (list a b)))
+   (bind ((a b (k 5))) (print (list a b)))"
+  "(5 #f)
+(5 #f)
+(5 #f)
+(5 #f)
+(5 #f)
+(5 #f)
+")
 )

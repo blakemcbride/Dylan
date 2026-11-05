@@ -168,10 +168,12 @@ static D next_handler(D condition, DyFrame *start) {
 
 /* Call the first handler from START on that applies to CONDITION, with
  * a next-handler; or, if none does, default-handler.  A macro, since it
- * makes tail calls and so must be in a uniform entry. */
+ * makes tail calls and so must be in a uniform entry.  The values are the
+ * handler's: the tests' are not counted. */
 #define SIGNAL_FROM(condition, start) do {                                \
         D c_ = (condition);                                             \
         DyFrame *f_ = find_handler(c_, (start));                        \
+        dy_thread->mv_count = 1;                                        \
         if (f_) DY_TAIL_CALL(f_->b, c_, next_handler(c_, f_->prev), 0, 0, 2); \
         if (!default_handler)                                           \
             dy_error("a condition was signalled before the library was initialized", c_); \
@@ -210,6 +212,7 @@ PRIMITIVE(do_handlers) {
         if (f->kind == DY_FRAME_HANDLER)
             DY_CALL(a0, f->a, f->c == DY_FALSE ? DY_OBJ(&always_true) : f->c, f->b,
                     f->d, 4);
+    dy_thread->mv_count = 1;            /* #f alone, not funarg's values */
     return DY_FALSE;
 }
 

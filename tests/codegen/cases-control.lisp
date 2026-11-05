@@ -418,4 +418,26 @@ handled
 (5 #f)
 (5 #f)
 ")
+
+ ;; Chapter 13, signal: "If a handler returns, all the values that it
+ ;; returned are returned from signal" -- not its test's; and do-handlers
+ ;; answers #f alone, whatever its function answers.
+ (signal-answers-handler-values
+  "(define-class <note> (<warning>))
+   (define-method run ()
+     (handler-bind (<note> (method (c n) 5) test: (method (c) (values #t 'x)))
+       (signal (make <note>))))
+   (bind ((a #rest r (run))) (print (list a r)))
+   (define-method run2 ()
+     (handler-bind (<note> (method (c n) 'outer))
+       (handler-bind (<note> (method (c n) (n)) test: (method (c) (values #t 'y 'z)))
+         (signal (make <note>)))))
+   (bind ((a #rest r (run2))) (print (list a r)))
+   (bind ((a #rest r (handler-bind (<note> (method (c n) 'h))
+                       (do-handlers (method (#rest x) (values 1 2))))))
+     (print (list a r)))"
+  "(5 ())
+(outer ())
+(#f ())
+")
 )

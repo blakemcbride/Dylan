@@ -166,8 +166,19 @@ NIL) and the index at which the forms begin."
                                               (subseq line (1+ colon)))))))))
           (values module start)))))
 
+;;; File names as the system writes them, from the command line, may have
+;;; * ? [ in them, which a Common Lisp namestring takes for wildcards.
+
+(defun native-pathname (x)
+  "X, a pathname or a file name as the system writes it, as a pathname."
+  (if (pathnamep x) x (sb-ext:parse-native-namestring x)))
+
+(defun native-name (x)
+  "The name the system knows the file X by."
+  (sb-ext:native-namestring (native-pathname x)))
+
 (defun read-file-text (pathname)
-  (with-open-file (in pathname :external-format :utf-8)
+  (with-open-file (in (native-pathname pathname) :external-format :utf-8)
     (let* ((text (make-string (file-length in)))
            (end (read-sequence text in)))
       (subseq text 0 end))))

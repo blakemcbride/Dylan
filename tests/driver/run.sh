@@ -126,6 +126,13 @@ check "no files: status 2" test "$status" = 2
 "$dylanc" nonesuch.dyl >/dev/null 2>&1; status=$?
 check "a missing file: status 2" test "$status" = 2
 check "-h" sh -c "'$dylanc' -h | grep -q Usage"
+# A file name with characters Common Lisp takes for wildcards, and ??,
+# which C takes for the start of a trigraph
+cp main.dyl 'w??!*[1].dyl'
+check "a name with * ? [" "$dylanc" -k greet.dyl 'w??!*[1].dyl' -o 'w??!*[1]'
+check "it runs" output_is "$expected" './w??!*[1]'
+"$dylanc" 'none??.dyl' >/dev/null 2>&1; status=$?
+check "a missing file with ? in its name: status 2" test "$status" = 2
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

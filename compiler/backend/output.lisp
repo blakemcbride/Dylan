@@ -125,12 +125,20 @@ from its head to its closing brace."
 (defun module-file-stem (module)
   (substitute-if #\_ (lambda (c) (not (or (alphanumericp c) (char= c #\-)))) module))
 
+(defun header-pathname (c-file)
+  "The header the C files of the program C-FILE share: named for it, but
+with no ?, which in the #include that names it could begin a trigraph,
+which C11 reads there too."
+  (let ((c-file (native-pathname c-file)))
+    (make-pathname :name (substitute #\_ #\? (pathname-name c-file)) :type "h"
+                   :defaults c-file)))
+
 (defun write-c-program (text c-file modules)
   "Write TEXT, the C of a program, as C-FILE and the files that go with it
 (above); MODULES maps the C name of each Dylan function to its module.
 Answer the C files, C-FILE first."
-  (let* ((c-file (pathname c-file))
-         (header (make-pathname :type "h" :defaults c-file))
+  (let* ((c-file (native-pathname c-file))
+         (header (header-pathname c-file))
          (main '())                     ; items of C-FILE, in order
          (shared '())                   ; lines of the header
          (by-module (make-hash-table :test #'equal)) ; module -> items
@@ -187,7 +195,7 @@ Answer the C files, C-FILE first."
                                        (c-comment-text (string module)))
                                (if (string= module "dylan")
                                    (own-declarations definitions (reverse shared))
-                                   (format nil "#include \"~a.h\"" (pathname-name c-file)))
+                                   (format nil "#include \"~a.h\"" (pathname-name header)))
                                definitions))
           (push file files)))
       (cons c-file (reverse files)))))
@@ -248,7 +256,7 @@ function's before its parameters, else the last before any array bounds."
 #line DY_RESET by a #line directive back to FILE."
   (with-open-file (out file :direction :output :if-exists :supersede)
     (let ((line 1)
-          (name (c-name-string (namestring file))))
+          (name (c-name-string (native-name file))))
       (dolist (item items)
         (with-input-from-string (in item)
           (loop for text = (read-line in nil)

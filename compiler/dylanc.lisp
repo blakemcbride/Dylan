@@ -96,12 +96,12 @@ Options:
                        (t (push a files))))))
     (when (null files) (usage-error "no files to compile."))
     (dolist (f files)
-      (unless (probe-file f) (usage-error "~a does not exist." f)))
+      (unless (probe-file (native-pathname f)) (usage-error "~a does not exist." f)))
     (list* :files (nreverse files) options)))
 
 (defun default-output (file)
-  (let ((p (pathname file)))
-    (namestring (make-pathname :type nil :defaults p))))
+  (let ((p (native-pathname file)))
+    (native-name (make-pathname :type nil :defaults p))))
 
 (defun expand-only (files)
   "Write each use of the program's macros in FILES and its expansion."
@@ -134,7 +134,7 @@ Options:
                          :variant variant
                          :lto (getf options :lto))))
         (unless (getf options :keep)
-          (dolist (f (cons (make-pathname :type "h" :defaults (pathname c-file)) c-files))
+          (dolist (f (cons (header-pathname c-file) c-files))
             (when (probe-file f) (delete-file f))))
         (unless ok
           (format *error-output* "dylanc: the C compiler failed.~%")

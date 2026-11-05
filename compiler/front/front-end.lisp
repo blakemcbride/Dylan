@@ -126,7 +126,7 @@ after the library's, if LIBRARY.  Answer a PROGRAM; its diagnostics say
 whether it succeeded."
   (front-end-sources
    (mapcar (lambda (p)
-             (cons (namestring p)
+             (cons (native-name p)
                    (handler-case (read-file-text p)
                      (file-error (e)
                        (make-diagnostic :error nil (format nil "~a" e))))))
@@ -142,7 +142,7 @@ program in MODULE.  For tests."
 sources, if LIBRARY).  For tests."
   (front-end-sources
    (append (and library
-                (mapcar (lambda (p) (cons (namestring p) (read-file-text p)))
+                (mapcar (lambda (p) (cons (native-name p) (read-file-text p)))
                         (library-files)))
            (list (cons name text)))))
 

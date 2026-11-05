@@ -105,7 +105,7 @@ program must be compiled with too."
          (target (cond (directory (format nil "~a/libdylan.a" directory))
                        (trampoline "build/libdylan-trampoline.a")
                        (t "build/libdylan.a")))
-         (arguments (append (list "-s" "-C" (namestring *runtime-directory*)
+         (arguments (append (list "-s" "-C" (native-name *runtime-directory*)
                                   (format nil "GC=~(~a~)" *gc*))
                             (and directory
                                  (list (format nil "VDIR=~a" directory)
@@ -133,7 +133,7 @@ T the library is compiled with the program, not apart.  VARIANT is one of
 *VARIANTS*, for testing.  GC is the collector, :BOEHM or :MPS (*GC*)."
   (let* ((*gc* gc)
          (*separate-library* (separate-library-p size whole))
-         (c-file (or c-file (concatenate 'string (namestring executable) ".c")))
+         (c-file (or c-file (concatenate 'string (native-name executable) ".c")))
          (c-files (let ((*debug* (or debug (member variant '(:address :thread)))))
                     (compile-files files c-file))))
     (and c-files
@@ -161,11 +161,11 @@ built for debugging or testing."
           (list "-std=c11" "-pthread"
                 "-Wall" "-Wno-unused-variable" "-Wno-unused-but-set-variable"
                 "-Wno-unused-label"
-                (format nil "-I~a" (namestring (merge-pathnames "c/" *runtime-directory*))))
+                (format nil "-I~a" (native-name (merge-pathnames "c/" *runtime-directory*))))
           (and trampoline (list "-DDY_TRAMPOLINE"))
           (and (mps-p)
                (list "-DDY_MPS"
-                     (format nil "-I~a" (namestring (merge-pathnames "mps/code/" *runtime-directory*)))))
+                     (format nil "-I~a" (native-name (merge-pathnames "mps/code/" *runtime-directory*)))))
           (and (lto-p lto debug variant) (list "-flto=auto"))))
 
 (defun build-c (c-files executable &key trampoline (cc "cc") (optimize "-O2") size debug
@@ -186,10 +186,10 @@ is compiled once (LIBRARY-OBJECT)."
                           c-files)))
     (and (every #'identity objects)
          (zerop (run cc (append options
-                                (mapcar #'namestring objects)
-                                (list (namestring library))
+                                (mapcar #'native-name objects)
+                                (list (native-name library))
                                 (if (mps-p) '() (list "-lgc"))
-                                (list "-lm" "-lpthread" "-o" (namestring executable))))))))
+                                (list "-lm" "-lpthread" "-o" (native-name executable))))))))
 
 ;;; The library's object
 
@@ -201,11 +201,11 @@ is compiled once (LIBRARY-OBJECT)."
   "How many objects of the library's C are kept: the newest.")
 
 (defun library-c-file-p (file)
-  (let ((name (pathname-name (pathname file))))
+  (let ((name (pathname-name (native-pathname file))))
     (and (> (length name) 6) (string= "-dylan" name :start2 (- (length name) 6)))))
 
 (defun file-text (file)
-  (with-open-file (in file :external-format :latin-1)
+  (with-open-file (in (native-pathname file) :external-format :latin-1)
     (let ((text (make-string (file-length in))))
       (subseq text 0 (read-sequence text in)))))
 
@@ -233,7 +233,7 @@ is compiled once (LIBRARY-OBJECT)."
 from a build before, or compiled now (in the cache, so that the #line
 directives back to the C file stay true there).  NIL if it does not
 compile."
-  (let* ((self (c-name-string (namestring c-file)))
+  (let* ((self (c-name-string (native-name c-file)))
          (placeholder "\"<library>\"")
          (text (replace-all (file-text c-file) self placeholder))
          (digest (format nil "~(~{~2,'0x~}~)"
@@ -254,10 +254,10 @@ compile."
           (ensure-directories-exist object)
           (with-open-file (out source :direction :output :if-exists :supersede
                                       :external-format :latin-1)
-            (write-string (replace-all text placeholder (c-name-string (namestring source))) out))
+            (write-string (replace-all text placeholder (c-name-string (native-name source))) out))
           (when (zerop (run cc (append (remove-if (lambda (o) (search "-Wl," o)) options)
-                                       (list "-c" (namestring source)
-                                             "-o" (namestring temporary)))))
+                                       (list "-c" (native-name source)
+                                             "-o" (native-name temporary)))))
             ;; Renamed whole, for builds running at the same time
             (rename-file temporary object)
             (prune-library-cache)

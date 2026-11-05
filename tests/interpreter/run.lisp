@@ -28,27 +28,25 @@
 
 (in-package #:dylan)
 
-(defun read-program (text)
-  "The forms of the Dylan program TEXT."
-  (with-input-from-string (in text)
-    (let ((eof (list 'eof)))
-      (loop for form = (dylan-read in nil eof)
-            until (eq form eof)
-            collect form))))
-
 (defvar *program-variables* '()
   "The module variables the program being run has made so far.")
 
-(defun evaluate-forms (forms)
-  "Compile and evaluate FORMS one by one, as the read-eval-print loop does."
-  (let ((module-variables '()))
-    (dolist (form forms)
-      (compile-expression
-       form nil module-variables
-       (lambda (new-variables preamble compiled)
-         (implementation-specific/eval (append preamble (list compiled)))
-         (setf module-variables (append new-variables module-variables))
-         (setf *program-variables* (append new-variables *program-variables*)))))))
+(defun evaluate-program (text)
+  "Read, compile and evaluate the forms of the Dylan program TEXT one by
+one, as the read-eval-print loop does: each is read after the one before
+it has run, which matters to a symbol's spelling (chapter 15: as may make
+a symbol before a later form spells it)."
+  (with-input-from-string (in text)
+    (let ((eof (list 'eof))
+          (module-variables '()))
+      (loop for form = (dylan-read in nil eof)
+            until (eq form eof)
+            do (compile-expression
+                form nil module-variables
+                (lambda (new-variables preamble compiled)
+                  (implementation-specific/eval (append preamble (list compiled)))
+                  (setf module-variables (append new-variables module-variables))
+                  (setf *program-variables* (append new-variables *program-variables*))))))))
 
 (defun forget-program ()
   "Undo the program's definitions in dylan-user, for the next program:
@@ -79,7 +77,7 @@ program's handlers, as at the read-eval-print loop."
     (handler-case
         (let ((*standard-output* out))
           (dylan%catch-all-conditions
-           (lambda () (evaluate-forms (read-program text)))))
+           (lambda () (evaluate-program text))))
       (error (e) (setf message (condition-message e))))
     (forget-program)
     (values (get-output-stream-string out) message)))

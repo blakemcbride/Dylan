@@ -154,6 +154,10 @@ if every character fits in a byte, else a <unicode-string>."
                             (max 1 (length codes)) name (length codes) codes))
               name))))
 
+(defvar *symbol-forms* nil
+  "The program's SYMBOL-FORMS: which top-level form first spells each
+symbol (front-end.lisp), or NIL.")
+
 (defun c-symbol (data spelling kind)
   "The C name of the static symbol (KIND :SYMBOL) or keyword (:KEYWORD)
 named SPELLING."
@@ -163,9 +167,14 @@ named SPELLING."
         (setf (gethash key table)
               (let ((string (c-string data spelling))
                     (name (content-name data (if (eq kind :keyword) "dy_keyword_" "dy_symbol_")
-                                        key)))
-                (define-c data "DySymbol ~a = { &dy_wrapper_~(~a~), ~a, 0 };"
-                          name kind (address string))
+                                        key))
+                    ;; The top-level form that makes it, if the program's
+                    (form (or (and *symbol-forms*
+                                   (gethash (format nil "~:[s~;k~]:~a" (eq kind :keyword) key)
+                                            *symbol-forms*))
+                              0)))
+                (define-c data "DySymbol ~a = { &dy_wrapper_~(~a~), ~a, 0, ~d };"
+                          name kind (address string) form)
                 (push name (cdata-symbol-list data))
                 name)))))
 

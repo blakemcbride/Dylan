@@ -1109,6 +1109,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*dylan-modules* (program-modules (ir-program-source ir)))
         (dylan::*symbol-spellings* (or (program-spellings (ir-program-source ir))
                                        dylan::*symbol-spellings*))
+        (*symbol-forms* (program-symbol-forms (ir-program-source ir)))
         (*let-values* (make-hash-table :test #'eq))
         (*global-definitions* (make-hash-table :test #'eq))
         (*assigned-globals* (make-hash-table :test #'eq))
@@ -1211,10 +1212,17 @@ each of its Dylan functions -> the name of the module it was written in."
             (when name
               (format stream "    dy_name_method(DY_OBJ(&~a), ~a);~%" p
                       (c-utf8-literal name)))))
-        (dolist (top (ir-program-toplevels ir))
-          (unless (inert-toplevel-p top)
-            (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
-                    (cfun-c-name (gethash top *cfuns*)))))
+        ;; Each top-level form runs after the symbols the forms up to it
+        ;; spell are made (front-end.lisp)
+        (let ((made 0))
+          (dolist (top (ir-program-toplevels ir))
+            (unless (inert-toplevel-p top)
+              (let ((form (location-form-number (ir-program-source ir) (ir-fn-location top))))
+                (when (and form (> form made))
+                  (format stream "    dy_symbols_through(~d);~%" form)
+                  (setf made form)))
+              (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
+                      (cfun-c-name (gethash top *cfuns*))))))
         (format stream "    return 0;~%}~%")
         (let ((modules (make-hash-table :test #'equal))
               (units (program-units (ir-program-source ir))))

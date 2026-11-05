@@ -784,4 +784,32 @@ error
 3
 "
   :compiler-only t)
+
+ ;; Chapter 15's example: a symbol keeps the case it was first spelled
+ ;; in, by as or by the program -- a form spells its symbols when it is
+ ;; read, after the forms before it have run.
+ (symbol-first-spelling
+  "(print (as <symbol> \"foo\"))
+   (print (id? 'FOO (as <symbol> \"Foo\")))
+   (print 'Foo)
+   (print (as <keyword> \"foo\"))
+   (define Bar 1)
+   (print (as <symbol> \"BAR\"))
+   (define-method g () 'BAZ)
+   (print (as <symbol> \"baz\"))
+   (print (as <symbol> \"quux\"))
+   (print 'QUUX)
+   (print (as <keyword> \"Zip\"))
+   (print zip:)"
+  "foo
+#t
+foo
+foo:
+Bar
+BAZ
+quux
+quux
+Zip:
+Zip:
+")
 )

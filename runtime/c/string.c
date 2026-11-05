@@ -13,6 +13,7 @@
 #include "dylan.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 #include <wctype.h>
 
 D dy_make_byte_string(const char *bytes, size_t size) {
@@ -197,7 +198,18 @@ static D copy_name(const Name *n) {
     return string;
 }
 
-static D intern(SymbolTable *t, const Name *n) {
+/* The program's top-level forms begun so far.  A static symbol whose form
+ * is later has not been read yet, as it were, in the read-eval-print
+ * loop: the program has it, so that it is the one symbol of its name, but
+ * as, finding it, makes it then, with as's spelling. */
+static _Atomic intptr_t forms_begun;
+
+void dy_symbols_through(intptr_t form) {
+    atomic_store_explicit(&forms_begun, form, memory_order_release);
+}
+
+/* AS: for as, which makes a symbol not yet read with its own spelling */
+static D intern(SymbolTable *t, const Name *n, bool as) {
     uint64_t hash = name_hash(n);
     pthread_mutex_lock(&t->lock);
     DySymbol *s = table_find(t, n, hash);
@@ -206,7 +218,11 @@ static D intern(SymbolTable *t, const Name *n) {
         s = dy_alloc(t->wrapper, sizeof(DySymbol));
         s->name = string;
         s->hash = hash;
+        s->form = 0;
         table_add(t, s);
+    } else if (as && s->form > atomic_load_explicit(&forms_begun, memory_order_acquire)) {
+        s->name = copy_name(n);
+        s->form = 0;
     }
     pthread_mutex_unlock(&t->lock);
     return DY_OBJ(s);
@@ -215,23 +231,23 @@ static D intern(SymbolTable *t, const Name *n) {
 /* NAME, SIZE bytes, holds the characters of the first 256 code points */
 D dy_intern_symbol(const char *name, size_t size) {
     Name n = { (const unsigned char *)name, NULL, size };
-    return intern(&symbols, &n);
+    return intern(&symbols, &n, false);
 }
 
 D dy_intern_keyword(const char *name, size_t size) {
     Name n = { (const unsigned char *)name, NULL, size };
-    return intern(&keywords, &n);
+    return intern(&keywords, &n, false);
 }
 
-/* STRING is a <byte-string> or a <unicode-string> */
-D dy_intern_symbol_string(D string) {
+/* STRING is a <byte-string> or a <unicode-string>.  AS: for as. */
+D dy_intern_symbol_string(D string, bool as) {
     Name n = name_of(string);
-    return intern(&symbols, &n);
+    return intern(&symbols, &n, as);
 }
 
-D dy_intern_keyword_string(D string) {
+D dy_intern_keyword_string(D string, bool as) {
     Name n = name_of(string);
-    return intern(&keywords, &n);
+    return intern(&keywords, &n, as);
 }
 
 /* A new string of the name of SYMBOL, a symbol or keyword */

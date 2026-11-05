@@ -469,12 +469,12 @@ static D as_name(D s) {
 
 PRIMITIVE(intern_symbol) {
     need(self, argc, 1, 1);
-    return dy_intern_symbol_string(as_name(a0));
+    return dy_intern_symbol_string(as_name(a0), true);
 }
 
 PRIMITIVE(intern_keyword) {
     need(self, argc, 1, 1);
-    return dy_intern_keyword_string(as_name(a0));
+    return dy_intern_keyword_string(as_name(a0), true);
 }
 
 /* (%symbol-name symbol-or-keyword): a new string of its name */
@@ -684,7 +684,7 @@ PRIMITIVE(method_name) {
     need(self, argc, 1, 1);
     if (!dy_kind_p(a0, DY_KIND_FUNCTION)) dy_error("not a method", a0);
     const char *name = ((DyFunction *)DY_PTR(a0))->name;
-    return name ? dy_intern_symbol_string(dy_make_string_from_utf8(name, strlen(name)))
+    return name ? dy_intern_symbol_string(dy_make_string_from_utf8(name, strlen(name)), false)
                 : DY_FALSE;
 }
 

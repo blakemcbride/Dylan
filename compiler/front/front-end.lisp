@@ -24,8 +24,65 @@
   units
   modules                               ; name -> DYLAN-MODULE
   diagnostics                           ; in the order found
-  (spellings nil))                      ; symbol -> its first spelling in
+  (spellings nil)                       ; symbol -> its first spelling in
                                         ; this program (chapter 15)
+  (symbol-forms nil)                    ; "s:name" or "k:name", the name
+                                        ; in lower case -> the top-level
+                                        ; form that first spells it
+  (form-starts nil))                    ; source file -> a vector of
+                                        ; (index . form) for each of its
+                                        ; top-level forms
+
+;;; A symbol is made, with the case it is spelled in, when the form that
+;;; first spells it is read; in the read-eval-print loop that is after the
+;;; forms before it have run, and as may have made it first, with a case of
+;;; its own (chapter 15's example).  So the program's top-level forms are
+;;; numbered from 1 in the order they are read -- the library's are all 0,
+;;; read before the program runs -- and each symbol is given the number of
+;;; the form that first spells it, so that the program can make it then.
+
+(defun form-symbol-key (symbol)
+  "The key of SYMBOL in a program's SYMBOL-FORMS."
+  (format nil "~:[s~;k~]:~a" (keywordp symbol)
+          (string-downcase (dylan::dylan-symbol->string symbol))))
+
+(defun note-form-symbols (form number table)
+  "Record in TABLE that the symbols FORM spells are made by the top-level
+form NUMBER, unless an earlier form made them."
+  (labels ((walk (x)
+             (cond ((and (symbolp x) x (not (eq x t)))
+                    (let ((key (form-symbol-key x)))
+                      (unless (gethash key table)
+                        (setf (gethash key table) number))))
+                   ((consp x) (walk (car x)) (walk (cdr x)))
+                   ((and (vectorp x) (not (stringp x))) (map nil #'walk x)))))
+    (walk form)))
+
+(defun note-forms (file forms number table starts)
+  "Number the top-level FORMS of FILE, the first after NUMBER (or all 0,
+for the library's), noting their symbols in TABLE and their starts in
+STARTS.  Answer the last number given."
+  (let ((library (library-source-file-p file))
+        (positions '()))
+    (dolist (entry forms)
+      (let ((n (if library 0 (incf number))))
+        (when (cdr entry)
+          (push (cons (location-index (cdr entry)) n) positions))
+        (note-form-symbols (car entry) n table)))
+    (setf (gethash file starts) (coerce (nreverse positions) 'vector))
+    number))
+
+(defun location-form-number (program location)
+  "The number of the top-level form LOCATION is in, or NIL."
+  (let ((starts (and location (program-form-starts program)
+                     (gethash (location-file location) (program-form-starts program)))))
+    (when (and starts (plusp (length starts)))
+      (let ((index (location-index location))
+            (found nil))
+        (loop for (start . n) across starts
+              while (<= start index)
+              do (setf found n))
+        found))))
 
 (defun program-errors (program)
   (remove :warning (program-diagnostics program) :key #'diagnostic-kind))
@@ -82,16 +139,22 @@ saying why the file could not be read."
   (let ((*diagnostics* '())
         (specs '())
         ;; The case a symbol is first written in is the program's own.
-        (dylan::*symbol-spellings* (make-hash-table :test #'eq)))
+        (dylan::*symbol-spellings* (make-hash-table :test #'eq))
+        (symbol-forms (make-hash-table :test #'equal))
+        (form-starts (make-hash-table :test #'eq))
+        (number 0))
     (dolist (source sources)
       (if (diagnostic-p (cdr source))
           (push (cdr source) *diagnostics*)
           (collecting-errors
             (multiple-value-bind (file module forms)
                 (read-source (car source) (cdr source))
+              (setf number (note-forms file forms number symbol-forms form-starts))
               (push (list file (or module "dylan-user") forms) specs)))))
     (let ((program (front-end-units (nreverse specs) :diagnostics *diagnostics*)))
-      (setf (program-spellings program) dylan::*symbol-spellings*)
+      (setf (program-spellings program) dylan::*symbol-spellings*
+            (program-symbol-forms program) symbol-forms
+            (program-form-starts program) form-starts)
       program)))
 
 (defun front-end-units (specs &key diagnostics)

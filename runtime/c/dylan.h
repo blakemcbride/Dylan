@@ -296,6 +296,10 @@ typedef struct DySymbol {          /* <symbol> and <keyword>             */
                                       character beyond a byte            */
     uint64_t hash;                 /* of the case-folded name; 0 until
                                       interned                           */
+    intptr_t form;                 /* the program's top-level form that
+                                      first spells it, or 0: until that
+                                      form begins, as may make it first,
+                                      with as's spelling (chapter 15)    */
 } DySymbol;
 
 /* The static objects */
@@ -723,8 +727,10 @@ D dy_pair(D head, D tail);
  * that name, making it if need be.  Safe to call from any thread. */
 D dy_intern_symbol(const char *name, size_t size);
 D dy_intern_keyword(const char *name, size_t size);
-D dy_intern_symbol_string(D string);    /* a <byte-string> or <unicode-string> */
-D dy_intern_keyword_string(D string);
+/* STRING is a <byte-string> or <unicode-string>; AS, for as (string.c) */
+D dy_intern_symbol_string(D string, bool as);
+D dy_intern_keyword_string(D string, bool as);
+void dy_symbols_through(intptr_t form); /* the program's top-level FORM begins */
 D dy_symbol_name(D symbol);              /* a new string of its name */
 const char *dy_symbol_utf8(D symbol);    /* its name as UTF-8 */
 /* Characters' case, as Common Lisp's char-downcase and char-upcase */

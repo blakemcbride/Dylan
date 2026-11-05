@@ -681,4 +681,44 @@ found
 1125899906842624.3
 1228074218604401.3
 ")
+
+ ;; Chapter 14: rationalize, as Common Lisp's: the simplest rational
+ ;; within the float's precision.
+ (rationalize
+  "(for-each ((x (list 0.5 0.1 -0.1 0.3333333333333333 831.1704033985734 1.5s0 0.1s0 3.14159s0
+                       2.0 -7.0 1.0e10 4.611686018427387e18 1.0e-10 123.456 0.0 1.0e-15
+                       2.718281828459045)))
+             ()
+     (print (rationalize x)))"
+  "1/2
+1/10
+-1/10
+1/3
+3927118909/4724806
+3/2
+1/10
+9563/3044
+2
+-7
+10000000000
+4611686018427386880
+1/10000000000
+15432/125
+0
+1/1000000000000000
+268876667/98914198
+")
+
+ ;; Beyond 63 bits, an error, not a wrong answer
+ (rationalize-overflow
+  "(print (rationalize 4.611686018427387904e18))"
+  ""
+  :error "integer overflow"
+  :compiler-only t)
+
+ (rationalize-overflow-small
+  "(print (rationalize 1.0e-20))"
+  ""
+  :error "integer overflow"
+  :compiler-only t)
 )

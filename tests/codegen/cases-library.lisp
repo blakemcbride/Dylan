@@ -934,4 +934,14 @@ Zip:
 {range 0 by 1 size 0}
 {range 4 by 1 size 1}
 ")
+
+ ;; The intersection of a sequence and an unbounded range ends
+ (intersection-with-unbounded-range
+  "(print (intersection '(1 -9) (range from: 0)))
+   (print (intersection '(1 -9 4) (range from: 10 by: -3)))
+   (print (intersection '(1 2 3) '(2.0 3) test: =))"
+  "(1)
+(1 4)
+(2 3)
+")
 )

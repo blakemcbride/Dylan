@@ -72,8 +72,10 @@ module: dylan
     (%copy-like values (%list-reverse chosen))))
 
 (define-generic-function intersection (sequence1 sequence2 #key test))
+;;; member?, not a walk of S2: a range answers it by arithmetic, and an
+;;; unbounded one has no end to walk.
 (define-method intersection ((s1 <sequence>) (s2 <sequence>) #key (test id?))
-  (choose (method (e) (any? (method (f) (test e f)) s2)) s1))
+  (choose (method (e) (member? e s2 test: test)) s1))
 
 (define-generic-function union (sequence1 sequence2 #key test))
 (define-method union ((s1 <sequence>) (s2 <sequence>) #key (test id?))

@@ -66,6 +66,8 @@ module: dylan
 
 (define-method =hash ((x <object>)) (%object-hash x))
 (define-method =hash ((x <number>)) (%number-hash x))
+;;; A character's is its code, which %string-hash relies on.
+(define-method =hash ((c <character>)) (%character->integer c))
 
 ;;; Functional operations (chapter 17)
 

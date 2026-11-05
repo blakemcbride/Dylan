@@ -511,16 +511,38 @@ PRIMITIVE(number_hash) {
     return DY_INT((intptr_t)((bits * 0x9E3779B97F4A7C15u) >> 4) & DY_INT_MAX);
 }
 
-/* (%string-hash s): of the characters, case significant */
+/* A collection's =hash (04-collections.dyl) is a sum, below 2^56, of one
+ * of these for each key and element: of their =hashes, mixed. */
+#define ENTRY_HASH_MASK (((uint64_t)1 << 56) - 1)
+
+static uint64_t entry_hash(uint64_t key_hash, uint64_t element_hash) {
+    uint64_t x = key_hash * 0x9E3779B97F4A7C15u ^ element_hash;
+    x ^= x >> 33;
+    x *= 0xFF51AFD7ED558CCDu;
+    x ^= x >> 33;
+    x *= 0xC4CEB9FE1A85EC53u;
+    x ^= x >> 33;
+    return x & ENTRY_HASH_MASK;
+}
+
+/* (%entry-hash key-hash element-hash) */
+PRIMITIVE(entry_hash) {
+    need(self, argc, 2, 2);
+    return DY_INT((intptr_t)entry_hash((uint64_t)int_arg(a0), (uint64_t)int_arg(a1)));
+}
+
+/* (%string-hash s): what =hash of a collection answers for S, quickly: the
+ * sum of the entries of each index (its =hash is itself) and character
+ * (its =hash, its code). */
 PRIMITIVE(string_hash) {
     need(self, argc, 1, 1);
     intptr_t n = vector_size(a0);
-    uint64_t h = 14695981039346656037u;
+    uint64_t h = 0;
     for (intptr_t i = 0; i < n; i++) {
         D c = dy_prim_vector_element_entry(self, a0, DY_INT(i), 0, 0, 2);
-        h = (h ^ DY_CHAR_CODE(c)) * 1099511628211u;
+        h = (h + entry_hash((uint64_t)i, DY_CHAR_CODE(c))) & ENTRY_HASH_MASK;
     }
-    return DY_INT((intptr_t)(h >> 2) & DY_INT_MAX);
+    return DY_INT((intptr_t)h);
 }
 
 /* -------------------------------------------------------------- Output */

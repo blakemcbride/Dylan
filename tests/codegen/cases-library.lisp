@@ -832,4 +832,35 @@ Zip:
 #f
 #f
 ")
+
+ ;; Chapter 9: objects that are = hash alike -- a string and a vector of
+ ;; its characters, "" and (), tables made in different orders, equal
+ ;; arrays, a range and a list of its elements.
+ (hash-agrees-with-equal
+  "(define t (make <table>))
+   (set! (element t \"a\") 1)
+   (print (element t (vector #\\a) default: 'none))
+   (print (element t (list #\\a) default: 'none))
+   (set! (element t \"\") 2)
+   (print (element t '() default: 'none))
+   (define t1 (make <table>)) (set! (element t1 'x) 1) (set! (element t1 'y) 2)
+   (define t2 (make <table>)) (set! (element t2 'y) 2) (set! (element t2 'x) 1)
+   (set! (element t t1) 3)
+   (print (element t t2 default: 'none))
+   (set! (element t (make <array> dimensions: '(2 2) fill: 7)) 4)
+   (print (element t (make <array> dimensions: '(2 2) fill: 7) default: 'none))
+   (set! (element t (range from: 0 up-to: 3)) 5)
+   (print (element t (list 0 1 2) default: 'none))
+   (set! (element t (range from: 3)) 6)
+   (print (element t (range from: 3) default: 'none))
+   (print (= (=hash \"ab\") (=hash (vector #\\a #\\b))))"
+  "1
+1
+2
+3
+4
+5
+6
+#t
+")
 )

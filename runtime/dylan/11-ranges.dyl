@@ -93,6 +93,13 @@ module: dylan
     (set! (%by r) (%by reversed))
     r))
 
+;;; An unbounded range is = only to a range with the same start and step
+;;; (a sequence's elements would never end), and its hash is of those.
+(define-method =hash ((r <range>))
+  (if (%size r)
+      (next-method)
+      (%entry-hash (=hash (%from r)) (=hash (%by r)))))
+
 (define-method binary= ((x <range>) (y <range>))
   (and (= (%size x) (%size y))
        (or (and (%size x) (zero? (%size x)))

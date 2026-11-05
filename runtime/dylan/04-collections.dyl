@@ -322,14 +322,26 @@ module: dylan
       (unless (= (current-element x sx) (current-element y sy))
         (return #f)))))
 
-;;; The hash is kept below 2^56, so that h * 31 stays well inside a
-;;; 63-bit integer whatever the elements' hashes are.
+;;; Collections that are = have = keys and elements, whatever their
+;;; classes -- a string and a vector of its characters, "" and (), a
+;;; sequence and a table keyed 0 to n - 1, two tables made in different
+;;; orders -- so the =hash of a collection is a sum, in no order, of a mix
+;;; of each key's =hash and its element's (%entry-hash), below 2^56.  A
+;;; string's (08-strings.dyl) is the same sum, made in C.
+
+(define-method =hash ((c <collection>))
+  (for ((state (initial-state c) (next-state c state))
+        (h 0 (%logand (binary+ h (%entry-hash (=hash (current-key c state))
+                                               (=hash (current-element c state))))
+                      72057594037927935)))
+       ((not state) h)))
+
 (define-method =hash ((s <sequence>))
   (for ((state (initial-state s) (next-state s state))
-        (n 0 (binary+ n 1))
-        (h 17 (%logand (%logxor (binary* h 31) (=hash (current-element s state)))
-                       72057594037927935)))
-       ((or (not state) (= n 8)) h)))
+        (i 0 (binary+ i 1))
+        (h 0 (%logand (binary+ h (%entry-hash i (=hash (current-element s state))))
+                      72057594037927935)))
+       ((not state) h)))
 
 ;;; Conversion of collections by as: to a sequence class, the elements in
 ;;; their natural order.

@@ -97,7 +97,7 @@
     "%make-byte-string" "%make-unicode-string" "%replace-vector!"
     "%concatenate-byte-strings" "%set-car!"
     "%set-cdr!" "%pair?" "%intern-symbol" "%intern-keyword" "%symbol-name"
-    "%object-hash" "%number-hash" "%string-hash" "%write-string"
+    "%object-hash" "%number-hash" "%string-hash" "%entry-hash" "%write-string"
     "%write-char" "%number->string" "%class-name" "%generic-name"
     "%singleton-object" "%function?" "%method-owner" "%method-name"
     ;; The primitives of the manual's generic functions (00-kernel.dyl)

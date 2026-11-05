@@ -70,7 +70,7 @@
     ("%intern-symbol" . "intern_symbol") ("%intern-keyword" . "intern_keyword")
     ("%symbol-name" . "symbol_name")
     ("%object-hash" . "object_hash") ("%number-hash" . "number_hash")
-    ("%string-hash" . "string_hash")
+    ("%string-hash" . "string_hash") ("%entry-hash" . "entry_hash")
     ("%write-string" . "write_string") ("%write-char" . "write_char")
     ("%number->string" . "number_to_string")
     ("%class-name" . "class_name") ("%generic-name" . "generic_name")

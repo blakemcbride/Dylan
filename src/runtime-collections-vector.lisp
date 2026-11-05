@@ -391,8 +391,29 @@
            (lambda ()
              (dylan-call
               dylan/error
-              "(element <vector> <integer>) -- invalid index with no default value"
-              vector-value index))))))))
+              "element: there is no element at the index ~s"
+              index))))))))
+
+;;; Any other key: the index it denotes, if any (INDEX-KEY), as for any
+;;; sequence.  (Without this, the <explicit-key-collection> method would
+;;; take it, since a vector is an <array>.)
+(add-method
+ dylan/element
+ (dylan%dylan-callable->method
+  (make-param-list `((vector ,<vector>) (key ,<object>))
+                   nil nil '(:default))
+  (lambda (multiple-values next-method vector key &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:default))
+    (let ((index (index-key key)))
+      (if index
+          (dylan-apply dylan/element vector index rest)
+          (dylan%find-keyword
+           rest :default
+           (lambda ()
+             (dylan-call dylan/error
+                         "element: there is no element at the index ~s"
+                         key))))))))
 
 ;;;
 ;;; Mutable Collections
@@ -427,12 +448,13 @@
                    nil nil nil)
   ;; Chapter 12: it is an error to set an element whose key is not
   ;; already in the vector.
-  (lambda (vector-instance index new-value)
-    (let ((vector (vector-value vector-instance)))
-      (unless (and (integerp index) (< -1 index (length vector)))
+  (lambda (vector-instance key new-value)
+    (let ((vector (vector-value vector-instance))
+          (index (index-key key)))
+      (unless (and index (< -1 index (length vector)))
         (dylan-call dylan/error
-                    "((setter element) <vector>) -- invalid index"
-                    vector-instance index))
+                    "element: there is no element at the index ~s"
+                    key))
       (setf (aref vector index) new-value)
       new-value))))
 

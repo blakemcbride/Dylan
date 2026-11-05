@@ -1547,4 +1547,46 @@ error
 {the class <type-error>}
 {the class <type-error>}
 ")
+
+ (element-keys-the-same-in-both
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<type-error> condition: c) (object-class c))
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (define-method sv (l) (bind ((v (make <stretchy-vector>))) (for-each ((e l)) () (add! v e)) v))
+   (define-method dq (l) (bind ((v (make <deque>))) (for-each ((e l)) () (push-last v e)) v))
+   (define t (make <table>))
+   (set! (element t 'a) 1)
+   (for-each ((c (list '(1 2 3) #(1 2 3) \"abc\" (sv '(1 2 3)) (dq '(1 2 3))
+                       (range from: 1 size: 3) t (make <array> dimensions: '(2 3)))))
+             ()
+     (print (list (msg (method () (element c 5)))
+                  (msg (method () (element c 1.0)))
+                  (msg (method () (element c 'x)))
+                  (element c 1.5 default: 'd))))
+   (print (list (element (range from: 10) 2.0) (msg (method () (element (range from: 10) -1)))))
+   (bind ((l (list 1 2 3)) (v (vector 1 2 3)) (s (as <byte-string> \"abc\")) (d (dq '(1 2 3))))
+     (set! (element l 1.0) 9) (set! (element v 2.0) 9) (set! (element s 0.0) #\\z)
+     (set! (element d 0.0) 7)
+     (print (list l v s (as <list> d)))
+     (print (msg (method () (set! (element v 3) 0))))
+     (print (msg (method () (set! (element l 'x) 0))))
+     (print (msg (method () (set! (element s 0) 5)))))
+   (print (msg (method () (set! (element (make <unicode-string> size: 1) 0) 5))))"
+  "(\"element: there is no element at the index 5\" 2 \"element: there is no element at the index x\" d)
+(\"element: there is no element at the index 5\" 2 \"element: there is no element at the index x\" d)
+(\"element: there is no element at the index 5\" #\\b \"element: there is no element at the index x\" d)
+(\"element: there is no element at the index 5\" 2 \"element: there is no element at the index x\" d)
+(\"element: there is no element at the index 5\" 2 \"element: there is no element at the index x\" d)
+(\"element: there is no element at the index 5\" 2 \"element: there is no element at the index x\" d)
+(\"element: the table has no key 5\" \"element: the table has no key 1.0\" \"element: the table has no key x\" d)
+(\"element: there is no element for the key 5\" \"element: there is no element for the key 1.0\" \"element: there is no element for the key x\" d)
+(12 \"element: there is no element at the index -1\")
+((1 9 3) #(1 2 9) \"zbc\" (7 2 3))
+\"element: there is no element at the index 3\"
+\"element: there is no element at the index x\"
+\"a <byte-string> holds only 8-bit characters: 5\"
+\"a string holds only characters: 5\"
+")
 )

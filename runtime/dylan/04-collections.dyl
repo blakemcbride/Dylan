@@ -64,6 +64,16 @@ module: dylan
   (bind ((n (size c)))
     (if n (range up-to: n) (range))))
 
+;;; The index a sequence's key denotes, or #f.  The default element below
+;;; finds a key with = (chapter 12), so a float = to an integer denotes
+;;; that integer, whatever the sequence.
+(define %index-key
+  (method (key)
+    (cond ((%instance? key <integer>) key)
+          ((and (%instance? key <float>) (binary< -1.0 key) (binary< key 1.0e15))
+           (bind ((r (%float->rational key))) (and (%instance? r <integer>) r)))
+          (else: #f))))
+
 (define-generic-function element (collection key #key default))
 
 (define-method element ((c <explicit-key-collection>) key #key (default %no-default))

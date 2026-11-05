@@ -109,7 +109,11 @@ v                                          ; => #(first 2 3)
 \noindent Asking for a key the collection does not have is an error,
 unless a \code{default:} is given, which is then the answer. Setting the
 element of a key a collection does not have is an error too, except for
-a table, which adds the key.
+a table, which adds the key. \code{element} finds a key with \code{=}
+(as the manual's default method does), so a float equal to an integer,
+such as \code{1.0}, is that index of a sequence:
+\code{(element '(a b c) 1.0)} answers \code{b}. Any other key, such as
+\code{1.5}, is not among a sequence's keys.
 
 \index{size}\index{empty?}\index{key-sequence}
 \code{size} answers the number of elements, or \code{\#f} for a

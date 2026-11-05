@@ -216,9 +216,8 @@ many keys share a hash code; growing would not help them."
           (dylan%find-keyword
            rest :default
            (lambda ()
-             (dylan-call dylan/error
-                         "element -- no such element in collection"
-                         table key rest))))))))
+             (dylan-call dylan/error "element: the table has no key ~s"
+                         key))))))))
 
 (defun grow-vector-by (v increase)
   (let ((new-v (make-array (+ (length v) increase))))

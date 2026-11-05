@@ -681,8 +681,24 @@ answers a list of the wanted element, or NIL when there is none."
              (progn
                (set-current-element mut-seq state new-value)
                new-value)
-             (dylan-call dylan/error "(setter element) -- key not found"
-                         mut-seq key new-value)))))))
+             (dylan-call dylan/error
+                         "element: there is no element at the index ~s"
+                         key)))))))
+
+;;; Any other key: the index it denotes, if any, as for element.
+(add-method
+ dylan/setter/element/
+ (dylan%function->method
+  (make-param-list `((mutable-sequence ,<mutable-sequence>)
+                     (key ,<object>) (new-value ,<object>))
+                   nil nil nil)
+  (lambda (mut-seq key new-value)
+    (let ((index (index-key key)))
+      (if index
+          (dylan-call dylan/setter/element/ mut-seq index new-value)
+          (dylan-call dylan/error
+                      "element: there is no element at the index ~s"
+                      key))))))
 
 (add-method
  dylan/setter/element/
@@ -702,5 +718,6 @@ answers a list of the wanted element, or NIL when there is none."
              (progn
                (set-current-element mut-seq state new-value)
                new-value)
-             (dylan-call dylan/error "(setter element) -- key not found"
-                         mut-seq key new-value)))))))
+             (dylan-call dylan/error
+                         "element: there is no element for the key ~s"
+                         key)))))))

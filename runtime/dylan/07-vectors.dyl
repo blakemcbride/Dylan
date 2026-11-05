@@ -15,13 +15,20 @@ module: dylan
 (define %vector-previous-state (method (v i) (if (zero? i) #f (binary- i 1))))
 
 (define %vector-ref
-  (method (v index default)
-    (if (and (%instance? index <integer>) (not (negative? index))
-             (binary< index (%vector-size v)))
-        (%vector-element v index)
-        (if (id? default %no-default)
-            (error "element: there is no element at the index ~s" index)
-            default))))
+  (method (v key default)
+    (bind ((index (%index-key key)))
+      (if (and index (not (negative? index)) (binary< index (%vector-size v)))
+          (%vector-element v index)
+          (if (id? default %no-default)
+              (error "element: there is no element at the index ~s" key)
+              default)))))
+
+(define %vector-set
+  (method (v key new-value)
+    (bind ((index (%index-key key)))
+      (unless (and index (not (negative? index)) (binary< index (%vector-size v)))
+        (error "element: there is no element at the index ~s" key))
+      (%vector-element-setter v index new-value))))
 
 (define-method initial-state ((v <simple-object-vector>)) (%vector-initial-state v))
 (define-method next-state ((v <simple-object-vector>) (i <integer>)) (%vector-next-state v i))
@@ -35,7 +42,7 @@ module: dylan
 (define-method element ((v <simple-object-vector>) index #key (default %no-default))
   (%vector-ref v index default))
 (define-method (setter element) ((v <simple-object-vector>) index new-value)
-  (%vector-element-setter v index new-value))
+  (%vector-set v index new-value))
 
 (define-method make ((class (singleton <simple-object-vector>)) #key (size 0) (fill #f))
   (%make-vector size fill))

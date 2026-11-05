@@ -349,8 +349,8 @@
            rest :default
            (lambda ()
              (dylan-call dylan/error
-                         "element -- invalid index with no default value"
-                         list-1 index))))))))
+                         "element: there is no element at the index ~s"
+                         index))))))))
 
 ;;;
 ;;; Mutable Collection

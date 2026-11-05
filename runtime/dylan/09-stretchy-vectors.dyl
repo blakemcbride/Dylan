@@ -37,21 +37,24 @@ module: dylan
   (set! (%count v) n)
   n)
 
+;;; The index KEY denotes in V, or an error
 (define %stretchy-check
-  (method (v i)
-    (unless (and (%instance? i <integer>) (not (negative? i)) (binary< i (%count v)))
-      (error "element: there is no element at the index ~s" i))))
+  (method (v key)
+    (bind ((i (%index-key key)))
+      (unless (and i (not (negative? i)) (binary< i (%count v)))
+        (error "element: there is no element at the index ~s" key))
+      i)))
 
-(define-method element ((v <stretchy-vector>) index #key (default %no-default))
-  (if (and (%instance? index <integer>) (not (negative? index)) (binary< index (%count v)))
-      (%vector-element (%data v) index)
-      (if (id? default %no-default)
-          (error "element: there is no element at the index ~s" index)
-          default)))
+(define-method element ((v <stretchy-vector>) key #key (default %no-default))
+  (bind ((index (%index-key key)))
+    (if (and index (not (negative? index)) (binary< index (%count v)))
+        (%vector-element (%data v) index)
+        (if (id? default %no-default)
+            (error "element: there is no element at the index ~s" key)
+            default))))
 
-(define-method (setter element) ((v <stretchy-vector>) index new-value)
-  (%stretchy-check v index)
-  (%vector-element-setter (%data v) index new-value))
+(define-method (setter element) ((v <stretchy-vector>) key new-value)
+  (%vector-element-setter (%data v) (%stretchy-check v key) new-value))
 
 (define-method initial-state ((v <stretchy-vector>)) (if (zero? (%count v)) #f 0))
 (define-method next-state ((v <stretchy-vector>) (i <integer>))

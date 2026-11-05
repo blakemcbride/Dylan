@@ -399,6 +399,13 @@ unbounded collection)."
   (make-param-list `((sov ,<simple-object-vector>) (state ,<sequence>))
                    nil nil nil)
   (lambda (vec state) (aref vec (aref state 0)))))
+;;; Any other vector, such as a stretchy vector: its one index.  (element
+;;; takes only an index of a vector, as for any sequence.)
+(add-method
+ dylan/current-element
+ (dylan%function->method
+  (make-param-list `((vector ,<vector>) (state ,<sequence>)) nil nil nil)
+  (lambda (vec state) (aref (vector-value vec) (aref state 0)))))
 (add-method
  dylan/current-element
  (dylan%function->method
@@ -561,6 +568,15 @@ runs out before the DONE? test causes an exit."
 ;;;; Collection Keys (page 123)
 ;;;;
 
+(defun index-key (key)
+  "The index a sequence's KEY denotes, or NIL.  Chapter 12's default
+element finds a key with =, so a float = to an integer denotes that
+integer, whatever the sequence, as in a compiled program."
+  (cond ((integerp key) key)
+        ((and (floatp key) (< -1 key 1d15))
+         (let ((r (rational key))) (and (integerp r) r)))
+        (t nil)))
+
 (defparameter dylan/element
   (dylan%generic-fn
    'element
@@ -603,8 +619,8 @@ runs out before the DONE? test causes an exit."
            (cond (state (current-element exp-coll state))
                  ((eq default default-marker)
                   (dylan-call dylan/error
-                              "element -- no such element in collection"
-                              exp-coll key rest))
+                              "element: there is no element for the key ~s"
+                              key))
                  (t default))))))))
 
 (add-method
@@ -618,19 +634,21 @@ runs out before the DONE? test causes an exit."
     (let* ((default-marker (cons 1 2))
            (default (dylan%find-keyword rest :default
                                         (lambda () default-marker))))
-      (do ((state (initial-state seq)
+      ;; No negative key is among them, nor found in an unbounded range.
+      (do ((state (if (minusp key) nil (initial-state seq))
                   (next-state seq state))
            (k 0 (+ k 1)))
           ((or (not state) (= k key))
            (cond (state (current-element seq state))
                  ((eq default default-marker)
                   (dylan-call dylan/error
-                              "element -- no such element in collection"
-                              seq key rest))
+                              "element: there is no element at the index ~s"
+                              key))
                  (t default))))))))
 
-;;; A sequence's keys are integers, so any other key is not among them: the
-;;; answer is default:, as chapter 12 says for a key that is absent.
+;;; A sequence's keys are integers: any other key denotes the index
+;;; INDEX-KEY finds, if any, and is otherwise absent, so that the answer is
+;;; default:, as chapter 12 says.
 (add-method
  dylan/element
  (dylan%dylan-callable->method
@@ -639,11 +657,14 @@ runs out before the DONE? test causes an exit."
   (lambda (multiple-values next-method seq key &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (dylan%find-keyword rest :default
-                        (lambda ()
-                          (dylan-call dylan/error
-                                      "element -- no such element in collection"
-                                      seq key rest))))))
+    (let ((index (index-key key)))
+      (if index
+          (dylan-apply dylan/element seq index rest)
+          (dylan%find-keyword rest :default
+                              (lambda ()
+                                (dylan-call dylan/error
+                                            "element: there is no element at the index ~s"
+                                            key))))))))
 
 (defparameter dylan/key-sequence
   (dylan%generic-fn

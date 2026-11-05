@@ -96,13 +96,18 @@
 
 (defun check-byte-character (string character &optional (prefix ""))
   "Signal an error, as the compiler to C does, if CHARACTER is to go into
-STRING, a <byte-string>, and its code is above 255."
-  (when (and (simple-string-p string) (characterp character)
-             (> (char-code character) 255))
-    (dylan-call dylan/error
-                (concatenate 'string prefix
-                             "a <byte-string> holds only 8-bit characters: ~s")
-                character)))
+STRING and is not a character, or STRING is a <byte-string> and its code is
+above 255."
+  (cond ((and (simple-string-p string)
+              (not (and (characterp character) (< (char-code character) 256))))
+         (dylan-call dylan/error
+                     (concatenate 'string prefix
+                                  "a <byte-string> holds only 8-bit characters: ~s")
+                     character))
+        ((not (characterp character))
+         (dylan-call dylan/error
+                     (concatenate 'string prefix "a string holds only characters: ~s")
+                     character))))
 
 (defun string-like (original result)
   "The string RESULT, made from ORIGINAL, as a string of ORIGINAL's class."
@@ -135,12 +140,9 @@ the keyword arguments REST."
     (when (or (not (integerp size)) (minusp size))
       (dylan-call dylan/error
                   "(make (singleton <string>)) -- size: invalid" size))
-    (when (and have-fill? (not (characterp fill)))
-      (dylan-call dylan/error
-                  "(make (singleton <string>)) -- fill: not a character"
-                  fill))
-    (when (and have-fill? (not unicode?))
-      (check-byte-character "" fill "make: "))
+    (when have-fill?
+      (check-byte-character (if unicode? (make-unicode-string 0 #\Space) "")
+                            fill "make: "))
     ;; As in the compiler to C, the fill is a space unless given.
     (let ((fill (if have-fill? fill #\Space)))
       (if unicode?
@@ -358,8 +360,8 @@ the keyword arguments REST."
              (lambda ()
                (dylan-call
                 dylan/error
-                "(element <byte-string> <integer>) -- invalid index with no default value"
-                string-value index)))))))))
+                "element: there is no element at the index ~s"
+                index)))))))))
 
 ;;;
 ;;; Mutable Collections
@@ -383,15 +385,12 @@ the keyword arguments REST."
     (make-param-list `((byte-string ,class) (index ,<object>)
                        (new-value ,<object>))
                      nil nil nil)
-    (lambda (string index new-value)
-      (unless (and (integerp index) (< -1 index (length string)))
+    (lambda (string key new-value)
+      (let ((index (index-key key)))
+       (unless (and index (< -1 index (length string)))
         (dylan-call dylan/error
-                    "((setter element) <string>) -- invalid index"
-                    string index))
-      (unless (characterp new-value)
-        (dylan-call dylan/error
-                    "((setter element) <string>) -- not a character"
-                    string new-value))
+                    "element: there is no element at the index ~s"
+                    key))
       (check-byte-character string new-value)
       (setf (char string index) new-value)
-      new-value))))
+      new-value)))))

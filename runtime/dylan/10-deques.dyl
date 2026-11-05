@@ -36,23 +36,26 @@ module: dylan
           (set! (%data d) new)
           (set! (%first d) 0))))))
 
+;;; The index KEY denotes in D, or an error
 (define %deque-check
-  (method (d i)
-    (unless (and (%instance? i <integer>) (not (negative? i)) (binary< i (%count d)))
-      (error "element: there is no element at the index ~s" i))))
+  (method (d key)
+    (bind ((i (%index-key key)))
+      (unless (and i (not (negative? i)) (binary< i (%count d)))
+        (error "element: there is no element at the index ~s" key))
+      i)))
 
 (define-method size ((d <deque>)) (%count d))
 
-(define-method element ((d <deque>) index #key (default %no-default))
-  (if (and (%instance? index <integer>) (not (negative? index)) (binary< index (%count d)))
-      (%vector-element (%data d) (%deque-slot d index))
-      (if (id? default %no-default)
-          (error "element: there is no element at the index ~s" index)
-          default)))
+(define-method element ((d <deque>) key #key (default %no-default))
+  (bind ((index (%index-key key)))
+    (if (and index (not (negative? index)) (binary< index (%count d)))
+        (%vector-element (%data d) (%deque-slot d index))
+        (if (id? default %no-default)
+            (error "element: there is no element at the index ~s" key)
+            default))))
 
-(define-method (setter element) ((d <deque>) index new-value)
-  (%deque-check d index)
-  (%vector-element-setter (%data d) (%deque-slot d index) new-value))
+(define-method (setter element) ((d <deque>) key new-value)
+  (%vector-element-setter (%data d) (%deque-slot d (%deque-check d key)) new-value))
 
 (define-method initial-state ((d <deque>)) (if (zero? (%count d)) #f 0))
 (define-method next-state ((d <deque>) (i <integer>))

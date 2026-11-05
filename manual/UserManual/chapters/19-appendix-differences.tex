@@ -202,10 +202,6 @@ manual leaves a choice open or where the host shows through. A portable
 program depends on none of these; each is described where it arises.
 
 \begin{itemize}
-\item A handler that returns from the error \code{check-type} signals
-  leaves it unhandled in the compiler to C; in the interactive
-  implementation \code{check-type} answers what the handler returned
-  (Section~\ref{sec:conditions-signalling}).
 \item Assigning a read-only module variable is a compile error in the
   compiler to C and an error when it runs in the interactive
   implementation, which also needs modules declared before use

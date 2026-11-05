@@ -199,11 +199,9 @@ an instance of the type, and signals a \code{<type-error>} if not:
 ; => ("abc" <integer>)
 \end{dylan}
 
-\noindent The implementations differ when a handler returns from the
-type error: the compiler to C signals it with \code{error}, so a
-returning handler makes it unhandled; the Common Lisp implementation
-signals it with \code{signal}, so \code{check-type} answers whatever the
-handler returned.
+\noindent The type error is signalled with \code{error}, so a handler may
+not return from it: one that does causes the error ``a handler returned
+from error''.
 
 \index{abort}
 \code{(abort)} signals an \code{<abort>} with \code{error}; it never

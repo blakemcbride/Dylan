@@ -51,6 +51,10 @@
   (spec nil))                           ; its specialized entry: NIL,
                                         ; :ONLY (its only body) or :COPY
 
+(defvar *toplevel-order* nil
+  "Top-level IR-FN -> its place in the program, and module variable -> the
+place of the top-level form that defines it (inline.lisp, TOPLEVEL-ORDER).")
+
 (defvar *direct-next* nil
   "In a method whose next method is only called, and with no arguments
 called with the method's own, the next method's variable and the C
@@ -1134,6 +1138,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*used-primitives* '())
         (*label-counter* 0)
         (*temp-counter* 0)
+        (*toplevel-order* (toplevel-order ir))
         (fns (ir-fns ir)))
     (setf *reflective-methods* (uses-method-reflection-p ir))
     (number-thread-variables ir)

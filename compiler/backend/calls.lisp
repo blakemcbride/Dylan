@@ -222,8 +222,12 @@ gfun), (values :primitive c-name), or NIL."
 (defun dead-binding-p (var value)
   "Is the let of VAR to VALUE needless: the value pure, and every use of
 VAR absorbed by a known call -- none by a closure, whose environment holds
-it?"
-  (and (typep value '(or ir-global-ref const))
+it?  A module variable's value is pure only if it surely has one: else
+reading it signals an error, which a call that goes straight to its
+function, or its inlined code, would not (INLINE-TARGET)."
+  (and (or (const-p value)
+           (and (ir-global-ref-p value)
+                (known-bound-p (ir-global-ref-var value) (ivar-binder var))))
        (not (cell-var-p var))
        (not (ivar-captured-p var))
        (= (ivar-ref-count var) (gethash var *absorbed-uses* 0))))

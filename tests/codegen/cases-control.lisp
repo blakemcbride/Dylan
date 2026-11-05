@@ -440,4 +440,23 @@ handled
 (outer ())
 (#f ())
 ")
+ ;; A module variable used before its definition has no value, though
+ ;; the use is unused, through an alias, or in a call inlined
+ (unbound-before-definition
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method f () (bind ((x later-var)) 'ok))
+(print (try (method () (f))))
+(define-method g () (my-car '(1 2)))
+(print (try (method () (g))))
+(define-method h () (ff 1))
+(print (try (method () (h))))
+(define later-var 1)
+(define my-car car)
+(define ff (method (x) (+ x 1)))
+(print (list (f) (g) (h)))"
+  "\"ERR: the variable later-var@dylan-user has no value\"
+\"ERR: the variable my-car@dylan-user has no value\"
+\"ERR: the variable ff@dylan-user has no value\"
+(ok 1 2)
+")
 )

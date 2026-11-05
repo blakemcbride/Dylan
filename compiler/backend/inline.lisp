@@ -47,17 +47,12 @@ have to be inlined.")
 (defvar *inline-chains* nil
   "IR-CALL -> the methods whose inlining made it, innermost first.")
 
-(defvar *toplevel-order* nil
-  "Top-level IR-FN -> its place in the program, and module variable -> the
-place of the top-level form that defines it.")
-
 (defun inline-calls (ir)
   "Inline the calls of the program's functions that qualify, finding the
 types again before each round; leave IR analyzed afresh."
   (let ((*ivar-counter* (reduce #'max (ir-bound-vars ir) :key #'ivar-id :initial-value 0))
         (*fn-counter* (reduce #'max (ir-fns ir) :key #'ir-fn-id :initial-value 0))
         (*inline-chains* (make-hash-table :test #'eq))
-        (*toplevel-order* (toplevel-order ir))
         (bodies (make-hash-table :test #'eq)))  ; fn -> T if it qualifies
     (loop repeat (1+ *inline-depth*)
           do (let ((fns (ir-fns ir)) (changed nil))
@@ -106,12 +101,24 @@ types again before each round; leave IR analyzed afresh."
 (defun defined-before-p (var fn)
   "Is the module variable VAR defined by a top-level form before the one
 FN's code is in?  Then FN's code runs only once VAR has its value: the
-top-level forms run in order, and FN is made by its own."
+top-level forms run in order, and FN is made by its own -- unless FN's
+code is in a method of a generic function, which a compiled program has
+from its start (objects.lisp, BUILD-GENERICS)."
   (let ((top fn))
-    (loop while (ir-fn-parent top) do (setf top (ir-fn-parent top)))
+    (loop while (ir-fn-parent top)
+          do (when (eq (ir-fn-kind top) :method)
+               (return-from defined-before-p nil))
+             (setf top (ir-fn-parent top)))
     (let ((defined (gethash var *toplevel-order*))
           (here (gethash top *toplevel-order*)))
       (and defined here (< defined here)))))
+
+(defun known-bound-p (var fn)
+  "Does the module variable VAR surely have a value when FN's code reads
+it: a class or generic function, the library's, or defined before?"
+  (or (gethash var *constant-globals*)
+      (eq (module-var-module var) (dylan-module))
+      (defined-before-p var fn)))
 
 ;;; Which methods qualify
 
@@ -186,12 +193,8 @@ is a known function, which the copy may then call directly or inline."
 (defun inline-target (e bodies caller)
   "The fn the call E in CALLER's code can be replaced by, and its arguments
 in order."
-  (let ((global (or (let ((g (global-callee e)))
-                      ;; Inlined, the call no longer reads the variable,
-                      ;; which signals an error if it has no value yet.
-                      (and g (defined-before-p (second (static-value (ir-call-function e)))
-                                               caller)
-                           g))
+  (declare (ignorable caller))
+  (let ((global (or (global-callee e)
                     ;; A closure made by a let, not a local function of a
                     ;; letrec, whose calls are jumps (contify.lisp)
                     (let* ((f (ir-call-function e))

@@ -12,8 +12,9 @@
 ;;;; cases.lisp, of programs the compiler to C does not support yet.
 ;;;;
 ;;;; Each program runs in the module dylan-user, as a compiled program
-;;;; does, and what it defined there is forgotten before the next; its
-;;;; output is captured and compared with the expected output.  A program
+;;;; does, or in the module its module: header names, and what it defined
+;;;; there is forgotten before the next; its output is captured and
+;;;; compared with the expected output.  A program
 ;;;; the compiler would reject, or that would fail when run, must signal an
 ;;;; error here, whose message contains the expected text; whether it comes
 ;;;; from compiling or running makes no difference in this implementation,
@@ -32,22 +33,63 @@
 (defvar *program-variables* '()
   "The module variables the program being run has made so far.")
 
+(defun header-keyword-line-p (line)
+  (let ((colon (position #\: line)))
+    (and colon (> colon 0)
+         (alpha-char-p (char line 0))
+         (every (lambda (c) (or (alphanumericp c) (char= c #\-)))
+                (subseq line 0 colon)))))
+
+(defun program-header (text)
+  "Design note 33, as the compiler to C takes it: a program may begin with
+lines \"keyword: value\", ended by a blank line.  Answer the module: value
+as the name of a module, or NIL, and the text of the forms after them."
+  (if (not (and (plusp (length text)) (alpha-char-p (char text 0))
+                (header-keyword-line-p
+                 (subseq text 0 (or (position #\Newline text) (length text))))))
+      (values nil text)
+      (with-input-from-string (in text)
+        (let ((module nil))
+          (loop for line = (read-line in nil nil)
+                until (or (null line)
+                          (string= (string-trim '(#\Space #\Tab #\Return) line) ""))
+                do (let ((colon (position #\: line)))
+                     (when (and (header-keyword-line-p line)
+                                (string-equal (subseq line 0 colon) "module"))
+                       (setf module (dylan-read
+                                     (make-string-input-stream
+                                      (subseq line (1+ colon))))))))
+          (values module
+                  (with-output-to-string (out)
+                    (loop for line = (read-line in nil nil)
+                          while line do (write-line line out))))))))
+
+(defun define-module-form-p (form)
+  (and (consp form) (symbolp (car form))
+       (string-equal (symbol-name (car form)) "DEFINE-MODULE")))
+
 (defun evaluate-program (text)
   "Read, compile and evaluate the forms of the Dylan program TEXT one by
 one, as the read-eval-print loop does: each is read after the one before
 it has run, which matters to a symbol's spelling (chapter 15: as may make
-a symbol before a later form spells it)."
-  (with-input-from-string (in text)
+a symbol before a later form spells it).  A module: header puts the forms
+in that module, as it does a compiled program's -- all but the
+define-module forms before the first other form, which define it."
+  (multiple-value-bind (module text) (program-header text)
+   (with-input-from-string (in text)
     (let ((eof (list 'eof))
           (module-variables '()))
       (loop for form = (dylan-read in nil eof)
             until (eq form eof)
-            do (compile-expression
+            do (when (and module (not (define-module-form-p form)))
+                 (in-module module)
+                 (setf module nil))
+               (compile-expression
                 form nil module-variables
                 (lambda (new-variables preamble compiled)
                   (implementation-specific/eval (append preamble (list compiled)))
                   (setf module-variables (append new-variables module-variables))
-                  (setf *program-variables* (append new-variables *program-variables*))))))))
+                  (setf *program-variables* (append new-variables *program-variables*)))))))))
 
 (defun forget-program ()
   "Undo the program's definitions in dylan-user, for the next program:

@@ -114,13 +114,24 @@ it has there."
         (values (car import) (cdr import))
         (values module symbol))))
 
+(defun module-creates-p (module symbol)
+  "True if MODULE names SYMBOL in a create clause (design note 32): it owns
+the variable, and a module that uses it is to define it."
+  (some (lambda (clause)
+          (and (consp clause) (eq (car clause) 'create)
+               (member symbol (cdr clause))))
+        (module.clauses module)))
+
 (defun check-not-imported (dylan-variable form-name)
   "Chapter 5: a module may not create a variable under a name it imports;
-the conflict is an error, which cancels the definition."
+the conflict is an error, which cancels the definition -- unless the
+module the variable comes from created it for its users to define."
   (let ((symbol (if (consp dylan-variable) (cadr dylan-variable) dylan-variable)))
     (unless (or (gethash symbol *resolved-names*) (dylan-special-name? symbol))
-      (let ((owner (resolve-symbol (find-module *current-module*) symbol)))
-        (unless (eq (module.name owner) *current-module*)
+      (multiple-value-bind (owner name)
+          (resolve-symbol (find-module *current-module*) symbol)
+        (unless (or (eq (module.name owner) *current-module*)
+                    (module-creates-p owner name))
           (dylan%error (concatenate 'string form-name
                                     " -- the variable is imported from module")
                        dylan-variable (module.name owner)))))))

@@ -305,8 +305,9 @@ the form of Section~\ref{sec:test-case-format}, and test names, as the
 compiler's runners do; by default all of \file{tests/codegen/cases*.lisp},
 and \file{tests/interpreter/cases.lisp}, programs the manual allows that
 the compiler to C rejects for what it does not support yet.
-Each program runs in \code{dylan-user}, as a compiled program does, and
-what it defined is forgotten before the next; its output must be the
+Each program runs in \code{dylan-user}, as a compiled program does, or
+in the module its \code{module:} header names, and what it defined is
+forgotten before the next; its output must be the
 expected output, and the error it signals, if the case expects one, must
 have a message containing the expected text --- whether the compiler
 would find the error compiling or running makes no difference here, and

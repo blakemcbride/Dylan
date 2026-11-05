@@ -274,7 +274,11 @@ module: dylan
 (define-method imag-part ((x <real>)) 0)
 
 (define-generic-function angle (number))
-(define-method angle ((x <real>)) (if (negative? x) (%math 15 0.0 -1.0) 0))
+;;; As Common Lisp's phase of the float of X: 0.0 or pi in X's format (a
+;;; rational's, a double), pi for -0.0 -- atan2 of a positive zero and X.
+(define-method angle ((x <real>))
+  (bind ((f (if (%instance? x <float>) x (%float x 1))))
+    (%math 15 (binary- f f) f)))
 
 ;;; There are no complex numbers in this version: these make only reals.
 

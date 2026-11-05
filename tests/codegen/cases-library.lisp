@@ -1154,4 +1154,13 @@ neg
 (1 #t #f)
 (1 #f #f)
 ")
+
+ ;; Chapter 14: angle, as Common Lisp's phase -- a float, of the
+ ;; argument's format
+ (angle
+  "(print (list (angle 1) (angle -1) (angle 1/2) (angle -1/2) (angle 0) (angle 2.0) (angle -2.0) (angle -1.0s0) (angle 1.0s0) (angle 0.0) (angle -0.0)))
+   (print (list (magnitude -3) (magnitude -2.5s0)))"
+  "(0.0 3.141592653589793 0.0 3.141592653589793 0.0 0.0 3.141592653589793 3.1415927s0 0.0s0 0.0 3.141592653589793)
+(3 2.5s0)
+")
 )

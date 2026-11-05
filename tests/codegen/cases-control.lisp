@@ -256,7 +256,13 @@ aborted
  (for-variable-twice
   "(for ((i 0 (+ i 1)) (i 0 (+ i 1))) ((> i 2)) (print i))"
   ""
-  :compile-error "i appears twice")
+  :compile-error "for: i appears twice")
+
+ ;; So does a for-each.
+ (for-each-variable-twice
+  "(for-each ((x (list 1)) (x (list 2))) () (print x))"
+  ""
+  :compile-error "for-each: x appears twice")
 
  ;; Chapter 10: make of a <generic-function> needs a count of required
  ;; arguments.

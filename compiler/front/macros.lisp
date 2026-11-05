@@ -213,6 +213,7 @@ clause's body (or :NONE)."
       (compile-error "for: bad variable clauses ~a" clauses))
     (unless (proper-list-p end)
       (compile-error "for: bad end test ~a" end))
+    (check-unique (mapcar #'first clauses) "for")
     (let* ((loop (temp "for"))
            (again `(,loop ,@(mapcar #'third clauses))))
       `(dylan::bind-methods
@@ -239,6 +240,7 @@ clause's body (or :NONE)."
       (compile-error "for-each: bad bindings ~a" clauses))
     (unless (proper-list-p end)
       (compile-error "for-each: bad end test ~a" end))
+    (check-unique (mapcar #'first clauses) "for-each")
     (let* ((collections (mapcar (lambda (c) (declare (ignore c)) (temp "collection"))
                                 clauses))
            (states (mapcar (lambda (c) (declare (ignore c)) (temp "state"))

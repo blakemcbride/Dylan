@@ -1744,4 +1744,23 @@ error
 {<stretchy-vector>}
 {<stretchy-vector> 1 2 3}
 ")
+
+ ;; Chapter 12: copies keep the elements in order, for a stretchy vector
+ ;; (whose add puts the new element at the end) as for any sequence; and a
+ ;; deque's copy is made in time linear in its size.
+ (sequence-copies-in-order
+  "(define s (as <stretchy-vector> '(1 2 3)))
+   (print (list (copy-sequence s) (copy-sequence s start: 1) (choose odd? s)))
+   (print (list (remove s 2) (intersection s '(1 2)) (choose-by odd? '(1 2 3) s)))
+   (print (shallow-copy s))
+   (define d (make <deque> size: 3 fill: 1))
+   (set! (element d 0) 'x)
+   (print (list (copy-sequence d) (remove d 1) (add d 'y)))
+   (print (size (copy-sequence (make <deque> size: 2000 fill: 1))))"
+  "({<stretchy-vector> 1 2 3} {<stretchy-vector> 2 3} {<stretchy-vector> 1 3})
+({<stretchy-vector> 1 3} {<stretchy-vector> 1 2} {<stretchy-vector> 1 3})
+{<stretchy-vector> 1 2 3}
+({<deque> x 1 1} {<deque> x} {<deque> y x 1 1})
+2000
+")
 )

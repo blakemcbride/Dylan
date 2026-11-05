@@ -113,6 +113,20 @@
           seq
           (dylan-call dylan/add! seq object))))))
 
+(defun copy-like (sequence elements)
+  "A new instance of SEQUENCE's class-for-copy holding the list ELEMENTS,
+in order: made with its size and filled through the iteration protocol,
+as the compiled library's %from-list does."
+  (let ((class (dylan-call dylan/class-for-copy sequence)))
+    (if (subclass? class <list>)
+        (dylan-call dylan/as class elements)
+        (let ((result (dylan-call dylan/make class :size (length elements))))
+          (loop for state = (initial-state result) then (next-state result state)
+                for rest on elements
+                while state
+                do (set-current-element result state (car rest)))
+          result))))
+
 (defparameter dylan/remove
   (dylan%generic-fn
    'remove
@@ -131,8 +145,7 @@
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
           (count (dylan%find-keyword rest :count (lambda () -1))))
       (loop with state = (initial-state seq)
-            with result = (dylan-call dylan/make
-                                      (dylan-call dylan/class-for-copy seq))
+            with kept = '()
             with changed = 0
             do (if state
                    (let ((cur-element (current-element
@@ -144,9 +157,8 @@
                            (incf changed))
                          (progn
                            (setf state (next-state seq state))
-                           (setf result (dylan-call dylan/add result
-                                                    cur-element)))))
-                   (return (dylan-call dylan/reverse result))))))))
+                           (push cur-element kept))))
+                   (return (copy-like seq (nreverse kept)))))))))
 
 (defparameter dylan/remove!
   (dylan%generic-fn
@@ -175,15 +187,14 @@
                     nil nil nil)
    (lambda (test? seq)
      (loop with state = (initial-state seq)
-           with result = (dylan-call dylan/make
-                                     (dylan-call dylan/class-for-copy seq))
+           with kept = '()
            do (if state
                   (let ((cur-element (current-element
                                                  seq state)))
                     (setf state (next-state seq state))
                     (when (true? (dylan-call test? cur-element))
-                      (setf result (dylan-call dylan/add result cur-element))))
-                  (return (dylan-call dylan/reverse result)))))))
+                      (push cur-element kept)))
+                  (return (copy-like seq (nreverse kept))))))))
 
 (defparameter dylan/choose-by
   (dylan%generic-fn
@@ -194,9 +205,7 @@
    (lambda (test? test-sequence value-sequence)
      (loop with test-state = (initial-state test-sequence)
            with value-state = (initial-state value-sequence)
-           with result = (dylan-call dylan/make
-                                     (dylan-call dylan/class-for-copy
-                                                 value-sequence))
+           with kept = '()
            do (if (and test-state value-state)
                   (let ((test-element (current-element
                                                   test-sequence test-state))
@@ -207,8 +216,8 @@
                     (setf value-state (next-state
                                                   value-sequence value-state))
                     (when (true? (dylan-call test? test-element))
-                      (setf result (dylan-call dylan/add result value-element))))
-                  (return (dylan-call dylan/reverse result)))))))
+                      (push value-element kept)))
+                  (return (copy-like value-sequence (nreverse kept))))))))
 
 (defparameter dylan/intersection
   ;; Does intersection result in a set whose elements are unique?
@@ -229,8 +238,7 @@
     (dylan%keyword-validate next-method rest '(:test))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?))))
       (loop with state = (initial-state seq-1)
-            with result = (dylan-call dylan/make
-                                      (dylan-call dylan/class-for-copy seq-1))
+            with kept = '()
             do (if state
                    (let ((a (current-element seq-1 state)))
                      (setf state (next-state seq-1 state))
@@ -238,8 +246,8 @@
                      ;; even an unbounded one.
                      (when (true? (dylan-call dylan/member? a seq-2
                                               :test test?))
-                       (setf result (dylan-call dylan/add result a))))
-                   (return (dylan-call dylan/reverse result))))))))
+                       (push a kept)))
+                   (return (copy-like seq-1 (nreverse kept)))))))))
 
 (defparameter dylan/union
   (dylan%generic-fn
@@ -332,17 +340,16 @@
                                  (dylan%find-keyword rest :end
                                                      (lambda () dylan%false)))))
       (loop with state = (initial-state source)
-            with result = (dylan-call dylan/make
-                                      (dylan-call dylan/class-for-copy source))
+            with kept = '()
             with index = 0
             do (if (and state (<= index (- end 1)))
                    (let ((element (current-element
                                               source state)))
                      (setf state (next-state source state))
                      (when (>= index start)
-                       (setf result (dylan-call dylan/add result element)))
+                       (push element kept))
                      (incf index))
-                   (return (dylan-call dylan/reverse result))))))))
+                   (return (copy-like source (nreverse kept)))))))))
 
 (defparameter dylan/concatenate-as
   (dylan%generic-fn

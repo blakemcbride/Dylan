@@ -863,4 +863,75 @@ Zip:
 6
 #t
 ")
+
+ ;; Chapter 12 and design note 18: member? on a range tests with id?
+ ;; unless given a test, and terminates on an unbounded range with id? or
+ ;; =; intersection of ranges is a range, run the way the first runs, of
+ ;; the points both share; any other test intersects them as sequences.
+ (range-membership
+  "(print (member? 1.0 (range from: 0 up-to: 10)))
+   (print (member? 1.0 (range from: 0 up-to: 10) test: =))
+   (print (member? 4 (range from: 0) test: id?))
+   (print (member? 4 (range from: 0)))
+   (print (member? 1/2 (range from: 0 by: 1/4)))
+   (print (member? 0.5 (range from: 0.0 by: 0.25 size: 4)))
+   (print (member? 'a (range from: 0)))
+   (print (member? 3 (range from: 0 by: 0 size: 2)))
+   (print (member? 0 (range from: 0 by: 0 size: 2)))
+   (print (member? 7 (range from: 10 by: -1 size: 5)))
+   (print (member? 4 (range from: 0 up-to: 10) test: (method (a b) (= a (* 2 b)))))
+   (print (intersection (range from: -5 up-to: 10) (range from: 1.0 up-to: 15.0)))
+   (print (intersection (range from: -5 up-to: 10) (range from: 1 up-to: 15)))
+   (print (intersection (range from: 0 by: 2) (range from: 0 by: 3)))
+   (print (intersection (range from: 0 by: 2 size: 10) (range from: 0 by: 3)))
+   (print (intersection (range from: 20 by: -2) (range from: 0 by: 3 size: 10)))
+   (print (intersection (range from: 0 up-to: 10) (range from: 0 up-to: 10) test: =))
+   (print (intersection (range from: 0 up-to: 5) (range from: 0.0 up-to: 5.0) test: =))
+   (print (intersection (range from: 5 by: 0 size: 3) (range from: 0 up-to: 10)))
+   (print (intersection (range from: 0 up-to: 10) (range from: 5 by: 0 size: 3)))
+   (print (intersection (range from: 0 by: 2 size: 3) (range from: 4 by: 3 size: 3)))
+   (print (intersection (range from: 0 by: 1/2) (range from: 1/3 by: 1/3 size: 20)))
+   (print (intersection (range from: 10 by: -3) (range from: 0 by: 2)))
+   (print (intersection (range from: 0 by: 2) (range from: 1 by: 2)))
+   (print (intersection (range from: 0.0 up-to: 3.0) (range from: 1.0 up-to: 5.0)))
+   (print (as <list> (intersection (range from: 0 up-to: 10) (range from: 0 up-to: 10) test: (method (a b) (= a (* 2 b))))))"
+  "#f
+#t
+#t
+#t
+#t
+#t
+#f
+#f
+#t
+#t
+#t
+{range 0 by 1 size 0}
+{range 1 by 1 size 9}
+{range 0 by 6}
+{range 0 by 6 size 4}
+{range 18 by -6 size 4}
+{range 0 by 1 size 10}
+{range 0 by 1 size 5}
+{range 5 by 0 size 3}
+{range 5 by 1 size 1}
+{range 4 by 6 size 1}
+{range 1 by 1 size 6}
+{range 10 by -6 size 2}
+{range 0 by 1 size 0}
+{range 1.0 by 1.0 size 2}
+(0 2 4 6 8)
+")
+
+ ;; A collection of numbers in steps as a range
+ (as-range
+  "(print (as <range> '(1 3 5)))
+   (print (as <range> (vector 2.0 2.5)))
+   (print (as <range> '()))
+   (print (as <range> '(4)))"
+  "{range 1 by 2 size 3}
+{range 2.0 by 0.5 size 2}
+{range 0 by 1 size 0}
+{range 4 by 1 size 1}
+")
 )

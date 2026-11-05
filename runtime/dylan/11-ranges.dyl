@@ -42,6 +42,24 @@ module: dylan
          (or (not (%size r)) (binary< i (%size r))))))
 
 (define-method size ((r <range>)) (%size r))
+
+;;; A collection as a range: its numbers must go up or down by one step.
+(define-method as ((class (singleton <range>)) (c <collection>))
+  (if (%instance? c <range>)
+      c
+      (bind ((l (as <list> c)))
+        (cond ((id? l '()) (%empty-range))
+              ((id? (cdr l) '()) (range from: (car l) size: 1))
+              ((not (every? (method (x) (%instance? x <number>)) l))
+               (error "as: the elements of ~s are not numbers" c))
+              (else:
+               (bind ((step (binary- (car (cdr l)) (car l))))
+                 (for ((prev (car (cdr l)) (car rest))
+                       (rest (cdr (cdr l)) (cdr rest)))
+                      ((id? rest '())
+                       (make <range> from: (car l) by: step size: (%list-length l)))
+                   (unless (= (binary- (car rest) prev) step)
+                     (error "as: the elements of ~s are not in steps" c)))))))))
 (define-method empty? ((r <range>)) (and (%size r) (zero? (%size r))))
 
 (define-method element ((r <range>) index #key (default %no-default))
@@ -61,19 +79,30 @@ module: dylan
   (if (zero? (%size r)) #f (binary- (%size r) 1)))
 (define-method previous-state ((r <range>) (i <integer>)) (if (zero? i) #f (binary- i 1)))
 
-;;; member? always terminates.
-(define-method member? (value (r <range>) #key test)
-  (if test
-      (if (%size r)
-          (any? (method (e) (test value e)) (%elements r))
-          (error "member?: a test: on an unbounded range might not terminate"))
-      (and (%instance? value <real>)
-           (if (zero? (%by r))
-               (and (%range-index? r 0) (= value (%from r)))
-               (bind ((k (binary/ (binary- value (%from r)) (%by r))))
-                 (and (integral? k)
-                      (%range-index? r (if (%instance? k <integer>) k (truncate k)))
-                      #t))))))
+;;; member?'s test is id? unless given (chapter 12, design note 18).  With
+;;; id? or = the range's arithmetic answers, so that it terminates on an
+;;; unbounded range too: VALUE is a member if some index K has an element
+;;; the same as VALUE -- id? to it, or = -- K found exactly, by rationals.
+;;; Any other test is tried on each element, which only a bounded range
+;;; has an end to.
+(define-method member? (value (r <range>) #key (test id?))
+  (cond ((not (or (id? test id?) (id? test =)))
+         (if (%size r)
+             (any? (method (e) (test value e)) (%elements r))
+             (error "member?: a test: on an unbounded range might not terminate")))
+        ((not (%instance? value <real>)) #f)
+        ((zero? (%by r))
+         (and (%range-index? r 0) (test value (%from r)) #t))
+        (else:
+         (bind ((k (binary/ (binary- (%exact value) (%exact (%from r))) (%exact (%by r)))))
+           (and (%instance? k <integer>)
+                (%range-index? r k)
+                (test value (%range-element r k))
+                #t)))))
+
+;;; A real, exactly: a float as the rational it holds
+(define %exact
+  (method (x) (if (%instance? x <float>) (as <rational> x) x)))
 
 (define-method copy-sequence ((r <range>) #key (start 0) end)
   (bind ((stop (or end (%size r))))
@@ -107,73 +136,66 @@ module: dylan
                 (or (and (%size x) (= (%size x) 1))
                     (= (%by x) (%by y)))))))
 
-;;; The intersection of two ranges is a range, and is found without
-;;; walking an unbounded one.  If either is bounded, its elements are
-;;; tested.  Two unbounded ranges running the same way meet in an
-;;; arithmetic progression found as the Chinese remainder theorem finds
-;;; it (their values must then be rationals); running opposite ways, they
-;;; meet only between their starts.
-(define-method intersection ((x <range>) (y <range>) #key test)
-  (cond ((or (%size x) (%size y)) (%intersect-bounded x y))
-        ((zero? (%by x)) (%intersect-bounded (make <range> from: (%from x) size: 1) y))
-        ((zero? (%by y)) (%intersect-bounded (make <range> from: (%from y) size: 1) x))
-        ((and (negative? (%by x)) (negative? (%by y)))
-         (%negate-range (%intersect-increasing (%negate-range x) (%negate-range y))))
-        ((and (positive? (%by x)) (positive? (%by y))) (%intersect-increasing x y))
-        (else:
-         ;; Opposite ways: between the rising one's start and the falling one's
-         (bind ((up (if (positive? (%by x)) x y))
-                (down (if (positive? (%by x)) y x)))
-           (if (binary< (%from down) (%from up))
-               (make <range> from: 0 size: 0)
-               (%intersect-bounded (range from: (%from up) through: (%from down) by: (%by up))
-                                   down))))))
+;;; The intersection of two ranges is a range, as the interactive
+;;; implementation makes it (src/runtime-collections-range.lisp), and is
+;;; found without walking an unbounded one.  The test is id? unless given;
+;;; with any other than id? or =, the ranges are intersected as sequences.
+;;; A range of rationals is a grid -- the numbers its start is congruent
+;;; to modulo its step -- clipped to an interval, unbounded on one side if
+;;; the range is; two meet in the grid of their common points, whose step
+;;; is the least common multiple of theirs, clipped to both intervals, and
+;;; run the way the first runs.  Ranges of floats, both bounded, are
+;;; intersected as sequences.
+(define-method intersection ((x <range>) (y <range>) #key (test id?))
+  (cond ((not (or (id? test id?) (id? test =))) (next-method))
+        ((zero? (%by x))
+         (if (member? (%from x) y) (copy-sequence x) (%empty-range)))
+        ((zero? (%by y))
+         (bind ((v (%from y)))
+           (if (and (member? v y) (member? v x)) (range from: v size: 1) (%empty-range))))
+        ((every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
+         (%grid-intersection x y))
+        ((and (%size x) (%size y)) (as <range> (next-method)))
+        (else: (error "intersection: unbounded ranges of floats: ~s ~s" x y))))
 
-;;; The elements of the bounded range X that are in Y, as a range
-(define %intersect-bounded
-  (method (x y)
-    (bind ((bounded (if (%size x) x y))
-           (other (if (%size x) y x)))
-      (bind ((common (choose (method (e) (member? e other)) (%elements bounded))))
-        (cond ((id? common '()) (make <range> from: 0 size: 0))
-              ((id? (cdr common) '()) (make <range> from: (car common) size: 1))
-              (else: (make <range> from: (car common)
-                                   by: (binary- (car (cdr common)) (car common))
-                                   size: (%list-length common))))))))
+(define %empty-range (method () (range from: 0 size: 0)))
 
-(define %negate-range
+;;; The lowest and highest elements of R, #f where unbounded
+(define %range-interval
   (method (r)
-    (make <range> from: (unary- (%from r)) by: (unary- (%by r)) size: (%size r))))
+    (bind ((end (and (%size r) (%range-element r (binary- (%size r) 1)))))
+      (if (positive? (%by r)) (values (%from r) end) (values end (%from r))))))
 
-;;; g and s such that a * s is g modulo b (the extended Euclidean
-;;; algorithm)
-(define %extended-gcd
+;;; The least common multiple of positive rationals
+(define %rational-lcm
   (method (a b)
-    (bind-methods ((loop (r0 r1 s0 s1)
-                     (if (zero? r1)
-                         (values r0 s0)
-                         (bind ((q r (floor/ r0 r1)))
-                           (loop r1 r s1 (binary- s0 (binary* q s1)))))))
-      (loop a b 1 0))))
+    (bind ((d (lcm (denominator a) (denominator b))))
+      (binary/ (lcm (binary* a d) (binary* b d)) d))))
 
-(define %intersect-increasing
+(define %grid-intersection
   (method (x y)
-    (unless (every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
-      (error "intersection: two unbounded ranges must be of rationals"))
-    ;; Scaled to integers by the denominators' least common multiple
-    (bind ((d (lcm (denominator (%from x)) (denominator (%by x))
-                   (denominator (%from y)) (denominator (%by y)))))
-      (bind ((f1 (binary* (%from x) d)) (b1 (binary* (%by x) d))
-             (f2 (binary* (%from y) d)) (b2 (binary* (%by y) d)))
-        (bind ((g (gcd b1 b2))
-               (diff (binary- f2 f1)))
-          (if (not (zero? (modulo diff g)))
-              (make <range> from: 0 size: 0)
-              (bind ((b1g (truncate/ b1 g)) (b2g (truncate/ b2 g)))
-                (bind ((h s (%extended-gcd b1g b2g)))
-                  (bind ((i0 (modulo (binary* (truncate/ diff g) s) b2g))
-                         (step (binary* b1 b2g)))
-                    (bind ((x0 (binary+ f1 (binary* i0 b1))))
-                      (when (binary< x0 f2)
-                        (set! x0 (binary+ x0 (binary* step (ceiling/ (binary- f2 x0) step)))))
-                      (make <range> from: (binary/ x0 d) by: (binary/ step d))))))))))))
+    (bind ((d1 (abs (%by x)))
+           (d2 (abs (%by y)))
+           (period (%rational-lcm d1 d2))
+           ;; A point common to both grids, among one period of the first's
+           (common (bind-exit (return)
+                     (for ((k 0 (binary+ k 1)))
+                          ((not (binary< k (binary/ period d1))) #f)
+                       (bind ((p (binary+ (%from x) (binary* k d1))))
+                         (when (%instance? (binary/ (binary- p (%from y)) d2) <integer>)
+                           (return p)))))))
+      (bind ((lo1 hi1 (%range-interval x))
+             (lo2 hi2 (%range-interval y)))
+        (bind ((lo (if (and lo1 lo2) (max lo1 lo2) (or lo1 lo2)))
+               (hi (if (and hi1 hi2) (min hi1 hi2) (or hi1 hi2))))
+          (bind ((first (and common lo
+                             (binary+ common (binary* period (ceiling/ (binary- lo common) period)))))
+                 (last (and common hi
+                            (binary- common (binary* period (ceiling/ (binary- common hi) period))))))
+            (cond ((not common) (%empty-range))
+                  ((and first last)
+                   (cond ((binary< last first) (%empty-range))
+                         ((positive? (%by x)) (range from: first through: last by: period))
+                         (else: (range from: last through: first by: (unary- period)))))
+                  (first (range from: first by: period))
+                  (else: (range from: last by: (unary- period))))))))))

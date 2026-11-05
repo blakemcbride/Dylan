@@ -1040,4 +1040,30 @@ error
 (2 2 2 2 2 2)
 {<array> 0 1 2 1 2 3}
 ")
+
+ ;; find-key calls its procedure once on each element it looks at
+ (find-key-calls
+  "(define calls 0)
+   (define p (method (x) (set! calls (+ calls 1)) (= x 3)))
+   (print (find-key '(1 2 3 4) p))
+   (print calls)
+   (set! calls 0)
+   (print (find-key '(3 1 3 4 3) p skip: 1))
+   (print calls)
+   (set! calls 0)
+   (print (find-key '(1 2) p failure: 'none))
+   (print calls)
+   (define flavors '(chocolate pistachio pumpkin))
+   (print (find-key flavors (method (flavor) (id? flavor 'pistachio))))
+   (define t (make <table>)) (set! (element t 'k) 3)
+   (print (find-key t (method (v) (= v 3))))"
+  "2
+3
+2
+3
+none
+2
+1
+k
+")
 )

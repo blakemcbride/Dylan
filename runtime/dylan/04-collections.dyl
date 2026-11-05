@@ -268,16 +268,17 @@ module: dylan
 
 (define-generic-function find-key (collection procedure #key skip failure))
 
+;;; PROCEDURE is called once on each element, until one is found
 (define-method find-key ((c <collection>) (f <function>) #key (skip 0) (failure #f))
   (bind ((sequence? (%instance? c <sequence>)))
-    (for ((state (initial-state c) (next-state c state))
-          (index 0 (binary+ index 1))
-          (skip skip (if (f (current-element c state)) (binary- skip 1) skip)))
-         ((or (not state)
-              (and (f (current-element c state)) (zero? skip)))
-          (cond ((not state) failure)
-                (sequence? index)
-                (else: (current-key c state)))))))
+    (bind-exit (return)
+      (for ((state (initial-state c) (next-state c state))
+            (index 0 (binary+ index 1)))
+           ((not state) failure)
+        (when (f (current-element c state))
+          (if (zero? skip)
+              (return (if sequence? index (current-key c state)))
+              (set! skip (binary- skip 1))))))))
 
 (define-generic-function replace-elements! (mutable-collection predicate new-value-fn #key count))
 

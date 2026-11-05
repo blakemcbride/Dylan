@@ -508,6 +508,60 @@ PRIMITIVE(number_to_string) {
     return dy_number_string(a0);
 }
 
+/* The fewest significant digits that read back as X, a positive float
+ * (as a single-float if SINGLE): DIGITS gets them, N their count, and the
+ * answer is K, where X is 0.DIGITS times 10^K. */
+static bool reads_back(const char *text, double x, bool single) {
+    return single ? strtof(text, NULL) == (float)x : strtod(text, NULL) == x;
+}
+
+static int shortest_digits(double x, bool single, char *digits, int *n) {
+    char text[40];
+    int p;
+    for (p = 1; p < 17; p++) {
+        snprintf(text, sizeof text, "%.*e", p - 1, x);
+        if (reads_back(text, x, single)) break;
+    }
+    snprintf(text, sizeof text, "%.*e", p - 1, x);
+    char *e = strchr(text, 'e');
+    int exponent = atoi(e + 1);
+    int count = 0;
+    for (char *c = text; c < e; c++)
+        if (*c >= '0' && *c <= '9') digits[count++] = *c;
+    /* X halfway between two numbers of P digits: printf takes the even
+     * one, but the interactive implementation (SBCL's flonum-to-digits)
+     * the one above, and so does this, when it reads back too. */
+    char exact[160];
+    snprintf(exact, sizeof exact, "%.130e", x);
+    char *exact_e = strchr(exact, 'e');
+    char all[140];
+    int m = 0;
+    for (char *c = exact; c < exact_e; c++)
+        if (*c >= '0' && *c <= '9') all[m++] = *c;
+    bool tie = m > p && all[p] == '5';
+    for (int i = p + 1; tie && i < m; i++) tie = all[i] == '0';
+    if (tie) {
+        char up[24];
+        int up_exponent = atoi(exact_e + 1);
+        memcpy(up, all, (size_t)p);
+        int i = p - 1;
+        while (i >= 0 && up[i] == '9') up[i--] = '0';
+        if (i >= 0) up[i]++;
+        else { memmove(up + 1, up, (size_t)p); up[0] = '1'; up_exponent++; }
+        char candidate[48];
+        snprintf(candidate, sizeof candidate, "%c.%.*se%d", up[0], p - 1, up + 1, up_exponent);
+        if (reads_back(candidate, x, single)) {
+            memcpy(digits, up, (size_t)p);
+            count = p;
+            exponent = up_exponent;
+        }
+    }
+    while (count > 1 && digits[count - 1] == '0') count--;
+    digits[count] = '\0';
+    *n = count;
+    return exponent + 1;
+}
+
 D dy_number_string(D a0) {
     char buffer[80];
     if (DY_IS_INT(a0)) {
@@ -522,39 +576,39 @@ D dy_number_string(D a0) {
         if (isnan(x)) strcpy(buffer, "+nan");
         else if (isinf(x)) strcpy(buffer, x > 0 ? "+infinity" : "-infinity");
         else {
-            /* Fixed notation for ordinary magnitudes, else exponential;
-             * either way the fewest digits that read back as X. */
+            /* As the interactive implementation prints it
+             * (dylan-float-string in src/compat.lisp): the fewest digits
+             * that read back as X, laid out in fixed notation when the
+             * magnitude is at least 1e-5 and below 1e16 (or X is zero),
+             * else with an exponent. */
+            char digits[24];
+            int k = 0;                  /* X is 0.DIGITS times 10^K */
+            int n = 1;
+            if (x == 0) strcpy(digits, "0");
+            else k = shortest_digits(fabs(x), single, digits, &n);
             bool fixed = x == 0 || (fabs(x) >= 1e-5 && fabs(x) < 1e16);
-            for (int digits = 1; digits <= 17; digits++) {
-                if (fixed) snprintf(buffer, sizeof buffer, "%.*f", digits, x);
-                else snprintf(buffer, sizeof buffer, "%.*g", digits, x);
-                if (single ? (float)strtod(buffer, NULL) == (float)x : strtod(buffer, NULL) == x)
-                    break;
+            char *b = buffer;
+            if (signbit(x)) *b++ = '-';
+            int exponent = 0;
+            if (x == 0) {
+                b += sprintf(b, "0.0");
+            } else if (!fixed) {
+                exponent = k - 1;
+                b += sprintf(b, "%c.%s", digits[0], n > 1 ? digits + 1 : "0");
+            } else if (k <= 0) {          /* 0.000ddd */
+                b += sprintf(b, "0.");
+                for (int i = 0; i < -k; i++) *b++ = '0';
+                b += sprintf(b, "%s", digits);
+            } else if (k >= n) {          /* ddd000.0 */
+                b += sprintf(b, "%s", digits);
+                for (int i = 0; i < k - n; i++) *b++ = '0';
+                b += sprintf(b, ".0");
+            } else {
+                b += sprintf(b, "%.*s.%s", k, digits, digits + k);
             }
-            if (fixed) {
-                /* %f gives trailing zeros: keep one digit after the point. */
-                char *point = strchr(buffer, '.');
-                char *end = buffer + strlen(buffer) - 1;
-                while (end > point + 1 && *end == '0') *end-- = '\0';
-            }
-            char *e = strchr(buffer, 'e');
-            char exponent[16] = "0";
-            if (e) {
-                const char *x = e + 1;
-                if (*x == '+') x++;
-                bool negative = *x == '-';
-                if (negative) x++;
-                while (*x == '0' && x[1]) x++;      /* e+05 -> 5 */
-                snprintf(exponent, sizeof exponent, "%s%s", negative ? "-" : "", x);
-                *e = '\0';
-            }
-            if (!strchr(buffer, '.')) strcat(buffer, ".0");
-            const char *marker = single ? "s" : dy_kind_p(a0, DY_KIND_EXTENDED_FLOAT) ? "l"
-                               : e ? "e" : "";
-            if (*marker) {
-                strcat(buffer, marker);
-                strcat(buffer, exponent);
-            }
+            if (single) sprintf(b, "s%d", exponent);
+            else if (dy_kind_p(a0, DY_KIND_EXTENDED_FLOAT)) sprintf(b, "l%d", exponent);
+            else if (!fixed) sprintf(b, "e%d", exponent);
         }
     } else {
         dy_error("not a number", a0);

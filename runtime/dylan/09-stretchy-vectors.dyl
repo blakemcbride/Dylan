@@ -11,6 +11,8 @@ module: dylan
   (%count type: <integer> init-value: 0))
 
 (define-method make ((class (singleton <stretchy-vector>)) #key (size 0) (fill #f))
+  (unless (and (%instance? size <integer>) (not (negative? size)))
+    (error "make: size: must be a non-negative integer: ~s" size))
   (bind ((v (%make <stretchy-vector>)))
     (set! (%data v) (%make-vector (max size 8) fill))
     (set! (%count v) size)

@@ -12,6 +12,8 @@ module: dylan
   (%count type: <integer> init-value: 0))
 
 (define-method make ((class (singleton <deque>)) #key (size 0) (fill #f))
+  (unless (and (%instance? size <integer>) (not (negative? size)))
+    (error "make: size: must be a non-negative integer: ~s" size))
   (bind ((d (%make <deque>)))
     (set! (%data d) (%make-vector (max size 8) fill))
     (set! (%count d) size)

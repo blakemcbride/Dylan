@@ -960,4 +960,20 @@ error
 (1 2)
 {<deque> 1 2}
 ")
+
+ ;; A deque's or stretchy vector's size: must be a non-negative integer
+ (stretchy-sizes
+  "(print (handler-case (make <deque> size: -1) ((<error>) 'error)))
+   (print (handler-case (make <stretchy-vector> size: -1) ((<error>) 'error)))
+   (print (handler-case (make <deque> size: 1.5) ((<error>) 'error)))
+   (print (handler-case (make <stretchy-vector> size: 'a) ((<error>) 'error)))
+   (print (make <deque> size: 2 fill: 'x))
+   (print (make <stretchy-vector> size: 0))"
+  "error
+error
+error
+error
+{<deque> x x}
+{<stretchy-vector>}
+")
 )

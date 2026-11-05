@@ -1289,9 +1289,13 @@ for the Lisp handlers to have back if no Dylan handler takes it."
     (program-error
      (let ((control (and (typep condition 'simple-condition)
                          (simple-condition-format-control condition))))
+       ;; A Dylan function is a Lisp function of two hidden arguments --
+       ;; the multiple-values vector and the next method -- and then the
+       ;; Dylan ones, which are what the count is of.
        (if (and (stringp control) (search "invalid number of arguments" control))
            (values "wrong number of arguments (~a)"
-                   (list (car (simple-condition-format-arguments condition))))
+                   (list (let ((n (car (simple-condition-format-arguments condition))))
+                           (if (and (integerp n) (>= n 2)) (- n 2) n))))
            (values *reflected-error-tag* (list condition)))))
     (division-by-zero (values "division by zero" '()))
     (arithmetic-error

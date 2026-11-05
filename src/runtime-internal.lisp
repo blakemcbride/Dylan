@@ -52,11 +52,29 @@
 
 (in-package #:dylan)
 
+(defun module-variable-shown (name)
+  "The module variable whose Lisp name is NAME as the compiler to C shows
+it: (setter foo) for the setter variable dylan/setter/foo/, its module
+after it."
+  (let* ((string (symbol-name name))
+         (prefix "DYLAN/SETTER/"))
+    (if (and (> (length string) (1+ (length prefix)))
+             (string= prefix string :end2 (length prefix))
+             (char= #\/ (char string (1- (length string)))))
+        (let* ((inner (subseq string (length prefix) (1- (length string))))
+               (at (position #\@ inner :start 1))
+               (base (if at (subseq inner 0 at) inner))
+               (symbol (find-symbol base '#:dylan)))
+          (format nil "(setter ~a)~a"
+                  (if symbol (dylan-symbol->string symbol) (string-downcase base))
+                  (if at (string-downcase (subseq inner at)) "")))
+        (dylan-symbol->string name))))
+
 (declaim (inline dylan%free-variable-ref))
 (defun dylan%free-variable-ref (value name)
   (if (eq value the-unassigned-value)
       ;; As the compiler to C words it: the variable, with its module
-      (let ((shown (dylan-symbol->string name)))
+      (let ((shown (module-variable-shown name)))
         (dylan-call dylan/error
                     (format nil "the variable ~a~:[@dylan-user~;~] has no value"
                             shown (find #\@ shown))))

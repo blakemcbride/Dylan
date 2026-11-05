@@ -429,10 +429,9 @@ cache's entry for the call."
   (let ((nreq (generic-function-data.nrequired data))
         (ngiven (length original-args)))
     (declare (fixnum nreq ngiven))
+    ;; Worded as the compiler to C words it, with the count given
     (when (> nreq ngiven)
-      (dylan-call dylan/error
-                  "generic-dispatch -- too few arguments supplied"
-                  nreq original-args))
+      (dylan-call dylan/error "wrong number of arguments (~a)" ngiven))
     (let* ((applicable (cached-applicable-methods data original-args))
            (entries (car applicable))
            (applicable-methods (cadr applicable)))
@@ -454,9 +453,7 @@ cache's entry for the call."
           (if (or (generic-function-data.keys data)
                   (generic-function-data.rest? data))
               (check-extra-arguments data non-req-args applicable)
-              (dylan-call dylan/error
-                          "generic-dispatch -- too many arguments supplied"
-                          generic-function nreq original-args))))
+              (dylan-call dylan/error "wrong number of arguments (~a)" ngiven))))
       (call-methods entries multiple-values original-args))))
 
 (defun call-methods (entries multiple-values arguments)

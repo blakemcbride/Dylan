@@ -285,4 +285,20 @@ aborted
 caught
 "
   :error "a handler returned from error: a is not an instance of {the class <integer>}")
+
+ ;; Error messages as a compiled program words them: the count of the
+ ;; arguments a call gave, and an unassigned setter variable by its name.
+ (argument-count-message
+  "((method () 1) 1 2)"
+  ""
+  :error "wrong number of arguments (2)")
+ (argument-count-message-generic
+  "(define-method f2 (a b) a)
+   (f2 1)"
+  ""
+  :error "wrong number of arguments (1)")
+ (unassigned-setter-message
+  "(set! (VV 1) 2)"
+  ""
+  :error "the variable (setter VV)@dylan-user has no value")
 )

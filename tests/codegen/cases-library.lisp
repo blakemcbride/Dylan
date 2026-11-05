@@ -1968,4 +1968,54 @@ error
 0
 (1.5 2.0 2.5 3.0)
 ")
+ ;; A count: below 1 removes or replaces none, and a skip: below 1 skips
+ ;; none; no count: (or #f) is every match.
+ (count-below-one
+  "(print (remove '(1 2 1 3) 1 count: -1))
+(print (remove '(1 2 1 3) 1 count: 0))
+(print (remove '(1 2 1 3) 1 count: 1))
+(print (remove '(1 2 1 3) 1 count: #f))
+(print (remove '(1 2 1 3) 1))
+(print (remove! (list 1 2 1 3) 1 count: -1))
+(print (remove! (list 1 2 1 3) 1 count: #f))
+(print (remove! (list 1 2 1 3) 1 count: 1))
+(print (remove! (make <deque> size: 3 fill: 1) 1 count: -1))
+(print (remove! (make <deque> size: 3 fill: 1) 1 count: #f))
+(print (remove! (make <stretchy-vector> size: 3 fill: 1) 1 count: -1))
+(print (remove #(1 2 1) 1 count: -5))
+(print (replace-elements! (list 1 2 1 3) odd? (method (x) 0) count: -1))
+(print (replace-elements! (list 1 2 1 3) odd? (method (x) 0) count: 0))
+(print (replace-elements! (list 1 2 1 3) odd? (method (x) 0) count: 2))
+(print (replace-elements! (list 1 2 1 3) odd? (method (x) 0) count: #f))
+(print (replace-elements! (list 1 2 1 3) odd? (method (x) 0)))
+(print (find-key '(1 2 3 4) even? skip: -1))
+(print (find-key '(1 2 3 4) even? skip: 0))
+(print (find-key '(1 2 3 4) even? skip: 1))
+(print (find-key '(1 2 3 4) even? skip: 2))
+(print (as <list> (remove! (range from: 1 up-to: 5) 2 count: -1)))
+(print (as <list> (remove! (range from: 1 up-to: 5) 2)))"
+  "(1 2 1 3)
+(1 2 1 3)
+(2 1 3)
+(2 3)
+(2 3)
+(1 2 1 3)
+(2 3)
+(2 1 3)
+{<deque> 1 1 1}
+{<deque>}
+{<stretchy-vector> 1 1 1}
+#(1 2 1)
+(1 2 1 3)
+(1 2 1 3)
+(0 2 0 3)
+(0 2 0 0)
+(0 2 0 0)
+1
+1
+3
+#f
+(1 2 3 4)
+(1 3 4)
+")
 )

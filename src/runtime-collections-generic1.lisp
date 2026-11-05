@@ -503,11 +503,11 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
   (lambda (multiple-values next-method coll predicate new-val-fn &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:count))
-    (let* ((size (collection-size coll))
-           (count (dylan%find-keyword rest :count (lambda () size))))
+    ;; No count (or #f) replaces every match; a count below 1, none.
+    (let ((count (false->nil (dylan%find-keyword rest :count (lambda () nil)))))
       (loop with state = (initial-state coll)
             with num-changed = 0
-            do (cond ((or (>= num-changed count) (not state)) (return coll))
+            do (cond ((or (and count (>= num-changed count)) (not state)) (return coll))
                      ((true? (dylan-call predicate
                                          (current-element
                                                      coll state)))

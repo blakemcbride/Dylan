@@ -286,7 +286,8 @@ module: dylan
             (index 0 (binary+ index 1)))
            ((not state) failure)
         (when (f (current-element c state))
-          (if (zero? skip)
+          ;; A skip below 1 skips none
+          (if (not (binary< 0 skip))
               (return (if sequence? index (current-key c state)))
               (set! skip (binary- skip 1))))))))
 
@@ -294,9 +295,10 @@ module: dylan
 
 (define-method replace-elements! ((c <mutable-collection>) (predicate <function>)
                                   (new-value-fn <function>) #key count)
+  ;; A count below 1 replaces none
   (for ((state (initial-state c) (next-state c state))
         (left count left))
-       ((or (not state) (and left (zero? left))) c)
+       ((or (not state) (and left (not (binary< 0 left)))) c)
     (bind ((e (current-element c state)))
       (when (predicate e)
         (set! (current-element c state) (new-value-fn e))

@@ -507,7 +507,7 @@ implementation follows that.)
 \code{(find-key \meta{collection} \meta{predicate})} answers the key of
 the first element for which the predicate is true, or the
 \code{failure:} value (default \code{\#f}). \code{skip:} \meta{n} skips
-the first \meta{n} matches.
+the first \meta{n} matches (none if \meta{n} is below 1).
 
 \begin{dylan}
 (find-key flavors (method (f) (id? f 'pistachio)))   ; => 1
@@ -523,7 +523,8 @@ the first \meta{n} matches.
 \code{(replace-elements! \meta{collection} \meta{predicate}
 \meta{new-value-function})} replaces each element for which the
 predicate is true by the result of calling the function on it, at most
-\code{count:} of them if that is given, and answers the collection:
+\code{count:} of them if that is given (none if it is below 1), and
+answers the collection:
 
 \begin{dylan}
 (replace-elements! (list 10 13 16 19) odd? (method (x) (* 2 x)))
@@ -581,7 +582,8 @@ numbers                     ; => (3 4 5)
 \index{remove}\index{remove"!}\index{choose}\index{choose-by}
 \code{(remove \meta{sequence} \meta{value})} answers the sequence
 without the elements that match the value, or without the first
-\code{count:} of them; \code{remove!} may change the sequence.
+\code{count:} of them (none if it is below 1); \code{remove!} may change
+the sequence.
 \code{choose} keeps the elements for which a predicate is true, and
 \code{choose-by} keeps the elements of one sequence whose partners in
 another satisfy a predicate.

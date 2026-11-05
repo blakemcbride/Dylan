@@ -155,8 +155,8 @@
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-          (count (dylan%find-keyword rest :count
-                                     (lambda () (collection-size deque))))
+          (count (or (false->nil (dylan%find-keyword rest :count (lambda () nil)))
+                     (collection-size deque)))
           (num-changed 0)
           (front-entry (dylan-call dylan/get-deque-front deque)))
       (cond ((null front-entry) deque)

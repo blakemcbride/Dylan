@@ -143,14 +143,15 @@ as the compiled library's %from-list does."
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-          (count (dylan%find-keyword rest :count (lambda () -1))))
+          ;; No count (or #f) removes every match; a count below 1, none.
+          (count (false->nil (dylan%find-keyword rest :count (lambda () nil)))))
       (loop with state = (initial-state seq)
             with kept = '()
             with changed = 0
             do (if state
                    (let ((cur-element (current-element
                                                   seq state)))
-                     (if (and (or (minusp count) (< changed count))
+                     (if (and (or (null count) (< changed count))
                               (true? (dylan-call test? cur-element value)))
                          (progn
                            (setf state (next-state seq state))
@@ -176,8 +177,7 @@ as the compiled library's %from-list does."
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-          (count (dylan%find-keyword rest :count
-                                     (lambda () (collection-size seq)))))
+          (count (dylan%find-keyword rest :count (lambda () dylan%false))))
       (dylan-call dylan/remove seq value :test test? :count count)))))
 
 (defparameter dylan/choose

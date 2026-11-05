@@ -13,7 +13,6 @@
 #include <time.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wctype.h>
 
 /* ------------------------------------------------------------- Numbers */
 
@@ -261,13 +260,13 @@ PRIMITIVE(character_p) { need(self, argc, 1, 1); return DY_BOOL(DY_IS_CHAR(a0));
 PRIMITIVE(char_upcase) {
     need(self, argc, 1, 1);
     if (!DY_IS_CHAR(a0)) dy_error("not a character", a0);
-    return DY_CHAR(towupper(DY_CHAR_CODE(a0)));
+    return DY_CHAR(dy_char_upcase(DY_CHAR_CODE(a0)));
 }
 
 PRIMITIVE(char_downcase) {
     need(self, argc, 1, 1);
     if (!DY_IS_CHAR(a0)) dy_error("not a character", a0);
-    return DY_CHAR(towlower(DY_CHAR_CODE(a0)));
+    return DY_CHAR(dy_char_downcase(DY_CHAR_CODE(a0)));
 }
 
 /* ------------------------------------------------- Vectors and strings

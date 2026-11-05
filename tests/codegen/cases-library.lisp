@@ -608,4 +608,36 @@ found
 8
 "
   :error "no applicable method for ξ")
+
+ ;; Chapter 16: as-uppercase and as-lowercase change a character between
+ ;; the two cases of a pair that map to each other, as Common Lisp's
+ ;; char-upcase and char-downcase do: not the micro sign, the dotless i,
+ ;; the long s, the final sigma, the Ohm or the Kelvin sign.
+ (character-case
+  "(define codes '(65 97 201 233 255 376 181 305 383 962 963 931 453 452 454 7838 223 8486 8490 304 65313))
+   (for-each ((c codes)) ()
+     (bind ((ch (as <character> c)))
+       (format #t \"~d ~d ~d~%\" c (as <integer> (as-uppercase ch)) (as <integer> (as-lowercase ch)))))"
+  "65 65 97
+97 65 97
+201 201 233
+233 201 233
+255 376 255
+376 376 255
+181 181 181
+305 305 305
+383 383 383
+962 962 962
+963 931 963
+931 931 963
+453 452 454
+452 452 454
+454 452 454
+7838 7838 7838
+223 223 223
+8486 8486 8486
+8490 8490 8490
+304 304 304
+65313 65313 65345
+")
 )

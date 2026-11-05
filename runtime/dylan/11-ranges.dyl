@@ -105,6 +105,13 @@ module: dylan
   (method (x) (if (%instance? x <float>) (as <rational> x) x)))
 
 (define-method copy-sequence ((r <range>) #key (start 0) end)
+  ;; START and END are indexes of R, END exclusive, as for any sequence
+  (bind ((n (%size r)))
+    (when (or (not (%instance? start <integer>)) (negative? start)
+              (and n (binary< n start))
+              (and end (or (not (%instance? end <integer>)) (binary< end start)
+                           (and n (binary< n end)))))
+      (error "copy-sequence: bad start: or end: for ~s: ~s ~s" r start end)))
   (bind ((stop (or end (%size r))))
     (make <range> from: (%range-element r start) by: (%by r)
                   size: (and stop (max 0 (binary- stop start))))))

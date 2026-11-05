@@ -976,4 +976,27 @@ error
 {<deque> x x}
 {<stretchy-vector>}
 ")
+
+ ;; copy-sequence of a range: start: and end: are indexes within it
+ (range-copy-bounds
+  "(define r (range from: 0 up-to: 5))
+   (print (handler-case (copy-sequence r end: 10) ((<error>) 'error)))
+   (print (handler-case (copy-sequence r start: -1) ((<error>) 'error)))
+   (print (handler-case (copy-sequence r start: 6) ((<error>) 'error)))
+   (print (handler-case (copy-sequence r start: 3 end: 2) ((<error>) 'error)))
+   (print (copy-sequence r start: 5))
+   (print (copy-sequence r start: 1 end: 3))
+   (print (copy-sequence r end: 5))
+   (print (copy-sequence (range from: 0) start: 2 end: 4))
+   (print (copy-sequence (range from: 0) start: 2))"
+  "error
+error
+error
+error
+{range 5 by 1 size 0}
+{range 1 by 1 size 2}
+{range 0 by 1 size 5}
+{range 2 by 1 size 2}
+{range 2 by 1}
+")
 )

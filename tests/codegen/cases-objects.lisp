@@ -483,4 +483,25 @@ not-a-singleton
    (print (v (make <b>)))"
   ""
   :compile-error "not a subclass of")
+
+ ;; Chapter 6: a slot's type and initial value are evaluated after the
+ ;; class's variable is defined, so they may name the class.
+ (slot-names-its-class
+  "(define-class <node> (<object>)
+     (next type: <node> init-keyword: next:)
+     (kind init-value: <node>)
+     (maker init-function: (method () <node>)))
+   (define n1 (make <node>))
+   (define n2 (make <node> next: n1))
+   (print (id? (next n2) n1))
+   (print (id? (kind n2) <node>))
+   (print (id? (maker n2) <node>))
+   (print (handler-case (make <node> next: 5) ((<error>) 'refused)))
+   (print (slot-type (first (slot-descriptors <node>))))"
+  "#t
+#t
+#t
+refused
+{the class <node>}
+")
 )

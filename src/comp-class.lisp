@@ -464,15 +464,21 @@
                                        "define-class -- already has a value"
                                        ',name ,ref
                                        ',(mapcar #'slot.getter slots))
+                           ;; Chapter 6: the slots' types and initial
+                           ;; values are evaluated after the variable holds
+                           ;; the class, so they may name it.  A class
+                           ;; redefined keeps its identity, the variable's
+                           ;; value, and takes the new one's slots after.
                            (let ((!class
                                    (dylan%make-a-class
                                     ',name
                                     (dylan%list ,@superclasses)
-                                    (dylan%list ,@getter-code))))
+                                    (dylan%list ,@getter-code)))
+                                 (!redefined (dylan%class? ,ref)))
+                             (unless !redefined ,(funcall set '!class))
                              ,@(reverse add-slot-calls)
-                             (if (dylan%class? ,ref)
-                                 (dylan%redefine-class ,ref !class)
-                                 ,(funcall set '!class))
+                             (when !redefined
+                               (dylan%redefine-class ,ref !class))
                              (dylan%make-variable-read-only
                               ',(name->module-variable (variable->name name)))
                              ',name)))))

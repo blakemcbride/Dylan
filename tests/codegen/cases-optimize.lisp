@@ -435,4 +435,24 @@ made-specially
 \"abcd\"
 \"abc\"
 ")
+ ;; Chapter 8: a float result too large for its format is an error, though
+ ;; the result is not used
+ (float-overflow-unused
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method f (x) (/ x 1.0e-300) 'done)
+(print (try (method () (f 1.0e300))))
+(define-method g (x) (* x 1.0e300) 'done)
+(print (try (method () (g 1.0e300))))
+(define-method h (x) (+ x 1.7e308) 'done)
+(print (try (method () (h 1.7e308))))
+(define-method k ((x <double-float>)) (- x 1.7e308) 'done)
+(print (try (method () (k -1.7e308))))
+(define-method m (x) (bind ((y (* x x))) 'done))
+(print (try (method () (m 1.0e200))))"
+  "\"ERR: arithmetic error: floating-point-overflow\"
+\"ERR: arithmetic error: floating-point-overflow\"
+\"ERR: arithmetic error: floating-point-overflow\"
+\"ERR: arithmetic error: floating-point-overflow\"
+\"ERR: arithmetic error: floating-point-overflow\"
+")
 )

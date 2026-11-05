@@ -235,7 +235,8 @@ for a thread variable, the thread's slot for it."
      (emit "return ~a;" expr))
     (:bind (emit-bind (dest-var dest) expr))
     (:set (emit-set (dest-var dest) expr))
-    (:effect (unless (pure-c-p expr) (emit "(void)(~a);" expr)))
+    (:effect (let ((expr (unboxed-c expr)))
+               (unless (pure-c-p expr) (emit "(void)(~a);" expr))))
     (:mv (emit "~a = ~a;" (dest-var dest) expr)
          (emit "dy_thread->mv_count = 1;"))
     (:c (emit "~a = ~a;" (dest-var dest) expr))
@@ -244,14 +245,25 @@ for a thread variable, the thread's slot for it."
 
 ;;; Expressions
 
+(defun c-prefix-p (prefix expr)
+  (and (> (length expr) (length prefix))
+       (string= prefix expr :end2 (length prefix))))
+
 (defun pure-c-p (expr)
   "Is the C expression EXPR a variable or constant, whose value can be
 dropped unevaluated?"
   (or (every (lambda (c) (or (alphanumericp c) (char= c #\_))) expr)
-      (some (lambda (prefix)
-              (and (> (length expr) (length prefix))
-                   (string= prefix expr :end2 (length prefix))))
-            '("DY_INT(" "DY_CHAR(" "DY_OBJ(&" "DY_CELL(" "dy_make_double_float("))))
+      (some (lambda (prefix) (c-prefix-p prefix expr))
+            '("DY_INT(" "DY_CHAR(" "DY_OBJ(&" "DY_CELL("))))
+
+(defun unboxed-c (expr)
+  "EXPR without the boxing of a float (BOX-DOUBLE), whose value is not
+used: the operation that made the float is still done, for the error it
+signals if the result is too large (chapter 8), and nothing is allocated."
+  (let ((box "dy_make_double_float("))
+    (if (and (c-prefix-p box expr) (char= (char expr (1- (length expr))) #\)))
+        (subseq expr (length box) (1- (length expr)))
+        expr)))
 
 (defun gen (e dest)
   (let ((*location* (or (and (ir-node-p e) (ir-node-location e)) *location*)))

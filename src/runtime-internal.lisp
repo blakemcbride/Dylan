@@ -247,6 +247,20 @@ would call a symbol's Lisp function.)"
                          fast)
                (t ,general))))))
 
+(defun float-overflowed (result)
+  (error 'floating-point-overflow :operation 'arithmetic :operands (list result)))
+
+(defmacro float-checked (form)
+  "FORM, a float operation, done even if its value is not used: a result
+too large for its format is an error (chapter 8), which SBCL would not
+signal for an operation it drops as unused.  Its traps signal the error
+first; the test keeps the operation."
+  (let ((result (gensym "RESULT")))
+    `(let ((,result ,form))
+       (if (and (floatp ,result) (> (abs ,result) most-positive-long-float))
+           (float-overflowed ,result)
+           ,result))))
+
 (defmacro define-real-fast-paths (guard &rest operators-and-lisp-functions)
   "Fast paths for two reals, answering what the Lisp function does."
   `(progn
@@ -255,7 +269,7 @@ would call a symbol's Lisp function.)"
                         `(and (realp ,a) (realp ,b))
                         ,(if boolean?
                              ``(bool (,',lisp-function ,a ,b))
-                             ``(,',lisp-function ,a ,b))))))
+                             ``(float-checked (,',lisp-function ,a ,b)))))))
 
 (define-real-fast-paths *fast-binary+* (dylan/+ +))
 (define-real-fast-paths *fast-binary-* (dylan/- -))
@@ -264,10 +278,10 @@ would call a symbol's Lisp function.)"
 ;;; Dylan functions do.
 (define-fast-path dylan/+ *fast-binary+* args
   `(and ,@(mapcar (lambda (a) `(realp ,a)) args))
-  (cl:reduce (lambda (x y) `(+ ,x ,y)) args))
+  `(float-checked ,(cl:reduce (lambda (x y) `(+ ,x ,y)) args)))
 (define-fast-path dylan/* *fast-binary** args
   `(and ,@(mapcar (lambda (a) `(realp ,a)) args))
-  (cl:reduce (lambda (x y) `(* ,x ,y)) args))
+  `(float-checked ,(cl:reduce (lambda (x y) `(* ,x ,y)) args)))
 (define-real-fast-paths *fast-binary<* (dylan/< < t) (dylan/>= >= t))
 (define-real-fast-paths *fast-binary=* (dylan/= = t))
 (define-real-fast-paths *fast-binary<=* (dylan/> > t) (dylan/<= <= t))

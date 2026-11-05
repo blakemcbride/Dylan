@@ -1197,7 +1197,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (terpri stream)
         (loop for var being the hash-keys of *globals* using (hash-value name)
               do (format stream "static D ~a = DY_UNBOUND;   /* ~a */~%"
-                         name (module-var-string var)))
+                         name (c-comment-text (module-var-string var))))
         (terpri stream)
         (dolist (text texts) (format stream "~a~%" text))
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))

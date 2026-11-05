@@ -239,4 +239,21 @@ w
   "2305843009213693952
 "
   :error "integer overflow"
-  :compiler-only t))
+  :compiler-only t)
+
+ ;; Text that C would misread: ?? in a string or symbol, which C11 takes
+ ;; for the start of a trigraph, and a variable name containing */, which
+ ;; would end the comment it is written in.
+ (c-text
+  "(format #t \"~s ~s~%\" \"what??!\" (size \"what??!\"))
+   (format #t \"~s ~s~%\" \"a??/b\" (size \"a??/b\"))
+   (print '|q??!|)
+   (define x*/y 5)
+   (define z??/ 6)
+   (print (+ x*/y z??/))"
+  "\"what??!\" 7
+\"a??/b\" 5
+|q??!|
+11
+")
+)

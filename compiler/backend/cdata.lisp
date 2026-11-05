@@ -64,11 +64,24 @@ compilation)."
   (with-output-to-string (out)
     (write-char #\" out)
     (dolist (c codes)
-      (cond ((or (= c 34) (= c 92)) (format out "\\~c" (code-char c)))
+      ;; ? too, so that no ?? begins a trigraph, which C11 reads.
+      (cond ((or (= c 34) (= c 92) (= c 63)) (format out "\\~c" (code-char c)))
             ((<= 32 c 126) (write-char (code-char c) out))
             ;; Always three digits, so a digit after it cannot extend it.
             (t (format out "\\~3,'0o" c))))
     (write-char #\" out)))
+
+(defun c-comment-text (string)
+  "STRING, to go inside a C comment: with no */ to end it, and no ?? to
+begin a trigraph."
+  (with-output-to-string (out)
+    (loop for i from 0 below (length string)
+          for c = (char string i)
+          for next = (and (< (1+ i) (length string)) (char string (1+ i)))
+          do (write-char c out)
+             (when (or (and (char= c #\*) (eql next #\/))
+                       (and (char= c #\?) (eql next #\?)))
+               (write-char #\\ out)))))
 
 (defun c-float-literal (x)
   "X, a finite float, as an exact C hexadecimal floating constant."

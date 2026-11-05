@@ -103,8 +103,11 @@ longer."
   (clrhash *symbol-spellings*)          ; chapter 15: how a symbol was spelled
   (setf *program-variables* '()))
 
-(defun condition-message (condition)
-  "The message of CONDITION on one line, without the Error: prefix."
+;;; Not CONDITION-MESSAGE, which would replace the runtime's own function of
+;;; that name, the message of a Dylan condition, and print conditions as
+;;; #[dylan-instance ...].
+(defun lisp-condition-message (condition)
+  "The message of the Lisp CONDITION on one line, without the Error: prefix."
   (let ((text (string-trim '(#\Space #\Newline #\Tab) (format nil "~a" condition))))
     (if (and (> (length text) 7) (string= "Error: " text :end2 7))
         (subseq text 7)
@@ -117,11 +120,23 @@ program's handlers, as at the read-eval-print loop."
   (let ((out (make-string-output-stream))
         (message nil))
     (in-module 'dylan-user)
-    (handler-case
-        (let ((*standard-output* out))
-          (dylan%catch-all-conditions
-           (lambda () (evaluate-program text))))
-      (error (e) (setf message (condition-message e))))
+    ;; Some errors go straight to the debugger, as when a handler returns
+    ;; from error (chapter 13); here that ends the program, as an unhandled
+    ;; error does, instead of the run.  break reports and carries on, as
+    ;; when bin/dylan reads a file (*BATCH*).
+    (catch 'debugger
+      (let ((*batch* t)
+            (*error-output* (make-broadcast-stream))
+            (sb-ext:*invoke-debugger-hook*
+              (lambda (condition hook)
+                (declare (ignore hook))
+                (setf message (lisp-condition-message condition))
+                (throw 'debugger nil))))
+        (handler-case
+            (let ((*standard-output* out))
+              (dylan%catch-all-conditions
+               (lambda () (evaluate-program text))))
+          (error (e) (setf message (lisp-condition-message e))))))
     (forget-program)
     (values (get-output-stream-string out) message)))
 

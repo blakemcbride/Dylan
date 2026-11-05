@@ -73,6 +73,13 @@
                     (dylan%check-assignable ',(name->module-variable name)
                                             ',place)
                     (setq ,(name->module-variable name) !saved-value)
+                    ;; The fast paths inline the function the variable
+                    ;; held, which it holds no longer.
+                    ,@(let ((guards (fast-path-guards
+                                     (name->module-variable name))))
+                        (and guards
+                             `((setf ,@(loop for guard in guards
+                                             append (list guard nil))))))
                     !saved-value))
              (add-variable name bound-vars module-vars))))
          ((and (listp place) (null (cdr (cl:last place))))

@@ -8,7 +8,8 @@
 ;;;; (name program expected &key error compile-error compiler-only) -- so
 ;;;; that the programs the compiler to C is tested on test the interactive
 ;;;; implementation too, which must agree with it.  By default all of the
-;;;; compiler's case files, tests/codegen/cases*.lisp.
+;;;; compiler's case files, tests/codegen/cases*.lisp, and this directory's
+;;;; cases.lisp, of programs the compiler to C does not support yet.
 ;;;;
 ;;;; Each program runs in the module dylan-user, as a compiled program
 ;;;; does, and what it defined there is forgotten before the next; its
@@ -136,6 +137,7 @@ has, which this implementation's has not."
     (finish-output)
     (sb-ext:exit :code (if failures 1 0) :abort t)))
 
-(run-test-files (directory (merge-pathnames "../codegen/cases*.lisp"
-                                            (directory-namestring *load-truename*)))
-                (rest sb-ext:*posix-argv*))
+(let ((here (directory-namestring *load-truename*)))
+  (run-test-files (append (directory (merge-pathnames "../codegen/cases*.lisp" here))
+                          (list (merge-pathnames "cases.lisp" here)))
+                  (rest sb-ext:*posix-argv*)))

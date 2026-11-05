@@ -29,33 +29,40 @@
        (one-vector (list (list <simple-object-vector>)))
        (one-list (list (list <pair> <empty-list>)))
        (one-range (list (list <range>))))
-  (flet ((guard (generic-function &rest guards-and-classes)
-           (let ((data (generic-function-data generic-function)))
+  ;; GUARD is given the module variable holding the generic function, which
+  ;; assigning turns the guards off as adding a method may.
+  (flet ((guard (variable &rest guards-and-classes)
+           (let ((data (generic-function-data (symbol-value variable))))
              (loop for (guard classes) on guards-and-classes by #'cddr
                    do (push (list guard classes)
                             (generic-function-data.fast-paths data))
+                      (pushnew guard (gethash variable *fast-path-variables*))
                       (setf (symbol-value guard) t)))))
-    (guard dylan/binary+ '*fast-binary+* two-reals)
-    (guard dylan/binary- '*fast-binary-* two-reals)
-    (guard dylan/binary* '*fast-binary** two-reals)
-    (guard dylan/binary< '*fast-binary<* two-reals '*fast-binary<=* two-reals)
-    (guard dylan/binary= '*fast-binary=* two-reals '*fast-binary<=* two-reals)
-    (guard dylan/binary< '*fast-character-compare* two-characters)
-    (guard dylan/binary= '*fast-character-compare* two-characters)
+    (guard 'dylan/binary+ '*fast-binary+* two-reals)
+    (guard 'dylan/binary- '*fast-binary-* two-reals)
+    (guard 'dylan/binary* '*fast-binary** two-reals)
+    (guard 'dylan/binary< '*fast-binary<* two-reals '*fast-binary<=* two-reals)
+    (guard 'dylan/binary= '*fast-binary=* two-reals '*fast-binary<=* two-reals)
+    (guard 'dylan/binary< '*fast-character-compare* two-characters)
+    (guard 'dylan/binary= '*fast-character-compare* two-characters)
     ;; Only the first argument's class is known: a table's own key.
-    (guard dylan/binary= '*fast-key=* simple-key)
-    (guard dylan/=hash '*fast-key=* simple-key)
-    (guard dylan/modulo '*fast-modulo* two-integers)
-    (guard dylan/floor/ '*fast-modulo* two-integers)
-    (guard dylan/remainder '*fast-remainder* two-integers)
-    (guard dylan/element '*fast-element* vector-index
+    (guard 'dylan/binary= '*fast-key=* simple-key)
+    (guard 'dylan/=hash '*fast-key=* simple-key)
+    (guard 'dylan/modulo '*fast-modulo* two-integers)
+    (guard 'dylan/floor/ '*fast-modulo* two-integers)
+    (guard 'dylan/remainder '*fast-remainder* two-integers)
+    (guard 'dylan/element '*fast-element* vector-index
            '*fast-string-element* string-index)
-    (guard dylan/setter/element/ '*fast-setter-element* vector-index
+    (guard 'dylan/setter/element/ '*fast-setter-element* vector-index
            '*fast-string-setter-element* string-index)
-    (dolist (generic-function (list dylan/initial-state dylan/next-state
-                                    dylan/current-element))
-      (guard generic-function
+    (dolist (variable '(dylan/initial-state dylan/next-state
+                        dylan/current-element))
+      (guard variable
              '*fast-iterate-vector* one-vector '*fast-iterate-list* one-list))
-    (dolist (generic-function (list dylan/initial-state dylan/next-state
-                                    dylan/current-element dylan/size))
-      (guard generic-function '*fast-iterate-range* one-range))))
+    (dolist (variable '(dylan/initial-state dylan/next-state
+                        dylan/current-element dylan/size))
+      (guard variable '*fast-iterate-range* one-range))))
+
+;;; The operators the fast paths inline: assigning one turns its own off.
+(dolist (entry *fast-paths*)
+  (pushnew (third entry) (gethash (first entry) *fast-path-variables*)))

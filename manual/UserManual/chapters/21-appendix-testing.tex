@@ -302,7 +302,9 @@ The programs the compiler is tested on run in the interactive
 implementation too, by \file{tests/interpreter/run.lisp}, which is how
 the two implementations are kept in agreement. It takes files of cases in
 the form of Section~\ref{sec:test-case-format}, and test names, as the
-compiler's runners do; by default all of \file{tests/codegen/cases*.lisp}.
+compiler's runners do; by default all of \file{tests/codegen/cases*.lisp},
+and \file{tests/interpreter/cases.lisp}, programs the manual allows that
+the compiler to C rejects for what it does not support yet.
 Each program runs in \code{dylan-user}, as a compiled program does, and
 what it defined is forgotten before the next; its output must be the
 expected output, and the error it signals, if the case expects one, must

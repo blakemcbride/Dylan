@@ -139,6 +139,17 @@ form of them.  NARGS :N-ARY means any number of arguments from two up, and
 the functions then take the list of argument variables.  An operator may
 have several entries for the same NARGS, tried in the order defined.")
 
+(defvar *fast-path-variables* (make-hash-table :test 'eq)
+  "A module variable -> the guards of the fast paths that do the work of
+the function it held when they were made: an operator in *FAST-PATHS*, or
+a generic function behind one (runtime-fast-paths.lisp).  Chapter 7: such
+a variable may be assigned, and SET! of it turns those fast paths off.")
+
+(defun fast-path-guards (variable)
+  "The guards of the fast paths that assigning the module variable
+VARIABLE turns off."
+  (gethash variable *fast-path-variables*))
+
 (defmacro define-fast-path (operator guard args test expansion)
   "ARGS is a list of variables, or a single variable for an :N-ARY fast
 path."

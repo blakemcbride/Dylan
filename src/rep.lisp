@@ -76,9 +76,9 @@ program reports it."
      (dylan-format-message (dylan-condition-message condition)
                            (dylan-condition-irritants condition)))
     (unhandled-dylan-condition
-     (let ((*dylan-debug-print* t))
-       (with-output-to-string (s)
-         (dylan-write (unhandled-dylan-condition-object condition) s))))
+     ;; As display prints it, through its class's print-object
+     (with-output-to-string (s)
+       (dylan-display (unhandled-dylan-condition-object condition) s)))
     (t (princ-to-string condition))))
 
 (defun end-batch-run (condition hook)

@@ -29,8 +29,8 @@ module: dylan
   (getter: thread-error-condition setter: #f init-keyword: condition:))
 
 (define-method %condition-message ((c <thread-error>))
-  (%format-message "a thread ended with an unhandled condition: ~a"
-                   (list (%condition-message (thread-error-condition c)))))
+  (%message-text "a thread ended with an unhandled condition: ~a"
+                 (list (thread-error-condition c))))
 
 (define make-thread
   (method (function)

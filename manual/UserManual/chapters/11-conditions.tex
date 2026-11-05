@@ -480,11 +480,11 @@ implementations report is to subclass \code{<simple-error>} (or
 \end{dylan}
 
 \noindent Unhandled, it is reported as \code{sensor south read -1}. A
-direct subclass of \code{<error>} with no message is reported by its
-class only: in the compiler to C as
-\code{Dylan error: \{instance of <oops>\}}, even if the class has a
-\code{print-object} method (chapter~\ref{ch:printing}); that method is
-used when the program prints the condition itself.
+condition is reported as \code{display} prints it, so a
+\code{print-object} method of its class (chapter~\ref{ch:printing}) is
+used; the arguments of a message print the same way. A direct subclass
+of \code{<error>} with no message and no such method is reported by its
+class only, as \code{Dylan error: \{instance of <oops>\}}.
 
 \section{Unhandled conditions}\label{sec:conditions-unhandled}
 

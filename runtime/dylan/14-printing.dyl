@@ -213,6 +213,46 @@ module: dylan
 (define-method print-object ((c <condition>) stream escape?)
   (%put stream (%condition-message c)))
 
+;;; A condition as display prints it, through any print-object method of
+;;; its class: what the debugger of last resort reports.
+(define %condition-text
+  (method (c)
+    (bind ((s (make <string-stream>)))
+      (print-object c s #f)
+      (stream-contents s))))
+
+;;; A condition's message (chapter 13): CONTROL with ~a and ~d writing an
+;;; argument as display does, ~s as write does, ~% and ~& a newline and ~~
+;;; a tilde, and any other directive as it is written; the ARGUMENTS no
+;;; directive uses follow, each after a space, as display writes them.  A
+;;; CONTROL that is not a string is displayed.
+(define %message-text
+  (method (control arguments)
+    (bind ((s (make <string-stream>)))
+      (bind-methods ((put (escape?)
+                       (unless (id? arguments '())
+                         (print-object (car arguments) s escape?)
+                         (set! arguments (cdr arguments))))
+                     (scan (i n)
+                       (when (binary< i n)
+                         (bind ((c (element control i)))
+                           (if (and (id? c #\~) (binary< (binary+ i 1) n))
+                               (bind ((d (as-lowercase (element control (binary+ i 1)))))
+                                 (cond ((or (id? d #\a) (id? d #\d)) (put #f))
+                                       ((id? d #\s) (put #t))
+                                       ((or (id? d #\%) (id? d #\&)) (%put s #\newline))
+                                       ((id? d #\~) (%put s #\~))
+                                       (else: (%put s c) (%put s (element control (binary+ i 1)))))
+                                 (scan (binary+ i 2) n))
+                               (begin (%put s c) (scan (binary+ i 1) n)))))))
+        (if (%instance? control <string>)
+            (scan 0 (size control))
+            (print-object control s #f))
+        (for-each ((a arguments)) ()
+          (%put s #\space)
+          (print-object a s #f)))
+      (stream-contents s))))
+
 ;;; The functions
 
 (define write

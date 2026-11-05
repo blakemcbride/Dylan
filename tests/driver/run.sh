@@ -207,6 +207,22 @@ check "the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deep
 "$dylan" < deeper.dyl > deeper.out 2> deeper.err; status=$?
 check "bin/dylan: the stack exhausted in a handler: status 1" test "$status" = 1
 check "bin/dylan: the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deeper.out && ! grep -q after deeper.out && grep -q "^Dylan error: the stack is exhausted" deeper.err'
+# An unhandled condition, a warning and a break are reported as display
+# prints them, through the program's print-object, in both
+cat > report.dyl <<'EOF2'
+(define-class <pt> (<object>) (x init-keyword: x:))
+(define-method print-object ((p <pt>) stream escape?) (format stream "{pt ~a}" (x p)))
+(define-class <oops> (<error>))
+(define-method print-object ((c <oops>) stream escape?) (format stream "OOPS ~a" (make <pt> x: 1)))
+(signal "warn ~a" (make <pt> x: 2))
+(break "brk ~s" (make <pt> x: 3))
+(error (make <oops>))
+EOF2
+printf 'Dylan warning: warn {pt 2}\nDylan break: brk {pt 3}\nDylan error: OOPS {pt 1}\n' > report.want
+"$dylanc" -o report report.dyl >/dev/null 2>&1; ./report > report.out 2> report.err; status=$?
+check "a report through print-object" sh -c "test $status = 1 && cmp -s report.err report.want"
+"$dylan" < report.dyl > report.out 2> report.err; status=$?
+check "bin/dylan: a report through print-object" sh -c "test $status = 1 && cmp -s report.err report.want"
 # dylan:empty-environment! forgets what the loop defined, so that each
 # name can be defined again: classes, generic functions and macros too
 echo "(load \"$here/../../src/load-dylan.lisp\")" > empty.lisp

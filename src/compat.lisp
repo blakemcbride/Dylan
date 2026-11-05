@@ -353,12 +353,6 @@ can vanish while a caller walks it."
 whose elements go through PRINT-OBJECT too; NIL when it is printing on its
 own.")
 
-(defvar *dylan-debug-print* nil
-  "True while an error message is put together: objects then print as the
-compiler's %FORMAT-MESSAGE prints them, without PRINT-OBJECT, and an
-instance of a class other than a predefined collection or class shows only
-its class.")
-
 ;;;; Streams
 ;;;
 ;;; A Dylan stream (chapter 13 passes them around; the stream functions
@@ -522,8 +516,6 @@ it."
       ((instance? object)
        (let ((class (instance.class object)))
          (cond
-           (*dylan-debug-print*
-            (format stream "{instance of ~a}" (dylan-class-name class)))
            ;; Chapter 13: a condition prints as its message.
            ((subclass? class <condition>) (out (condition-message object)))
            ((subclass? class <range>)
@@ -561,24 +553,19 @@ it."
             (write-char #\} stream))
            (t (format stream "{instance of ~a}" (dylan-class-name class))))))
       ((slot? object)
-       (if *dylan-debug-print*
-           (out "{slot}")
-           (format stream "{slot ~a}"
-                   (let ((getter (slot.getter object))
-                         (n (slot.debug-name object)))
-                     (cond ((and (functionp getter)
-                                 (dylan%generic-function? getter))
-                            (dylan-function-name
-                             (generic-function.name getter)))
-                           ((symbolp n) (dylan-function-name n))
-                           (t n))))))
+       (format stream "{slot ~a}"
+               (let ((getter (slot.getter object))
+                     (n (slot.debug-name object)))
+                 (cond ((and (functionp getter)
+                             (dylan%generic-function? getter))
+                        (dylan-function-name
+                         (generic-function.name getter)))
+                       ((symbolp n) (dylan-function-name n))
+                       (t n)))))
       ((singleton? object)
-       (if *dylan-debug-print*
-           (out "{instance of <singleton>}")
-           (progn
-             (out "{singleton ")
-             (let ((*dylan-print-escape* t)) (rec (singleton.object object)))
-             (write-char #\} stream))))
+       (out "{singleton ")
+       (let ((*dylan-print-escape* t)) (rec (singleton.object object)))
+       (write-char #\} stream))
       ;; Generic functions and methods as the manual's examples show them
       ;; (chapters 3, 8, 10 and 11)
       ((and (functionp object) (dylan%generic-function? object))
@@ -635,7 +622,8 @@ it together (chapter 13)."
             "~s is not an instance of ~s"
             (list (dylan-call dylan/type-error-value object)
                   (dylan-call dylan/type-error-expected-type object))))
-          (t (dylan-format-message "~s" (list object))))))
+          ;; A condition with no message: its class
+          (t (format nil "{instance of ~a}" (dylan-class-name class))))))
 
 (defun shortest-float-digits (x)
   "For the positive float X: K and the fewest decimal DIGITS (a string)
@@ -1124,14 +1112,12 @@ itself."
              (when (char= c #\~) (write-char #\~ out)))))
 
 (defun dylan-format-message (control arguments)
-  (let ((*dylan-debug-print* t)
-        (*dylan-print-target* nil))
-    ;; Printing plain affects only a string or a character itself, not
-    ;; one inside a list, as %FORMAT-MESSAGE's DISPLAY does.
+  "CONTROL with ARGUMENTS as a condition's message: ~a and ~d an argument
+as display writes it, ~s as write does, through PRINT-OBJECT, as the
+compiler's %message-text does."
+  (let ((*dylan-print-target* nil))
     (flet ((put (object escape out)
-             (let ((*dylan-print-escape*
-                     (or escape (not (or (stringp object) (characterp object))))))
-               (dylan-print object out))))
+             (dylan-print-object object out escape)))
       (with-output-to-string (out)
         (let ((args arguments))
           (if (not (stringp control))
@@ -1172,9 +1158,8 @@ itself."
    (dylan-condition :initarg :dylan-condition :reader unhandled-dylan-condition-object))
   (:report (lambda (condition stream)
              (write-string "Unhandled Dylan condition: " stream)
-             ;; As the compiler to C reports it: {instance of <class>}
-             (let ((*dylan-debug-print* t))
-               (dylan-write (unhandled-dylan-condition-object condition) stream)))))
+             ;; As display prints it, through its class's print-object
+             (dylan-display (unhandled-dylan-condition-object condition) stream))))
 
 (defvar *reflected-error-tag* "Lisp condition: "
   "Used, by identity, to recognise a Dylan condition that merely reflects a
@@ -1207,7 +1192,7 @@ reports its message and carries on, and an unhandled error ends the run
 (END-BATCH-RUN), as each does in a compiled program.")
 
 (defun implementation-specific/enter-debugger (dylan-condition)
-  (let ((message (with-output-to-string (s) (dylan-write dylan-condition s))))
+  (let ((message (with-output-to-string (s) (dylan-display dylan-condition s))))
     (if *batch*
         (progn
           (finish-output *standard-output*)
@@ -1293,13 +1278,13 @@ bindings, each handler's among them: SBCL's is 1 MB."
             :message format-string
             :irritants format-args))))
 
-(defun implementation-specific/induce-type-error (value class-name)
+(defun implementation-specific/induce-type-error (value type)
   (call-with-dylan-restarts
    (lambda ()
      (error 'dylan-condition
             :offered t
-            :message "~s is not an instance of ~a"
-            :irritants (list value class-name)))))
+            :message "~s is not an instance of ~s"
+            :irritants (list value type)))))
 
 (defun implementation-specific/return-from-error (dylan-condition)
   "Chapter 13: if a handler returns from ERROR, error bombs directly to the
@@ -1308,9 +1293,7 @@ handlers."
   (invoke-debugger
    (make-condition 'dylan-condition
                    :message "a handler returned from error: ~a"
-                   :irritants (list (if (instance? dylan-condition)
-                                        (condition-message dylan-condition)
-                                        dylan-condition)))))
+                   :irritants (list dylan-condition))))
 
 (defun implementation-specific/signal-unhandled-dylan-condition (dylan-condition)
   (call-with-dylan-restarts

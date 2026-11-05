@@ -51,21 +51,24 @@ module: dylan
 (define-method make ((class (singleton <warning>)) #rest arguments) (%abstract class))
 (define-method make ((class (singleton <restart>)) #rest arguments) (%abstract class))
 
-;;; Messages: what the debugger of last resort reports.
+;;; Messages: how a condition prints unless its class has a print-object
+;;; method of its own, which the debugger of last resort uses too.  The
+;;; arguments print through print-object (%message-text, in printing).
 
 (define-generic-function %condition-message (condition))
 
+;;; A condition with no message: its class
 (define-method %condition-message ((c <condition>))
   (%format-message "~s" (list c)))
 
 (define-method %condition-message ((c <simple-error>))
-  (%format-message (condition-format-string c) (condition-format-arguments c)))
+  (%message-text (condition-format-string c) (condition-format-arguments c)))
 
 (define-method %condition-message ((c <simple-warning>))
-  (%format-message (condition-format-string c) (condition-format-arguments c)))
+  (%message-text (condition-format-string c) (condition-format-arguments c)))
 
 (define-method %condition-message ((c <type-error>))
-  (%format-message "~s is not an instance of ~s"
+  (%message-text "~s is not an instance of ~s"
                    (list (type-error-value c) (type-error-expected-type c))))
 
 ;;; Default handlers
@@ -77,10 +80,10 @@ module: dylan
 ;;; In the main thread, report and stop; in another, end the thread
 ;;; (runtime/dylan/threads.dyl).
 (define-method default-handler ((c <serious-condition>))
-  (%unhandled c (%condition-message c)))
+  (%unhandled c (%condition-text c)))
 
 (define-method default-handler ((c <warning>))
-  (%warn (%condition-message c))
+  (%warn (%condition-text c))
   #f)
 
 (define-method default-handler ((c <restart>))
@@ -111,8 +114,7 @@ module: dylan
     (bind ((c (%make-condition "error" <simple-error> condition arguments)))
       (%signal c)
       ;; A handler returned, which error does not allow.
-      (%unhandled c (%format-message "a handler returned from error: ~a"
-                                     (list (%condition-message c)))))))
+      (%unhandled c (%message-text "a handler returned from error: ~a" (list c))))))
 
 (define cerror
   (method (restart-description condition #rest arguments)
@@ -123,7 +125,7 @@ module: dylan
   (method (#rest arguments)
     (%break (if (id? arguments '())
                 "break"
-                (%condition-message
+                (%condition-text
                  (%make-condition "break" <simple-warning> (car arguments) (cdr arguments)))))))
 
 (define check-type

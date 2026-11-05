@@ -510,4 +510,62 @@ ok
 inner
 after
 ")
+ ;; A condition's message prints its arguments through print-object, ~a as
+ ;; display and ~s as write, and a condition prints through its class's
+ ;; print-object, or as its class if it has no message.
+ (condition-messages
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <pt> (<object>) (x init-keyword: x:))
+(define-method print-object ((p <pt>) stream escape?) (format stream \"{pt ~a}\" (x p)))
+(define pt (make <pt> x: 3))
+(print (format #f \"~a\" pt))
+(print (try (method () (error \"bad ~a\" pt))))
+(print (try (method () (error \"bad ~s\" pt))))
+(print (try (method () (error \"list ~a\" '(\"s\" #\\c)))))
+(print (try (method () (error \"list ~s\" '(\"s\" #\\c)))))
+(print (try (method () (error \"tbl ~a\" (make <table>)))))
+(print (try (method () (error \"rng ~a\" (range from: 1 size: 2)))))
+(print (try (method () (error \"dq ~a\" (make <deque> size: 2)))))
+(print (try (method () (error \"cond ~a\" (make <simple-error> format-string: \"inner ~a\" format-arguments: '(1))))))
+(print (try (method () (error \"str ~a and ~s\" \"x\" \"y\"))))
+(print (try (method () (error \"chr ~a and ~s\" #\\x #\\y))))
+(print (try (method () (error \"extra\" pt \"s\"))))
+(print (try (method () (check-type pt <integer>))))
+(print (format #f \"~a / ~s\" (make <table>) (range from: 1 size: 2)))
+(define-class <oops> (<error>))
+(define-method print-object ((c <oops>) stream escape?) (format stream \"OOPS!\"))
+(print (try (method () (error (make <oops>)))))
+(define-class <w> (<warning>))
+(define-method print-object ((c <w>) stream escape?) (format stream \"W!\"))
+(define-class <sw> (<simple-warning>))
+(define-method print-object ((c <sw>) stream escape?) (format stream \"SW!\"))
+(define-class <plain> (<error>))
+(print (try (method () (error (make <plain>)))))
+(print (format #f \"~s\" (make <plain>)))
+(print (try (method () (error \"sing ~a\" (singleton 3)))))
+(print (try (method () (error \"nested ~a\" (make <type-error> value: (make <pt> x: 1) type: <integer>)))))
+(define-class <sb> (<simple-error>))
+(define-method print-object ((c <sb>) stream escape?) (format stream \"SB!\"))
+(print (try (method () (error (make <sb> format-string: \"x\")))))"
+  "\"{pt 3}\"
+\"ERR: bad {pt 3}\"
+\"ERR: bad {pt 3}\"
+\"ERR: list (s c)\"
+\"ERR: list (\\\"s\\\" #\\\\c)\"
+\"ERR: tbl {table}\"
+\"ERR: rng {range 1 by 1 size 2}\"
+\"ERR: dq {<deque> #f #f}\"
+\"ERR: cond inner 1\"
+\"ERR: str x and \\\"y\\\"\"
+\"ERR: chr x and #\\\\y\"
+\"ERR: extra {pt 3} s\"
+\"ERR: {pt 3} is not an instance of {the class <integer>}\"
+\"{table} / {range 1 by 1 size 2}\"
+\"ERR: OOPS!\"
+\"ERR: {instance of <plain>}\"
+\"{instance of <plain>}\"
+\"ERR: sing {singleton 3}\"
+\"ERR: nested {pt 1} is not an instance of {the class <integer>}\"
+\"ERR: SB!\"
+")
 )

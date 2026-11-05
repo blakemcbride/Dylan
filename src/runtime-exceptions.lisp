@@ -284,8 +284,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
          (let ((value (dylan-call dylan/type-error-value serious))
                (expected-type (dylan-call dylan/type-error-expected-type
                                           serious)))
-           (implementation-specific/induce-type-error
-            value (class.debug-name expected-type))))
+           (implementation-specific/induce-type-error value expected-type)))
         (t (implementation-specific/signal-unhandled-dylan-condition
             serious)))))))
 
@@ -293,15 +292,11 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
  dylan/default-handler
  (dylan%function->method
   ;; Chapter 13: the default handler for <warning> displays the warning
-  ;; and returns #f.  A warning without a format string is shown as the
-  ;; printer shows it.
+  ;; and returns #f.
   (make-param-list `((condition ,<warning>)) nil nil nil)
   (lambda (warning)
-    (if (subclass? (get-type warning) <simple-warning>)
-        (implementation-specific/warning
-         (dylan-call dylan/condition-format-string warning)
-         (dylan-call dylan/condition-format-arguments warning))
-        (implementation-specific/warning "~a" (list warning)))
+    ;; As display prints it, through its class's print-object
+    (implementation-specific/warning "~a" (list warning))
     dylan%false)))
 
 (add-method

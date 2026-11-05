@@ -2092,7 +2092,7 @@ error
 4
 \"ERR: final-state: the range is unbounded\"
 #f
-\"ERR: as: {instance of <table>} cannot be converted to {the class <sequence>}\"
+\"ERR: as: {table} cannot be converted to {the class <sequence>}\"
 \"ERR: cannot make an instance of this class: {the class <mutable-sequence>}\"
 #(1 2)
 {table 0 => 1 1 => 2}

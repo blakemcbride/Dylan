@@ -708,12 +708,17 @@ and those of the fns contified into it."
 
 (defun makes-calls-p (fn)
   "Might FN's C function call another function other than in tail
-position?  (If so, a call may have changed the count of values.)"
+position, or exit locally with other than one value?  (If so, the count of
+values may have changed by the time it returns.)"
   (labels ((walk (e)
              (typecase e
-               (ir-call (and (not (gethash (call-target e) *groups*))
-                             (not (ir-call-tail-p e))
-                             (not (eq (ir-call-kind e) :exit))))
+               (ir-call (if (eq (ir-call-kind e) :exit)
+                            ;; Its values go to its bind-exit's destination,
+                            ;; which, for a multiple-value bind, sets the
+                            ;; count to theirs (DELIVER-VALUES).
+                            (/= (length (ir-call-arguments e)) 1)
+                            (and (not (gethash (call-target e) *groups*))
+                                 (not (ir-call-tail-p e)))))
                ;; These call Dylan functions.
                (ir-prim (member (ir-prim-name e) '(:call-with-exit :unwind-protect :handler-bind)))
                (ir-bind-exit (walk (ir-bind-exit-body e)))

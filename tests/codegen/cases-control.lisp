@@ -30,6 +30,25 @@
 #f
 ")
 
+ ;; An exit with other than one value, taken into a multiple-value bind in
+ ;; a method that then returns one value: the method's caller must see
+ ;; that one value, not the exit's.
+ (bind-exit-values-then-return
+  "(define-method f1 (x) (bind ((a b (bind-exit (k) (k 1 2)))) x))
+   (define-method f2 (x) (bind ((a b (bind-exit (k) (k)))) x))
+   (define-method f3 (x) (bind ((#rest r (bind-exit (k) (k 1 2 3)))) (+ x 1)))
+   (print (list (f1 7) (f2 7) (f3 7)))
+   (bind ((#rest r (f1 7))) (print r))
+   (bind ((#rest r (f2 7))) (print r))
+   (bind ((#rest r (f3 7))) (print r))
+   (print (handler-case (f1 7) ((<error>) 'error)))"
+  "(7 7 8)
+(7)
+(7)
+(8)
+7
+")
+
  ;; The exit is a first-class value, used from another function -- the
  ;; manual's first-even, with a do of our own.
  (escaping-exit

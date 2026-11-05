@@ -850,10 +850,11 @@ sequences of \code{copy-sequence}, \code{reverse}, \code{add},
 \code{as-lowercase} and the like keep it a \code{<unicode-string>}.
 
 \begin{warnbox}
-A string literal is a constant, and the compiler to C may share one
-literal among all its occurrences, so \code{(id? "abc" "abc")} can be
-\code{\#t} there (it is \code{\#f} in the Common Lisp implementation).
-Do not change a literal: copy it first with \code{copy-sequence}.
+A string literal is a constant. Each literal in a program is its own
+object, so \code{(id? "abc" "abc")} is \code{\#f}; but a literal is one
+object however often it is evaluated, so a method whose body is
+\code{"lit"} answers the same string each time. Do not change a literal:
+copy it first with \code{copy-sequence}.
 \end{warnbox}
 
 \index{as-uppercase}\index{as-lowercase}\index{as-uppercase"!}

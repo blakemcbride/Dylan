@@ -168,11 +168,11 @@
                    do (set-current-element result state (pop elements))
                       (setf state (next-state result state)))
              (when elements             ; It made too few places: <empty-list>
-               (dylan-call dylan/error "as -- not specialized for this class type"
-                           class collection))
+               (dylan-call dylan/error "as: ~s cannot be converted to ~s"
+                           collection class))
              result))
-          (t (dylan-call dylan/error "as -- not specialized for this class type"
-                         class collection))))))
+          (t (dylan-call dylan/error "as: ~s cannot be converted to ~s"
+                         collection class))))))
 
 ;;;;
 ;;;; FUNCTIONS FOR COLLECTIONS (page 99)

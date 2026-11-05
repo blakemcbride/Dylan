@@ -92,6 +92,16 @@ module: dylan
         (keys '() (cons (current-key t state) keys)))
        ((not state) keys)))
 
+;;; as a table: the collection's keys, each with its element (chapter 11).
+(define-method as ((class (singleton <table>)) (c <collection>))
+  (if (%instance? c <table>)
+      c
+      (bind ((t (make <table>)))
+        (for-each ((key (key-sequence c)))
+                  ()
+          (set! (element t key) (element c key)))
+        t)))
+
 ;;; map-into a table: the keys of the sources, which the table gains if it
 ;;; lacks them (chapter 12).
 (define-method map-into ((t <table>) (f <function>) (c <collection>) #rest more)

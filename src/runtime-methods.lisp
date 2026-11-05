@@ -908,8 +908,8 @@ irrational functions; an exact real stays exact."
    (lambda (class obj)
      (if (true? (dylan-call dylan/instance? obj class))
          obj
-         (dylan-call dylan/error "as -- not specialized for this class type"
-                     class obj)))))
+         (dylan-call dylan/error "as: ~s cannot be converted to ~s"
+                     obj class)))))
 
 (labels ((no-change (class object) (declare (ignore class)) object)
          (unwrap (object)

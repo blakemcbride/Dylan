@@ -61,9 +61,12 @@
                       (next-state collection state))
                (index 0 (+ index 1)))
               ((not state) new-string)
-            (let ((character (dylan-call dylan/as <character>
-                                         (current-element collection state))))
-              (check-byte-character new-string character)
+            ;; Its elements must be characters, as for element-setter.
+            (let ((character (current-element collection state)))
+              (unless (and (characterp character) (< (char-code character) 256))
+                (dylan-call dylan/error
+                            "a <byte-string> holds only 8-bit characters: ~s"
+                            character))
               (setf (char new-string index) character))))))))
 
 ;;; Chapter 12: <unicode-string> (see MAKE-UNICODE-STRING in compat.lisp)
@@ -79,7 +82,12 @@
         ;; Its characters directly, not by way of a <byte-string>, which
         ;; cannot hold those above code 255.
         (let ((characters (iterate->list
-                           (lambda (element) (dylan-call dylan/as <character> element))
+                           (lambda (element)
+                             (unless (characterp element)
+                               (dylan-call dylan/error
+                                           "a string holds only characters: ~s"
+                                           element))
+                             element)
                            collection)))
           ;; (REPLACE's value may be the string's simple data vector.)
           (let ((string (make-unicode-string (length characters))))

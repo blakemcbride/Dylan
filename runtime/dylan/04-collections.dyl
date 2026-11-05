@@ -348,9 +348,14 @@ module: dylan
        ((not state) h)))
 
 ;;; Conversion of collections by as: to a sequence class, the elements in
-;;; their natural order.
+;;; their natural order.  The result must be of the class (chapter 11): no
+;;; <empty-list> holds elements, and no <pair> is empty.
 
 (define-method as ((class <class>) (c <collection>))
   (cond ((%instance? c class) c)
-        ((%subclass? class <sequence>) (map-as class identity c))
+        ((%subclass? class <sequence>)
+         (bind ((result (map-as class identity c)))
+           (if (%instance? result class)
+               result
+               (error "as: ~s cannot be converted to ~s" c class))))
         (else: (error "as: ~s cannot be converted to ~s" c class))))

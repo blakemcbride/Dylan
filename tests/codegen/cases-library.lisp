@@ -1309,4 +1309,35 @@ error
   "(5.0e-324 1.0e-310 -5.0e-324 2.2250738585072014e-308 1.0s-40 1.0s-45)
 ({the generic function ZZ} {the generic function (setter ZZ)} {the generic function (setter Xc)} {the generic function (setter element)} {the generic function (setter Yy)})
 ")
+
+ ;; Chapter 11: as answers an instance of the class, or signals an error;
+ ;; a string's elements must be characters; a table gets the keys.
+ (as-to-predefined-classes
+  "(define-method try (class c)
+     (handler-case (as class c)
+       ((<error> condition: e)
+        (apply format #f (condition-format-string e) (condition-format-arguments e)))))
+   (print (try <empty-list> (vector 1 2)))
+   (print (try <empty-list> (vector)))
+   (print (try <pair> (vector)))
+   (print (try <pair> (vector 1)))
+   (print (try <string> (vector #\\a 2)))
+   (print (try <unicode-string> (vector 1)))
+   (print (try <string> (list #\\a #\\b)))
+   (print (try <table> (vector 1 2)))
+   (print (try <table> (range from: 3 up-to: 5)))
+   (print (try <integer> \"abc\"))
+   (print (handler-case (concatenate \"ab\" (vector 65)) ((<error>) 'error)))"
+  "\"as: #(1 2) cannot be converted to {the class <empty-list>}\"
+()
+\"as: #() cannot be converted to {the class <pair>}\"
+(1)
+\"a <byte-string> holds only 8-bit characters: 2\"
+\"a string holds only characters: 1\"
+\"ab\"
+{table 0 => 1 1 => 2}
+{table 0 => 3 1 => 4}
+\"as: \\\"abc\\\" cannot be converted to {the class <integer>}\"
+error
+")
 )

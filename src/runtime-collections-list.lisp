@@ -81,10 +81,12 @@
   (make-param-list `((class ,(dylan%make-singleton <pair>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
-    (declare (ignore class))
-    (if (true? (dylan-call dylan/instance? collection <pair>))
-        collection
-        (iterate->list #'identity collection)))))
+    (cond ((true? (dylan-call dylan/instance? collection <pair>)) collection)
+          ;; Chapter 11: the result is of the class, and no <pair> is empty.
+          ((true? (dylan-call dylan/empty? collection))
+           (dylan-call dylan/error "as: ~s cannot be converted to ~s"
+                       collection class))
+          (t (iterate->list #'identity collection))))))
 
 ;;;
 ;;; LIST SPECIALIZED MAKE

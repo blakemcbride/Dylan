@@ -1294,4 +1294,19 @@ error
 (8 (8) (#()) {<array> 16})
 (9 #f error error)
 ")
+
+ ;; Printing: a subnormal float with the fewest digits that read back as
+ ;; it; a setter's generic function by the name as first spelled
+ ;; (chapter 15), however it was made.
+ (subnormal-floats-and-setter-names
+  "(print (list 4.9e-324 1.0e-310 -4.9e-324 2.2250738585072014e-308
+               (as <single-float> 1.0e-40) (as <single-float> 1.4e-45)))
+   (define-method ZZ (x) x)
+   (define-method (setter ZZ) (v x) v)
+   (define-class <Pt> (<object>) (Xc init-value: 1))
+   (define-generic-function (setter Yy) (v x))
+   (print (list ZZ (setter ZZ) (setter Xc) (setter element) (setter Yy)))"
+  "(5.0e-324 1.0e-310 -5.0e-324 2.2250738585072014e-308 1.0s-40 1.0s-45)
+({the generic function ZZ} {the generic function (setter ZZ)} {the generic function (setter Xc)} {the generic function (setter element)} {the generic function (setter Yy)})
+")
 )

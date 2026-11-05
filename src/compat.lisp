@@ -398,24 +398,37 @@ its class.")
   "The Dylan name of a generic function the runtime knows as NAME: the
 compiler's Lisp names for (SETTER FOO) -- dylan/setter/foo/, or setter/foo/
 for the predefined ones -- and for a variable of module M -- foo@m -- are
-shown as Dylan writes them."
-  (if (not (symbolp name))
-      name
-      (let* ((string (dylan-symbol->string name))
-             (setter (loop for prefix in '("dylan/setter/" "setter/")
-                           when (and (> (length string) (1+ (length prefix)))
-                                     (string-equal prefix string
-                                                   :end2 (length prefix))
-                                     (char= #\/ (char string
-                                                      (1- (length string)))))
-                             return (subseq string (length prefix)
-                                            (1- (length string)))))
-             (base (or setter string))
-             (at (position #\@ base))
-             (base (if (and at (plusp at)) (subseq base 0 at) base)))
-        (if setter
-            (format nil "(setter ~a)" base)
-            base))))
+shown as Dylan writes them, in the case the name was first spelled in
+(chapter 15); so is a name (SETTER FOO) as define-generic-function gives
+it."
+  (labels ((spelled (string)
+             ;; The name a symbol named STRING was first spelled as, less
+             ;; any @module the compiler added
+             (let ((symbol (find-symbol string '#:dylan)))
+               (if (and symbol (gethash symbol *symbol-spellings*))
+                   (dylan-symbol->string symbol)
+                   (let* ((at (position #\@ string))
+                          (base (if (and at (plusp at)) (subseq string 0 at) string))
+                          (symbol (find-symbol base '#:dylan)))
+                     (if symbol
+                         (dylan-symbol->string symbol)
+                         (string-downcase base)))))))
+    (cond ((and (consp name) (eq (car name) 'setter) (symbolp (cadr name)))
+           (format nil "(setter ~a)" (dylan-function-name (cadr name))))
+          ((not (symbolp name)) name)
+          (t
+           (let* ((string (symbol-name name))
+                  (setter (loop for prefix in '("DYLAN/SETTER/" "SETTER/")
+                                when (and (> (length string) (1+ (length prefix)))
+                                          (string-equal prefix string
+                                                        :end2 (length prefix))
+                                          (char= #\/ (char string
+                                                           (1- (length string)))))
+                                  return (subseq string (length prefix)
+                                                 (1- (length string))))))
+             (if setter
+                 (format nil "(setter ~a)" (spelled setter))
+                 (spelled string)))))))
 
 
 (declaim (special <condition> <simple-error> <simple-warning> <type-error>
@@ -605,6 +618,28 @@ it together (chapter 13)."
                   (dylan-call dylan/type-error-expected-type object))))
           (t (dylan-format-message "~s" (list object))))))
 
+(defun shortest-float-digits (x)
+  "For the positive float X: K and the fewest decimal DIGITS (a string)
+such that 0.DIGITS times ten to the K reads back as X, a tie rounded up,
+as the compiler to C finds them.  (SBCL's FLONUM-TO-DIGITS gives too
+many for a subnormal float.)"
+  (let* ((r (rational x))
+         (format (if (typep x 'single-float) 'single-float 'double-float))
+         (e10 (floor (log (coerce x 'double-float) 10d0))))
+    ;; E10, the exponent of R's first digit: 10^E10 <= R < 10^(E10+1)
+    (loop while (> (expt 10 e10) r) do (decf e10))
+    (loop while (<= (expt 10 (1+ e10)) r) do (incf e10))
+    (loop for p from 1 to 17
+          do (let* ((unit (expt 10 (- e10 (1- p))))
+                    (digits (floor (+ (/ r unit) 1/2)))
+                    (k (1+ e10)))
+               (when (>= digits (expt 10 p)) ; 9.99 became 10.0
+                 (setf digits (/ digits 10) k (1+ k)))
+               (when (= (coerce (* digits (expt 10 (- k p))) format) x)
+                 (return-from shortest-float-digits
+                   (values k (string-right-trim "0" (princ-to-string digits)))))))
+    #+sbcl (sb-impl::flonum-to-digits x)))
+
 (defun dylan-float-string (x)
   "A float as the compiler to C prints one: the fewest digits that read
 back as X, in fixed notation when its magnitude is at least 1e-5 and below
@@ -632,7 +667,11 @@ reading -- with e and its exponent only when it has one (9.0, 1.0e20)."
               (if (zerop x)
                   "0.0"
                   (multiple-value-bind (k digits)
-                      #+sbcl (sb-impl::flonum-to-digits (abs x))
+                      #+sbcl (if (< (abs x) (if single
+                                               least-positive-normalized-single-float
+                                               least-positive-normalized-double-float))
+                                 (shortest-float-digits (abs x))
+                                 (sb-impl::flonum-to-digits (abs x)))
                       #-sbcl (let ((s (string-trim "0" (remove #\. (format nil "~,,,,,,'eE" (abs x))))))
                                (values 1 s))
                     (let ((n (length digits)))

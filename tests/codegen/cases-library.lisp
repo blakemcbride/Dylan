@@ -1651,4 +1651,23 @@ error
 (\"fill!: bad start: or end: for (1 2 3): 1 9\" \"fill!: bad start: or end: for (1 2 3): -1 #f\" (1 0 3))
 (\"fill!: bad start: or end: for #(1 2 3): 1 9\" \"fill!: bad start: or end: for #(1 2 3): -1 #f\" #(1 0 3))
 ")
+
+ (signal-and-error-first-argument
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (print (msg (method () (signal 42))))
+   (print (msg (method () (error 'sym \"a\"))))
+   (print (msg (method () (cerror \"go\" 42))))
+   (print (msg (method () (signal (make <simple-error> format-string: \"e\") 3))))
+   (print (msg (method () (error (make <simple-error> format-string: \"e\")))))
+   (print (msg (method () (error \"x ~a\" 1))))"
+  "\"signal: not a condition or a string: 42\"
+\"error: not a condition or a string: sym\"
+\"error: not a condition or a string: 42\"
+\"signal: arguments after a condition: (3)\"
+\"e\"
+\"x 1\"
+")
 )

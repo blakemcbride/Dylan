@@ -143,8 +143,12 @@ This is the usual way to report an error:
 \index{signal}
 \code{(signal \meta{condition})} signals a condition and answers whatever
 values the handler returns. \code{(signal \meta{string} \meta{argument}
-...)} makes a \code{<simple-warning>} and signals it. With no handler, a
-warning is printed and \code{signal} answers \code{\#f}:
+...)} makes a \code{<simple-warning>} and signals it. Any other first
+argument, or an argument after a condition, is an error, here and for
+\code{error}, \code{cerror} and \code{break}:
+\code{(signal 42)} reports \code{signal: not a condition or a string: 42}.
+With no handler, a warning is printed and \code{signal} answers
+\code{\#f}:
 
 \begin{dylan}
 (signal "disk is ~a% full" 91)

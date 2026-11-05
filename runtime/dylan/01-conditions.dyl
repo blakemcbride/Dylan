@@ -88,19 +88,27 @@ module: dylan
 
 ;;; Signalling
 
+;;; The condition signal, error and break are given (chapter 13): a
+;;; condition alone, or a string and its format arguments.  NAME names the
+;;; function for an error in them.
 (define %make-condition
-  (method (class condition arguments)
-    (if (%instance? condition <condition>)
-        condition
-        (make class format-string: condition format-arguments: arguments))))
+  (method (name class condition arguments)
+    (cond ((%instance? condition <condition>)
+           (unless (id? arguments '())
+             (error (concatenate name ": arguments after a condition: ~s") arguments))
+           condition)
+          ((%instance? condition <string>)
+           (make class format-string: condition format-arguments: arguments))
+          (else:
+           (error (concatenate name ": not a condition or a string: ~s") condition)))))
 
 (define signal
   (method (condition #rest arguments)
-    (%signal (%make-condition <simple-warning> condition arguments))))
+    (%signal (%make-condition "signal" <simple-warning> condition arguments))))
 
 (define error
   (method (condition #rest arguments)
-    (bind ((c (%make-condition <simple-error> condition arguments)))
+    (bind ((c (%make-condition "error" <simple-error> condition arguments)))
       (%signal c)
       ;; A handler returned, which error does not allow.
       (%unhandled c (%format-message "a handler returned from error: ~a"
@@ -116,7 +124,7 @@ module: dylan
     (%break (if (id? arguments '())
                 "break"
                 (%condition-message
-                 (%make-condition <simple-warning> (car arguments) (cdr arguments)))))))
+                 (%make-condition "break" <simple-warning> (car arguments) (cdr arguments)))))))
 
 (define check-type
   (method (value type)

@@ -137,16 +137,24 @@
 (defun make-default-condition (args type operator)
   "Handles one arg (a condition) or many args (format string and format
 args).  Assumes TYPE is a <simple-error> or <simple-warning>."
-  (cond ((and (consp args)
-              (subclass? (get-type (car args)) <condition>))
-         (if (null (cdr args))
-             (car args)
-             (dylan-call dylan/error "extraneous args" operator (cdr args))))
-        ((and (consp args) (stringp (car args)))
-         (dylan-call dylan/make type
-                     :format-string (car args)
-                     :format-arguments (cdr args)))
-        (t (dylan-call dylan/error "bad first argument" operator args))))
+  (let ((name (string-downcase (symbol-name operator))))
+    (cond ((null args)
+           (dylan-call dylan/error "wrong number of arguments (0)"))
+          ((subclass? (get-type (car args)) <condition>)
+           (if (null (cdr args))
+               (car args)
+               (dylan-call dylan/error
+                           (concatenate 'string name
+                                        ": arguments after a condition: ~s")
+                           (cdr args))))
+          ((stringp (car args))
+           (dylan-call dylan/make type
+                       :format-string (car args)
+                       :format-arguments (cdr args)))
+          (t (dylan-call dylan/error
+                         (concatenate 'string name
+                                      ": not a condition or a string: ~s")
+                         (car args))))))
 
 (defparameter dylan/signal
   (lambda (multiple-values next-method &rest args)

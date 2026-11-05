@@ -253,12 +253,17 @@ module: dylan
 
 ;;; Particular elements
 
-(define-generic-function first (sequence))
-(define-method first ((s <sequence>)) (element s 0))
-(define-generic-function second (sequence))
-(define-method second ((s <sequence>)) (element s 1))
-(define-generic-function third (sequence))
-(define-method third ((s <sequence>)) (element s 2))
+;;; first, second and third take default: (design note 2) and call element
+;;; with it and the index (design note 28).
+(define %nth
+  (method (s index default)
+    (if (id? default %no-default) (element s index) (element s index default: default))))
+(define-generic-function first (sequence #key default))
+(define-method first ((s <sequence>) #key (default %no-default)) (%nth s 0 default))
+(define-generic-function second (sequence #key default))
+(define-method second ((s <sequence>) #key (default %no-default)) (%nth s 1 default))
+(define-generic-function third (sequence #key default))
+(define-method third ((s <sequence>) #key (default %no-default)) (%nth s 2 default))
 
 (define-generic-function (setter first) (sequence new-value))
 (define-method (setter first) ((s <mutable-sequence>) new-value) (set! (element s 0) new-value))
@@ -267,17 +272,24 @@ module: dylan
 (define-generic-function (setter third) (sequence new-value))
 (define-method (setter third) ((s <mutable-sequence>) new-value) (set! (element s 2) new-value))
 
-(define-generic-function last (sequence))
-(define-method last ((s <sequence>))
+;;; last takes default: too (design note 2).
+(define-generic-function last (sequence #key default))
+(define-method last ((s <sequence>) #key (default %no-default))
   (bind ((state (initial-state s)))
-    (unless state (error "last: the sequence is empty"))
-    (for ((state state (next-state s state))
-          (previous state state))
-         ((not state) (current-element s previous)))))
+    (cond ((not (size s)) (error "last: the sequence is unbounded"))
+          ((not state)
+           (if (id? default %no-default) (error "last: the sequence is empty") default))
+          (else:
+           (for ((state state (next-state s state))
+                 (previous state state))
+                ((not state) (current-element s previous)))))))
 
 (define-generic-function (setter last) (sequence new-value))
 (define-method (setter last) ((s <mutable-sequence>) new-value)
-  (set! (element s (binary- (size s) 1)) new-value))
+  (bind ((n (size s)))
+    (cond ((not n) (error "last: the sequence is unbounded"))
+          ((zero? n) (error "last: the sequence is empty"))
+          (else: (set! (element s (binary- n 1)) new-value)))))
 
 ;;; Searching: the index of the COUNTth place PATTERN occurs in BIG.
 

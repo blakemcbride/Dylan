@@ -465,94 +465,60 @@
 
 ;;; First, second, third and last take default: (design note 2): the value
 ;;; when the sequence has no such element, which is otherwise an error.
+;;; First, second and third, and their setters, call element or (setter
+;;; element) with the index (design note 28), so their errors are
+;;; element's, as in a compiled program.
 
-(defun sequence-accessor (name locate)
-  "The generic function NAME of a sequence and #key default.  LOCATE
-answers a list of the wanted element, or NIL when there is none."
-  (let* ((param-list (make-param-list `((sequence ,<sequence>))
-                                      nil nil '(:default)))
-         (generic-function (dylan%generic-fn name param-list nil)))
-    (add-method
-     generic-function
-     (dylan%dylan-callable->method
-      param-list
-      (lambda (multiple-values next-method sequence &rest rest)
-        (declare (ignore multiple-values))
-        (dylan%keyword-validate next-method rest '(:default))
-        (let ((found (funcall locate sequence)))
-          (if found
-              (car found)
-              (dylan%find-keyword
-               rest :default
-               (lambda ()
-                 (dylan-call dylan/error
-                             (format nil "~(~a~) -- no such element" name)
-                             sequence))))))))
-    generic-function))
+(defun nth-accessor (name index)
+  (let ((param-list (make-param-list `((sequence ,<sequence>))
+                                     nil nil '(:default))))
+    (let ((generic-function (dylan%generic-fn name param-list nil)))
+      (add-method
+       generic-function
+       (dylan%dylan-callable->method
+        param-list
+        (lambda (multiple-values next-method sequence &rest rest)
+          (declare (ignore multiple-values))
+          (dylan%keyword-validate next-method rest '(:default))
+          (dylan-apply dylan/element sequence index rest))))
+      generic-function)))
 
-(defun nth-element-of (index)
-  (lambda (sequence)
-    (let ((state (if (zerop index)
-                     (initial-state sequence)
-                     (dylan-call dylan/get-state sequence index))))
-      (and state (list (current-element sequence state))))))
+(defparameter dylan/first (nth-accessor 'first 0))
+(defparameter dylan/second (nth-accessor 'second 1))
+(defparameter dylan/third (nth-accessor 'third 2))
 
-(defparameter dylan/first (sequence-accessor 'first (nth-element-of 0)))
-(defparameter dylan/second (sequence-accessor 'second (nth-element-of 1)))
-(defparameter dylan/third (sequence-accessor 'third (nth-element-of 2)))
-
-(defparameter dylan/setter/first/
+(defun nth-setter (name index)
   (dylan%generic-fn
-   'setter/first/ one-mutable-sequence-and-an-object
-   (lambda (sequence-1 new-value)
-     (let ((state (initial-state sequence-1)))
-       (if state
-           (progn
-             (set-current-element
-                         sequence-1 state new-value)
-             new-value)
-           (dylan-call dylan/error "(setter first) -- sequence is empty"
-                       sequence-1 new-value))))))
+   name one-mutable-sequence-and-an-object
+   (lambda (sequence new-value)
+     (dylan-call dylan/setter/element/ sequence index new-value)
+     new-value)))
 
-(defparameter dylan/setter/second/
-  (dylan%generic-fn
-   'setter/second/ one-mutable-sequence-and-an-object
-   (lambda (sequence-1 new-value)
-     (let ((size (collection-size sequence-1)))
-       (if (or (not size) (>= size 2))
-           (progn
-             (set-current-element
-                         sequence-1
-                         (dylan-call dylan/get-state sequence-1 1)
-                         new-value)
-             new-value)
-           (dylan-call dylan/error "(setter second) -- sequence size < 2"
-                       sequence-1 new-value))))))
-
-(defparameter dylan/setter/third/
-  (dylan%generic-fn
-   'setter/third/ one-mutable-sequence-and-an-object
-   (lambda (sequence-1 new-value)
-     (let ((size (collection-size sequence-1)))
-       (if (or (not size) (>= size 3))
-           (progn
-             (set-current-element
-                         sequence-1
-                         (dylan-call dylan/get-state sequence-1 2)
-                         new-value)
-             new-value)
-           (dylan-call dylan/error "(setter third) -- sequence size < 3"
-                       sequence-1 new-value))))))
+(defparameter dylan/setter/first/ (nth-setter 'setter/first/ 0))
+(defparameter dylan/setter/second/ (nth-setter 'setter/second/ 1))
+(defparameter dylan/setter/third/ (nth-setter 'setter/third/ 2))
 
 (defparameter dylan/last
-  (sequence-accessor
-   'last
-   (lambda (sequence)
-     (let ((size (collection-size sequence)))
-       (cond ((null size)
-              (dylan-call dylan/error "last -- unbounded sequence" sequence))
-             ((plusp size)
-              (list (dylan-call dylan/element sequence (- size 1)))))))))
+  (let ((param-list (make-param-list `((sequence ,<sequence>))
+                                     nil nil '(:default))))
+    (let ((generic-function (dylan%generic-fn 'last param-list nil)))
+      (add-method
+       generic-function
+       (dylan%dylan-callable->method
+        param-list
+        (lambda (multiple-values next-method sequence &rest rest)
+          (declare (ignore multiple-values))
+          (dylan%keyword-validate next-method rest '(:default))
+          (let ((size (collection-size sequence)))
+            (cond ((null size)
+                   (dylan-call dylan/error "last: the sequence is unbounded"))
+                  ((plusp size)
+                   (dylan-call dylan/element sequence (- size 1)))
+                  (t (dylan%find-keyword
+                      rest :default
+                      (lambda ()
+                        (dylan-call dylan/error "last: the sequence is empty")))))))))
+      generic-function)))
 
 ;;; Design note 12: the methods are on <stretchy-vector> and <deque>.
 (defparameter dylan/setter/size/
@@ -569,10 +535,10 @@ answers a list of the wanted element, or NIL when there is none."
    'setter/last/ one-mutable-sequence-and-an-object
    (lambda (sequence new-value)
      (let ((size (collection-size sequence)))
-       (unless (and size (plusp size))
-         (dylan-call dylan/error
-                     "(setter last) -- sequence is empty or unbounded"
-                     sequence))
+       (cond ((null size)
+              (dylan-call dylan/error "last: the sequence is unbounded"))
+             ((zerop size)
+              (dylan-call dylan/error "last: the sequence is empty")))
        (dylan-call dylan/setter/element/ sequence (- size 1) new-value)
        new-value))))
 

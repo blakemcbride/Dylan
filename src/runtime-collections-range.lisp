@@ -366,15 +366,12 @@
     (dylan%keyword-validate next-method rest '(:default))
     (let ((end (dylan-call dylan/get-range-end range)))
       (cond ((not end)
-             (dylan-call dylan/error
-                         "(last <range>) -- no end in sight for this range"
-                         range))
+             (dylan-call dylan/error "last: the sequence is unbounded"))
             ((zerop (collection-size range))
              (dylan%find-keyword
               rest :default
               (lambda ()
-                (dylan-call dylan/error "(last <range>) -- range is empty"
-                            range))))
+                (dylan-call dylan/error "last: the sequence is empty"))))
             (t end))))))
 
 ;;;;

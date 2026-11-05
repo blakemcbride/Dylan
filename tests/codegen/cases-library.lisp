@@ -1589,4 +1589,25 @@ error
 \"a <byte-string> holds only 8-bit characters: 5\"
 \"a string holds only characters: 5\"
 ")
+
+ (first-second-third-last-default
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+   (print (list (first '() default: 1) (second #(1) default: 2) (third \"ab\" default: 3)
+                (last #() default: 4) (first '(9) default: 1) (last (range from: 1 size: 3))))
+   (print (list (msg (method () (first '()))) (msg (method () (third #(1 2))))
+                (msg (method () (last '()))) (msg (method () (last (range from: 1))))
+                (msg (method () (first '() foo: 1)))))
+   (bind ((v (vector 1 2 3)))
+     (set! (first v) 'a) (set! (third v) 'c) (set! (last v) 'z)
+     (print v))
+   (print (list (msg (method () (set! (second (vector 1)) 0)))
+                (msg (method () (set! (last (vector)) 0)))))"
+  "(1 2 3 4 9 3)
+(\"element: there is no element at the index 0\" \"element: there is no element at the index 2\" \"last: the sequence is empty\" \"last: the sequence is unbounded\" \"keyword argument not accepted: foo:\")
+#(a 2 z)
+(\"element: there is no element at the index 1\" \"last: the sequence is empty\")
+")
 )

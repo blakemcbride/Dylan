@@ -685,13 +685,18 @@ nums                         ; => (3 1 4 1 5 9)
 \index{first}\index{second}\index{third}\index{last}
 \code{first}, \code{second}, \code{third} and \code{last} answer those
 elements, and with \code{set!} replace them. Asking for an element that
-is not there is an error.
+is not there is an error, unless a \code{default:} is given, which is
+then the answer. \code{first}, \code{second} and \code{third} call
+\code{element} with the index (and \code{default:}), so their errors
+are \code{element}'s.
 
 \begin{dylan}
 (first '(a b c))              ; => a
 (third '(a b c))              ; => c
 (last '(emperor of china))    ; => china
 (last #(1 2 3))               ; => 3
+(second '(a) default: 'none)  ; => none
+(last '() default: 0)         ; => 0
 (define l (list 1 2 3))
 (set! (first l) 'one)
 (set! (last l) 'three)

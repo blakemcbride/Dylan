@@ -357,8 +357,8 @@ Name & Description & \\
 \code{(reverse! sequence)}\index{reverse"!} & As \code{reverse}, reusing \code{sequence} if it can. &  \\
 \code{(sort sequence \#key test stable)}\index{sort} & A new sequence sorted by \code{test} (default \code{<}). &  \\
 \code{(sort! sequence \#key test stable)}\index{sort"!} & As \code{sort}, reusing \code{sequence} if it can. &  \\
-\code{(first sequence) (second sequence) (third sequence)}\index{first}\index{second}\index{third} & The first, second and third elements. &  \\
-\code{(last sequence)}\index{last} & The last element. &  \\
+\code{(first sequence \#key default) (second sequence \#key default) (third sequence \#key default)}\index{first}\index{second}\index{third} & The first, second and third elements, or \code{default} if there is none. &  \\
+\code{(last sequence \#key default)}\index{last} & The last element, or \code{default} if the sequence is empty. &  \\
 \code{((setter first) sequence value) }\textrm{and likewise}\code{ second, third, last} & Set the first, second, third and last elements. &  \\
 \code{(subsequence-position big pattern \#key test count)}\index{subsequence-position} & The index at which \code{pattern} occurs in \code{big} (the \code{count}th occurrence), or \code{\#f}. &  \\
 \bottomrule

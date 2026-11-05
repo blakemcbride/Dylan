@@ -244,7 +244,8 @@ typedef struct DyClass {
     D direct_subclasses;           /* <simple-object-vector>             */
     D (*maker)(D self, D a0, D a1, D a2, D a3, intptr_t argc);
                                    /* make for the class, or NULL        */
-    int sealed;                    /* has seal sealed it?                */
+    int sealed;                    /* sealed: one of the manual's sealed
+                                      classes, or one seal has sealed    */
 } DyClass;
 
 /* ------------------------------------------------------------- Objects */

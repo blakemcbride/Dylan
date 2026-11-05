@@ -416,4 +416,29 @@ not-a-singleton
   "(1 3 {instance of <of>} {instance of <subtype>})
 #t
 ")
+
+ ;; Chapter 11: all-superclasses, direct-superclasses and slot-descriptors
+ ;; answer an empty sequence for a sealed class -- the manual's sealed
+ ;; classes (chapters 12 and 14) as well as one seal has sealed.
+ (sealed-reflection
+  "(for-each ((c (list <integer> <double-float> <ratio> <real> <list> <pair> <byte-string>
+                       <simple-object-vector> <character> <object>)))
+             ()
+     (format #t \"~s ~s ~s ~s~%\" c (size (all-superclasses c)) (size (direct-superclasses c))
+             (size (slot-descriptors c))))
+   (define-class <s> (<object>) a)
+   (seal <s>)
+   (format #t \"~s ~s ~s~%\" (all-superclasses <s>) (direct-superclasses <s>) (size (slot-descriptors <s>)))"
+  "{the class <integer>} 0 0 0
+{the class <double-float>} 0 0 0
+{the class <ratio>} 0 0 0
+{the class <real>} 0 0 0
+{the class <list>} 0 0 0
+{the class <pair>} 0 0 0
+{the class <byte-string>} 0 0 0
+{the class <simple-object-vector>} 0 0 0
+{the class <character>} 2 1 0
+{the class <object>} 1 0 0
+() () 0
+")
 )

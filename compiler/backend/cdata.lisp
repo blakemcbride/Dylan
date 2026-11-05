@@ -251,7 +251,7 @@ declare."
                                         (class-info-cpl c)))))
         (push (format nil "static const uint8_t dy_ancestors_~a[] = { ~{~d~^, ~} };~%~
                            ~a~
-                           DyClass ~a = { &dy_wrapper_class, &~a, ~a, ~a, ~a, ~a, ~a };~%~
+                           DyClass ~a = { &dy_wrapper_class, &~a, ~a, ~a, ~a, ~a, ~a, ~d };~%~
                            DyWrapper ~a = { DY_OBJ(&~a), ~d, ~d, ~d, DY_KIND_~a, ~a, dy_ancestors_~a, ~a };"
                       (class-info-c-name c) (ancestor-bytes c count)
                       (if (class-info-slot-offsets c)
@@ -264,6 +264,10 @@ declare."
                       (address (c-vector data (mapcar (lambda (s) (address (class-c-name s)))
                                                       (class-info-subclasses c))))
                       (or (class-info-maker c) "NULL")
+                      ;; The manual's sealed classes are sealed from the start
+                      ;; (chapter 11: all-superclasses and the rest answer
+                      ;; an empty sequence)
+                      (if (class-info-sealed-p c) 1 0)
                       (wrapper-c-name c) (class-c-name c)
                       (class-info-id c) (class-info-subtree-end c) (class-info-size c)
                       (substitute #\_ #\- (string-upcase (class-info-kind c)))

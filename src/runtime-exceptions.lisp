@@ -125,13 +125,20 @@
 ;;; Basic Operators (pages 138 and 139)
 
 (defun dylan%handler-bind (type function test description thunk)
-  ;; Assumes FUNCTION is a method of two args, TEST is a method of one arg,
-  ;; and DESCRIPTION is a string or method of one argument.  Can't check???
-  (when (and (not (and (class? type) (subclass? type <condition>)))
-             (not (and (singleton? type)
-                       (subclass? (get-type (singleton.object type))
-                                  <condition>))))
-    (dylan-call dylan/error "handler-bind -- not a <condition>" type))
+  ;; Chapter 13: TYPE is a class or a singleton, FUNCTION a function, and
+  ;; TEST a function (#f, as a compiled program takes it, for none); all
+  ;; are evaluated before the forms are, and checked then, as a compiled
+  ;; program checks them.
+  (flet ((function-p (x) (true? (dylan-call dylan/instance? x <function>))))
+    (unless (or (class? type) (singleton? type))
+      (dylan-call dylan/error "handler-bind: not a class or singleton: ~s" type))
+    (unless (function-p function)
+      (dylan-call dylan/error "handler-bind: not a function: ~s" function))
+    (cond ((eq test dylan%false)
+           (setf test (make-dylan-callable
+                       (lambda (condition) (declare (ignore condition)) t))))
+          ((not (function-p test))
+           (dylan-call dylan/error "handler-bind: the test: is not a function: ~s" test))))
   (implementation-specific/push-handler type function test description thunk))
 
 (defun make-default-condition (args type operator)

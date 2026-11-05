@@ -124,6 +124,13 @@ D dy_unwind_protect(D protected, D cleanup) {
 }
 
 D dy_handler_bind(D type, D function, D test, D description, D thunk) {
+    /* Chapter 13: evaluated before the forms are, and checked then, so
+     * that no search for a handler meets a bad one */
+    if (!dy_kind_p(type, DY_KIND_CLASS) && !dy_kind_p(type, DY_KIND_SINGLETON))
+        dy_error("handler-bind: not a class or singleton", type);
+    if (!dy_function_p(function)) dy_error("handler-bind: not a function", function);
+    if (test != DY_FALSE && !dy_function_p(test))
+        dy_error("handler-bind: the test: is not a function", test);
     DyFrame f;
     f.a = type; f.b = function; f.c = test; f.d = description;
     push_frame(&f, DY_FRAME_HANDLER);

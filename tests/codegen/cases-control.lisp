@@ -355,4 +355,25 @@ caught
 (#t replaced)
 (a b)
 ")
+
+ ;; Chapter 13, handler-bind: the type, function and test are checked when
+ ;; the handler is established, so that a bad one is an error a handler
+ ;; outside can catch; any class or singleton will do.
+ (handler-bind-checks
+  "(define-method msg (thunk) (handler-case (thunk) ((<error> condition: c) (format #f \"~a\" c))))
+   (print (msg (method () (handler-bind (5 (method (c n) 1)) (signal \"x\")))))
+   (print (msg (method () (handler-case (signal \"x\") ((5) 1)))))
+   (print (msg (method () (handler-bind (<error> 5) 1))))
+   (print (msg (method () (handler-bind (<error> (method (c n) 1) test: 7) 1))))
+   (print (handler-case (error \"x\") ((<object>) 'caught)))
+   (print (handler-bind ((singleton 3) (method (c n) 1)) 'body))
+   (print (handler-bind (<warning> (method (c n) 'handled) test: #f) (signal \"w\")))"
+  "\"handler-bind: not a class or singleton: 5\"
+\"handler-bind: not a class or singleton: 5\"
+\"handler-bind: not a function: 5\"
+\"handler-bind: the test: is not a function: 7\"
+caught
+body
+handled
+")
 )

@@ -22,6 +22,7 @@ static DyThreadObject *new_thread_object(D function) {
     t->function = function;
     t->results = DY_EMPTY;
     t->condition = DY_FALSE;
+    t->started = 0;
     t->done = 0;
     t->main = 0;
 #ifdef DY_MPS
@@ -36,6 +37,7 @@ static DyThreadObject *new_thread_object(D function) {
 void dy_init_main_thread(void) {
     DyThreadObject *t = new_thread_object(DY_FALSE);
     t->thread = pthread_self();
+    t->started = 1;
     t->main = 1;
     dy_thread->self = t;
 }
@@ -44,6 +46,12 @@ static void *thread_main(void *arg) {
     DyThreadObject *t = arg;
     dy_init_thread();
     dy_thread->self = t;
+    /* T is now reachable from this thread's state and its stack, which
+     * are roots: the creating thread, waiting in make_thread, may go on. */
+    pthread_mutex_lock(DY_THREAD_LOCK(t));
+    t->started = 1;
+    pthread_cond_broadcast(DY_THREAD_ENDED(t));
+    pthread_mutex_unlock(DY_THREAD_LOCK(t));
     DyFrame top;
     top.kind = DY_FRAME_EXIT;
     top.prev = NULL;
@@ -76,6 +84,16 @@ PRIMITIVE(make_thread) {
     if (status != 0) dy_error("make-thread: the thread could not be created", 0);
     /* join-thread waits on ENDED, so no thread need be joined. */
     pthread_detach(t->thread);
+    /* Until the new thread has registered its stack with the collector,
+     * this stack holds the only reference to T (the argument pthread_create
+     * passed is out of the collector's sight), and a program that drops the
+     * <thread> would let a collection free it, and its function, before the
+     * thread starts.  So wait for it, as the Boehm collector's
+     * pthread_create does.  join-thread, waiting on the same condition
+     * variable, takes this wakeup for a spurious one. */
+    pthread_mutex_lock(DY_THREAD_LOCK(t));
+    while (!t->started) pthread_cond_wait(DY_THREAD_ENDED(t), DY_THREAD_LOCK(t));
+    pthread_mutex_unlock(DY_THREAD_LOCK(t));
     return DY_OBJ(t);
 }
 

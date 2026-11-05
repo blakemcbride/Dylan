@@ -129,6 +129,23 @@ alive
 "
   :compiler-only t)
 
+ ;; Threads whose <thread> the program drops at once, while it allocates:
+ ;; a collection before a thread has started must not free it (in
+ ;; gc-stress mode this crashed about one run in three).
+ (dropped-threads
+  "(define counter (make <atomic-integer>))
+   (define-method spawn (i)
+     (bind ((data (list i (* i 2) (vector i \"x\"))))
+       (make-thread (method () (when (= (car data) i) (atomic-add! counter 1))))
+       #f))
+   (dotimes (i 3000) (spawn i) (size (make <vector> size: 50)))
+   (for ((n 0 (+ n 1))) ((or (= (atomic-value counter) 3000) (> n 10000000)))
+     (thread-yield))
+   (print (atomic-value counter))"
+  "3000
+"
+  :compiler-only t)
+
  (lock-not-held
   "(define l (make <lock>)) (print (handler-case (release-lock l) ((<error>) 'caught))) (acquire-lock l) (acquire-lock l)"
   "caught

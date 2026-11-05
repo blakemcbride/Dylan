@@ -1079,6 +1079,7 @@ typedef struct DyThreadObject {    /* <thread>                          */
     D function;
     D results;                     /* the function's values, as a list    */
     D condition;                   /* the condition that ended it, or #f  */
+    int started;                   /* its stack is a root: see make_thread */
     int done;
     int main;
 #ifdef DY_MPS

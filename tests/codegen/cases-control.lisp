@@ -201,4 +201,22 @@ aborted
 #t
 #t
 ")
+
+ ;; An exit taken from an unwind-protect's cleanup returns its own values,
+ ;; and none left over from the protected form's.
+ (exit-from-cleanup-values
+  "(bind ((a b (bind-exit (e) (unwind-protect (values 1 2) (e 3))))) (print (list a b)))
+   (bind ((a b c (bind-exit (e) (unwind-protect (values 1 2 3) (e 4 5))))) (print (list a b c)))
+   (bind ((#rest r (bind-exit (e) (unwind-protect (values 1 2) (e))))) (print r))
+   (bind ((#rest r (bind-exit (e) (unwind-protect (values 1 2) (e 7))))) (print r))
+   (define-method f () (bind-exit (e) (unwind-protect (values 1 2) (e 3))))
+   (bind ((#rest r (f))) (print r))
+   (bind ((a b (values 1 2))) (bind ((c d (values 3))) (print (list a b c d))))"
+  "(3 #f)
+(4 5 #f)
+()
+(7)
+(3)
+(1 2 3 #f)
+")
 )

@@ -247,13 +247,17 @@
     (declare (ignore next-method))
     (if (not multiple-values?)
         (if (null values) dylan%false (car values))
+        ;; Every place is set, those beyond the values given to #f: the
+        ;; vector may hold values from before -- from the values an
+        ;; unwind-protect's cleanup interrupted by taking an exit.
         (let ((last-loc (- (length multiple-values?) 1)))
           (do ((index 0 (+ index 1))
                (rest values (cdr rest)))
-              ((or (null rest) (= index last-loc))
+              ((= index last-loc)
                (setf (aref multiple-values? last-loc) rest)
                multiple-values?)        ; Return vector itself.  See BIND
-            (setf (aref multiple-values? index) (car rest)))))))
+            (setf (aref multiple-values? index)
+                  (if rest (car rest) dylan%false)))))))
 
 (defparameter dylan/not
   (make-dylan-callable (lambda (object) (bool (false? object))) 1))

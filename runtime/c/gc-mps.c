@@ -94,8 +94,16 @@ typedef struct {                   /* KIND_WEAK_KEYS                      */
 
 /* ------------------------------------------------------ The format */
 
+/* The collector calls the format only while it has stopped every other
+ * thread, with signals, which ThreadSanitizer cannot see: it would take
+ * the format's reads and writes, and a new object's later use of the
+ * memory, for data races.  So they are hidden from it, as the MPS's own
+ * are (runtime/Makefile builds it without the sanitizers). */
+#define FORMAT_FUNCTION static __attribute__((no_sanitize("thread")))
+
+
 /* The size of the object at BASE, aligned. */
-static size_t object_size(mps_addr_t base) {
+FORMAT_FUNCTION size_t object_size(mps_addr_t base) {
     DyWrapper *w = ((DyHeader *)base)->wrapper;
     switch (w->kind) {
     case DY_KIND_INSTANCE:
@@ -140,7 +148,7 @@ static size_t object_size(mps_addr_t base) {
     }
 }
 
-static mps_addr_t format_skip(mps_addr_t base) {
+FORMAT_FUNCTION mps_addr_t format_skip(mps_addr_t base) {
     return (char *)base + object_size(base);
 }
 
@@ -159,7 +167,7 @@ static mps_addr_t format_skip(mps_addr_t base) {
  * search. */
 static DyHeader dead_key = { &dy_wrapper_object };
 
-static mps_res_t format_scan(mps_ss_t ss, mps_addr_t base, mps_addr_t limit) {
+FORMAT_FUNCTION mps_res_t format_scan(mps_ss_t ss, mps_addr_t base, mps_addr_t limit) {
     MPS_SCAN_BEGIN(ss) {
         while (base < limit) {
             DyWrapper *w = ((DyHeader *)base)->wrapper;
@@ -234,12 +242,12 @@ static mps_res_t format_scan(mps_ss_t ss, mps_addr_t base, mps_addr_t limit) {
     return MPS_RES_OK;
 }
 
-static mps_addr_t format_isfwd(mps_addr_t addr) {
+FORMAT_FUNCTION mps_addr_t format_isfwd(mps_addr_t addr) {
     DyWrapper *w = ((DyHeader *)addr)->wrapper;
     return (w == &wrapper_fwd2 || w == &wrapper_fwd) ? ((Forward *)addr)->to : NULL;
 }
 
-static void format_fwd(mps_addr_t old, mps_addr_t new) {
+FORMAT_FUNCTION void format_fwd(mps_addr_t old, mps_addr_t new) {
     size_t size = object_size(old);
     Forward *f = old;
     if (size == DY_ALIGN(2 * sizeof(D))) {
@@ -251,7 +259,7 @@ static void format_fwd(mps_addr_t old, mps_addr_t new) {
     f->to = new;
 }
 
-static void format_pad(mps_addr_t addr, size_t size) {
+FORMAT_FUNCTION void format_pad(mps_addr_t addr, size_t size) {
     if (size == sizeof(D)) {
         ((DyHeader *)addr)->wrapper = &wrapper_pad1;
     } else {

@@ -368,6 +368,33 @@ that the program defines, or NIL."
           (let ((sd (find getter (gclass-sdefs cg) :key #'sdef-getter)))
             (when sd (return sd))))))))
 
+(defun inherited-slot-definitions (class getter)
+  "Every definition of the slot GETTER reads in a proper superclass of
+CLASS that the program defines."
+  (loop for c in (class-info-cpl class)
+        for cg = (and (not (eq c class)) (class-gclass c))
+        for sd = (and cg (find getter (gclass-sdefs cg) :key #'sdef-getter))
+        when sd collect sd))
+
+(defun slot-type-class (sd)
+  "The class SD's type: names, if a class known at compile time, or NIL."
+  (let* ((type (slot-spec-type (sdef-spec sd)))
+         (v (and type (static-value type))))
+    (and (eq (car v) :global) (global-class (second v)))))
+
+(defun check-slot-type-redefinition (sd)
+  "Chapter 6: the type of a redefined slot must be within the
+intersection of the types of all the slots it overrides."
+  (let ((new (slot-type-class sd)))
+    (when new
+      (dolist (old (inherited-slot-definitions (sdef-class sd) (sdef-getter sd)))
+        (let ((was (slot-type-class old)))
+          (when (and was (not (subclass-info-p new was)))
+            (let ((*location* (or (sdef-location sd) *location*)))
+              (compile-error "slot ~a: the new slot type ~a is not a subclass of the inherited type ~a"
+                             (name-string (module-var-name (sdef-getter sd)))
+                             (class-info-name new) (class-info-name was)))))))))
+
 (defun check-slot-redefinition (sd old)
   "Chapter 6: if you redefine an inherited slot, you must respecify all the
 slot features the superior definition specified."
@@ -437,7 +464,9 @@ slot features the superior definition specified."
              ;; was, storage, initialization and all.
              (unless (eq (sdef-allocation sd) :virtual)
                (let ((old (inherited-slot-definition (gclass-info g) (sdef-getter sd))))
-                 (when old (check-slot-redefinition sd old))))))
+                 (when old
+                   (check-slot-redefinition sd old)
+                   (check-slot-type-redefinition sd))))))
   ;; Number the instance slots, and lay out each class's instances.
   (let ((count 0))
     (loop for g being the hash-values of *gclasses*

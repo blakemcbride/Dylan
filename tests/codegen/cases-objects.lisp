@@ -464,4 +464,23 @@ not-a-singleton
    (print (g 1))"
   ""
   :compile-error "generic function")
+
+ ;; Chapter 6: a redefined slot's type must be within the inherited one's
+ (slot-type-narrowed
+  "(define-class <a> (<object>) (v type: <number> init-value: 0 init-keyword: v:))
+   (define-class <b> (<a>) (v type: <integer> init-value: 3 init-keyword: v:))
+   (print (v (make <b>)))
+   (define-class <c> (<object>) (w type: <object> init-value: 1))
+   (define-class <d> (<c>) (w type: <real> init-value: 2))
+   (print (w (make <d>)))"
+  "3
+2
+")
+
+ (slot-type-widened
+  "(define-class <a> (<object>) (v type: <number> init-value: 0 init-keyword: v:))
+   (define-class <b> (<a>) (v type: <string> init-value: \"s\" init-keyword: v:))
+   (print (v (make <b>)))"
+  ""
+  :compile-error "not a subclass of")
 )

@@ -505,10 +505,8 @@ of the arguments, not converted:
 (min 2)           ; => 2
 \end{dylan}
 
-\noindent When several arguments are equal the two implementations may
-choose different ones: \code{(min 1 1.0)} is \code{1} in the compiler to
-C, which keeps the first of equal arguments, and \code{1.0} in the
-Common Lisp implementation, which uses Common Lisp's \code{min}.
+\noindent Of equal arguments the first is the answer: \code{(min 1 1.0)} is
+\code{1} and \code{(min 1.0 1)} is \code{1.0}.
 Because \code{min} and \code{max} use \code{binary<}, they work on any
 objects \code{<} can compare, characters among them:
 \code{(max \#\textbackslash{}a \#\textbackslash{}z)} is \code{\#\textbackslash{}z}.

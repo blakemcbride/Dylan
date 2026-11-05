@@ -198,7 +198,9 @@
      (let ((min-so-far real1))
        (dolist (x others min-so-far)
          (setf min-so-far
-               (if (true? (dylan-call dylan/binary< min-so-far x)) min-so-far x)))))))
+               ;; Of equal arguments the first is kept, as in a
+               ;; compiled program.
+               (if (true? (dylan-call dylan/binary< x min-so-far)) x min-so-far)))))))
 
 (defparameter dylan/max
   (dylan%function->method

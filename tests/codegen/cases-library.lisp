@@ -1438,4 +1438,10 @@ error
 (\"wrong number of arguments (1)\" ())
 (\"wrong number of arguments (3)\" ())
 ")
+
+ ;; Of equal arguments, min and max answer the first.
+ (min-max-equal-arguments
+  "(print (list (min 1 1.0) (min 1.0 1) (max 1 1.0) (max 1.0 1) (min 2 1.0 1) (max 1 2.0 2)))"
+  "(1 1.0 1 1.0 1.0 2.0)
+")
 )

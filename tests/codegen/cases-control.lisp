@@ -332,4 +332,27 @@ caught
 \"the variable undefined-function@dylan-user has no value\"
 (arg)
 ")
+
+ ;; Chapter 10, bind-methods, and chapter 7, set!: a variable bind-methods
+ ;; binds can be assigned like any other lexical variable; its function
+ ;; is then a value whose calls are unknown.
+ (bind-methods-assigned
+  "(print (bind-methods ((f () 1)) (set! f 2) f))
+   (define-method h (n)
+     (bind-methods ((even (m) (if (= m 0) #t (odd (- m 1))))
+                    (odd (m) (if (= m 0) #f (even (- m 1)))))
+       (bind ((first (even n)))
+         (set! odd (method (m) 'replaced))
+         (list first (even 3)))))
+   (print (h 10))
+   (define-method k ()
+     (bind-methods ((f () 'a))
+       (bind ((old f))
+         (set! f (method () 'b))
+         (list (old) (f)))))
+   (print (k))"
+  "2
+(#t replaced)
+(a b)
+")
 )

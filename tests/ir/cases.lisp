@@ -157,7 +157,8 @@
    (let ((t_3 f_1))
      (tail-call t_3))))"
   (:var "f" :fn nil :assigned t)
-  (:fn 1 :escapes nil :call-sites 0))
+  ;; Its value is the variable's, whose uses are unknown: it escapes
+  (:fn 1 :escapes t :call-sites 0))
 
  ;; Methods of generic functions escape: they are called by dispatch.
  (method-escapes

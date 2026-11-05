@@ -63,10 +63,12 @@ calls) or :SET."
 
 (defun bind-fn (var fn)
   "VAR is bound to the function FN.  If VAR is never assigned, the calls
-of VAR are calls of FN."
+of VAR are calls of FN.  If it is, FN is a value like any other, whose
+calls are unknown: it escapes, and so is never made a label."
   (setf (ir-fn-binder fn) var)
-  (unless (ivar-assigned-p var)
-    (setf (ivar-value-fn var) fn)))
+  (if (ivar-assigned-p var)
+      (setf (ir-fn-escapes-p fn) t)
+      (setf (ivar-value-fn var) fn)))
 
 (defun scan-made-fn (made fn)
   "Scan MADE, a function FN makes.  Its specializers are atoms of FN,

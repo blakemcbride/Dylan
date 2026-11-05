@@ -329,11 +329,12 @@
                `(progn
                   (cond ((dylan%eq? ,ref ',the-unassigned-value)
                          ,(funcall set
-                                   `(dylan%create-generic-function
-                                     ',(variable->name name)
-                                     ,(length reqs)
-                                     nil ; No required keywords
-                                     ,(if (or keys rest) t nil))))
+                                   `(dylan%implicit-generic-function
+                                     (dylan%create-generic-function
+                                      ',(variable->name name)
+                                      ,(length reqs)
+                                      nil ; No required keywords
+                                      ,(if (or keys rest) t nil)))))
                         ((dylan%not (dylan%generic-function? ,ref))
                          (dylan-call dylan/error
                                      ,(format nil "~a is defined both as a variable and as a generic function"

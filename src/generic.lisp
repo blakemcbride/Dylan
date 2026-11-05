@@ -173,7 +173,8 @@ checked them; a direct call (next-method #f) is checked here."
   (cache nil)                           ; see CACHED-APPLICABLE-METHODS
   (cache-epoch 0)
   (cache-singletons nil)
-  (fast-paths '()))                     ; see CHECK-FAST-PATH
+  (fast-paths '())                      ; see CHECK-FAST-PATH
+  (implicit nil))                       ; made by define-method, not declared
 
 (defvar *generic-function-data* (make-oned-table))
 
@@ -261,46 +262,54 @@ checked them; a direct call (next-method #f) is checked here."
                  (return list)
             finally (return list))))
 
+(defun missing-required-keys-p (data param-list)
+  "True if the generic function's DATA declares keywords that the method's
+PARAM-LIST does not accept."
+  (and (consp (generic-function-data.keys data))
+       (not (let ((method-keys (param-list.keys param-list)))
+              (or (param-list.rest? param-list)
+                  (eq method-keys :any)
+                  (and (consp method-keys)
+                       (subset? (generic-function-data.keys data)
+                                method-keys)))))))
+
+(defun congruency-error (data param-list)
+  "Why a method with PARAM-LIST is not congruent with the generic function
+whose DATA is given, or NIL."
+  (cond
+    ((not (= (param-list.nrequired param-list)
+             (generic-function-data.nrequired data)))
+     "required argument count mismatch")
+    ((and (not (or (generic-function-data.rest? data)
+                   (generic-function-data.keys data)))
+          (or (param-list.rest? param-list)
+              (param-list.keys param-list)))
+     "generic function doesn't allow rest/keys")
+    ((and (or (generic-function-data.rest? data)
+              (generic-function-data.keys data))
+          (not (or (param-list.rest? param-list)
+                   (param-list.keys param-list))))
+     "generic function requires rest/keys")
+    (t nil)))
+
 (defun add-method (generic-function method &rest multi-value-receiver)
   (let ((data (generic-function-data generic-function))
         (param-list (method.param-list method)))
-    (flet ((congruency-error ()
-             (cond
-               ((not (= (param-list.nrequired param-list)
-                        (generic-function-data.nrequired data)))
-                "required argument count mismatch")
-               ((and (not (or (generic-function-data.rest? data)
-                              (generic-function-data.keys data)))
-                     (or (param-list.rest? param-list)
-                         (param-list.keys param-list)))
-                "generic function doesn't allow rest/keys")
-               ((and (or (generic-function-data.rest? data)
-                         (generic-function-data.keys data))
-                     (not (or (param-list.rest? param-list)
-                              (param-list.keys param-list))))
-                "generic function requires rest/keys")
-               (t nil))))
-      (cond ((generic-function-data.read-only? data)
-             (dylan-call dylan/error
-                         "add-method -- generic function is read-only"
-                         generic-function))
-            ((and (consp (generic-function-data.keys data))
-                  (not (let ((method-keys (param-list.keys param-list)))
-                         (or (param-list.rest? param-list)
-                             (eq method-keys :any)
-                             (and (consp method-keys)
-                                  (subset? (generic-function-data.keys data)
-                                           method-keys))))))
-             (dylan-call dylan/error
-                         "add-method -- generic function requires certain keys"
-                         (generic-function-data.keys data)))
-            (t (let ((specific-error (congruency-error)))
-                 (when specific-error
-                   (dylan-call dylan/error
-                               (concatenate 'string
-                                            "add-method -- parameter lists not congruent, "
-                                            specific-error)
-                               generic-function method))))))
+    (cond ((generic-function-data.read-only? data)
+           (dylan-call dylan/error
+                       "add-method -- generic function is read-only"
+                       generic-function))
+          ((missing-required-keys-p data param-list)
+           (dylan-call dylan/error
+                       "add-method -- generic function requires certain keys"
+                       (generic-function-data.keys data)))
+          (t (let ((specific-error (congruency-error data param-list)))
+               (when specific-error
+                 (dylan-call dylan/error
+                             (concatenate 'string
+                                          "add-method -- parameter lists not congruent, "
+                                          specific-error)
+                             generic-function method)))))
     (check-not-frozen generic-function method "add-method")
     (let ((old-method (find-method generic-function
                                    (method.specializers method))))

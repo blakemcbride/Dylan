@@ -93,12 +93,37 @@
              (not (eq (symbol-value variable) the-unassigned-value)))
     (implementation-specific/warning "redefining variable ~a" (list name))))
 
+(defun dylan%implicit-generic-function (generic-function)
+  "Mark GENERIC-FUNCTION, which DEFINE-METHOD made, as made so."
+  (setf (generic-function-data.implicit (generic-function-data generic-function)) t)
+  generic-function)
+
 (defun dylan%check-generic-function-definition (generic-function name
                                                 nrequired keys rest?)
   "Signal an error unless a DEFINE-GENERIC-FUNCTION of NAME with this
-parameter list is consistent with the existing GENERIC-FUNCTION."
+parameter list is consistent with the existing GENERIC-FUNCTION.  One that
+DEFINE-METHOD made takes the parameter list declared, if its methods are
+congruent with it: DEFINE-METHOD gave it only what its first method had."
   (let ((data (generic-function-data generic-function))
         (keys (guarantee-keys keys)))
+    (when (generic-function-data.implicit data)
+      (let ((old-keys (generic-function-data.keys data))
+            (old-rest? (generic-function-data.rest? data)))
+        (setf (generic-function-data.keys data) keys
+              (generic-function-data.rest? data) rest?)
+        (when (or (/= nrequired (generic-function-data.nrequired data))
+                  (some (lambda (method)
+                          (let ((param-list (method.param-list method)))
+                            (or (missing-required-keys-p data param-list)
+                                (congruency-error data param-list))))
+                        (generic-function-data.methods data)))
+          (setf (generic-function-data.keys data) old-keys
+                (generic-function-data.rest? data) old-rest?)
+          (dylan-call dylan/error
+                      (format nil "the parameter list of a method of ~a is not congruent with its generic function"
+                              (dylan-symbol->string (if (consp name) (cadr name) name)))))
+        (setf (generic-function-data.implicit data) nil
+              (generic-function-data.cache data) nil)))
     (flet ((same-keys? (a b)
              (cond ((or (null a) (null b)) (and (null a) (null b)))
                    ((or (not (consp a)) (not (consp b))) (and (not (consp a)) (not (consp b))))

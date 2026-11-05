@@ -546,4 +546,32 @@ refused
 (30 40 30 4)
 b-slot
 ")
+
+ ;; Chapter 10: define-generic-function after define-method has made the
+ ;; generic function declares its parameters, #key and #rest among them,
+ ;; if the methods are congruent with them.
+ (generic-declared-after-methods
+  "(define-method f1 (x #key a) (list x a))
+   (define-generic-function f1 (x #key a))
+   (define-method f2 (x #rest r) (list x r))
+   (define-generic-function f2 (x #rest r))
+   (define-method f3 (x) x)
+   (define-generic-function f3 (x))
+   (define-method f4 (x #key a) (list x a))
+   (define-generic-function f4 (x #rest r))
+   (define-method f5 (x #key a b) (list x a b))
+   (define-generic-function f5 (x #key a))
+   (print (list (f1 1 a: 2) (f2 1 2 3) (f3 4) (f4 1 a: 5) (f5 1 a: 5)))
+   (bind ((#rest r (function-arguments f1))) (print r))
+   (bind ((#rest r (function-arguments f2))) (print r))"
+  "((1 2) (1 (2 3)) 4 (1 5) (1 5 #f))
+(1 #f (a:))
+(1 #t #f)
+")
+
+ (generic-declared-after-methods-not-congruent
+  "(define-method g1 (x) x)
+   (define-generic-function g1 (x y))"
+  ""
+  :compile-error "is not congruent with its generic function")
 )

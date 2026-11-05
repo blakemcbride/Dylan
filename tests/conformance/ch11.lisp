@@ -286,14 +286,17 @@ error
 
  ;; add-slot and remove-slot change a class at run time, which a static
  ;; program cannot do (README, CompilerPlan.md); the compiler reports them.
+ ;; The interactive implementation has them, so these are the compiler's.
  (ch11-add-slot
   "(define-class <p> (<object>))
    (add-slot <p> getter: foo)"
   ""
-  :compile-error "add-slot cannot be used")
+  :compile-error "add-slot cannot be used"
+  :compiler-only t)
  (ch11-remove-slot
   "(define-class <p> (<object>) (foo init-value: 1))
    (remove-slot <p> (slot-descriptor (make <p>) foo))"
   ""
-  :compile-error "remove-slot cannot be used")
+  :compile-error "remove-slot cannot be used"
+  :compiler-only t)
 )

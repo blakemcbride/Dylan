@@ -299,7 +299,7 @@ error
 
  ;; Integers are 63 bits here and there are no bignums (README.md); an
  ;; integer result that does not fit is an error rather than a wrong
- ;; answer.
+ ;; answer.  The interactive implementation has bignums.
  (ch14-integer-overflow
   "(define big (expt 2 61))
    (print big)
@@ -312,7 +312,8 @@ error
 error
 error
 error
-")
+"
+  :compiler-only t)
 
  ;; 14: logior, logxor, logand, logeqv (any number of integers), lognand,
  ;; lognor, logandc1, logandc2, logorc1, logorc2, lognot, ash as in

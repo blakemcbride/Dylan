@@ -1670,4 +1670,23 @@ error
 \"e\"
 \"x 1\"
 ")
+
+ (type-error-wording
+  "(define-method msg (thunk)
+     (handler-case (thunk)
+       ((<error> condition: c)
+        (list (condition-format-string c) (condition-format-arguments c)))))
+   (print (msg (method () (car 5))))
+   (print (msg (method () (cdr \"x\"))))
+   (print (msg (method () (logand 1.5 2))))
+   (print (msg (method () (apply 5 '()))))
+   (print (msg (method () (condition-format-string (make <type-error> value: 1 type: <string>)))))
+   (print (msg (method () (type-error-value (make <simple-warning> format-string: \"w\")))))"
+  "(\"not a list: ~s\" (5))
+(\"not a list: ~s\" (\"x\"))
+(\"not an integer: ~s\" (1.5))
+(\"not a function: ~s\" (5))
+(\"no applicable method for condition-format-string\" ())
+(\"no applicable method for type-error-value\" ())
+")
 )

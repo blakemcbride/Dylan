@@ -56,18 +56,18 @@
    'condition-format-string
    (make-param-list `((condition ,<condition>)) nil nil nil)
    (lambda (condition)
-     (dylan-call dylan/error
-                 "(condition-format-string <condition>) -- no specialization"
-                 condition))))
+     (declare (ignore condition))
+     ;; As for any generic function with no applicable method
+     (dylan-call dylan/error "no applicable method for condition-format-string"))))
 
 (defparameter dylan/condition-format-arguments
   (dylan%generic-fn
    'condition-format-arguments
    (make-param-list `((condition ,<condition>)) nil nil nil)
    (lambda (condition)
-     (dylan-call dylan/error
-                 "(condition-format-arguments <condition>) -- no specialization"
-                 condition))))
+     (declare (ignore condition))
+     ;; As for any generic function with no applicable method
+     (dylan-call dylan/error "no applicable method for condition-format-arguments"))))
 
 ;;; A format string not given is empty, as in the compiled library, so
 ;;; that such a condition still has a message.
@@ -83,18 +83,18 @@
    'type-error-value
    (make-param-list `((condition ,<condition>)) nil nil nil)
    (lambda (condition)
-     (dylan-call dylan/error
-                 "(type-error-value <condition>) -- no specialization"
-                 condition))))
+     (declare (ignore condition))
+     ;; As for any generic function with no applicable method
+     (dylan-call dylan/error "no applicable method for type-error-value"))))
 
 (defparameter dylan/type-error-expected-type
   (dylan%generic-fn
    'type-error-expected-type
    (make-param-list `((condition ,<condition>)) nil nil nil)
    (lambda (condition)
-     (dylan-call dylan/error
-                 "(type-error-expected-type <condition>) -- no specialization"
-                 condition))))
+     (declare (ignore condition))
+     ;; As for any generic function with no applicable method
+     (dylan-call dylan/error "no applicable method for type-error-expected-type"))))
 
 (dylan%add-slot <type-error>
                 nil 'instance nil dylan/type-error-value 'type-error-value

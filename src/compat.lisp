@@ -1323,8 +1323,22 @@ for the Lisp handlers to have back if no Dylan handler takes it."
     (arithmetic-error
      (values (format nil "arithmetic error: ~(~a~)" (type-of condition)) '()))
     (type-error
-     (values (format nil "~~s is not of type ~(~a~)" (type-error-expected-type condition))
-             (list (type-error-datum condition))))
+     ;; Worded as a compiled program's primitives word them, where they
+     ;; have one.
+     (let* ((expected (type-error-expected-type condition))
+            (wording (cond ((member expected '(list cons)) "not a list")
+                           ((eq expected 'character) "not a character")
+                           ((or (member expected '(integer fixnum))
+                                (and (consp expected) (eq (car expected) 'integer)))
+                            "not an integer")
+                           ((eq expected 'number) "not a number")
+                           ((eq expected 'real) "not a real number")
+                           ((eq expected 'string) "not a string")
+                           ((eq expected 'function) "not a function"))))
+       (values (if wording
+                   (concatenate 'string wording ": ~s")
+                   (format nil "~~s is not of type ~(~a~)" expected))
+               (list (type-error-datum condition)))))
     (simple-condition
      (let ((c (simple-condition-format-control condition)))
        (if (stringp c)

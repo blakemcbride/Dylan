@@ -53,10 +53,11 @@
 ;;; which take any number.)
 
 (defun integers-only (name integers)
+  "Worded as in a compiled program."
+  (declare (ignore name))
   (dolist (n integers integers)
     (unless (integerp n)
-      (dylan-call dylan/error
-                  (concatenate 'string name " -- not an integer") n))))
+      (dylan-call dylan/error "not an integer: ~s" n))))
 
 (defun logical-op-only-rest-args (name fn)
   (lambda (&rest integers)

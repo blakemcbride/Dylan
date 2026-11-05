@@ -946,7 +946,8 @@ slot-descriptors leaves them out, as a compiled program does.")
   (make-param-list `((fn ,<function>)) nil t nil)
   (lambda (multiple-values next-method fn &rest args)
     (declare (ignore next-method))
-    (dylan-call dylan/check-type fn <function>)
+    (unless (functionp fn)
+      (dylan-call dylan/error "not a function: ~s" fn))
     (dylan-full-apply fn multiple-values next-method/not-generic
                       (split-last
                        args

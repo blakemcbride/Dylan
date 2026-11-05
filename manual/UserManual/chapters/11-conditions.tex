@@ -611,8 +611,8 @@ evaluated.
 In the Common Lisp implementation an error that arises inside Common Lisp
 itself is reflected as a Dylan \code{<simple-error>}, which handlers see
 as they see any other: the host's errors for a call with the wrong number
-of arguments, a value of the wrong type (\code{5 is not of type list}
-for \code{(car 5)}) and division by zero are worded as above, and any
+of arguments, a value of the wrong type (\code{not a list: 5} for
+\code{(car 5)}) and division by zero are worded as above, and any
 other has a message beginning \code{Lisp condition:} followed by Common
 Lisp's own description.
 

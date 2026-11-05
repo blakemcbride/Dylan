@@ -95,7 +95,7 @@ keywords, which chapter 6 says accepts none; else the list of keywords."
 (defun guarantee-integer (object)
   (if (integerp object)
       object
-      (guarantee-integer (dylan-call dylan/error "not an integer" object))))
+      (guarantee-integer (dylan-call dylan/error "not an integer: ~s" object))))
 
 (defvar *method-data* (make-oned-table))
 

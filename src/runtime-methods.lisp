@@ -436,8 +436,18 @@ than the default accepts."
     ((complex rational) (coerce number '(complex double-float)))
     (t number)))
 
+(defun ->inexact-arguments (numbers)
+  "NUMBERS made ready for an irrational function.  When all are exact
+they become double-floats; when some are floats, the exact ones are left
+to Common Lisp's contagion, which makes them floats of the others'
+format, so that (expt 2.0s0 2) and (atan2 1.0s0 1) answer single-floats."
+  (if (some (lambda (n) (or (floatp n) (and (complexp n) (floatp (realpart n)))))
+            numbers)
+      numbers
+      (mapcar #'->inexact-argument numbers)))
+
 (defun inexact-function (fn)
-  (lambda (&rest numbers) (apply fn (mapcar #'->inexact-argument numbers))))
+  (lambda (&rest numbers) (apply fn (->inexact-arguments numbers))))
 
 (defun complex-magnitude (number)
   "ABS, with an exact complex argument made inexact first, as for the other
@@ -464,8 +474,7 @@ irrational functions; an exact real stays exact."
                     (lambda (base power)
                       (if (and (rationalp base) (integerp power))
                           (expt base power)
-                          (expt (->inexact-argument base)
-                                (->inexact-argument power))))))
+                          (apply #'expt (->inexact-arguments (list base power)))))))
 (defparameter dylan/sqrt
   (dylan%generic-fn 'sqrt one-number (inexact-function #'sqrt)))
 

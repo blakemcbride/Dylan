@@ -1253,4 +1253,15 @@ error
 error
 ((\"aλb\" {the class <unicode-string>}) (\"zbλa\" {the class <unicode-string>}) (\"λa\" {the class <unicode-string>}) (\"BΛA\" {the class <unicode-string>}) (\"bλa\" {the class <unicode-string>}) (\"bλ\" {the class <unicode-string>}) (\"abλ\" {the class <unicode-string>}) (\"ba\" {the class <unicode-string>}))
 ")
+
+ ;; expt and atan2 of a single-float and an exact number answer a
+ ;; single-float, by Common Lisp's contagion; of exact numbers alone, a
+ ;; double-float, or for expt with an integer power, an exact number.
+ (expt-atan2-formats
+  "(define show (method (x) (list x (object-class x))))
+   (print (map show (list (expt 2.0s0 2) (expt 2 2.0s0) (expt 2.0s0 1/2) (expt 4 0.5d0) (expt 2 1/2) (expt 1/2 2))))
+   (print (map show (list (atan2 1.0s0 1) (atan2 1 1.0s0) (atan2 1 1) (atan2 1 1.0d0))))"
+  "((4.0s0 {the class <single-float>}) (4.0s0 {the class <single-float>}) (1.4142135s0 {the class <single-float>}) (2.0 {the class <double-float>}) (1.4142135623730951 {the class <double-float>}) (1/4 {the class <ratio>}))
+((0.7853982s0 {the class <single-float>}) (0.7853982s0 {the class <single-float>}) (0.7853981633974483 {the class <double-float>}) (0.7853981633974483 {the class <double-float>}))
+")
 )

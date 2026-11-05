@@ -267,7 +267,7 @@ dropped unevaluated?"
          ;; Chapter 7: an error if the variable is not defined when the
          ;; set! is done.
          (emit "(void)dy_check_bound(~a, ~a);" (global-c-name var)
-               (c-string-literal (map 'list #'char-code (module-var-string var))))
+               (c-utf8-literal (module-var-string var)))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))
          (deliver dest (atom-c (ir-global-set-value e)))))
       (ir-set
@@ -316,7 +316,7 @@ dropped unevaluated?"
            (when (and (eq (module-var-module var) (dylan-module))
                       (char/= (char name 0) #\%))
              (emit "dy_name_method(~a, ~a);" (global-c-name var)
-                   (c-string-literal (map 'list #'char-code name)))))
+                   (c-utf8-literal name))))
          (when (module-var-thread-local-p var)
            ;; The value threads made from now on start with.
            (emit "dy_thread_variable_defaults[~d] = ~a;"
@@ -376,7 +376,7 @@ every use of VAR has instead, or something without effect no one uses?"
           c))
       (t
        (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
-               (c-string-literal (map 'list #'char-code (module-var-string var))))))))
+               (c-utf8-literal (module-var-string var)))))))
 
 (defun deliver-call (dest expr)
   "Give DEST the values of EXPR, a C call of something that answers
@@ -1210,7 +1210,7 @@ each of its Dylan functions -> the name of the module it was written in."
                                     *primitive-functions*))))
             (when name
               (format stream "    dy_name_method(DY_OBJ(&~a), ~a);~%" p
-                      (c-string-literal (map 'list #'char-code name))))))
+                      (c-utf8-literal name)))))
         (dolist (top (ir-program-toplevels ir))
           (unless (inert-toplevel-p top)
             (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"

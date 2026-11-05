@@ -291,7 +291,9 @@ typedef struct DyVector {          /* <simple-object-vector>             */
 
 typedef struct DySymbol {          /* <symbol> and <keyword>             */
     DyWrapper *wrapper;
-    D name;                        /* <byte-string>, as first spelled    */
+    D name;                        /* as first spelled: a <byte-string>,
+                                      or a <unicode-string> if it has a
+                                      character beyond a byte            */
     uint64_t hash;                 /* of the case-folded name; 0 until
                                       interned                           */
 } DySymbol;
@@ -713,6 +715,13 @@ D dy_pair(D head, D tail);
  * that name, making it if need be.  Safe to call from any thread. */
 D dy_intern_symbol(const char *name, size_t size);
 D dy_intern_keyword(const char *name, size_t size);
+D dy_intern_symbol_string(D string);    /* a <byte-string> or <unicode-string> */
+D dy_intern_keyword_string(D string);
+D dy_symbol_name(D symbol);              /* a new string of its name */
+const char *dy_symbol_utf8(D symbol);    /* its name as UTF-8 */
+/* Characters' case, as Common Lisp's char-downcase and char-upcase */
+uint32_t dy_char_downcase(uint32_t c);
+uint32_t dy_char_upcase(uint32_t c);
 
 /* ---------------------------------------------------------- Functions
  *

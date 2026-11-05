@@ -421,25 +421,20 @@ PRIMITIVE(pair_p) { need(self, argc, 1, 1); return DY_BOOL(dy_kind_p(a0, DY_KIND
 
 /* ------------------------------------------------- Symbols and keywords */
 
-static D string_bytes(D s, const char **bytes, size_t *size) {
-    if (!dy_kind_p(s, DY_KIND_BYTE_STRING)) dy_error("not a <byte-string>", s);
-    *bytes = ((DyByteString *)DY_PTR(s))->data;
-    *size = DY_INT_VALUE(((DyByteString *)DY_PTR(s))->size);
+static D as_name(D s) {
+    if (!dy_kind_p(s, DY_KIND_BYTE_STRING) && !dy_kind_p(s, DY_KIND_UNICODE_STRING))
+        dy_error("not a <byte-string> or <unicode-string>", s);
     return s;
 }
 
 PRIMITIVE(intern_symbol) {
     need(self, argc, 1, 1);
-    const char *b; size_t n;
-    string_bytes(a0, &b, &n);
-    return dy_intern_symbol(b, n);
+    return dy_intern_symbol_string(as_name(a0));
 }
 
 PRIMITIVE(intern_keyword) {
     need(self, argc, 1, 1);
-    const char *b; size_t n;
-    string_bytes(a0, &b, &n);
-    return dy_intern_keyword(b, n);
+    return dy_intern_keyword_string(as_name(a0));
 }
 
 /* (%symbol-name symbol-or-keyword): a new string of its name */
@@ -447,8 +442,7 @@ PRIMITIVE(symbol_name) {
     need(self, argc, 1, 1);
     if (!dy_kind_p(a0, DY_KIND_SYMBOL) && !dy_kind_p(a0, DY_KIND_KEYWORD))
         dy_error("not a symbol or keyword", a0);
-    DyByteString *s = DY_PTR(((DySymbol *)DY_PTR(a0))->name);
-    return dy_make_byte_string(s->data, DY_INT_VALUE(s->size));
+    return dy_symbol_name(a0);
 }
 
 /* ------------------------------------------------------------- Hashing */
@@ -596,7 +590,8 @@ PRIMITIVE(method_name) {
     need(self, argc, 1, 1);
     if (!dy_kind_p(a0, DY_KIND_FUNCTION)) dy_error("not a method", a0);
     const char *name = ((DyFunction *)DY_PTR(a0))->name;
-    return name ? dy_intern_symbol(name, strlen(name)) : DY_FALSE;
+    return name ? dy_intern_symbol_string(dy_make_string_from_utf8(name, strlen(name)))
+                : DY_FALSE;
 }
 
 PRIMITIVE(singleton_object) {

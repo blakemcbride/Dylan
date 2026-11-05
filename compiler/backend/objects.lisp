@@ -102,7 +102,7 @@ order variables are met (CONTENT-NAME)."
             (subseq (content-hash (module-var-string var)) 0 8))))
 
 (defun c-name-string (string)
-  (c-string-literal (map 'list #'char-code string)))
+  (c-utf8-literal string))
 
 ;;; ------------------------------------------------------- Static values
 

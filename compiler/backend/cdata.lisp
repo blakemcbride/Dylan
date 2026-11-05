@@ -59,8 +59,16 @@ compilation)."
 
 ;;; C literals
 
+(defun c-utf8-literal (string)
+  "A C string literal holding STRING, as UTF-8: for the runtime's
+messages, which it reads as UTF-8, and for file names."
+  (c-string-literal (coerce (sb-ext:string-to-octets string :external-format :utf-8)
+                            'list)))
+
 (defun c-string-literal (codes)
   "A C string literal holding the bytes CODES (integers below 256)."
+  (assert (every (lambda (c) (< c 256)) codes) ()
+          "Internal error: a C string of more than bytes.")
   (with-output-to-string (out)
     (write-char #\" out)
     (dolist (c codes)

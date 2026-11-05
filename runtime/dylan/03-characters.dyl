@@ -21,13 +21,23 @@ module: dylan
 ;;; Symbols and keywords are not case sensitive, but keep the case they
 ;;; were first written in.
 
+;;; A name with a character beyond a byte is a <unicode-string>.
+
+(define %name-string
+  (method (s)
+    (if (or (%instance? s <byte-string>) (%instance? s <unicode-string>))
+        s
+        (as <unicode-string> s))))
+
 (define-method as ((class (singleton <symbol>)) (s <string>))
-  (%intern-symbol (as <byte-string> s)))
+  (%intern-symbol (%name-string s)))
 
 (define-method as ((class (singleton <keyword>)) (s <string>))
-  (%intern-keyword (as <byte-string> s)))
+  (%intern-keyword (%name-string s)))
 
 (define-method as ((class (singleton <string>)) (s <symbol>)) (%symbol-name s))
 (define-method as ((class (singleton <string>)) (k <keyword>)) (%symbol-name k))
-(define-method as ((class (singleton <byte-string>)) (s <symbol>)) (%symbol-name s))
-(define-method as ((class (singleton <byte-string>)) (k <keyword>)) (%symbol-name k))
+(define-method as ((class (singleton <byte-string>)) (s <symbol>))
+  (as <byte-string> (%symbol-name s)))
+(define-method as ((class (singleton <byte-string>)) (k <keyword>))
+  (as <byte-string> (%symbol-name k)))

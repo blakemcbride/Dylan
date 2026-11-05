@@ -28,8 +28,7 @@ bool dy_specializer_matches(D x, D spec) {
 static const char *generic_name(D generic) {
     D symbol = ((DyGeneric *)DY_PTR(generic))->name;
     if (symbol == DY_FALSE) return "an anonymous generic function";
-    DySymbol *name = DY_PTR(symbol);
-    return ((DyByteString *)DY_PTR(name->name))->data;
+    return dy_symbol_utf8(symbol);
 }
 
 _Noreturn void dy_no_applicable_method(D generic) {

@@ -577,4 +577,35 @@ found
   "(define-generic-function frob~a~s (x)) (frob~a~s 'q)"
   ""
   :error "no applicable method for frob~a~s")
+
+ ;; Chapter 15: symbols and keywords whose names have characters beyond
+ ;; Latin-1, and case ignored beyond ASCII -- but only between the cases
+ ;; of a pair, so the Kelvin sign is not a K.
+ (unicode-names
+  "(format #t \"~s ~s~%\" 'λ (as <string> 'λ))
+   (print (list 'café 'Straße λ: (as <keyword> \"ζeta\")))
+   (define-class <ζ> (<object>))
+   (print <ζ>)
+   (print (make <ζ>))
+   (define-generic-function ξ (x))
+   (print ξ)
+   (print (id? (as <symbol> \"É\") (as <symbol> \"é\")))
+   (print (id? 'Ωmega 'ωMEGA))
+   (print (id? (as <symbol> \"λ\") 'λ))
+   (print (id? (as <symbol> \"K\") (as <symbol> \"K\")))
+   (define λvar 7)
+   (print (+ λvar 1))
+   (ξ 1)"
+  "λ \"λ\"
+(café Straße λ: ζeta:)
+{the class <ζ>}
+{instance of <ζ>}
+{the generic function ξ}
+#t
+#t
+#t
+#f
+8
+"
+  :error "no applicable method for ξ")
 )

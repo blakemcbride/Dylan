@@ -1063,4 +1063,54 @@ base
   "{the generic function foo}
 "
   :error "make: debug-name: must be a symbol: \"foo\"")
+ ;; Both answer the methods in definition order; a redefined method moves
+ ;; to the end.
+ (generic-function-methods-order
+  "(define-generic-function g (x))
+(define-method g ((x <integer>)) 1)
+(define-method g ((x <string>)) 2)
+(define-method g ((x <symbol>)) 3)
+(define-method g ((x <integer>)) 4)
+(print (map (method (m) (first (method-specializers m))) (generic-function-methods g)))
+(print (g 1))"
+  "({the class <string>} {the class <symbol>} {the class <integer>})
+4
+")
+ ;; Chapter 10: with too few sample arguments no method is applicable.
+ (sorted-applicable-methods-few-arguments
+  "(define-generic-function h (x y))
+(define-method h ((x <integer>) (y <integer>)) 1)
+(print (sorted-applicable-methods h 3))
+(print (sorted-applicable-methods h))
+(print (size (sorted-applicable-methods h 3 4)))"
+  "()
+()
+1
+")
+ ;; The reflective functions of chapter 10 say what is wrong with their
+ ;; arguments; find-method takes a list.
+ (reflection-argument-checks
+  "(define-macro try (e)
+  `(print (handler-case ,e
+            ((<error> condition: c)
+             (apply format #f (condition-format-string c) (condition-format-arguments c))))))
+(define-generic-function g (x))
+(define-method g ((x <string>)) x)
+(try (find-method g (list <string>)))
+(try (find-method g (vector <string>)))
+(try (find-method 5 '()))
+(try (generic-function-methods 5))
+(try (sorted-applicable-methods 5))
+(try (method-specializers 5))
+(try (function-arguments 5))
+(try (applicable-method? 5))"
+  "{a method on g}
+\"not a list: #({the class <string>})\"
+\"not a generic function: 5\"
+\"not a generic function: 5\"
+\"not a generic function: 5\"
+\"not a method: 5\"
+\"function-arguments: not a function: 5\"
+\"not a function: 5\"
+")
 )

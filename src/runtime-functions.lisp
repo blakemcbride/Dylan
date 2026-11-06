@@ -147,24 +147,32 @@
 ;;; Misc Generic Functions
 ;;;
 
+(defun check-generic-function (object)
+  (unless (dylan%generic-function? object)
+    (dylan-call dylan/error "not a generic function: ~s" object)))
+
+;;; The generic functions of chapter 10 below have one method, on
+;;; <object>, which checks its arguments, as in compiled programs.
+
 (defparameter dylan/find-method
-  (dylan%generic-fn 'find-method
-                    (make-param-list `((generic-function ,<generic-function>)
-                                       (specializers ,<list>))
-                                     nil nil nil)
+  (dylan%generic-fn 'find-method two-objects
                     ;; Chapter 10: #f for a list of the wrong length too,
                     ;; which no method of the generic function has.
                     (lambda (generic-function specializers)
+                      (check-generic-function generic-function)
+                      (unless (listp specializers)
+                        (dylan-call dylan/error "not a list: ~s" specializers))
                       (or-false
                        (and (= (length specializers)
                                (generic-function.nrequired generic-function))
                             (find-method generic-function specializers))))))
 
 (defparameter dylan/generic-function-methods
-  (dylan%generic-fn 'generic-function-methods
-                    (make-param-list `((generic-function ,<generic-function>))
-                                     nil nil nil)
-                    #'generic-function.methods))
+  (dylan%generic-fn 'generic-function-methods one-object
+                    ;; Kept newest first; answered in definition order.
+                    (lambda (generic-function)
+                      (check-generic-function generic-function)
+                      (reverse (generic-function.methods generic-function)))))
 
 ;;; The hyperbolic functions are Common Lisp's (chapter 14), with exact
 ;;; arguments made double-floats as for the others in runtime-methods.lisp.
@@ -218,9 +226,10 @@
                       generic-function)))
 
 (defparameter dylan/function-arguments
-  (dylan%generic-fn 'function-arguments
-                    (make-param-list `((fn ,<function>)) nil nil nil)
-                    nil))
+  (dylan%generic-fn 'function-arguments one-object
+                    (lambda (object)
+                      (dylan-call dylan/error "function-arguments: not a function: ~s"
+                                  object))))
 
 (defun keyword-sequence (keys)
   "Chapter 10: function-arguments' third value -- #f without #key, else the
@@ -272,9 +281,12 @@ own functions such as make take any keyword arguments, is #rest without
                           (complex real imaginary)))))
 
 (defparameter dylan/method-specializers
-  (dylan%generic-fn 'method-specializers
-                    (make-param-list `((method ,<method>)) nil nil nil)
-                    #'method.specializers))
+  (dylan%generic-fn 'method-specializers one-object
+                    (lambda (method)
+                      (unless (and (functionp method)
+                                   (not (dylan%generic-function? method)))
+                        (dylan-call dylan/error "not a method: ~s" method))
+                      (method.specializers method))))
 
 ;;; Chapter 10: singleton is a function, not a generic function.
 (defparameter dylan/singleton
@@ -282,12 +294,16 @@ own functions such as make take any keyword arguments, is #rest without
 
 (defparameter dylan/sorted-applicable-methods
   (dylan%generic-fn 'sorted-applicable-methods
-                    (make-param-list `((generic-function ,<generic-function>))
-                                     nil t nil)
+                    (make-param-list `((generic-function ,<object>)) nil t nil)
+                    ;; With too few sample arguments no method applies.
                     (lambda (generic-function &rest args)
-                      (sorted-applicable-methods
-                       (generic-function.methods generic-function)
-                       args))))
+                      (check-generic-function generic-function)
+                      (if (< (length args)
+                             (generic-function.nrequired generic-function))
+                          '()
+                          (sorted-applicable-methods
+                           (generic-function.methods generic-function)
+                           args)))))
 
 (defparameter dylan/remove-method
   (dylan%generic-fn

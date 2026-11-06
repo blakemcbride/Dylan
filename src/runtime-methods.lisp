@@ -969,8 +969,10 @@ slot-descriptors leaves them out, as a compiled program does.")
 (defparameter dylan/applicable-method?
   (dylan%generic-fn
    'applicable-method?
-   (make-param-list `((fn ,<function>)) nil t nil)
+   (make-param-list `((fn ,<object>)) nil t nil)
    (lambda (fn &rest args)
+     (unless (functionp fn)
+       (dylan-call dylan/error "not a function: ~s" fn))
      ;; METHOD-APPLICABLE? answers a list of specificities; Dylan wants #t.
      ;; Too few sample arguments make a method inapplicable, not an error.
      (flet ((applicable? (method)

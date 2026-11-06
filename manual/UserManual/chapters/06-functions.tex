@@ -726,9 +726,10 @@ useful in tools and for understanding dispatch.
 \item[\code{(find-method \meta{generic-function} \meta{specializers})}]
   \index{find-method@\code{find-method}}
   returns the method whose specializers are exactly the classes and
-  singletons in the sequence \meta{specializers}, or \code{\#f}.
+  singletons in the list \meta{specializers}, or \code{\#f}.
 \item[\code{(generic-function-methods \meta{generic-function})}]
-  returns a sequence of all its methods, in no particular order.
+  returns a sequence of all its methods, in the order they were
+  defined.
 \item[\code{(method-specializers \meta{method})}]
   returns a sequence of a method's specializers, one for each required
   parameter.

@@ -339,6 +339,7 @@ static bool same_specializer(D x, D y) {
 PRIMITIVE(find_method) {
     need(self, argc, 2, 2);
     DyVector *methods = DY_PTR(as_generic(a0)->methods);
+    if (a1 != DY_EMPTY && !dy_kind_p(a1, DY_KIND_PAIR)) dy_error("not a list", a1);
     for (intptr_t i = 0; i < DY_INT_VALUE(methods->size); i++) {
         D specs = ((DyFunction *)DY_PTR(methods->data[i]))->specializers;
         if (specs == DY_FALSE) continue;

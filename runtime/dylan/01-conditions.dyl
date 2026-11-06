@@ -44,7 +44,7 @@ module: dylan
 ;;; Chapter 13 makes these abstract classes, which cannot be the first
 ;;; argument to make (chapter 2); their subclasses can.
 (define %abstract
-  (method (class) (error "make: ~s is an abstract class, which cannot be instantiated" class)))
+  (method (class) (error "cannot make an instance of this class: ~s" class)))
 (define-method make ((class (singleton <condition>)) #rest arguments) (%abstract class))
 (define-method make ((class (singleton <serious-condition>)) #rest arguments) (%abstract class))
 (define-method make ((class (singleton <error>)) #rest arguments) (%abstract class))

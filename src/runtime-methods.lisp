@@ -324,7 +324,7 @@ same."
         (dylan%find-keyword
          rest k (lambda ()
                   (dylan-call dylan/error
-                              "make: the required init-keyword is missing" k))))
+                              "make: the required init-keyword is missing: ~s" k))))
       (vector-iterate slots
                       (lambda (i slot)
                         (declare (ignore i))

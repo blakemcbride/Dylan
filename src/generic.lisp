@@ -451,8 +451,7 @@ cache's entry for the call."
                     (format nil "no applicable method for ~a"
                             (double-tildes
                              (or (generic-function-print-name generic-function)
-                                 "an anonymous generic function")))
-                    original-args))
+                                 "an anonymous generic function")))))
       (when (> ngiven nreq)             ; More supplied than required
         (check-extra-arguments data (but-first nreq original-args) applicable))
       (call-methods entries multiple-values original-args))))

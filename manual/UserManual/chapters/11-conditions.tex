@@ -632,8 +632,7 @@ Lisp's own description.
 
 (handler-case (f "s")
   ((<error> condition: c) c))
-; C:    no applicable method for f
-; Lisp: generic-dispatch -- no applicable methods {the generic function f} ("s")
+; => no applicable method for f
 
 (define-class <account> (<object>)
   (balance type: <integer> init-value: 0))

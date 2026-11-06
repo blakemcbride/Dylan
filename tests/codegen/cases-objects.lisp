@@ -801,4 +801,11 @@ b-slot
   "329
 337
 ")
+ ;; No applicable method: the message names the generic function, with no
+ ;; format arguments (user manual, chapter 11).
+ (no-applicable-method-message
+  "(define-method f ((x <integer>)) x)
+(print (handler-case (f \"s\") ((<error> condition: c) (list (condition-format-string c) (condition-format-arguments c)))))"
+  "(\"no applicable method for f\" ())
+")
 )

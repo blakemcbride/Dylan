@@ -2176,6 +2176,32 @@ error
   "(923 8560 9424 8064 411 612 7305 42955 68944)
 (955 8544 9398 8072 42956 68944 7305 8490 304)
 ")
+ ;; A dotted list is = to one with = elements and final tail (chapter 12),
+ ;; so it hashes alike and can be a table key (chapter 9); and a circular
+ ;; list has a hash too.
+ (dotted-list-keys
+  "(define t (make <table>))
+(set! (element t (cons 'a 'b)) 1)
+(print (element t (cons 'a 'b)))
+(print (= (=hash '(1 . 2)) (=hash (cons 1 2))))
+(print (= (=hash '(1 2 . 3)) (=hash (list* 1 2 3))))
+(print (= (=hash '(1 2)) (=hash (vector 1 2))))
+(set! (element t '(1 2 . 3)) 'x)
+(print (element t (list* 1 2 3)))
+(print (element t (list* 1 2 4) default: 'none))
+(print (size t))
+(define c (list 1 2 3))
+(set! (cdr (cddr c)) c)
+(print (= (=hash c) (=hash c)))"
+  "1
+#t
+#t
+#t
+x
+none
+2
+#t
+")
  ;; A range's element at an index is computed, not walked to, and is
  ;; FROM + index * BY (chapter 12).
  (range-element-by-arithmetic

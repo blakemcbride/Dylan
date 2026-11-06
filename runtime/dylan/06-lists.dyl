@@ -181,3 +181,24 @@ module: dylan
 ;;; Dotted lists are = when their elements and final cdrs are.
 (define-method binary= ((x <pair>) (y <pair>))
   (and (= (car x) (car y)) (= (cdr x) (cdr y))))
+
+;;; =hash of a list: a proper one's is any sequence's of its elements; a
+;;; dotted one hashes as though its final tail were one more element; and
+;;; a circular one, which is = only to one with the same elements, by its
+;;; first two, as the interactive implementation hashes an unbounded
+;;; collection (tortoise and hare, as size).
+(define-method =hash ((l <pair>))
+  (bind-methods ((circular? (slow fast)
+                   (cond ((not (%pair? fast)) #f)
+                         ((not (%pair? (cdr fast))) #f)
+                         ((id? (cdr (cdr fast)) (cdr slow)) #t)
+                         (else: (circular? (cdr slow) (cdr (cdr fast)))))))
+    (bind ((limit (if (circular? l l) 2 #f)))
+      (for ((p l (cdr p))
+            (i 0 (binary+ i 1))
+            (h 0 (%logand (binary+ h (%entry-hash i (=hash (car p))))
+                          72057594037927935)))
+           ((or (not (%pair? p)) (id? i limit))
+            (if (or limit (id? p '()))
+                h
+                (%logand (binary+ h (%entry-hash i (=hash p))) 72057594037927935)))))))

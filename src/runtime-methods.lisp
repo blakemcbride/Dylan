@@ -705,6 +705,18 @@ slot-descriptors leaves them out, as a compiled program does.")
 (defun combine-hash (hash1 hash2)
   (logand (+ (* 31 hash1) hash2) most-positive-fixnum))
 
+;;; The final cdr of LIST when it is a dotted list; NIL when it is a
+;;; proper or circular one.
+(defun dotted-list-tail (list)
+  (let ((slow list) (fast list))
+    (loop
+      (loop repeat 2 do
+        (cond ((null fast) (return-from dotted-list-tail nil))
+              ((atom fast) (return-from dotted-list-tail fast))
+              (t (setf fast (cdr fast)))))
+      (setf slow (cdr slow))
+      (when (eq slow fast) (return nil)))))
+
 (defparameter dylan/=hash
   (dylan%generic-fn '=hash one-object
                     (lambda (object)
@@ -737,7 +749,26 @@ slot-descriptors leaves them out, as a compiled program does.")
                ;; its key/element pairs, independent of iteration order.
                ;; An unbounded collection is = only to one with the same
                ;; elements, so its first two elements are enough, and
-               ;; hashing them terminates.
+               ;; hashing them terminates.  A dotted list is = only to one
+               ;; with = elements and final tail, so it hashes as though
+               ;; its tail were one more element.
+               (if (and (consp collection) (dotted-list-tail collection))
+                   (let ((hash 0) (index 0))
+                     (loop for rest = collection then (cdr rest)
+                           while (consp rest)
+                           do (setf hash
+                                    (logxor hash
+                                            (combine-hash
+                                             (dylan-call dylan/=hash index)
+                                             (dylan-call dylan/=hash
+                                                         (car rest)))))
+                              (incf index)
+                           finally (return
+                                     (logxor hash
+                                             (combine-hash
+                                              (dylan-call dylan/=hash index)
+                                              (dylan-call dylan/=hash
+                                                          rest))))))
                (let ((hash 0)
                      (index 0)
                      (sequence? (true? (dylan-call dylan/instance? collection
@@ -758,7 +789,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                                                        (current-element
                                                         collection state)))))
                             (incf index)))
-                 hash))))
+                 hash)))))
 
 (defparameter dylan/floor (dylan%generic-fn 'floor one-real nil))
 

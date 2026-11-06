@@ -555,16 +555,29 @@ answer a float when either is one (chapter 14), or signal an error.")
       (subclass-info-p class (spec-class spec))
       (subclass-info-p (spec-class spec) class)))
 
+(defun makes-extended-floats-p (ir)
+  "Can the program make an <extended-float>: does it use the class as a
+value, or direct-subclasses, which could answer it?  No literal is one,
+and the library makes one only of that class."
+  (let ((names (mapcar #'dylan-var '("<extended-float>" "direct-subclasses"))))
+    (some (lambda (top)
+            (and (not (library-form-p top))
+                 (some (lambda (v) (member v names)) (referenced-variables top))))
+          (ir-program-toplevels ir))))
+
 (defun double-contagion-p (g args)
   "Is the call of G on ARGS sure to answer a <double-float>, if it answers
 at all: G one of *FLOAT-CONTAGIOUS*, one argument known to be a
-<double-float>, and no method but the library's able to apply to a
+<double-float>, the other not an <extended-float>, which would make the
+value one (chapter 14), and no method but the library's able to apply to a
 <double-float> in its place?"
   (let ((double (find-class-info "<double-float>" *classes*)))
     (and (= (length args) 2)
          (member (gfun-var g) (mapcar #'dylan-var *float-contagious*))
          (loop for a in args for i from 0
                thereis (and (eq (argument-fit a "<double-float>") :yes)
+                            (or (not *extended-floats*)
+                                (eq (argument-fit (nth (- 1 i) args) "<extended-float>") :no))
                             (every (lambda (m)
                                      (or (library-method-p m)
                                          (not (may-apply-p (nth i (gmethod-specs m)) double))))

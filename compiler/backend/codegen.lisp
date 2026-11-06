@@ -81,6 +81,9 @@ inline operation tests its arguments when run.")
 (defvar *cfun* nil "The CFUN being generated.")
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
 (defvar *used-primitives* nil)
+(defvar *extended-floats* t
+  "Can the program make an <extended-float>?  See MAKES-EXTENDED-FLOATS-P
+(calls.lisp).")
 (defvar *used-primitive-entries* nil "C names of primitive entries called directly.")
 (defvar *absorbed-uses* nil
   "IVAR -> how many of its uses are as the function of a call made without
@@ -1158,8 +1161,10 @@ each of its Dylan functions -> the name of the module it was written in."
         (*label-counter* 0)
         (*temp-counter* 0)
         (*toplevel-order* (toplevel-order ir))
+        (*extended-floats* t)
         (fns (ir-fns ir)))
-    (setf *reflective-methods* (uses-method-reflection-p ir))
+    (setf *reflective-methods* (uses-method-reflection-p ir)
+          *extended-floats* (makes-extended-floats-p ir))
     (number-thread-variables ir)
     (prepare-object-system ir)
     (unless *debug*

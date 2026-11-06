@@ -455,4 +455,21 @@ made-specially
 \"ERR: arithmetic error: floating-point-overflow\"
 \"ERR: arithmetic error: floating-point-overflow\"
 ")
+ ;; An <extended-float> stays one through arithmetic done unboxed.
+ (extended-float-contagion
+  "(define e (as <extended-float> 1.5))
+(define-method g (x) (object-class (* (* x 2.0) 1.0)))
+(print (g e))
+(print (+ (identity e) 2.5 1))"
+  "{the class <extended-float>}
+5.0l0
+")
+ ;; An <extended-float> made through a class found by direct-subclasses,
+ ;; with the class never named, stays one too.
+ (extended-float-by-reflection
+  "(define-method g (x) (object-class (* (* x 2.0) 1.0)))
+(define e (last (direct-subclasses <float>)))
+(print (list e (g (as e 1))))"
+  "({the class <extended-float>} {the class <extended-float>})
+")
 )

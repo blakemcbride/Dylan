@@ -189,6 +189,13 @@ module: dylan
 (define-method instance? (object type) (%instance? object type))
 (define-generic-function subclass? (class-1 class-2))
 (define-method subclass? (class-1 class-2) (%subclass? class-1 class-2))
+;;; seal and make-read-only (chapters 10 and 11) have methods for what
+;;; they take, as in the interactive implementation.
+(define-generic-function seal (class))
+(define-method seal ((class <class>)) (%seal class))
+(define-generic-function make-read-only (object))
+(define-method make-read-only ((class <class>)) (%make-read-only class))
+(define-method make-read-only ((g <generic-function>)) (%make-read-only g))
 (define-generic-function all-superclasses (class))
 (define-method all-superclasses (class) (%all-superclasses class))
 (define-generic-function direct-superclasses (class))

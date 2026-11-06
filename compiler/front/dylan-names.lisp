@@ -107,6 +107,7 @@
     "%direct-superclasses" "%direct-subclasses"
     "%generic-function-methods" "%method-specializers"
     "%applicable-method?" "%sorted-applicable-methods" "%find-method"
+    "%seal" "%make-read-only"
     "%function-arguments" "%slot-getter" "%slot-setter" "%slot-type"
     "%slot-allocation" "%init-value" "%init-function" "%init-keyword"
     "%slot-value" "%slot-initialized?" "%slot-descriptor"

@@ -585,24 +585,25 @@ irrational functions; an exact real stays exact."
                       ;; In the order defined, as the compiler to C has them
                       (reverse (population->list (class.subclasses class))))))
 
-(defparameter dylan/instance?
-  (dylan%generic-fn 'instance?
-                    (make-param-list `((object ,<object>) (class ,<class>))
-                                     nil nil nil)
-                    (lambda (obj class) (bool (subclass? (get-type obj) class)))))
+;;; instance?, subclass? and slot-value each have one method, of two
+;;; objects, which checks them, as in the compiled library.
 
 ;;; Chapters 4, 6 and 13: a singleton is a type too.
-(add-method dylan/instance?
-            (dylan%function->method
-             (make-param-list `((object ,<object>) (type ,<singleton>))
-                              nil nil nil)
-             (lambda (obj type) (bool (id? obj (singleton.object type))))))
+(defparameter dylan/instance?
+  (dylan%generic-fn 'instance? two-objects
+                    (lambda (obj type)
+                      (cond ((class? type) (bool (subclass? (get-type obj) type)))
+                            ((singleton? type) (bool (id? obj (singleton.object type))))
+                            (t (dylan-call dylan/error "not a class or singleton: ~s"
+                                           type))))))
 
 (defparameter dylan/subclass?
-  (dylan%generic-fn 'subclass?
-                    (make-param-list `((class-1 ,<class>) (class-2 ,<class>))
-                                     nil nil nil)
-                    (boolean-function #'subclass?)))
+  (dylan%generic-fn 'subclass? two-objects
+                    (lambda (class-1 class-2)
+                      (dolist (class (list class-1 class-2))
+                        (unless (class? class)
+                          (dylan-call dylan/error "not a class: ~s" class)))
+                      (bool (subclass? class-1 class-2)))))
 
 (defparameter dylan/object-class
   (dylan%generic-fn 'object-class one-object #'get-type))

@@ -338,9 +338,11 @@ a descriptor of a class INSTANCE is not an instance of is an error."
 (defparameter dylan/slot-value
   (dylan%generic-fn
    'slot-value
-   (make-param-list `((instance ,<object>) (slot-desc ,<slot-descriptor>))
+   (make-param-list `((instance ,<object>) (slot-desc ,<object>))
                     nil nil nil)
    (lambda (instance slot-desc)
+     (unless (slot? slot-desc)
+       (dylan-call dylan/error "not a slot descriptor: ~s" slot-desc))
      (unless (singleton-slot-values instance slot-desc)
        (setf slot-desc (instance-slot-descriptor instance slot-desc)))
      (let ((allocation (slot.allocation slot-desc))

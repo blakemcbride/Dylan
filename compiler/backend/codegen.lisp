@@ -376,7 +376,10 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       ;; where it is defined.
       (ir-define-generic
        (let ((g (gethash (ir-define-generic-var e) *gfuns*)))
-         (when g (dolist (line (generic-definition-c g)) (emit "~a" line))))
+         (if (gethash e *inconsistent-declarations*)
+             (emit "dy_error_naming(\"define-generic-function: \", ~a, \" is inconsistent with the existing generic function\", 0);"
+                   (c-utf8-literal (name-string (module-var-name (ir-define-generic-var e)))))
+             (when g (dolist (line (generic-definition-c g)) (emit "~a" line)))))
        (deliver dest (definition-value (ir-define-generic-var e))))
       (ir-define-method
        (let ((m (gethash (ir-define-method-fn e) *method-of-fn*)))
@@ -1201,6 +1204,8 @@ each of its Dylan functions -> the name of the module it was written in."
         (*gfuns* (make-hash-table :test #'eq))
         (*method-of-fn* (make-hash-table :test #'eq))
         (*definition-fns* (make-hash-table :test #'eq))
+        (*generic-declarations* (make-hash-table :test #'eq))
+        (*inconsistent-declarations* (make-hash-table :test #'eq))
         (*own-class-refs* (make-hash-table :test #'eq))
         (*constant-globals* (make-hash-table :test #'eq))
         (*sdef-of-node* (make-hash-table :test #'eq))

@@ -150,8 +150,8 @@ congruent with it: DEFINE-METHOD gave it only what its first method had."
                    (eq rest? (generic-function-data.rest? data))
                    (same-keys? keys (generic-function-data.keys data)))
         (dylan-call dylan/error
-                    "define-generic-function -- inconsistent with the existing generic function"
-                    name)))))
+                    (format nil "define-generic-function: ~a is inconsistent with the existing generic function"
+                            (definition-name-string name)))))))
 
 (defun dylan%call/cc (receiver)
   "Used for BIND-EXIT and HANDLER-CASE.  Dylan only ever escapes with its

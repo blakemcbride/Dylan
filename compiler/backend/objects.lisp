@@ -75,6 +75,13 @@ option of its own define-class, where the class is already its value.")
   "Top-level IR-FN -> its place in the program, and module variable -> the
 place of the top-level form that defines it (inline.lisp, TOPLEVEL-ORDER).")
 
+(defvar *generic-declarations* nil
+  "MODULE-VAR -> its first define-generic-function, which the generic
+function follows.")
+(defvar *inconsistent-declarations* nil
+  "The later define-generic-functions not consistent with the first, an
+error when they run (chapter 6).")
+
 (defvar *definition-fns* nil
   "Definition node -> the IR-FN whose code it is in.")
 
@@ -889,19 +896,35 @@ against the slot's type as make checks it."
     (:setter (values 2 nil))
     (:default (values 1 t))))
 
+(defun consistent-declarations-p (a b)
+  "Do the define-generic-functions A and B declare the same parameters?"
+  (let ((ka (ir-define-generic-keys a)) (kb (ir-define-generic-keys b)))
+    (and (= (ir-define-generic-required a) (ir-define-generic-required b))
+         (eq (and (ir-define-generic-rest a) t) (and (ir-define-generic-rest b) t))
+         (cond ((or (null ka) (null kb)) (and (null ka) (null kb)))
+               ((or (atom ka) (atom kb)) (and (atom ka) (atom kb)))
+               (t (and (subsetp ka kb) (subsetp kb ka)))))))
+
 (defun build-generics (definitions)
   (dolist (d definitions)
     (at-node (d)
       (typecase d
         (ir-define-generic
-         (let ((g (gfun-for (ir-define-generic-var d))))
-           (when (gfun-declared-keys g)
-             (compile-error "define-generic-function: ~a is defined twice"
-                            (name-string (module-var-name (ir-define-generic-var d)))))
+         (block build-generics-declaration
+          (let* ((var (ir-define-generic-var d))
+                (g (gfun-for var))
+                (first (gethash var *generic-declarations*)))
+           ;; Chapter 6: a generic function may be declared again,
+           ;; consistently: the same required parameters, #rest and keys.
+           (when first
+             (unless (consistent-declarations-p first d)
+               (setf (gethash d *inconsistent-declarations*) t))
+             (return-from build-generics-declaration))
+           (setf (gethash var *generic-declarations*) d)
            (setf (gfun-required g) (ir-define-generic-required d)
                  (gfun-variable-p g) (or (ir-define-generic-rest d)
                                          (and (ir-define-generic-keys d) t))
-                 (gfun-declared-keys g) (or (ir-define-generic-keys d) :none))))
+                 (gfun-declared-keys g) (or (ir-define-generic-keys d) :none)))))
         (ir-define-method
          (let* ((fn (ir-define-method-fn d))
                 (var (ir-define-method-var d)))

@@ -452,11 +452,11 @@ other than a generic function.
 \end{dylan}
 
 The options are keyword/value pairs reserved by the manual for future use.
-Both implementations accept them and ignore them. In the Common Lisp
-implementation a generic function may be declared again, as when a file is
-loaded a second time, if the new declaration has the same number of
-required parameters, the same \code{\#rest} and the same keys; in the
-compiler to C it may be declared only once.
+Both implementations accept them and ignore them. A generic function may
+be declared again, as when a file is loaded a second time, if the new
+declaration has the same number of required parameters, the same
+\code{\#rest} and the same keys; a declaration that differs is an error
+when it is evaluated, and the generic function is left as it was.
 
 \section{Specializers and singletons}\label{sec:functions-singletons}
 

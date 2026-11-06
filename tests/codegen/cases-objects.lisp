@@ -1331,4 +1331,39 @@ done
 (int str)
 \"no applicable method for g\"
 ")
+ ;; Chapter 6: a generic function may be declared again with the same
+ ;; parameters; a declaration that differs is an error when it runs.
+ (generic-declared-again
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(define-generic-function g (x #key a))
+(define-method g ((x <integer>) #key a) (list 'int a))
+(print (define-generic-function g (x #key a)))
+(print (g 1 a: 3))
+(print (try (method () (define-generic-function g (x y)))))
+(print (try (method () (define-generic-function g (x #rest r)))))
+(print (try (method () (define-generic-function g (x #key b)))))
+(print (g 1 a: 4))
+(define-method h (x) x)
+(print (define-generic-function h (x)))
+(print (try (method () (define-generic-function h (x y)))))
+(define-generic-function (setter foo) (v x))
+(define-generic-function (setter foo) (v x))
+(print (try (method () (define-generic-function (setter foo) (v)))))
+(define-method nested () (define-generic-function q (a b)) 'ok)
+(define-generic-function q (a b))
+(print (nested))"
+  "g
+(int 3)
+\"define-generic-function: g is inconsistent with the existing generic function\"
+\"define-generic-function: g is inconsistent with the existing generic function\"
+\"define-generic-function: g is inconsistent with the existing generic function\"
+(int 4)
+h
+\"define-generic-function: h is inconsistent with the existing generic function\"
+\"define-generic-function: (setter foo) is inconsistent with the existing generic function\"
+ok
+")
 )

@@ -842,4 +842,46 @@ b-slot
 2
 \"ERR: no applicable method for v\"
 ")
+ ;; A slot inherited from two superclasses must have one definition, or
+ ;; the class must define it (chapter 6, "Redefining Slots").
+ (inherited-slot-clash
+  "(define-class <a> (<object>) (s init-value: 1))
+(define-class <b> (<object>) (s init-value: 2))
+(define-class <ab> (<a> <b>))
+(print (s (make <ab>)))"
+  ""
+  :compile-error "<ab> inherits two different definitions of the slot s, from <a> and <b>")
+ ;; The same definitions -- options whose values are id?, a slot inherited
+ ;; along two paths from one class, or overridden on one of them -- are
+ ;; one; values known only when the class is defined are compared then.
+ (inherited-slot-agreement
+  "(define-class <a> (<object>) (s init-value: 1.5 type: <real>))
+(define-class <b> (<object>) (s init-value: 1.5 type: <real>))
+(define-class <ab> (<a> <b>))
+(print (s (make <ab>)))
+(define-class <base> (<object>) (t init-value: 'x))
+(define-class <l> (<base>))
+(define-class <r> (<base>))
+(define-class <lr> (<l> <r>))
+(print (t (make <lr>)))
+(define-class <r2> (<base>) (t init-value: 'y))
+(define-class <lr2> (<l> <r2>))
+(print (t (make <lr2>)))
+(define-method three () 3)
+(define-class <c> (<object>) (u init-value: (three)))
+(define-class <d> (<object>) (u init-value: (+ 1 2)))
+(define-class <cd> (<c> <d>))
+(print (u (make <cd>)))
+(define-class <e> (<object>) (w init-value: (list 1)))
+(define-class <f> (<object>) (w init-value: (list 1)))
+(print 'before)
+(define-class <ef> (<e> <f>))
+(print 'after)"
+  "1.5
+x
+y
+3
+before
+"
+  :error "<ef> inherits two different definitions of the slot w, from <e> and <f>")
 )

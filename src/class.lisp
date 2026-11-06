@@ -137,18 +137,20 @@
 
 ;;;; And now the good stuff ...
 
-(defun test-that-all-slots-for-this-getter-are-identical (my-slot my-getter slots)
-  (flet ((slots-equal? (slot1 slot2)
-           (every (lambda (f) (eq (funcall f slot1) (funcall f slot2)))
-                  (list #'slot.debug-name #'slot.getter #'slot.setter
-                        #'slot.type #'slot.init-value #'slot.init-function
-                        #'slot.init-keyword #'slot.required-init-keyword
-                        #'slot.allocation))))
-    (dolist (slot slots t)
-      (when (eq (slot.getter slot) my-getter)
-        (unless (slots-equal? my-slot slot)
-          (dylan-call dylan/error "multiple inheritance slot clash"
-                      my-slot slot))))))
+(defun check-inherited-slots-agree (class slot origin other other-origin)
+  "Chapter 6: a slot CLASS inherits from two superclasses, SLOT from
+ORIGIN and OTHER from OTHER-ORIGIN, must have exactly the same definition
+in both -- the options' values id? -- or CLASS must define it."
+  (unless (and (every (lambda (f) (eq (funcall f slot) (funcall f other)))
+                      (list #'slot.debug-name #'slot.getter #'slot.setter
+                            #'slot.init-keyword #'slot.required-init-keyword
+                            #'slot.allocation #'slot.has-initial-value?))
+               (every (lambda (f) (id? (funcall f slot) (funcall f other)))
+                      (list #'slot.type #'slot.init-value #'slot.init-function)))
+    (dylan-call dylan/error
+                "~a inherits two different definitions of the slot ~a, from ~a and ~a"
+                (class.debug-name class) (slot.debug-name slot)
+                (class.debug-name other-origin) (class.debug-name origin))))
 
 (defun vector-iterate (v fn)
   (dotimes (i (length v))
@@ -245,8 +247,8 @@ slot vector, the class-data size and the instance-data size."
                          ((subclass? origin (cdr entry))
                           (setf (car entry) slot
                                 (cdr entry) origin))
-                         (t (test-that-all-slots-for-this-getter-are-identical
-                             slot getter (list (car entry))))))))
+                         (t (check-inherited-slots-agree
+                             class slot origin (car entry) (cdr entry)))))))
     ;; Then lay out the data.  CLASS always gets accessor methods of its
     ;; own: a slot's offset in CLASS may differ from its offset in a
     ;; superclass, and a superclass's method could otherwise be the most

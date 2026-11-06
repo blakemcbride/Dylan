@@ -368,6 +368,105 @@ that the program defines, or NIL."
           (let ((sd (find getter (gclass-sdefs cg) :key #'sdef-getter)))
             (when sd (return sd))))))))
 
+;;; Slots inherited along two paths (chapter 6, "Redefining Slots"): the
+;;; definitions must be exactly the same, the options' values id?, or the
+;;; class must define the slot itself.
+
+(defun slot-definition-in (class getter)
+  "The definition of the slot GETTER reads in CLASS: its own, or the one
+it inherits; NIL if none the program defines."
+  (dolist (c (class-info-cpl class) nil)
+    (let* ((cg (class-gclass c))
+           (sd (and cg (find getter (gclass-sdefs cg) :key #'sdef-getter))))
+      (when sd (return sd)))))
+
+(defun inherited-slot-origins (class getter)
+  "The definitions of the slot GETTER that CLASS inherits through its
+direct superclasses, but for any that another of them overrides."
+  (let ((sds '()))
+    (dolist (super (class-info-supers class))
+      (let ((sd (slot-definition-in super getter)))
+        (when sd (pushnew sd sds))))
+    (remove-if (lambda (sd)
+                 (some (lambda (other)
+                         (and (not (eq other sd)) (sdef-class other) (sdef-class sd)
+                              (subclass-info-p (sdef-class other) (sdef-class sd))))
+                       sds))
+               (nreverse sds))))
+
+(defun slot-option-comparison (sd1 sd2 reader what)
+  "Whether the option of SD1 and SD2 that READER reads from their specs
+(WHAT names its storage) is the same: :SAME, :DIFFER, or a list of the
+two C expressions to compare with id? when the program runs."
+  (flet ((known (sd)
+           (let ((atom (funcall reader (sdef-spec sd))))
+             (cond (atom (static-value atom))
+                   ;; No type: is <object> (chapter 6)
+                   ((eq reader #'slot-spec-type)
+                    (list :global (dylan-var "<object>")))
+                   (t (list :none))))))
+    (let ((k1 (known sd1)) (k2 (known sd2)))
+      (cond ((and k1 k2)
+             (cond ((and (eq (car k1) :constant) (eq (car k2) :constant))
+                    (if (dylan::id? (second k1) (second k2)) :same :differ))
+                   ((equal k1 k2) :same)
+                   ((or (eq (car k1) :none) (eq (car k2) :none)) :differ)
+                   ((and (eq (car k1) :global) (eq (car k2) :global)
+                         (global-class (second k1)) (global-class (second k2)))
+                    (if (eq (global-class (second k1)) (global-class (second k2)))
+                        :same
+                        :differ))
+                   ((and (funcall reader (sdef-spec sd1)) (funcall reader (sdef-spec sd2)))
+                    (list (sdef-c sd1 what) (sdef-c sd2 what)))
+                   (t :differ)))
+            ((and (funcall reader (sdef-spec sd1)) (funcall reader (sdef-spec sd2)))
+             (list (sdef-c sd1 what) (sdef-c sd2 what)))
+            (t :differ)))))
+
+(defun slot-clash-message (g getter sd1 sd2)
+  (format nil "~a inherits two different definitions of the slot ~a, from ~a and ~a"
+          (class-info-name (gclass-info g))
+          (name-string (module-var-name getter))
+          (class-info-name (sdef-class sd1)) (class-info-name (sdef-class sd2))))
+
+(defun slot-clash-checks (g)
+  "For the program's class G: signal a compile error if it inherits a slot
+whose definitions differ; else answer the checks, (MESSAGE C1 C2) each, of
+options whose values are compared when the class is defined."
+  (let* ((class (gclass-info g))
+         (own (mapcar #'sdef-getter (gclass-sdefs g)))
+         (getters '())
+         (checks '()))
+    (dolist (c (rest (class-info-cpl class)))
+      (let ((cg (class-gclass c)))
+        (when cg
+          (dolist (sd (gclass-sdefs cg))
+            (unless (member (sdef-getter sd) own)
+              (pushnew (sdef-getter sd) getters))))))
+    (dolist (getter (nreverse getters) (nreverse checks))
+      (let ((origins (inherited-slot-origins class getter)))
+        (dolist (other (rest origins))
+          (let* ((first (first origins))
+                 (message (slot-clash-message g getter first other))
+                 (comparisons
+                   (list (if (and (eq (sdef-allocation first) (sdef-allocation other))
+                                  (eq (sdef-setter first) (sdef-setter other))
+                                  (eq (slot-spec-init-keyword (sdef-spec first))
+                                      (slot-spec-init-keyword (sdef-spec other)))
+                                  (eq (slot-spec-required-init-keyword (sdef-spec first))
+                                      (slot-spec-required-init-keyword (sdef-spec other))))
+                             :same
+                             :differ)
+                         (slot-option-comparison first other #'slot-spec-type "type")
+                         (slot-option-comparison first other #'slot-spec-init-value "init")
+                         (slot-option-comparison first other #'slot-spec-init-function
+                                                 "initfn"))))
+            (if (member :differ comparisons)
+                (let ((*location* (or (gclass-location g) *location*)))
+                  (compile-error "~a" message))
+                (dolist (c comparisons)
+                  (when (consp c) (push (cons message c) checks))))))))))
+
 (defun inherited-slot-definitions (class getter)
   "Every definition of the slot GETTER reads in a proper superclass of
 CLASS that the program defines."
@@ -467,6 +566,12 @@ slot features the superior definition specified."
                  (when old
                    (check-slot-redefinition sd old)
                    (check-slot-type-redefinition sd))))))
+  ;; Chapter 6: a slot inherited from two superclasses with different
+  ;; definitions must be defined in the class.  What differs when compiling
+  ;; is an error now; what may differ is checked where the class is
+  ;; defined (SLOT-CLASH-CHECKS).
+  (loop for g being the hash-values of *gclasses*
+        do (slot-clash-checks g))
   ;; Number the instance slots, and lay out each class's instances.
   (let ((count 0))
     (loop for g being the hash-values of *gclasses*
@@ -616,7 +721,11 @@ in layout order."
         (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)))
     (gen-slot-initialization sd))
   (when (ir-define-class-p node)
-    (emit "~a = 1;" (gclass-ready-c (gethash (ir-define-class-var node) *gclasses*)))))
+    (let ((g (gethash (ir-define-class-var node) *gclasses*)))
+      (loop for (message c1 c2) in (slot-clash-checks g)
+            do (emit "if (!dy_identical(~a, ~a)) dy_error(~a, 0);"
+                     c1 c2 (c-utf8-literal message)))
+      (emit "~a = 1;" (gclass-ready-c g)))))
 
 ;;; Accessors
 

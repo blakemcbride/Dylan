@@ -4,8 +4,10 @@
 
 A compiler, written in Common Lisp (SBCL), that translates 1992 prefix-syntax
 Dylan programs into portable C. A standard C compiler (gcc or clang) then
-produces the executable. Garbage collection is the Boehm-Demers-Weiser
-conservative collector (`libgc`), built for threads.
+produces the executable. Garbage collection is by the Memory Pool System
+(MPS), generational and moving, by default, or by the Boehm-Demers-Weiser
+conservative collector (`libgc`) with `--gc boehm`; both are built for
+threads.
 
 The targets are the language's original ones: **small and fast**.
 
@@ -343,8 +345,8 @@ frame, so generated code never calls `setjmp` and can always make tail
 calls. Handlers are frames in the same chain; `signal` and `next-handler`
 are in C. The condition classes and `signal`, `error`, `cerror`,
 `check-type`, `abort`, `break` and `default-handler` are written in Dylan
-in `runtime/dylan/conditions.dyl` — the first file of the library, which
-every program is now compiled with. The runtime's own errors (wrong
+in `runtime/dylan/01-conditions.dyl` — one of the first files of the
+library, which every program is now compiled with. The runtime's own errors (wrong
 arguments, type errors, overflow, no applicable method, …) are signalled as
 `<simple-error>` and `<type-error>` conditions. There is no interactive
 debugger: an unhandled serious condition prints its message and exits with

@@ -154,4 +154,4 @@ $ make -C manual/UserManual
 | `gc.h: No such file or directory` | `--gc boehm` without the Boehm collector's headers: install `gc-devel` / `libgc-dev` |
 | `This C compiler cannot guarantee tail calls (musttail)` | the C compiler is too old: use Clang, GCC 15, or `--trampoline` |
 | `sbcl: not found` | SBCL is not installed or not on `PATH` |
-| `Could not make the runtime library.` | `make` is missing, or the runtime did not compile; run `make -C runtime` to see why |
+| `dylanc: could not make the runtime library.` | `make` is missing, or the runtime did not compile; run `make -C runtime` to see why |

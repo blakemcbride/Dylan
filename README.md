@@ -329,12 +329,12 @@ Each line gives the best of three runs for each, their ratios, and
 
 | | |
 |---|---|
-| `src/` | the Common Lisp implementation — 40 Lisp files, ~15,500 lines |
+| `src/` | the Common Lisp implementation — 41 Lisp files, ~16,800 lines |
 | `Makefile` | builds `bin/dylan`, the Common Lisp implementation as one executable (`src/build-dylan.lisp`); `make distclean` (or `realclean`) removes everything built |
 | `src/README` | how it works, and which Thomas file each file grew from |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
 | `dylan-examples.dyl` | the examples from the Dylan book |
-| `compiler/` | the compiler to C, in Common Lisp — ~9,100 lines |
+| `compiler/` | the compiler to C, in Common Lisp — ~10,400 lines |
 | `bin/dylanc` | its command line |
 | `runtime/` | its runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
 | `tests/` | its tests |

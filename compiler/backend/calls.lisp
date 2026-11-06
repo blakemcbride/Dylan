@@ -194,6 +194,10 @@ gfun), (values :primitive c-name), or NIL."
         (n (length (ir-call-arguments e))))
     (when (eq (car v) :global)
       (let ((var (second v)) (swap nil))
+        ;; A variable the program assigns holds what it will when the
+        ;; call runs.
+        (when (variable-global-p var (ir-call-site e))
+          (return-from call-callee nil))
         (when (and (eq (module-var-module var) (dylan-module)) (> n 2))
           (loop for (name target) in *variadic-folds*
                 when (and (eq var (dylan-var name)) (gethash (dylan-var target) *gfuns*))

@@ -365,7 +365,8 @@ does."
                                       (copy (ir-if-else e))))
                    (ir-call (let ((new (make-ir-call (atom* (ir-call-function e))
                                                      (mapcar #'atom* (ir-call-arguments e)))))
-                              (setf (gethash new *inline-chains*) chain)
+                              (setf (gethash new *inline-chains*) chain
+                                    (ir-call-site new) binder)
                               new))
                    (ir-prim (make-ir-prim (ir-prim-name e) (mapcar #'atom* (ir-prim-arguments e))))
                    (ir-global-ref (make-ir-global-ref (ir-global-ref-var e)))

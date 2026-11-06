@@ -782,7 +782,7 @@ in layout order."
       (dolist (var (list (sdef-getter sd) (sdef-setter sd)))
         (let ((g (and var (gethash var *gfuns*))))
           (when g
-            (when (gfun-defined-c g) (emit "~a = 1;" (gfun-defined-c g)))
+            (dolist (line (generic-definition-c g)) (emit "~a" line))
             (dolist (m (gfun-methods g))
               (when (and (eq (gmethod-sdef m) sd) (added-when-run-p m))
                 (dolist (line (method-attachment-c m)) (emit "~a" line)))))))))
@@ -1056,7 +1056,7 @@ the methods with its specializers are detached."
      (loop for s in replaced
            when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
      (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
-     (and (gfun-defined-c g) (list (format nil "~a = 1;" (gfun-defined-c g))))
+     (generic-definition-c g)
      (list (if replaced
                (format nil "dy_add_method(~a, ~a, (const D[]){ ~{~a~^, ~} }, ~d);"
                        (address (gfun-c-name g)) (address (gmethod-object-c m))
@@ -1074,6 +1074,41 @@ one."
           (g (gethash var *gfuns*)))
       (cond (c (gclass-ready-c c))
             (g (gfun-defined-c g))))))
+
+;;; Assigned module variables (chapters 5 and 7)
+
+(defun library-var-p (var)
+  (eq (module-var-module var) (dylan-module)))
+
+(defun read-only-var-p (var)
+  "Is the module variable VAR read-only: a class's, or a program's
+define-generic-function's (chapter 5)?  The library's functions are
+plain variables, as the manual's own (set! (setter element) ...) has
+them."
+  (or (and (global-class var) t)
+      (let ((g (gethash var *gfuns*)))
+        (and g (gfun-declared-keys g) (not (library-var-p var)) t))))
+
+(defun variable-global-p (var &optional fn)
+  "Must the code of FN read the module variable VAR when it runs?  The
+program assigns VAR, and FN is not the library reading a variable of its
+own: the library's C is the same for every program."
+  (and (gethash var *assigned-globals*)
+       (not (and fn (ir-fn-library-p fn) (library-var-p var)))))
+
+(defun generic-definition-c (g)
+  "The C statements a definition of the generic function G does when it
+runs, besides attaching a method: G's variable has its value (chapter 6).
+If the program assigns the variable, it is given G when it has no value,
+and must hold G otherwise."
+  (let ((var (gfun-var g)))
+    (append
+     (and (gfun-defined-c g) (list (format nil "~a = 1;" (gfun-defined-c g))))
+     (and (variable-global-p var)
+          (let ((cell (global-c-name var)) (object (address (gfun-c-name g))))
+            (list (format nil "if (~a == DY_UNBOUND) ~a = ~a; else dy_check_generic_variable(~a, ~a, ~a);"
+                          cell cell object cell object
+                          (c-utf8-literal (name-string (module-var-name var))))))))))
 
 (defun fn-toplevel (fn)
   (loop while (ir-fn-parent fn) do (setf fn (ir-fn-parent fn)))

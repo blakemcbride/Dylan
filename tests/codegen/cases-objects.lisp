@@ -1215,4 +1215,112 @@ inner
 {the class <e>}
 \"the variable <d>@dylan-user has no value\"
 ")
+ ;; Chapter 5: only define-class and define-generic-function make read-only
+ ;; variables.  A define-method variable and the library's functions can
+ ;; be assigned, and a call reads the variable when it runs; define-method
+ ;; on a variable holding a function that is not generic is an error.
+ (set-of-method-variable
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(define-method f (x) x)
+(define-method call-f () (f 1))
+(print (f 1))
+(set! f (method (x) 2))
+(print (f 1))
+(print (call-f))
+(print (try (method () (define-method f ((x <integer>)) 3))))
+(define-method g (x) 'g)
+(define-method h (x) 'h)
+(set! f g)
+(print (f 1))
+(define-generic-function dg (x))
+(print (setter element))
+(print (try (method () (set! (setter element) (method (v i x) (list 'set i x))))))
+(print (try (method () (set! (element (vector 1 2) 0) 5))))
+(print (try (method () (set! car cdr))))
+(print (try (method () (car '(1 2)))))
+(print (try (method () (set! + -))))
+(print (try (method () (+ 5 2))))"
+  "1
+2
+2
+\"f is defined both as a variable and as a generic function\"
+g
+{the generic function (setter element)}
+{an anonymous method}
+5
+{method cdr}
+(2)
+{method -}
+3
+")
+ ;; The library's functions assigned and restored; the library's own calls
+ ;; are unaffected.
+ (set-of-library-variable
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(define-method keep (name f) (print (try (method () (bind ((old (f))) (list name old))))))
+(print (try (method () (bind ((old element)) (set! element 5) (set! element old) 'element-ok))))
+(print (try (method () (bind ((old make)) (set! make 5) (set! make old) 'make-ok))))
+(print (try (method () (bind ((old signal)) (set! signal 5) (set! signal old) 'signal-ok))))
+(print (try (method () (bind ((old +)) (set! + -) (bind ((r (list (+ 5 2) (reduce1 + '(1 2 3))))) (set! + old) r)))))
+(print (try (method () (bind ((old +)) (set! + -) (bind ((r (list (+ 5 2) (reduce1 + '(1 2 3))))) (set! + old) r)))))
+(print (try (method () (bind ((old car)) (set! car cdr) (bind ((r (list (car (quote (1 2))) (first (quote (1 2)))))) (set! car old) r)))))"
+  "element-ok
+make-ok
+signal-ok
+(3 -4)
+(3 -4)
+((2) 1)
+")
+ ;; A call inside a method reads the variable too, so an assignment changes
+ ;; the calls that follow it, even recursive ones; the old function still
+ ;; works through another variable.
+ (calls-after-set
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(print (try (method () (set! h 1))))
+(define-method h () 1)
+(define-method f (x) (if (> x 0) (f (- x 1)) 'done))
+(print (f 3))
+(set! f (method (x) 'other))
+(print (f 3))
+(define-method count-down (x) (if (> x 0) (count-down (- x 1)) 'done))
+(define-method user () (count-down 2))
+(print (user))
+(set! count-down (method (x) (list 'replaced x)))
+(print (user))
+(define-method size ((x <integer>)) 'int-size)
+(print (list (size 5) (size '(1 2))))
+(bind ((old size))
+  (set! size (method (x) 'replaced))
+  (print (list (size 5) (size '(1 2))))
+  (set! size old))
+(print (list (size 5) (size '(1 2))))
+(define-method g ((x <integer>)) 'int)
+(define-method g ((x <string>)) 'str)
+(define saved g)
+(set! g (method (x) 'any))
+(print (list (g 1) (saved 1) (saved \"s\")))
+(set! g saved)
+(print (list (g 1) (g \"s\")))
+(print (try (method () (g 1.5))))"
+  "\"the variable h@dylan-user has no value\"
+done
+other
+done
+(replaced 2)
+(int-size 2)
+(replaced replaced)
+(int-size 2)
+(any int str)
+(int str)
+\"no applicable method for g\"
+")
 )

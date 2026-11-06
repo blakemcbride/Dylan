@@ -66,6 +66,15 @@ void dy_add_method(D generic, D method, const D *replaced, intptr_t n) {
     g->methods = v;
 }
 
+/* The variable NAME, which define-method defines, holds VALUE; it must be
+   GENERIC, the generic function the compiler made for it (chapter 6). */
+void dy_check_generic_variable(D value, D generic, const char *name) {
+    if (value == generic) return;
+    if (!dy_kind_p(value, DY_KIND_GENERIC))
+        dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
+    dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);
+}
+
 _Noreturn void dy_unbound_slot(const char *getter) {
     dy_error_naming("the slot ", getter, " is not initialized", 0);
 }

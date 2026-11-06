@@ -176,12 +176,10 @@ counter                        ; => 1
   x)                           ; => 10
 \end{dylan}
 
-\noindent Some module variables cannot be assigned. A variable made by
-\code{define-class} is read-only in both implementations. In the compiler
-to C a variable holding a generic function cannot be assigned either, nor
-can any variable of the \code{dylan} module; these are errors when
-compiling. The Common Lisp implementation allows assigning a generic
-function's variable, as the 1992 manual does.
+\noindent Some module variables cannot be assigned: a variable made by
+\code{define-class} or \code{define-generic-function} is read-only
+(Section~\ref{sec:modules-readonly}). A variable that \code{define-method}
+alone made, or one of the library's functions, is ordinary.
 
 \subsection{The extended form}\label{sec:control-extended-set}
 

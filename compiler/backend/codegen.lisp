@@ -76,6 +76,9 @@ inline operation tests its arguments when run.")
 (defvar *cfuns* nil "IR-FN -> CFUN, for every fn that is a C function.")
 (defvar *cfun* nil "The CFUN being generated.")
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
+(defvar *global-values* nil
+  "MODULE-VAR -> the C expression the program's cell for a library variable
+it assigns starts with: the library's value, when that is a constant.")
 (defvar *used-primitives* nil)
 (defvar *library-comparisons* t
   "Have binary< and binary= the library's methods alone?  See
@@ -217,7 +220,28 @@ for a thread variable, the thread's slot for it."
                   (setf (gethash var *thread-variables*)
                         (hash-table-count *thread-variables*))))
       (or (gethash var *globals*)
-          (setf (gethash var *globals*) (var-c-name "dyg_" var)))))
+          (progn
+            ;; The program's cell for a library variable it assigns
+            ;; starts with the library's value.
+            (when (library-var-p var)
+              (let ((value (library-value-c var)))
+                (when value (setf (gethash var *global-values*) value))))
+            (setf (gethash var *globals*) (var-c-name "dyg_" var))))))
+
+(defun note-used-primitive (c)
+  "C, the C expression of a predefined value: if it is a function written
+in C, the program declares it."
+  (let ((primitive (search "dy_prim_" c)))
+    (when primitive
+      (pushnew (subseq c primitive (1- (length c))) *used-primitives* :test #'string=)))
+  c)
+
+(defun library-value-c (var)
+  "The C expression of the library's value of its variable VAR, if that is
+a generic function or a function written in C; else NIL."
+  (or (gethash var *constant-globals*)
+      (let ((c (predefined-c-value var *classes*)))
+        (and c (note-used-primitive c)))))
 
 (defun unsupported (node what)
   (let ((*location* (or (and (ir-node-p node) (ir-node-location node)) *location*)))
@@ -282,9 +306,9 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       (ir-global-ref (deliver dest (global-ref-c e dest)))
       (ir-global-set
        (let ((var (ir-global-set-var e)))
-         (when (module-var-predefined-p var)
-           (unsupported e "Assigning a variable of the dylan module"))
-         (when (gethash var *constant-globals*)
+         ;; Chapter 5: the variables of classes and of
+         ;; define-generic-function are read-only.
+         (when (read-only-var-p var)
            (compile-error "~a holds a class or generic function and cannot be assigned"
                           (name-string (module-var-name var))))
          ;; Chapter 7: an error if the variable is not defined when the
@@ -352,9 +376,8 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       ;; work is done when compiling.  A class's slot values are evaluated
       ;; where it is defined.
       (ir-define-generic
-       (let* ((g (gethash (ir-define-generic-var e) *gfuns*))
-              (flag (and g (gfun-defined-c g))))
-         (when flag (emit "~a = 1;" flag)))
+       (let ((g (gethash (ir-define-generic-var e) *gfuns*)))
+         (when g (dolist (line (generic-definition-c g)) (emit "~a" line))))
        (deliver dest (definition-value (ir-define-generic-var e))))
       (ir-define-method
        (let ((m (gethash (ir-define-method-fn e) *method-of-fn*)))
@@ -393,6 +416,13 @@ every use of VAR has instead, or something without effect no one uses?"
 (defun global-ref-c (e &optional dest)
   (let ((var (ir-global-ref-var e)))
     (cond
+      ((variable-global-p var (and *cfun* (cfun-fn *cfun*)))
+       ;; The program assigns VAR: its code reads it when it runs.
+       (let ((cell (global-c-name var)))
+         (if (gethash var *global-values*)
+             cell
+             (format nil "dy_check_bound(~a, ~a)" cell
+                     (c-utf8-literal (module-var-string var))))))
       ((gethash var *constant-globals*)
        ;; A program's class or generic function: its variable has no
        ;; value until its definition has run, unless that is sure.
@@ -415,11 +445,7 @@ every use of VAR has instead, or something without effect no one uses?"
                                (name-string (module-var-name var)))
                 (unsupported e (format nil "~a (it has no definition in the runtime yet)"
                                        (module-var-string var)))))
-          (let ((primitive (search "dy_prim_" c)))
-            (when primitive
-              (pushnew (subseq c (+ primitive) (1- (length c))) *used-primitives*
-                       :test #'string=)))
-          c))
+          (note-used-primitive c)))
       (t
        (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
                (c-utf8-literal (module-var-string var)))))))
@@ -1156,6 +1182,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*cdata* (make-cdata))
         (*classes* (prepare-classes (built-in-class-infos)))
         (*globals* (make-hash-table :test #'eq))
+        (*global-values* (make-hash-table :test #'eq))
         (*closed-over* (make-hash-table :test #'eq))
         (*local-exits* (make-hash-table :test #'eq))
         (*thread-variables* (make-hash-table :test #'eq))
@@ -1264,8 +1291,9 @@ each of its Dylan functions -> the name of the module it was written in."
         (dolist (line closure-lines) (format stream "~a~%" line))
         (terpri stream)
         (loop for var being the hash-keys of *globals* using (hash-value name)
-              do (format stream "static D ~a = DY_UNBOUND;   /* ~a */~%"
-                         name (c-comment-text (module-var-string var))))
+              do (format stream "static D ~a = ~a;   /* ~a */~%"
+                         name (or (gethash var *global-values*) "DY_UNBOUND")
+                         (c-comment-text (module-var-string var))))
         (terpri stream)
         (dolist (text texts) (format stream "~a~%" text))
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))

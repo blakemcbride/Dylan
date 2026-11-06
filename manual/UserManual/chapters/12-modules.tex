@@ -438,7 +438,10 @@ variable always holds the same object, though that object may itself be
 changed. \code{define-class} and \code{define-generic-function} create
 read-only variables, so a class or generic function cannot be replaced by
 assignment. Variables made by \code{define} (or by \code{define-method}
-alone) are ordinary and can be assigned with \code{set!}.
+alone) are ordinary and can be assigned with \code{set!}, and so can the
+library's functions, as the 1992 manual's own example \code{(set! (setter
+element) ...)} has them. A call through such a variable finds whatever it
+holds when the call runs.
 
 The two implementations check this at different times. The compiler to C
 refuses the program:

@@ -39,11 +39,11 @@ TESTS   = ../tests/runtime
 
 all: $(VDIR)/libdylan.a $(VDIR)/libdylan-trampoline.a
 
-$(VDIR)/%.o: c/%.c c/dylan.h c/primitive.h Makefile | $(VDIR)
+$(VDIR)/%.o: c/%.c c/dylan.h c/primitive.h c/casemap.h Makefile | $(VDIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 # The same, for programs built to use trampolines instead of musttail.
-$(VDIR)/trampoline/%.o: c/%.c c/dylan.h c/primitive.h Makefile | $(VDIR)/trampoline
+$(VDIR)/trampoline/%.o: c/%.c c/dylan.h c/primitive.h c/casemap.h Makefile | $(VDIR)/trampoline
 	$(CC) $(ALL_CFLAGS) -DDY_TRAMPOLINE -c $< -o $@
 
 $(VDIR)/libdylan.a: $(OBJECTS) $(GC_OBJECT)

@@ -5,7 +5,6 @@
 
 #include "dylan.h"
 #include <stdio.h>
-#include <locale.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,7 +40,6 @@ void dy_gc_stress(void) {
 #endif
 
 void dy_init(void) {
-    setlocale(LC_CTYPE, "C.UTF-8");        /* for the case of characters */
 #ifdef DY_MPS
     dy_gc_init();
 #else

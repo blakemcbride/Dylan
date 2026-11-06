@@ -2168,4 +2168,12 @@ error
 \"ERR: as: () cannot be converted to {the class <pair>}\"
 \"ERR: as: () cannot be converted to {the class <pair>}\"
 ")
+ ;; Case mapping beyond ASCII is the same in both implementations, whatever
+ ;; the host's C library says.
+ (case-mapping-tables
+  "(print (map (method (c) (as <integer> (as-uppercase (as <character> c)))) (list 955 8560 9424 8064 411 612 7305 42955 68944)))
+(print (map (method (c) (as <integer> (as-lowercase (as <character> c)))) (list 923 8544 9398 8072 42956 68944 7305 8490 304)))"
+  "(923 8560 9424 8064 411 612 7305 42955 68944)
+(955 8544 9398 8072 42956 68944 7305 8490 304)
+")
 )

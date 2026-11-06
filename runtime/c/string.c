@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
-#include <wctype.h>
 
 D dy_make_byte_string(const char *bytes, size_t size) {
     if (size > (size_t)DY_INT_MAX) dy_error("out of memory", 0);
@@ -74,18 +73,31 @@ D dy_make_string_from_utf8(const char *bytes, size_t size) {
 /* ------------------------------------------------------------ Symbols */
 
 /* The case of a character, as Common Lisp's char-downcase and
- * char-upcase give it: only between the two of a pair of cases that map
- * to each other, so that the Kelvin sign, say, is not taken for a k. */
+ * char-upcase give it, from the interactive implementation's own tables
+ * (casemap.h, made by runtime/casemap.lisp), not the C library's, which
+ * depend on the host. */
+#include "casemap.h"
+
+static uint32_t case_lookup(const uint32_t table[][2], size_t n, uint32_t c) {
+    size_t low = 0, high = n;
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (table[mid][0] == c) return table[mid][1];
+        if (table[mid][0] < c) low = mid + 1; else high = mid;
+    }
+    return c;
+}
+
 uint32_t dy_char_downcase(uint32_t c) {
     if (c < 0x80) return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
-    wint_t l = towlower((wint_t)c);
-    return (l != (wint_t)c && towupper(l) == towupper((wint_t)c)) ? (uint32_t)l : c;
+    return case_lookup(dy_downcase_table,
+                       sizeof dy_downcase_table / sizeof dy_downcase_table[0], c);
 }
 
 uint32_t dy_char_upcase(uint32_t c) {
     if (c < 0x80) return (c >= 'a' && c <= 'z') ? c - ('a' - 'A') : c;
-    wint_t u = towupper((wint_t)c);
-    return (u != (wint_t)c && towlower(u) == towlower((wint_t)c)) ? (uint32_t)u : c;
+    return case_lookup(dy_upcase_table,
+                       sizeof dy_upcase_table / sizeof dy_upcase_table[0], c);
 }
 
 /* A name to look up: the characters of a <byte-string> or of a

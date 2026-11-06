@@ -114,6 +114,18 @@ two
   ""
   :compile-error "define-macro must be at top level")
 
+ ;; define-module and define-for-macros are defining forms too (chapters
+ ;; 12 and 16).
+ (module-not-top-level
+  "(define f (method (x) (define-module zz (use dylan)) x))"
+  ""
+  :compile-error "define-module must be at top level")
+
+ (define-for-macros-not-top-level
+  "(define f (method (x) (define-for-macros (define y 1)) x))"
+  ""
+  :compile-error "define-for-macros must be at top level")
+
  (macro-never-stops
   "(define-macro forever () '(forever))
    (forever)"

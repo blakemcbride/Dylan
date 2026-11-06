@@ -861,7 +861,7 @@ call, with the macro's name, as the compiler to C reports it."
                                        multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
   (unless (null bound-vars)
-    (dylan%error "define-for-macros must be at top level" forms))
+    (dylan%error "define-for-macros must be at top level"))
   (compile-expression
    `(begin ,@forms) nil module-vars
    (lambda (new-vars preamble output)

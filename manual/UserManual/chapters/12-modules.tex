@@ -89,9 +89,8 @@ Each \meta{clause} is a \code{use} clause, an \code{export} clause or a
 namespace of their own, separate from variables, so \code{define-module}
 creates no variable, and a module may share its name with a variable.
 \code{define-module} is a defining form: it belongs at top level or
-inside a top-level \code{begin}. The compiler to C reports one inside a
-method (``define-module must be at top level''); the interactive
-implementation does not check.
+inside a top-level \code{begin}. One inside a method is an error
+(``define-module must be at top level'').
 
 \subsection{\code{use} clauses}\label{sec:modules-use}
 

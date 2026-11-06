@@ -159,7 +159,7 @@ each class its specializers name could have an instance: the class is not
 one the library or program defines, or it or a subclass is used as a
 value by what is kept (made, say, or answered), not only named as a
 specializer or superclass -- or the program may find classes by
-direct-subclasses."
+direct-subclasses, or looks at methods (USES-METHOD-REFLECTION-P)."
   (let ((definers (make-hash-table :test #'eq)) ; var -> library forms defining it
         (needs (make-hash-table :test #'eq))    ; method form -> class vars
         (superclasses (make-hash-table :test #'eq)) ; class var -> its superclasses
@@ -183,7 +183,10 @@ direct-subclasses."
       ;; What the code generator refers to itself
       (dolist (name '("initialize"))
         (push (dylan-var name) work))
-      (setf subclasses (dylan-var "%direct-subclasses")))
+      (setf subclasses (dylan-var "%direct-subclasses")
+            ;; A program that looks at generic functions' methods sees
+            ;; them all, whatever the options it is compiled with.
+            all-possible (uses-method-reflection-p ir)))
     (labels ((make-possible (class)
                (unless (gethash class possible)
                  (setf (gethash class possible) t)

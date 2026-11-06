@@ -271,6 +271,13 @@ check "an output directory that is missing" sh -c "'$dylanc' -k -o nodir/sub/p b
 printf "(print 'ok)\n" > 'q"x.dyl'
 printf 'x' > q
 check "a \" in the file's name" sh -c "'$dylanc' 'q\"x.dyl' && test \"\$(./'q\"x')\" = ok"
+# The options a program is compiled with do not change the methods it
+# finds by reflection
+printf '(print (size (generic-function-methods size)))\n' > methods.dyl
+"$dylanc" -o methods methods.dyl >/dev/null 2>&1 && ./methods > methods1.out
+"$dylanc" --whole -o methods methods.dyl >/dev/null 2>&1 && ./methods > methods2.out
+"$dylanc" -Os -o methods methods.dyl >/dev/null 2>&1 && ./methods > methods3.out
+check "--whole and -Os keep the methods reflection finds" sh -c 'test -s methods1.out && cmp -s methods1.out methods2.out && cmp -s methods1.out methods3.out'
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

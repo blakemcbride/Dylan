@@ -515,7 +515,7 @@ PRIMITIVE(number_hash) {
     need(self, argc, 1, 1);
     if (DY_IS_INT(a0)) return DY_INT(DY_INT_VALUE(a0) & DY_INT_MAX);
     double x = dy_float_value(a0);
-    if (x == floor(x) && fabs(x) < 0x1p62) return DY_INT((intptr_t)x & DY_INT_MAX);
+    if (x == floor(x) && x >= -0x1p62 && x < 0x1p62) return DY_INT((intptr_t)x & DY_INT_MAX);
     uint64_t bits;
     memcpy(&bits, &x, sizeof bits);
     return DY_INT((intptr_t)((bits * 0x9E3779B97F4A7C15u) >> 4) & DY_INT_MAX);

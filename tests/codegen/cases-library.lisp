@@ -2136,4 +2136,10 @@ error
 (#\\z #\\z #\\c \"abc!\" (#\\a #\\b #\\c))
 (2 20 (0 10 20) {range 0 by 1 size 2})
 ")
+ ;; The least integer, -2^62, and the float equal to it hash alike.
+ (hash-of-least-integer
+  "(print (list (= -4611686018427387904 -4.611686018427387904e18)
+             (= (=hash -4611686018427387904) (=hash -4.611686018427387904e18))))"
+  "(#t #t)
+")
 )

@@ -901,8 +901,14 @@ against the slot's type as make checks it."
 (defun finish-generic (g)
   (let ((var (gfun-var g)))
     (when (some (lambda (d) (define-variable-node-p d)) (module-var-definitions var))
-      (let ((*location* (node-location (find-if #'define-variable-node-p
-                                                (module-var-definitions var)))))
+      ;; Placed at the program's definition, not the library's
+      (let ((*location*
+              (node-location
+               (or (find-if (lambda (d)
+                              (let ((l (node-location d)))
+                                (and l (not (library-source-file-p (location-file l))))))
+                            (module-var-definitions var))
+                   (find-if #'define-variable-node-p (module-var-definitions var))))))
         (compile-error "~a is defined both as a variable and as a generic function"
                        (name-string (module-var-name var)))))
     ;; In program order; a method with the same specializers as an

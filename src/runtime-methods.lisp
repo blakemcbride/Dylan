@@ -984,14 +984,19 @@ slot-descriptors leaves them out, as a compiled program does.")
     (declare (ignore next-method))
     (unless (functionp fn)
       (dylan-call dylan/error "not a function: ~s" fn))
+    ;; Chapter 8: the last argument, a sequence, is required.
+    (when (null args)
+      (dylan-call dylan/error "wrong number of arguments (~a)" 1))
     (dylan-full-apply fn multiple-values next-method/not-generic
                       (split-last
                        args
                        (lambda (early end)
-                         (append early
-                                 (if (null end)
-                                     '()
-                                     (iterate->list #'identity (car end))))))))))
+                         (let ((sequence (car end)))
+                           (unless (true? (dylan-call dylan/instance? sequence <sequence>))
+                             (dylan-call dylan/error
+                                         "apply: the last argument is not a sequence: ~s"
+                                         sequence))
+                           (append early (iterate->list #'identity sequence)))))))))
 
 (defparameter dylan/as
   (dylan%generic-fn

@@ -1056,6 +1056,16 @@ static inline D dy_tail(D pair) {
     DY_REPRESENTATION(dy_kind_p(pair, DY_KIND_PAIR), "a <pair>", pair);
     return ((DyPair *)DY_PTR(pair))->tail;
 }
+/* The stores of %set-car! and %set-cdr! done inline, where the pair is
+ * known to be one: through a D, so that a C compiler, seeing some other
+ * constant in a branch the test rules out, has no type-punned store of it
+ * to warn of. */
+static inline D dy_set_head(D pair, D value) {
+    return ((DyPair *)DY_PTR(pair))->head = value;
+}
+static inline D dy_set_tail(D pair, D value) {
+    return ((DyPair *)DY_PTR(pair))->tail = value;
+}
 
 /* Type checks of bound values (bind's typed variables). */
 void dy_check_type(D value, D type);

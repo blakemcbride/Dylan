@@ -191,6 +191,9 @@ check "bin/dylan < file: abort reported" grep -q "^Dylan error: no handler was e
 # checks guard are not shown
 echo '(print (third #(1 2) default: 5))' > bounds.dyl
 check "no C warning for a guarded constant vector" sh -c '"$0" -o bounds bounds.dyl > bounds.out 2>&1 && ! grep -q warning bounds.out && [ "$(./bounds)" = 5 ]' "$dylanc"
+# Nor about a store into the car of (), which the library's test rules out
+printf "(print (set! (car '()) 1))\n" > setcar.dyl
+check "no C warning for (set! (car '()) 1)" sh -c '"$0" -o setcar setcar.dyl > setcar.out 2>&1 && ! grep -q warning setcar.out && ./setcar 2>&1 | grep -q "not a pair: ()"' "$dylanc"
 # An unhandled warning is reported as a compiled program reports it
 echo '(signal "low ~a" 1)' | "$dylan" > warn.out 2> warn.err
 check "bin/dylan: an unhandled warning" grep -q "^Dylan warning: low 1$" warn.err

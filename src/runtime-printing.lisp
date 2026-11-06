@@ -34,7 +34,7 @@
 (the default) and #t mean *standard-output*."
   (cond ((or (false? stream) (eq stream t)) dylan/*standard-output*)
         ((dylan-stream? stream) stream)
-        (t (dylan-call dylan/error "not a stream" stream))))
+        (t (dylan-call dylan/error "not a stream: ~s" stream))))
 
 (defun stream-keyword (keys)
   (dylan-stream-argument (dylan%find-keyword keys :stream
@@ -191,7 +191,7 @@
             (out (dylan-stream-lisp target))
             (n (if (stringp control)
                    (length control)
-                   (dylan-call dylan/error "format: not a string" control))))
+                   (dylan-call dylan/error "format: not a string: ~s" control))))
        (flet ((next-argument ()
                 (if (null arguments)
                     (dylan-call dylan/error "format: too few arguments for ~s"

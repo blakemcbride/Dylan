@@ -55,7 +55,10 @@ module: dylan
                       chars))))
 
 (define %stream
-  (method (stream) (if (or (not stream) (id? stream #t)) *standard-output* stream)))
+  (method (stream)
+    (cond ((or (not stream) (id? stream #t)) *standard-output*)
+          ((%instance? stream <stream>) stream)
+          (else: (error "not a stream: ~s" stream)))))
 
 ;;; print-object
 
@@ -365,9 +368,9 @@ module: dylan
 
 (define format
   (method (stream control #rest arguments)
-    (bind ((s (cond ((not stream) (make <string-stream>))
-                    ((id? stream #t) *standard-output*)
-                    (else: stream)))
+    (unless (%instance? control <string>)
+      (error "format: not a string: ~s" control))
+    (bind ((s (if (not stream) (make <string-stream>) (%stream stream)))
            (n (%library-size control)))
       (bind-methods ((next-argument ()
                        (if (id? arguments '())

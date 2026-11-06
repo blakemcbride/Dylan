@@ -1056,4 +1056,11 @@ base
 (print (map init-keyword (slot-descriptors <p>)))"
   "#(y: z: #f)
 ")
+ ;; make <generic-function> takes a symbol (or #f) as its debug-name:.
+ (generic-function-debug-name-not-a-symbol
+  "(print (make <generic-function> required: 1 debug-name: 'foo))
+(make <generic-function> required: 1 debug-name: \"foo\")"
+  "{the generic function foo}
+"
+  :error "make: debug-name: must be a symbol: \"foo\"")
 )

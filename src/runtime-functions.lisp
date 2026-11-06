@@ -72,6 +72,8 @@
       (unless (and (integerp nrequired) (>= nrequired 0))
         (dylan-call dylan/error
                     "make: a <generic-function> needs required:, an integer not below 0"))
+      (when (and name (not (false? name)) (not (symbolp name)))
+        (dylan-call dylan/error "make: debug-name: must be a symbol: ~s" name))
       (dylan%create-generic-function name nrequired keys rest?)))))
 
 ;;; Chapter 11: classes can be made with MAKE as well as DEFINE-CLASS.

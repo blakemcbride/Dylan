@@ -9,18 +9,22 @@
 
 ;;; A control stack of 1 GB for each thread, the main one too, in place of
 ;;; SBCL's 2 MB, which ends a recursion some 15,000 calls deep: deep
-;;; recursions run as deep as compiled ones.  Only the part used is memory;
-;;; the rest is address space.  The executable keeps the stack size of the
-;;; SBCL that builds it, so the build runs again in one started with it.
-(let ((wanted (* 1024 1024 1024)))
-  (when (< (extern-alien "thread_control_stack_size" unsigned-long) wanted)
+;;; recursions run as deep as compiled ones.  And a heap of 8 GB at least,
+;;; in place of SBCL's usual 1 GB, which a list of 40 million elements
+;;; fills: large programs run as compiled ones do.  Only the part used of
+;;; either is memory; the rest is address space.  The executable keeps the
+;;; sizes of the SBCL that builds it, so the build runs again in one
+;;; started with them.
+(let ((stack (* 1024 1024 1024))
+      (heap (max (sb-ext:dynamic-space-size) (* 8 1024 1024 1024))))
+  (when (or (< (extern-alien "thread_control_stack_size" unsigned-long) stack)
+            (< (sb-ext:dynamic-space-size) heap))
     (sb-ext:exit
      :code (sb-ext:process-exit-code
             (sb-ext:run-program
              sb-ext:*runtime-pathname*
-             (list "--control-stack-size" (format nil "~dMB" (floor wanted (* 1024 1024)))
-                   "--dynamic-space-size"
-                   (format nil "~dMB" (floor (sb-ext:dynamic-space-size) (* 1024 1024)))
+             (list "--control-stack-size" (format nil "~dMB" (floor stack (* 1024 1024)))
+                   "--dynamic-space-size" (format nil "~dMB" (floor heap (* 1024 1024)))
                    "--script" (sb-ext:native-namestring *load-truename*))
              :input t :output t :error t))
      :abort t)))

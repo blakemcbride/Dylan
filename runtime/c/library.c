@@ -227,8 +227,9 @@ PRIMITIVE(rationalize) {
     uint64_t frac = (uint64_t)ldexp(fabs(x), -expo);
     typedef unsigned __int128 u128;
     if (expo >= 0) {
-        /* an integer */
-        if (expo >= 62 || frac > (uint64_t)DY_INT_MAX >> expo) dy_integer_overflow();
+        /* an integer: up to 2^62 - 1, or 2^62 when negative */
+        uint64_t most = (uint64_t)DY_INT_MAX + (x < 0);
+        if (expo >= 62 || frac > most >> expo) dy_integer_overflow();
         intptr_t n = (intptr_t)(frac << expo);
         return DY_INT(x < 0 ? -n : n);
     }

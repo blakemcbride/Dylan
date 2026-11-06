@@ -2142,4 +2142,11 @@ error
              (= (=hash -4611686018427387904) (=hash -4.611686018427387904e18))))"
   "(#t #t)
 ")
+ ;; rationalize answers the least integer, -2^62, for the float equal to it.
+ (rationalize-least-integer
+  "(print (rationalize -4.611686018427387904e18))
+(print (rationalize -4.6116860184273874e18))"
+  "-4611686018427387904
+-4611686018427387392
+")
 )

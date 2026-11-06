@@ -408,7 +408,10 @@ module: dylan
 (define-method as ((class <class>) (c <collection>))
   (cond ((%instance? c class) c)
         ((%subclass? class <mutable-sequence>)
-         (bind ((result (map-as class identity c)))
+         ;; A list is made as a <list>, so that the error names C: map-as
+         ;; refuses an <empty-list> with elements and an empty <pair>.
+         (bind ((result (map-as (if (%subclass? class <list>) <list> class)
+                                identity c)))
            (if (%instance? result class)
                result
                (error "as: ~s cannot be converted to ~s" c class))))

@@ -912,4 +912,29 @@ before
 {slot s}
 "
   :error "<a> is sealed: it cannot be subclassed")
+ ;; A method's specializers are one for each required argument, <object>
+ ;; where none is given, and applicable-method? asks for enough arguments
+ ;; (chapter 10).
+ (unspecialized-method-specializers
+  "(print (method-specializers (method (x y) x)))
+(print (method-specializers car))
+(print (applicable-method? car 5))
+(print (applicable-method? car '(1)))
+(print (applicable-method? (method (x) x)))
+(print (applicable-method? (method (x) x) 1))
+(print (applicable-method? (method (#rest r) r)))
+(print (method-specializers apply))
+(print (applicable-method? apply car))
+(print (applicable-method? apply 5))"
+  "({the class <object>} {the class <object>})
+({the class <list>})
+#f
+#t
+#f
+#t
+#t
+({the class <function>})
+#t
+#f
+")
 )

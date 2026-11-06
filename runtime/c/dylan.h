@@ -322,7 +322,7 @@ extern DyWrapper dy_wrapper_object, dy_wrapper_boolean, dy_wrapper_integer,
     dy_wrapper_real, dy_wrapper_method, dy_wrapper_generic_function,
     dy_wrapper_singleton, dy_wrapper_thread, dy_wrapper_lock,
     dy_wrapper_recursive_lock, dy_wrapper_condition_variable,
-    dy_wrapper_atomic_integer, dy_wrapper_slot_descriptor;
+    dy_wrapper_atomic_integer, dy_wrapper_slot_descriptor, dy_wrapper_function;
 
 /* The program's symbols and keywords, which the runtime interns when it
  * starts.  Defined by the compiler's output. */
@@ -1115,6 +1115,10 @@ bool dy_identical(D x, D y);
 
 /* Does X match the specializer SPEC, a class or a singleton? */
 bool dy_specializer_matches(D x, D spec);
+
+/* For the method F: how many arguments it requires; *FIRST is set to the
+ * first one's specializer, for a method that records none. */
+intptr_t dy_method_required(D f, D *first);
 
 _Noreturn void dy_no_applicable_method(D generic);
 _Noreturn void dy_unbound_slot(const char *getter);

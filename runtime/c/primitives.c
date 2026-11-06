@@ -235,7 +235,12 @@ PRIMITIVE(method_specializers) {
     need(self, argc, 1, 1);
     if (!dy_kind_p(a0, DY_KIND_FUNCTION)) dy_error("not a method", a0);
     D specs = ((DyFunction *)DY_PTR(a0))->specializers;
-    return specs == DY_FALSE ? DY_EMPTY : list_of_vector(specs);
+    if (specs != DY_FALSE) return list_of_vector(specs);
+    /* One for each required argument (chapter 10) */
+    D first, result = DY_EMPTY;
+    for (intptr_t i = dy_method_required(a0, &first) - 1; i >= 0; i--)
+        result = dy_pair(i == 0 ? first : dy_wrapper_object.class, result);
+    return result;
 }
 
 /* Does METHOD -- or, of a generic function, one of its methods -- apply
@@ -249,7 +254,12 @@ static bool applicable(D method, const D *args, intptr_t n) {
     }
     if (!dy_kind_p(method, DY_KIND_FUNCTION)) dy_error("not a function", method);
     D specs = ((DyFunction *)DY_PTR(method))->specializers;
-    if (specs == DY_FALSE) return true;
+    if (specs == DY_FALSE) {
+        /* Too few arguments make it inapplicable */
+        D first;
+        intptr_t required = dy_method_required(method, &first);
+        return n >= required && (required == 0 || dy_specializer_matches(args[0], first));
+    }
     DyVector *v = DY_PTR(specs);
     if (DY_INT_VALUE(v->size) > n) return false;
     for (intptr_t i = 0; i < DY_INT_VALUE(v->size); i++)

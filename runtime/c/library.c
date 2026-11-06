@@ -800,6 +800,21 @@ static const struct { DyFunction *f; int required; bool rest; } primitive_argume
     { &dy_prim_current_milliseconds, 0, false },
 };
 
+/* For the method F: how many arguments it requires, and the specializer
+ * of the first -- <object>, where F records none, but for car and cdr
+ * (<list>) and apply (<function>), as the manual gives them. */
+intptr_t dy_method_required(D f, D *first) {
+    DyFunction *m = DY_PTR(f);
+    *first = dy_wrapper_object.class;
+    if (m->info != 0 && m->info != DY_FALSE)
+        return DY_INT_VALUE(((DyVector *)DY_PTR(m->info))->data[0]);
+    if (m == &dy_prim_car || m == &dy_prim_cdr) *first = dy_wrapper_list.class;
+    else if (m == &dy_prim_apply) *first = dy_wrapper_function.class;
+    for (size_t i = 0; i < sizeof primitive_arguments / sizeof primitive_arguments[0]; i++)
+        if (m == primitive_arguments[i].f) return primitive_arguments[i].required;
+    return 0;
+}
+
 PRIMITIVE(function_arguments) {
     need(self, argc, 1, 1);
     D info = DY_FALSE;

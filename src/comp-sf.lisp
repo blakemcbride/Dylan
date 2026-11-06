@@ -218,8 +218,8 @@ string literals are id?."
                                 ,@(if have-default?
                                       '()
                                       `((t (dylan-call dylan/error
-                                                       "CASE -- no matches"
-                                                       ',e))))))
+                                                       "case: no clause matches ~s"
+                                                       !case-key))))))
                        mod-vars)
                       (if have-default?
                           (dylan%error "CASE -- else isn't last clause" e)
@@ -287,8 +287,8 @@ string literals are id?."
                               ,@(if have-default?
                                     '()
                                     `((t (dylan-call dylan/error
-                                                     "SELECT -- no match"
-                                                     ',e))))))
+                                                     "select: no clause matches ~s"
+                                                     !select-target))))))
                          mod-vars)
                         (if have-default?
                             (dylan%error "SELECT -- else isn't last clause" e)

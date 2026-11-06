@@ -448,9 +448,10 @@ contents of a restart (\code{restart-query}) or for values to return
 recovery protocol allows returning \dylanbook{chapter 13},
 \code{return-allowed?} answers \code{\#t} and
 \code{return-description} the string \code{"Return; the value is
-ignored."}. \code{restart-query} does nothing. The compiler to C, having
-no debugger, has \code{return-query} answer \code{\#f}; the Common Lisp
-implementation's reads values typed by the user.
+ignored."}. \code{restart-query} does nothing. Where there is no one to
+ask --- in a compiled program, and in a program \code{bin/dylan} reads
+from a file --- \code{return-query} answers \code{\#f}; at the Common
+Lisp implementation's prompt it reads values typed by the user.
 
 \section{Defining your own conditions}\label{sec:conditions-defining}
 

@@ -846,10 +846,11 @@ typedef struct DyThread {
     /* Its stack's limits (control.c), or 0 if they cannot be found.  A
        function that finds its frame below dy_stack_guard signals that
        the stack is exhausted (DY_CHECK_STACK).  The guard is STACK_SOFT,
-       or STACK_HARD while that error is handled; below STACK_HARD errors
-       are reported, not signalled. */
+       or STACK_FLOOR while that error is handled; below STACK_HARD,
+       which is above STACK_FLOOR, errors are reported, not signalled. */
     char *stack_soft;
     char *stack_hard;
+    char *stack_floor;
     /* Threads (Phase 7) */
     struct DyThreadObject *self;   /* this thread's <thread>             */
     struct DyFrame *top_frame;     /* where an unhandled condition ends

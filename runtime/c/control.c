@@ -248,7 +248,13 @@ static _Noreturn void report(const char *kind, const char *message, D irritant) 
  * while a handler runs, so an error a handler causes, and also handles,
  * recurs until the stack is exhausted.  Below the lower one, the hard
  * limit, the runtime's errors are reported, not signalled.  Each reserve
- * is an eighth of the stack, at most 64 KB and 192 KB. */
+ * is an eighth of the stack, at most 64 KB and 192 KB.  While the error
+ * is handled, a function finds the stack exhausted only below the floor,
+ * half way through the hard reserve: an error the runtime signals in each
+ * round of a recursion that never ends -- a handler of the wrong arity,
+ * called on its own error -- is reached first, below the hard limit, and
+ * reported, whatever the stack's layout, as in the interactive
+ * implementation. */
 #define DY_HARD_RESERVE (64 * 1024)
 #define DY_SOFT_RESERVE (192 * 1024)
 
@@ -274,15 +280,16 @@ void dy_find_stack(void) {
     size_t eighth = size / 8;
     size_t hard = eighth < DY_HARD_RESERVE ? eighth : DY_HARD_RESERVE;
     size_t soft = eighth < DY_SOFT_RESERVE ? eighth : DY_SOFT_RESERVE;
+    t->stack_floor = low + hard / 2;
     t->stack_hard = low + hard;
     t->stack_soft = dy_stack_guard = low + hard + soft;
 }
 
-/* The guard is lowered to the hard limit while the error is handled, and
+/* The guard is lowered to the floor while the error is handled, and
  * raised again by an exit to a frame above the soft limit
  * (dy_call_with_exit). */
 _Noreturn void dy_stack_exhausted(void) {
-    dy_stack_guard = dy_thread->stack_hard;
+    dy_stack_guard = dy_thread->stack_floor;
     dy_error("the stack is exhausted", 0);
 }
 

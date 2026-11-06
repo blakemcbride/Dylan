@@ -837,7 +837,7 @@ call, with the macro's name, as the compiler to C reports it."
     (unless (and (symbolp name) (variable-name? name))
       (dylan%error "define-macro -- bad macro name" name))
     (unless (null bound-vars)
-      (dylan%error "define-macro must be at top level" name))
+      (dylan%error "define-macro must be at top level"))
     (unless (listp params)
       (dylan%error "define-macro -- bad parameter list" name params))
     (check-not-imported name "DEFINE-MACRO")

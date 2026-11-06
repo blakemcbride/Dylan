@@ -474,9 +474,20 @@
                                     ',name
                                     (dylan%list ,@superclasses)
                                     (dylan%list ,@getter-code)))
-                                 (!redefined (dylan%class? ,ref)))
-                             (unless !redefined ,(funcall set '!class))
-                             ,@(reverse add-slot-calls)
+                                 (!redefined (dylan%class? ,ref))
+                                 (!done nil))
+                             ;; An error in a slot cancels the definition
+                             ;; (chapter 5): the new class is discarded,
+                             ;; and the variable is as it was.
+                             (unwind-protect
+                                  (progn
+                                    (unless !redefined ,(funcall set '!class))
+                                    ,@(reverse add-slot-calls)
+                                    (setf !done t))
+                               (unless !done
+                                 (dylan%discard-class !class)
+                                 (unless !redefined
+                                   ,(funcall set `',the-unassigned-value))))
                              (when !redefined
                                (dylan%redefine-class ,ref !class))
                              (dylan%make-variable-read-only

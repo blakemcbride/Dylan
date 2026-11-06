@@ -1078,13 +1078,17 @@ it has now)."
 ;;; rebuilt with the classes below it, and NEW is discarded.  Instances
 ;;; keep the value of each slot whose getter survives.
 
+(defun dylan%discard-class (class)
+  "Undo the making of CLASS: its accessor methods and its place below its
+superclasses."
+  (remove-class-accessors! class)
+  (dolist (super (class.superclasses class))
+    (remove-from-population! (class.subclasses super) class)))
+
 (defun dylan%redefine-class (old new)
   (let ((supers (class.superclasses new))
         (own (own-slots new)))
-    ;; Discard NEW: its accessor methods and its place below its supers.
-    (remove-class-accessors! new)
-    (dolist (super supers)
-      (remove-from-population! (class.subclasses super) new))
+    (dylan%discard-class new)
     (cond ((class.read-only? old)
            (dylan-call dylan/error "define-class -- class is read-only" old))
           ((some (lambda (super) (subclass? super old)) supers)

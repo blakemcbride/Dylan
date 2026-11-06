@@ -103,9 +103,13 @@ error when they run (chapter 6).")
   (toplevel nil)                        ; for a program's method, the index
                                         ; of the top-level form whose own
                                         ; code defines it, or NIL
-  (siblings '()))                       ; the other methods with its
+  (siblings '())                        ; the other methods with its
                                         ; specializers, which replace it or
                                         ; it replaces
+  (closure-c nil))                      ; for a method that refers to local
+                                        ; variables, the C name of the
+                                        ; variable holding the closure its
+                                        ; define-method made last
 
 (defstruct (spec (:constructor make-spec (kind class &optional value c)))
   kind                                  ; :class or :singleton
@@ -932,11 +936,6 @@ against the slot's type as make checks it."
                       (predefined-c-value var *classes*))
              (compile-error "methods cannot be added to ~a (it is not yet a generic function in the runtime)"
                             (name-string (module-var-name var))))
-           (when (ir-fn-free-vars fn)
-             (compile-error "define-method: the method refers to local variables (~a)"
-                            (format nil "~{~a~^, ~}"
-                                    (mapcar (lambda (v) (name-string (ivar-name v)))
-                                            (ir-fn-free-vars fn)))))
            (let ((m (make-gmethod
                      :specs (mapcar #'resolve-specializer (ir-fn-specializers fn))
                      :kind :ir :fn fn :var var
@@ -1020,7 +1019,14 @@ against the slot's type as make checks it."
             (setf (gmethod-flag-c m) name)
             ;; The library's are attached from the start.
             (declare-object "static unsigned char ~a~:[~; = 1~];" name
-                            (not (added-when-run-p m))))))
+                            (not (added-when-run-p m)))))
+        ;; A method that refers to local variables is a closure, made
+        ;; anew each time its define-method runs (chapter 6), as method
+        ;; makes one.
+        (when (and (eq (gmethod-kind m) :ir) (ir-fn-free-vars (gmethod-fn m)))
+          (let ((name (format nil "~a_mc~d" (gfun-c-name g) (position m methods))))
+            (setf (gmethod-closure-c m) name)
+            (declare-object "static D ~a = DY_FALSE;" name))))
       (setf (gfun-methods g) methods))
     ;; A program's generic function has no value until one of its
     ;; definitions has run (chapter 6).
@@ -1070,9 +1076,15 @@ slot it reads or writes -- not from the start?"
       (and (member (gmethod-kind m) '(:getter :setter))
            (not (library-location-p (sdef-location (gmethod-sdef m)))))))
 
-(defun method-attachment-c (m)
+(defun method-object-c-expr (m)
+  "The C expression of M's <method> object: its static object, or the
+closure its define-method made last."
+  (or (gmethod-closure-c m) (address (gmethod-object-c m))))
+
+(defun method-attachment-c (m &optional previous)
   "The C statements that attach M, as its definition does when it runs:
-the methods with its specializers are detached."
+the methods with its specializers are detached, and PREVIOUS, the
+closure of M made before, if any."
   (let ((g (gethash (gmethod-var m) *gfuns*))
         (replaced (gmethod-siblings m)))
     (append
@@ -1080,13 +1092,14 @@ the methods with its specializers are detached."
            when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
      (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
      (generic-definition-c g)
-     (list (if replaced
-               (format nil "dy_add_method(~a, ~a, (const D[]){ ~{~a~^, ~} }, ~d);"
-                       (address (gfun-c-name g)) (address (gmethod-object-c m))
-                       (mapcar (lambda (r) (address (gmethod-object-c r))) replaced)
-                       (length replaced))
-               (format nil "dy_add_method(~a, ~a, NULL, 0);"
-                       (address (gfun-c-name g)) (address (gmethod-object-c m))))))))
+     (let ((dropped (append (mapcar #'method-object-c-expr replaced)
+                            (and previous (list previous)))))
+       (list (if dropped
+                 (format nil "dy_add_method(~a, ~a, (const D[]){ ~{~a~^, ~} }, ~d);"
+                         (address (gfun-c-name g)) (method-object-c-expr m)
+                         dropped (length dropped))
+                 (format nil "dy_add_method(~a, ~a, NULL, 0);"
+                         (address (gfun-c-name g)) (method-object-c-expr m))))))))
 
 (defun defined-flag-c (var)
   "The C name of the flag that says whether VAR, the variable of a
@@ -1266,7 +1279,7 @@ being the next-method expression for each: answer whether one surely is."
         do (when flag (emit-object "~aif (~a) {" pad flag))
            (emit-object "~a~:[~;    ~]dy_thread->next_method = ~a;" pad flag next)
            (emit-object "~a~:[~;    ~]DY_TAIL_CALL_DIRECT(~a, ~a, a0, a1, a2, a3, argc);"
-                        pad flag (gmethod-entry-c m) (address (gmethod-object-c m)))
+                        pad flag (gmethod-entry-c m) (method-object-c-expr m))
            (if flag
                (emit-object "~a}" pad)
                (return t))

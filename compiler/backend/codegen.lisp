@@ -384,7 +384,9 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       (ir-define-method
        (let ((m (gethash (ir-define-method-fn e) *method-of-fn*)))
          (when (and m (added-when-run-p m))
-           (dolist (line (method-attachment-c m)) (emit "~a" line))))
+           (dolist (line (method-attachment-c m (and (gmethod-closure-c m)
+                                                     (make-method-closure m))))
+             (emit "~a" line))))
        (deliver dest (definition-value (ir-define-method-var e))))
       (ir-define-class
        (gen-class-definition e)
@@ -693,6 +695,31 @@ STACK, with its environment yet to fill."
                    (mapcar #'v-name (cfun-env cfun)))
              (record-specializers temp fn)
              temp)))))
+
+(defun make-method-closure (m)
+  "Make a closure of M, a method that refers to local variables, of them
+as they are now, and keep it in M's variable: answer the C variable that
+holds the closure made before."
+  (let* ((fn (gmethod-fn m))
+         (cfun (gethash fn *cfuns*))
+         (g (gethash (gmethod-var m) *gfuns*))
+         (previous (new-temp))
+         (closure (new-temp)))
+    (emit "~a = ~a;" previous (gmethod-closure-c m))
+    ;; As its static object would be (EMIT-METHOD-OBJECTS)
+    (emit "~a = dy_make_closure_env(~a, ~a, ~d, (const D[]){~{~a~^, ~}});"
+          closure
+          (if *reflective-methods*
+              (format nil "~a_direct" (gmethod-entry-c m))
+              (gmethod-entry-c m))
+          (if *reflective-methods* (method-info-c m) "DY_FALSE")
+          (length (cfun-env cfun)) (mapcar #'v-name (cfun-env cfun)))
+    (when *reflective-methods*
+      (emit "((DyFunction *)DY_PTR(~a))->specializers = ~a;" closure
+            (spec-vector-c (gmethod-specs m))))
+    (emit "((DyFunction *)DY_PTR(~a))->owner = ~a;" closure (address (gfun-c-name g)))
+    (emit "~a = ~a;" (gmethod-closure-c m) closure)
+    previous))
 
 (defun record-specializers (closure fn)
   "Give the closure CLOSURE of FN, a method made by method, the

@@ -394,16 +394,16 @@ not-a-singleton
 ((2 3) 2 6)
 "
   :error "")
- (local-method-message
-  ;; A define-method that refers to local variables is reported, at the
-  ;; right line though the file has a header.
+ (local-method
+  ;; A define-method that refers to local variables, in a file with a
+  ;; header.
   "module: dylan-user
 
 (bind ((k 1))
-  (define-method f ((x <integer>)) (+ x k)))"
-  ""
-  :compile-error ":4:3: error: define-method: the method refers to local variables (k)"
-  :compiler-only t)
+  (define-method f ((x <integer>)) (+ x k)))
+(print (f 1))"
+  "2
+")
 
  ;; Classes whose C names would be names the runtime uses for other things
  (runtime-c-names
@@ -1365,5 +1365,96 @@ h
 \"define-generic-function: h is inconsistent with the existing generic function\"
 \"define-generic-function: (setter foo) is inconsistent with the existing generic function\"
 ok
+")
+ ;; Chapter 6: define-method makes a method as method does, so one inside
+ ;; a method closes over its locals; each time it runs it makes a new one,
+ ;; which replaces the last.
+ (methods-close-over-locals
+  "(define-method make-adder (n)
+  (define-method adder (x) (+ x n))
+  'made)
+(print (make-adder 10))
+(print (adder 1))
+(print (make-adder 20))
+(print (adder 1))
+(define-method counter-maker ()
+  (bind ((count 0))
+    (define-method tick () (set! count (+ count 1)) count)
+    'ok))
+(counter-maker)
+(print (list (tick) (tick)))
+(counter-maker)
+(print (tick))
+(define-method spec-maker (c)
+  (define-method sp ((x <integer>)) (list 'int c))
+  (define-method sp ((x <string>)) (list 'str c)))
+(spec-maker 1)
+(print (list (sp 5) (sp \"s\")))
+(spec-maker 2)
+(print (list (sp 5) (sp \"s\")))"
+  "made
+11
+made
+21
+(1 2)
+1
+((int 1) (str 1))
+((int 2) (str 2))
+")
+ ;; Such methods have no value before their definition runs, are found
+ ;; by reflection, are called as values, and take part in next-method.
+ (method-closures-reflect
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (format #f \"~a\" c))))
+(print (try (method () (adder 1))))
+(define-method make-adder (n)
+  (define-method adder ((x <integer>)) (+ x n))
+  'made)
+(make-adder 1) (make-adder 2) (make-adder 3)
+(print (size (generic-function-methods adder)))
+(define m (first (generic-function-methods adder)))
+(print (list (m 10) (method-specializers m)))
+(print m)
+(print (try (method () (m \"s\"))))
+(define-method r ((x <number>)) (list 'num x))
+(define-method layer (tag)
+  (define-method r ((x <integer>)) (list tag (next-method))))
+(layer 'a)
+(print (r 1))
+(layer 'b)
+(print (r 1))
+(define-method r ((x <integer>)) (list 'top (next-method)))
+(print (r 1))
+(layer 'c)
+(print (r 1))
+(print (map (method (m) (first (method-specializers m))) (generic-function-methods r)))
+(define-method two-levels (a)
+  (bind ((f (method (b) (define-method tl (c) (list a b c)) 'ok)))
+    (f 2)))
+(two-levels 1)
+(print (tl 3))
+(define-method keep-next (k)
+  (define-method kn ((x <integer>)) (bind ((nm next-method)) (list k (nm))))
+  (define-method kn ((x <number>)) (list 'num k)))
+(keep-next 7)
+(print (kn 1))
+(define-method gc-churn (i) (define-method churn (x) (list i x)) (make <vector> size: 1000))
+(for ((i 0 (+ i 1))) ((= i 2000)) (gc-churn i))
+(print (churn 'z))"
+  "\"the variable adder@dylan-user has no value\"
+1
+(13 ({the class <integer>}))
+{a method on adder}
+\"\\\"s\\\" is not an instance of {the class <integer>}\"
+(a (num 1))
+(b (num 1))
+(top (num 1))
+(c (num 1))
+({the class <number>} {the class <integer>})
+(1 2 3)
+(7 (num 7))
+(1999 z)
 ")
 )

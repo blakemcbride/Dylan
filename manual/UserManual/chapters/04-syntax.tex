@@ -536,11 +536,10 @@ could appear anywhere, and both implementations accept \code{define} inside
 a method, where it still defines a module variable. Later design notes
 (``Definitions are Declarative'') restrict definitions to top level, and
 that is the only place they belong: a definition inside a method happens
-again each time the method runs, and in the compiler to C a
-\code{define-method} that refers to local variables cannot be compiled:
-it stops with \code{define-method: the method refers to local variables
-(k)}, naming the variables.
-Put definitions at top level.
+again each time the method runs. A \code{define-method} there makes its
+method as \code{method} does, so the method may refer to the local
+variables around it; each time it runs it makes a new method, which
+replaces the one it made before. Put definitions at top level.
 
 \subsection{When things happen}\label{sec:syntax-when}
 

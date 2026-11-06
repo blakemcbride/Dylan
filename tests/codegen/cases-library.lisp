@@ -2149,4 +2149,23 @@ error
   "-4611686018427387904
 -4611686018427387392
 ")
+ ;; map-as and concatenate-as make an instance of the class they are given:
+ ;; no <empty-list> holds elements, and no <pair> is empty (chapter 12).
+ (map-as-list-classes
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (map-as <empty-list> identity '(1)))))
+(print (try (method () (concatenate-as <pair> '() '()))))
+(print (try (method () (map-as <empty-list> identity '()))))
+(print (try (method () (concatenate-as <pair> '(1) '()))))
+(print (try (method () (as <empty-list> '(1)))))
+(print (try (method () (as <pair> '()))))
+(print (try (method () (map-as <pair> identity '()))))"
+  "\"ERR: as: (1) cannot be converted to {the class <empty-list>}\"
+\"ERR: as: () cannot be converted to {the class <pair>}\"
+()
+(1)
+\"ERR: as: (1) cannot be converted to {the class <empty-list>}\"
+\"ERR: as: () cannot be converted to {the class <pair>}\"
+\"ERR: as: () cannot be converted to {the class <pair>}\"
+")
 )

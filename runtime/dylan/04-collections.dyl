@@ -143,11 +143,15 @@ module: dylan
 (define-method class-for-copy ((x <object>)) (%object-class x))
 
 ;;; A new collection of CLASS holding the elements of the list ELEMENTS.
+;;; It must be of the class (chapter 12): no <empty-list> holds elements,
+;;; and no <pair> is empty.
 
 (define %from-list
   (method (class elements)
     (if (%subclass? class <list>)
-        elements
+        (if (%instance? elements class)
+            elements
+            (error "as: ~s cannot be converted to ~s" elements class))
         (bind ((result (make class size: (%list-length elements))))
           (for ((state (initial-state result) (next-state result state))
                 (l elements (cdr l)))

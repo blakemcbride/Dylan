@@ -278,14 +278,6 @@ binary calls, the conversions happen from left to right.
 (* 1.5s0 1.5d0)    ; => 2.25        a <double-float>
 \end{dylan}
 
-\begin{notebox}
-The compiler to C converts a rational to the float's format by way of a
-C \code{double}, so a single-float result can differ from the Common Lisp
-implementation's in the last place: \code{(+ 1/3 0.5s0)} is
-\code{0.8333333s0} in compiled code and \code{0.8333334s0} in the Common
-Lisp implementation.
-\end{notebox}
-
 \section{Comparing numbers}\label{sec:numbers-comparison}
 
 \index{comparison}\index{=}\index{<}
@@ -689,7 +681,7 @@ negative one.
 \begin{dylan}
 (real-part 5)    ; => 5
 (imag-part 5)    ; => 0
-(angle 5)        ; => 0 (C)   0.0 (Lisp)
+(angle 5)        ; => 0.0
 (angle -5)       ; => 3.141592653589793
 \end{dylan}
 

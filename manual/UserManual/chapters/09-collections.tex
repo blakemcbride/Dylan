@@ -13,10 +13,8 @@ collections.
 The chapter first describes the classes and the protocol every
 collection shares, then the functions on all collections and on
 sequences, and then each built-in class in turn. Examples show their
-results as comments. A list, a vector and a string print the same in
-both implementations; the other collections print differently, and
-where that matters the examples convert them to lists first. A class in
-a result is written by its name alone, as in chapter~\ref{ch:numbers}.
+results as comments. A class in a result is written by its name alone,
+as in chapter~\ref{ch:numbers}.
 
 \section{The collection classes}\label{sec:collections-classes}
 
@@ -129,10 +127,9 @@ none; and \code{key-sequence} answers a sequence of the keys:
 (key-sequence "ab")       ; => a sequence of 0 and 1
 \end{dylan}
 
-\noindent The key sequence of a sequence holds the integers from 0 up to
-its size (a range, except that the Common Lisp implementation answers a
-list for a vector or a string); that of a table is a list of its keys, in
-no particular order.
+\noindent The key sequence of a sequence is a range of the integers from 0
+up to its size; that of a table is a list of its keys, in no particular
+order.
 
 \index{class-for-copy}
 \code{class-for-copy} answers the class used when a function such as
@@ -446,12 +443,8 @@ than a character is an error there; ask for another class with
 (map (method (c) 'x) "ab")                         ; => error
 \end{dylan}
 
-\noindent The compiler to C reports the error as \code{a <byte-string>
-holds only 8-bit characters: x}; the Common Lisp implementation as
-\code{as -{}- not specialized for this class type}. (The Common Lisp
-implementation turns an integer result into the character with that code
-instead, so \code{(map (method (c) 1) "ab")} answers a string of two
-characters there and is an error in the compiler to C.)
+\noindent The error is \code{a <byte-string> holds only 8-bit
+characters: x}.
 
 \index{map-into}
 \code{(map-into \meta{target} \meta{function} \meta{collection} ...)}

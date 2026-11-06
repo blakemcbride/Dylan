@@ -229,15 +229,9 @@ restarts (invokable by number or by possibly-abbreviated name):
 \end{repl}
 
 \begin{notebox}
-A few errors are detected by Common Lisp itself rather than by Dylan; for
-example, \code{(car 5)} is reported as a Lisp \code{TYPE-ERROR}. For such
-an error the debugger still offers \code{DYLAN-REP}, ``Return to the Dylan
-read-eval-print loop'', which gives you a new \code{?} prompt. Dylan's own
-handlers see these errors as instances of \code{<error>}, so
-\code{handler-case} catches them normally. In a Lisp you loaded the
-system into, the debugger's \code{ABORT} leaves the loop for the Lisp
-\code{*} prompt; nothing you defined is lost; type \code{(dylan:rep)} to
-carry on.
+In a Lisp you loaded the system into, the debugger's \code{ABORT} leaves
+the loop for the Lisp \code{*} prompt; nothing you defined is lost; type
+\code{(dylan:rep)} to carry on.
 \end{notebox}
 
 \paragraph{Running a file at the loop.} The loop reads from standard

@@ -41,9 +41,9 @@ introduced by \code{prints:}, one line of output to each comment:
 \end{dylan}
 
 \noindent A form whose evaluation signals an error is marked
-\code{; => error}, usually followed by a short description of the error.
-The exact wording of error messages differs between the two
-implementations, and the comment does not try to reproduce either.
+\code{; => error}, usually followed by a short description of the error,
+not always the message's exact words (chapter~\ref{ch:conditions} gives
+the messages).
 
 Values that cannot be read back in, such as classes and functions, are
 printed inside braces: \code{\{the class <integer>\}}, as the 1992
@@ -211,10 +211,8 @@ remembers the case it was first written in, and that is how it prints
 (as <string> 'hello)       ; => "Hello"
 \end{dylan}
 
-\noindent ``First written'' means first read. The compiler to C reads a
-whole program before running any of it, so a symbol's spelling is the one
-in the source text that comes first. The Common Lisp implementation reads a
-form at a time, so a symbol first made at run time by
+\noindent ``First written'' means first read, and a program's top-level
+forms are read in order, as they run: a symbol first made at run time by
 \code{(as <symbol> "Abc")} keeps the spelling \code{Abc} if no form read
 earlier wrote it.
 
@@ -347,11 +345,9 @@ backquotes nested inside backquotes and backquoted vectors.
 
 \noindent The reader turns \code{'x}, \code{`x}, \code{,x} and \code{,@x}
 into the lists \code{(quote x)}, \code{(quasiquote x)}, \code{(unquote x)}
-and \code{(unquote-splicing x)}. The compiler to C prints these lists in
-that long form; the Common Lisp implementation prints them abbreviated,
-as \code{'x} and so on. A comma outside any backquote is an error. Backquote
-is most useful in macros, an extension of the compiler to C described in
-Chapter~\ref{ch:extensions}.
+and \code{(unquote-splicing x)}, and these lists print in that long
+form. A comma outside any backquote is an error. Backquote is most useful
+in macros, an extension described in Chapter~\ref{ch:extensions}.
 
 \subsection{\#key, \#rest and \#next}\label{sec:syntax-parameter-tokens}
 
@@ -362,11 +358,9 @@ list (Section~\ref{sec:functions-parameters}); \code{\#rest} also appears in
 \code{bind} (Section~\ref{sec:control-bind}). Like \code{\#t} and \code{\#f} they are
 case-insensitive.
 
-Both implementations also read \code{!key}, \code{!rest} and \code{!next}
-as these same tokens, because Thomas, from which the Common Lisp
-implementation grew, wrote them that way, and so do its programs, the
-manual's examples among them. As a consequence those three names cannot
-name variables. Any other name may.
+\code{!key}, \code{!rest} and \code{!next}, which Thomas, from which the
+Common Lisp implementation grew, read as these tokens, are ordinary
+names in both implementations, as in the 1992 manual.
 
 \subsection{Unreadable objects}
 
@@ -489,9 +483,9 @@ not a function and has no value: \code{(map and ...)} is meaningless, and
 so is passing \code{if} as an argument.
 
 The 1992 manual has no way for a program to define its own syntax forms.
-The compiler to C adds Common Lisp--style macros, defined with
-\code{define-macro} and expanded when compiling (Chapter~\ref{ch:extensions}); the
-Common Lisp implementation does not have them.
+Both implementations add Common Lisp--style macros, defined with
+\code{define-macro} and expanded when compiling
+(Chapter~\ref{ch:extensions}).
 
 \subsection{Multiple values}
 
@@ -532,9 +526,10 @@ Definition & Creates \\
 \end{tabular}
 \end{center}
 
-\noindent The compiler to C adds three more definitions, which are
+\noindent Both implementations add three more definitions, which are
 described in Chapter~\ref{ch:extensions}: \code{define-macro},
-\code{define-for-macros} and \code{define-thread-variable}.
+\code{define-for-macros} and \code{define-thread-variable} (threads
+exist only in compiled programs).
 
 The 1992 manual describes definitions as if they were ordinary forms that
 could appear anywhere, and both implementations accept \code{define} inside

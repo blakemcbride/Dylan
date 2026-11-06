@@ -308,22 +308,12 @@ debugger with the message \code{Dylan breakpoint: look at 42}; its
 \code{CONTINUE} restart makes \code{break} return \code{\#f}.
 
 \begin{notebox}
-Some errors are detected by Common Lisp itself rather than by the
-Dylan runtime, for example \code{(car 5)}, which reaches Lisp's
-\code{car} with a non-list. Such an error arrives in the debugger as a
-Lisp \code{TYPE-ERROR}, and the restarts offered are \code{DYLAN-REP}
-and Lisp's own:
-\begin{repl}
-restarts (invokable by number or by possibly-abbreviated name):
-  0: [DYLAN-REP] Return to the Dylan read-eval-print loop.
-  1: [ABORT    ] Exit debugger, returning to top level.
-\end{repl}
-\noindent Choose \code{DYLAN-REP} to carry on at the \code{?} prompt.
-(In \file{bin/dylan}, \code{ABORT} also returns to the loop. In a Lisp you
-loaded the system into, it lands at the Lisp \code{*} prompt; nothing is
-lost: type \code{(dylan:rep)} to go back in.) A Dylan
-handler still catches these errors as instances of \code{<error>}:
-\code{(handler-case (car 5) ((<error>) 'caught))} answers \code{caught}.
+An error that Common Lisp itself detects, inside a Lisp function the
+runtime calls, arrives in the debugger in the same way, as a Dylan error
+with the same restarts, and a Dylan handler catches it as an instance of
+\code{<error>}. In \file{bin/dylan}, \code{ABORT} also returns to the
+loop. In a Lisp you loaded the system into, it lands at the Lisp \code{*}
+prompt; nothing is lost: type \code{(dylan:rep)} to go back in.
 \end{notebox}
 
 \subsection{Running a file at the loop}\label{sec:lisp-test-file}

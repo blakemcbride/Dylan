@@ -14,15 +14,10 @@ mention as they go. Each entry says which implementation it concerns:
 \label{sec:diff-both}
 
 \begin{description}
-\item[\code{!key}, \code{!rest} and \code{!next}.]
-  \index{"!key@\code{"!key}}
-  These are read as \code{\#key}, \code{\#rest} and \code{\#next}, as
-  Thomas read them, because Thomas's programs --- the book's examples
-  among them --- use them. So they cannot be used as variable names.
-  Every other name the manual allows is allowed.
-  \code{((method (a !key (b 2)) (list a b)) 1 b: 5)} \yields{}
-  \code{(1 5)}.
-
+\item[\code{\#t} and \code{\#f}.] They are instances of an internal
+  class, \code{<boolean>}, which \code{object-class} answers but which
+  the \code{dylan} module does not export; the manual names no class for
+  them.
 \item[Modules.] \index{modules}
   The 1992 manual describes modules but leaves the way they are declared
   to the programming environment. Both implementations declare them with
@@ -99,9 +94,6 @@ mention as they go. Each entry says which implementation it concerns:
   arrives as the empty list, not \code{\#f}
   (Chapter~\ref{ch:lisp}). A compiled program has the two names, but
   calling one is an error.
-\item[\code{\#t} and \code{\#f}.] Their class, as \code{object-class}
-  answers it, is \code{<object>}; the manual names no class for them.
-  (The compiler differs; see below.)
 \item[No threads.] The interactive implementation has none of the
   compiler's threads (Chapter~\ref{ch:extensions}). It has their names,
   but using one is an error.
@@ -169,10 +161,7 @@ prints its message and returns \code{\#f}. \code{restart-query} and
 
 \subsection{Representation}
 
-\code{\#t} and \code{\#f} are instances of an internal class,
-\code{<boolean>}, which \code{object-class} answers but which the
-\code{dylan} module does not export (the manual names no class for
-them). \code{seal} works as the manual says, and \code{make-read-only}
+\code{seal} works as the manual says, and \code{make-read-only}
 answers its argument, a class, unchanged, since a compiled program's
 classes are already fixed.
 
@@ -209,8 +198,9 @@ program depends on none of these; each is described where it arises.
   implementation, which also needs modules declared before use
   (Sections~\ref{sec:modules-readonly} and~\ref{sec:modules-lisp}).
 \item A compiled program that an unhandled error stops reports it on
-  the standard error, \code{Dylan error:} and the message; the
-  interactive implementation enters its debugger with the same message
+  the standard error, \code{Dylan error:} and the message, as the
+  interactive implementation does when it runs a file from its standard
+  input; at its prompt it enters its debugger with the same message
   (Section~\ref{sec:conditions-runtime-errors}).
 \end{itemize}
 

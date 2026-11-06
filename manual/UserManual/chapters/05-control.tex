@@ -206,10 +206,9 @@ v                               ; => #(a sea c)
 v                               ; => #(x sea c)
 \end{dylan}
 
-\noindent The arguments and the new value are each evaluated once. The
-compiler to C evaluates the arguments first, left to right, and the new
-value last, the order of the call \code{set!} stands for; the Common Lisp
-implementation evaluates the new value first. Slot accessors
+\noindent The arguments and the new value are each evaluated once: the
+arguments first, left to right, and the new value last, the order of the
+call \code{set!} stands for. Slot accessors
 (Chapter~\ref{ch:classes}) and \code{element} (Chapter~\ref{ch:collections}) are the
 setters used most, and a program can define its own
 (Section~\ref{sec:functions-setters}).

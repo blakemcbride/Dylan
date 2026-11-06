@@ -884,4 +884,32 @@ y
 before
 "
   :error "<ef> inherits two different definitions of the slot w, from <e> and <f>")
+ ;; make-read-only only forbids changes, and hides nothing; seal hides a
+ ;; class's superclasses and slots, and a sealed class cannot be subclassed
+ ;; (chapter 11).
+ (sealed-and-read-only-classes
+  "(define-class <a> (<object>) (s init-value: 1))
+(define-class <r> (<a>))
+(make-read-only <r>)
+(print (all-superclasses <r>))
+(print (direct-superclasses <r>))
+(print (size (slot-descriptors <r>)))
+(define-class <q> (<a>))
+(seal <q>)
+(print (all-superclasses <q>))
+(print (direct-superclasses <q>))
+(print (size (slot-descriptors <q>)))
+(print (slot-descriptor (make <q>) s))
+(seal <a>)
+(define-class <c> (<a>))
+(print 'subclassed)"
+  "({the class <r>} {the class <a>} {the class <object>})
+({the class <a>})
+1
+()
+()
+0
+{slot s}
+"
+  :error "<a> is sealed: it cannot be subclassed")
 )

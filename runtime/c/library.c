@@ -776,7 +776,8 @@ PRIMITIVE(shallow_copy) {
  * sequence, where the manual's #rest args takes the sequence among
  * them).  The rest -- list, vector, values -- take any number. */
 extern DyFunction dy_prim_id, dy_prim_not, dy_prim_identity, dy_prim_cons, dy_prim_car,
-    dy_prim_cdr, dy_prim_apply, dy_prim_singleton, dy_prim_seal, dy_prim_do_handlers,
+    dy_prim_cdr, dy_prim_apply, dy_prim_singleton, dy_prim_seal, dy_prim_make_read_only,
+    dy_prim_do_handlers,
     dy_prim_current_thread, dy_prim_thread_yield, dy_prim_acquire_lock,
     dy_prim_release_lock, dy_prim_wait_condition_variable,
     dy_prim_notify_condition_variable, dy_prim_notify_all_condition_variable,
@@ -787,7 +788,8 @@ static const struct { DyFunction *f; int required; bool rest; } primitive_argume
     { &dy_prim_id, 2, true }, { &dy_prim_not, 1, false }, { &dy_prim_identity, 1, false },
     { &dy_prim_cons, 2, false }, { &dy_prim_car, 1, false }, { &dy_prim_cdr, 1, false },
     { &dy_prim_apply, 1, true }, { &dy_prim_singleton, 1, false },
-    { &dy_prim_seal, 1, false }, { &dy_prim_do_handlers, 1, false },
+    { &dy_prim_seal, 1, false }, { &dy_prim_make_read_only, 1, false },
+    { &dy_prim_do_handlers, 1, false },
     { &dy_prim_current_thread, 0, false }, { &dy_prim_thread_yield, 0, false },
     { &dy_prim_acquire_lock, 1, false }, { &dy_prim_release_lock, 1, false },
     { &dy_prim_wait_condition_variable, 2, false },

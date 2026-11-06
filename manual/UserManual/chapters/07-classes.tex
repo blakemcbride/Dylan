@@ -558,13 +558,10 @@ forbidding subclasses. Both return the class.
 (instance? (make <b>) <a>)     ; => #t
 \end{dylan}
 
-\noindent In the Common Lisp implementation, defining a subclass of a sealed
-class is then an error. In the compiler to C all of a program's classes are
-created when it is compiled, before \code{seal} runs, so \code{seal} affects
-only what the reflective functions return afterwards; and there
-\code{make-read-only} on a class does exactly what \code{seal} does. A
-built-in class that cannot be subclassed, such as \code{<integer>} or
-\code{<list>}, is reported when compiling, if a program tries.
+\noindent Defining a subclass of a sealed class is then an error:
+\code{<b> is sealed: it cannot be subclassed}. A built-in class that
+cannot be subclassed, such as \code{<integer>} or \code{<list>}, is
+sealed from the start, and a program that tries is refused.
 
 \section{Changing classes at run time}\label{sec:classes-dynamic}
 

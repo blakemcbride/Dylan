@@ -432,7 +432,9 @@ value stored when the slot is initialized is checked as the setter's is."
     (dylan-call dylan/error "multiple inheritance from identical superclasses"))
   (dolist (superclass superclasses)
     (when (class.sealed? superclass)
-      (dylan-call dylan/error "cannot subclass a sealed class" superclass)))
+      ;; As the compiler to C words it
+      (dylan-call dylan/error "~a is sealed: it cannot be subclassed"
+                  (class.debug-name superclass))))
   (let* ((the-class
            (make-class name                     ; debug-name
                        (make-population*)       ; instances
@@ -1124,7 +1126,8 @@ superclasses."
                        "multiple inheritance from identical superclasses")))
     (dolist (super supers)
       (when (class.sealed? super)
-        (dylan-call dylan/error "cannot subclass a sealed class" super))
+        (dylan-call dylan/error "~a is sealed: it cannot be subclassed"
+                    (class.debug-name super)))
       (when (subclass? super class)
         (dylan-call dylan/error
                     "(setter direct-superclasses) -- circular inheritance"

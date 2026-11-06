@@ -26,7 +26,7 @@
     ("%applicable-method?" . "applicable_method_p")
     ("%sorted-applicable-methods" . "sorted_applicable_methods")
     ("%find-method" . "find_method")
-    ("seal" . "seal") ("make-read-only" . "seal")
+    ("seal" . "seal") ("make-read-only" . "make_read_only")
     ;; Conditions (chapter 13)
     ("do-handlers" . "do_handlers")
     ;; Threads (Phase 7)

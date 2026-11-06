@@ -722,6 +722,12 @@ in layout order."
     (gen-slot-initialization sd))
   (when (ir-define-class-p node)
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
+      ;; A class seal has sealed since compiling cannot be subclassed
+      ;; (chapter 11).
+      (dolist (s (class-info-supers (gclass-info g)))
+        (emit "if (~a.sealed) dy_error(~a, 0);" (class-c-name s)
+              (c-utf8-literal (format nil "~a is sealed: it cannot be subclassed"
+                                      (class-info-name s)))))
       (loop for (message c1 c2) in (slot-clash-checks g)
             do (emit "if (!dy_identical(~a, ~a)) dy_error(~a, 0);"
                      c1 c2 (c-utf8-literal message)))

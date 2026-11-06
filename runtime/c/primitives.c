@@ -217,6 +217,15 @@ PRIMITIVE(seal) {
     return a0;
 }
 
+/* (make-read-only class-or-generic-function) only forbids changes, which
+ * a static program cannot make anyway; unlike seal, it hides nothing
+ * (chapter 11). */
+PRIMITIVE(make_read_only) {
+    need(self, argc, 1, 1);
+    if (!dy_kind_p(a0, DY_KIND_GENERIC)) as_class(a0);
+    return a0;
+}
+
 PRIMITIVE(generic_function_methods) {
     need(self, argc, 1, 1);
     return list_of_vector(as_generic(a0)->methods);

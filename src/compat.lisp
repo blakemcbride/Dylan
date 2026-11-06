@@ -1390,7 +1390,9 @@ for the Lisp handlers to have back if no Dylan handler takes it."
                            ((eq expected 'number) "not a number")
                            ((eq expected 'real) "not a real number")
                            ((eq expected 'string) "not a string")
-                           ((eq expected 'function) "not a function"))))
+                           ((or (eq expected 'function)
+                                (equal expected '(or function symbol)))
+                            "not a function"))))
        (values (if wording
                    (concatenate 'string wording ": ~s")
                    (format nil "~~s is not of type ~(~a~)" expected))

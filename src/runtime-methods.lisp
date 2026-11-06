@@ -382,12 +382,9 @@ than the default accepts."
    (make-param-list `((instance ,<object>) (getter ,<generic-function>))
                     nil nil nil)
    (lambda (instance getter)
+     (multiple-value-bind (singleton-slot singleton)
+         (object-singleton-slot instance getter)
      (let* ((class (get-type instance))
-            (singleton (and (instance? instance) (instance.singleton instance)))
-            (singleton-slot
-              (and singleton
-                   (same-slot-getter-in-slot-vector->slot
-                    getter (singleton.extra-slot-descriptors singleton))))
             (the-slot (or singleton-slot
                           (same-slot-getter-in-slot-vector->slot
                            getter (class.slots class)))))
@@ -410,7 +407,7 @@ than the default accepts."
                   (t (dylan-call dylan/error
                                  "slot-initialized? -- bad allocation"
                                  (slot.allocation the-slot)
-                                 instance getter class))))))))))
+                                 instance getter class)))))))))))
 
 ;;; Arithmetic
 

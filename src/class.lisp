@@ -746,6 +746,14 @@ answer the class precedence list."
     (add-method (slot.getter new-slot)
                 (make-constant-getter singleton (slot.data-location new-slot)))))
 
+;;; The singletons of an object with slots of its own (define-slot on a
+;;; singleton, chapter 6): an instance's, which it keeps, or those of any
+;;; other object, which this table keeps.
+
+(defvar *object-singletons* (make-hash-table :test 'eql :weakness :key)
+  "An object that is not an instance -> the singletons of it that have
+slots.")
+
 (defun dylan%add-slot (owner type allocation setter getter debug-name
                         init-value has-init-value? init-function init-keyword
                         required-init-keyword)
@@ -855,11 +863,28 @@ answer the class precedence list."
                                #'add-slot-to-class!)
                    (conflict-test class (copy-slot new-slot t 0))))
              (class.subclasses owner)))
-          (add-a-slot owner new-slot    ; SINGLETON
-                      #'singleton.extra-slot-descriptors
-                      #'set-singleton-extra-slot-descriptors!
-                      #'add-slot-to-singleton!))
+          (progn
+            (add-a-slot owner new-slot    ; SINGLETON
+                        #'singleton.extra-slot-descriptors
+                        #'set-singleton-extra-slot-descriptors!
+                        #'add-slot-to-singleton!)
+            (unless (instance? (singleton.object owner))
+              (pushnew owner (gethash (singleton.object owner)
+                                      *object-singletons*)))))
       new-slot)))
+
+(defun object-singletons (object)
+  (if (instance? object)
+      (and (instance.singleton object) (list (instance.singleton object)))
+      (values (gethash object *object-singletons*))))
+
+(defun object-singleton-slot (object getter)
+  "The slot GETTER reads that was added to OBJECT alone, and the singleton
+that holds it; or NIL."
+  (dolist (singleton (object-singletons object) nil)
+    (let ((slot (same-slot-getter-in-slot-vector->slot
+                 getter (singleton.extra-slot-descriptors singleton))))
+      (when slot (return (values slot singleton))))))
 
 ;;; REMOVE-SLOT (chapter 11).  The Scheme never implemented it.  The slot
 ;;; goes from OWNER and from every subclass that inherits it only through

@@ -870,6 +870,12 @@ PRIMITIVE(init_value) {
 
 /* The storage of the slot SD describes in INSTANCE */
 static D *slot_place(D instance, DySlotDescriptor *sd) {
+    if (sd->one_object) {
+        if (!dy_identical(instance, sd->owner))
+            dy_error("slot-value: the object does not have the slot", instance);
+        if (sd->kind == 4) dy_error("slot-value: a virtual slot has no storage", DY_OBJ(sd));
+        return sd->cell;
+    }
     DyClass *owner = DY_PTR(sd->owner);
     if (!dy_instance_p(instance, owner->instance_wrapper))
         dy_error("slot-value: the object does not have the slot", instance);

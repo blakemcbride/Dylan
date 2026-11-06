@@ -700,12 +700,12 @@ in layout order."
         (emit "~a = DY_CALL(~a, 0, 0, 0, 0, 0);" (sdef-c sd "cell") (sdef-c sd "initfn"))
         (when (slot-spec-type spec)
           (emit "dy_check_type(~a, ~a);" (sdef-c sd "cell") (sdef-c sd "type")))))
-    ;; The slot descriptor's copies (a singleton's slot has none)
-    (when (and (slot-spec-type spec) (sdef-class sd))
+    ;; The slot descriptor's copies
+    (when (slot-spec-type spec)
       (emit "~a.type = ~a;" (sdef-descriptor-c sd) (sdef-c sd "type")))
-    (when (and (slot-spec-init-value spec) (sdef-class sd))
+    (when (slot-spec-init-value spec)
       (emit "~a.init_value = ~a;" (sdef-descriptor-c sd) (sdef-c sd "init")))
-    (when (and (slot-spec-init-function spec) (sdef-class sd))
+    (when (slot-spec-init-function spec)
       (emit "~a.init_function = ~a;" (sdef-descriptor-c sd) (sdef-c sd "initfn")))))
 
 (defun sdef-descriptor-c (sd) (format nil "dy_sd~d" (sdef-id sd)))
@@ -718,7 +718,8 @@ in layout order."
       (let ((owner (atom-c (ir-define-slot-owner node))))
         (emit "if (!dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error(\"define-slot: the owner must be a singleton, or a class known when compiling\", ~a);"
               owner owner)
-        (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)))
+        (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)
+        (emit "~a.owner = ~a.object;" (sdef-descriptor-c sd) (owner-c sd))))
     (gen-slot-initialization sd))
   (when (ir-define-class-p node)
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
@@ -1392,6 +1393,26 @@ objects, makers."
 
 (defun emit-slot-descriptors ()
   (let ((sdefs (loop for g being the hash-values of *gclasses* append (gclass-sdefs g))))
+    ;; A slot of one object (define-slot on a singleton): its OWNER is the
+    ;; object, once the define-slot has run, and its storage the cell.
+    (dolist (sd *singleton-sdefs*)
+      (let ((spec (sdef-spec sd))
+            (getter (gethash (sdef-getter sd) *gfuns*))
+            (setter (and (sdef-setter sd) (gethash (sdef-setter sd) *gfuns*))))
+        (when getter
+          (declare-object "DySlotDescriptor ~a;" (sdef-descriptor-c sd))
+          (emit-object "DySlotDescriptor ~a = { &dy_wrapper_slot_descriptor, ~a, ~a, DY_UNBOUND, ~a, DY_UNBOUND, DY_UNBOUND, ~a, DY_UNBOUND, ~d, 0, ~a, true };"
+                       (sdef-descriptor-c sd)
+                       (address (gfun-c-name getter))
+                       (if setter (address (gfun-c-name setter)) "DY_FALSE")
+                       (c-constant *cdata* (dylan-name (string-downcase (sdef-allocation sd))))
+                       (c-constant *cdata* (or (slot-spec-init-keyword spec)
+                                               (slot-spec-required-init-keyword spec)
+                                               +false+))
+                       (position (sdef-allocation sd) '(:instance :class :each-subclass :constant :virtual))
+                       (if (member (sdef-allocation sd) '(:instance :constant))
+                           (format nil "&~a" (sdef-c sd "cell"))
+                           "NULL")))))
     (dolist (sd sdefs)
       (let ((spec (sdef-spec sd))
             (setter (and (sdef-setter sd) (gethash (sdef-setter sd) *gfuns*))))
@@ -1416,6 +1437,13 @@ objects, makers."
     (emit-object "    (void)a2; (void)a3;")
     (emit-object "    if (DY_UNLIKELY(argc != 2)) dy_wrong_argument_count(self, argc);")
     (emit-object "    DyWrapper *w = dy_wrapper_of(a0); (void)w;")
+    ;; The slots of single objects, which are more specific
+    (dolist (sd *singleton-sdefs*)
+      (let ((getter (gethash (sdef-getter sd) *gfuns*)))
+        (when getter
+          (emit-object "    if (a1 == ~a && dy_identical(a0, ~a.object)) return ~a;"
+                       (address (gfun-c-name getter)) (owner-c sd)
+                       (address (sdef-descriptor-c sd))))))
     (dolist (sd (stable-sort (copy-list sdefs) #'>
                              :key (lambda (sd) (length (class-info-cpl (sdef-class sd))))))
       (emit-object "    if (a1 == ~a && dy_wrapper_subtype(w, &~a)) return ~a;"

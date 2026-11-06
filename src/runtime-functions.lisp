@@ -311,21 +311,16 @@ own functions such as make take any keyword arguments, is #rest without
                     nil nil nil)
    (lambda (obj getter)
      (or-false
-      (or (and (instance? obj)
-               (instance.singleton obj)
-               (same-slot-getter-in-slot-vector->slot
-                getter
-                (singleton.extra-slot-descriptors (instance.singleton obj))))
+      (or (object-singleton-slot obj getter)
           (same-slot-getter-in-slot-vector->slot
            getter (class.slots (get-type obj))))))))
 
 (defun singleton-slot-values (instance slot-desc)
   "The extra-slot-values vector holding SLOT-DESC, when it is a slot added
 to INSTANCE's singleton rather than one of its class's slots."
-  (let ((singleton (and (instance? instance) (instance.singleton instance))))
-    (and singleton
-         (find slot-desc (singleton.extra-slot-descriptors singleton))
-         (singleton.extra-slot-values singleton))))
+  (dolist (singleton (object-singletons instance) nil)
+    (when (find slot-desc (singleton.extra-slot-descriptors singleton))
+      (return (singleton.extra-slot-values singleton)))))
 
 (defun instance-slot-descriptor (instance slot-desc)
   "SLOT-DESC as INSTANCE's class has it.  Each class keeps its own copy of
@@ -339,7 +334,7 @@ a descriptor of a class INSTANCE is not an instance of is an error."
                       (class-precedence-list class)))
            (same-slot-getter-in-slot-vector->slot (slot.getter slot-desc)
                                                   (class.slots class)))
-          (t (dylan-call dylan/error "slot-value: the object does not have the slot"
+          (t (dylan-call dylan/error "slot-value: the object does not have the slot: ~s"
                          instance)))))
 
 (defparameter dylan/slot-value

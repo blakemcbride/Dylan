@@ -964,4 +964,42 @@ before
 #f
 \"ERR: slot-value: the slot is not initialized: {instance of <pt>}\"
 ")
+ ;; A slot define-slot adds to one object -- an instance, a symbol, an
+ ;; integer -- has a descriptor for that object alone (chapter 11).
+ (slots-of-one-object
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <pt> (<object>) (x init-value: 0))
+(define p1 (make <pt>))
+(define p2 (make <pt>))
+(define-slot (singleton p1) color init-value: 'red)
+(define sd (slot-descriptor p1 color))
+(print sd)
+(print (slot-descriptor p2 color))
+(print (slot-value p1 sd))
+(set! (slot-value p1 sd) 'blue)
+(print (color p1))
+(print (slot-initialized? p1 color))
+(define-slot (singleton 'sym) mood init-value: 'calm)
+(define sd2 (slot-descriptor 'sym mood))
+(print sd2)
+(print (slot-value 'sym sd2))
+(print (slot-initialized? 'sym mood))
+(print (slot-descriptor 'other mood))
+(define-slot (singleton 42) tag init-value: 'answer)
+(print (slot-value 42 (slot-descriptor 42 tag)))
+(print (try (method () (slot-value p2 sd))))
+(print (try (method () (slot-value 'other sd2))))"
+  "{slot color}
+#f
+red
+blue
+#t
+{slot mood}
+calm
+#t
+#f
+answer
+\"ERR: slot-value: the object does not have the slot: {instance of <pt>}\"
+\"ERR: slot-value: the object does not have the slot: other\"
+")
 )

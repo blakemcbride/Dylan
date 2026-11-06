@@ -811,12 +811,15 @@ typedef struct DySlotDescriptor {
     D init_value;                  /* DY_UNBOUND if none                  */
     D init_function;               /* DY_UNBOUND if none                  */
     D init_keyword;                /* keyword or #f                       */
-    D owner;                       /* the class                           */
+    D owner;                       /* the class (but see ONE_OBJECT)      */
     intptr_t kind;                 /* 0 instance, 1 class, 2 each-subclass,
                                       3 constant, 4 virtual               */
     intptr_t number;               /* instance: the program's slot number */
     D *cell;                       /* class, constant: the storage;
                                       each-subclass: one per class id     */
+    bool one_object;               /* a slot of one object (define-slot on
+                                      a singleton): OWNER is the object,
+                                      and CELL its storage                */
 } DySlotDescriptor;
 
 typedef struct DySingleton {       /* (singleton object)                */

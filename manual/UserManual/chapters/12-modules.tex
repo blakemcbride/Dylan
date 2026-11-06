@@ -294,9 +294,12 @@ It first finds every top-level \code{define-module} form in every file,
 then defines each module after the modules it uses. The order of the
 \code{define-module} forms, and of the files that contain them, therefore
 does not matter. Then it compiles each file's forms in the module its
-header names. The top-level forms of all the files run in the order the
-files were given on the command line, and within each file from top to
-bottom.
+header names. A \code{define-module} that a macro makes is found only
+when the compiler reaches the macro's use: the module is defined there,
+and a module that uses it is defined when its own \code{define-module}
+form is reached, which must therefore come after the macro's use. The
+top-level forms of all the files run in the order the files were given
+on the command line, and within each file from top to bottom.
 
 Mistakes in modules are reported when compiling, with the file and line:
 

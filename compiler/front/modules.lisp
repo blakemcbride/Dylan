@@ -30,6 +30,7 @@
   (created '())                         ; symbols named in create clauses
   (clauses '())
   (location nil)
+  (form nil)                            ; the define-module form
   (state :defined))                     ; or :pending, :defining
 
 (defmethod print-object ((m dylan-module) stream)
@@ -275,17 +276,63 @@ DEFINE-ALL-MODULES."
       (let ((module (make-dylan-module name)))
         (setf (dylan-module-clauses module) (cddr form)
               (dylan-module-location module) *location*
+              (dylan-module-form module) form
               (dylan-module-state module) :pending)
         (setf (gethash name *dylan-modules*) module)))))
 
+(defun define-pending-module (module)
+  "Define MODULE if it is pending; an error in it is reported, and it is
+taken as having no clauses."
+  (when (eq (dylan-module-state module) :pending)
+    (handler-case (define-module-now (dylan-module-name module))
+      (compile-error (e)
+        (note-error e)
+        (setf (dylan-module-state module) :defined)))))
+
+(defun used-module-names (module)
+  (loop for clause in (dylan-module-clauses module)
+        when (and (consp clause) (eq (car clause) 'dylan::use) (consp (cdr clause)))
+          collect (cadr clause)))
+
+(defun waiting-modules ()
+  "The pending modules that use a module no define-module written in the
+program defines, or one of these: a macro may yet make its
+define-module, so they are defined when their own define-module form is
+reached, as the forms run in order."
+  (let ((waiting '())
+        (changed t))
+    (loop while changed
+          do (setf changed nil)
+             (loop for module being the hash-values of *dylan-modules*
+                   when (and (eq (dylan-module-state module) :pending)
+                             (not (member module waiting))
+                             (some (lambda (name)
+                                     (let ((used (gethash name *dylan-modules*)))
+                                       (or (null used) (member used waiting))))
+                                   (used-module-names module)))
+                     do (push module waiting)
+                        (setf changed t)))
+    waiting))
+
 (defun define-all-modules ()
-  (loop for module being the hash-values of *dylan-modules*
-        when (eq (dylan-module-state module) :pending)
-          do (handler-case (define-module-now (dylan-module-name module))
-               (compile-error (e)
-                 (note-error e)
-                 ;; Go on as though it had no clauses.
-                 (setf (dylan-module-state module) :defined)))))
+  (let ((waiting (waiting-modules)))
+    (loop for module being the hash-values of *dylan-modules*
+          unless (member module waiting)
+            do (define-pending-module module))))
+
+(defvar *module-forms* nil
+  "An EQ table of the define-module forms DECLARE-MODULES-IN met.")
+
+(defun define-module-form (form)
+  "A define-module FORM met in converting the program: one written in it
+was declared before (DECLARE-MODULES-IN) and is defined now if it waited
+for a module a macro makes; one a macro made is declared and defined."
+  (if (and *module-forms* (gethash form *module-forms*))
+      (let ((module (gethash (cadr form) *dylan-modules*)))
+        (when (and module (eq (dylan-module-form module) form))
+          (define-pending-module module)))
+      (progn (declare-module form)
+             (define-pending-module (gethash (cadr form) *dylan-modules*)))))
 
 ;;; The predefined modules
 

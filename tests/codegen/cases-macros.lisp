@@ -177,4 +177,13 @@ error
 (#t #f #t)
 #t
 ")
+ ;; A define-module a macro makes defines the module where the macro is used,
+ ;; and a module that uses it can be defined after.
+ (macro-made-module
+  "(define-macro defmod (name) `(define-module ,name (use dylan) (export foo)))
+(defmod mm)
+(define-module other (use dylan) (use mm))
+(print 'done)"
+  "done
+")
 )

@@ -85,7 +85,8 @@ and the variable."
   "The nodes for the top-level FORM, in order."
   (with-form (form)
     (cond ((and (consp form) (eq (car form) 'dylan::define-module))
-           '())                         ; done before conversion began
+           (define-module-form form)
+           '())
           ((and (consp form) (eq (car form) 'dylan::define-macro))
            (define-user-macro form)
            '())

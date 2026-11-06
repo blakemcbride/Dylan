@@ -182,6 +182,7 @@ saying why the file could not be read."
         (*variable-counter* 0)
         (*dylan-modules* nil)
         (*macro-literal-keys* (make-hash-table :test #'eq))
+        (*module-forms* (make-hash-table :test #'eq))
         (*location* nil))
     (initialize-modules)
     ;; Modules first.
@@ -194,21 +195,27 @@ saying why the file could not be read."
     ;; Then the forms of each file, in its module.
     (let ((units
             (loop for (file module-name forms) in specs
-                  for unit = (let ((*source-file* file)
-                                   (*location* (and file (make-location file 0))))
-                               (collecting-errors
-                                 (make-unit file
-                                            (find-module (dylan-name module-name))
-                                            forms)))
-                  when unit
-                    collect unit)))
-      (dolist (unit units)
-        (let ((*source-file* (unit-file unit))
-              (*module* (unit-module unit)))
-          (setf (unit-forms unit)
-                (loop for (form . location) in (unit-raw-forms unit)
-                      append (let ((*location* location))
-                               (collecting-errors (convert-top-level form)))))))
+                  ;; The module is found when the file's forms are
+                  ;; converted, since a macro may make it.
+                  collect (make-unit file (dylan-name module-name) forms))))
+      (setf units
+            (loop for unit in units
+                  when (let ((*source-file* (unit-file unit))
+                             (*location* (and (unit-file unit) (make-location (unit-file unit) 0))))
+                         (collecting-errors
+                           (let ((module (find-module (unit-module unit))))
+                             (define-pending-module module)
+                             (setf (unit-module unit) module))))
+                    collect (let ((*source-file* (unit-file unit))
+                                  (*module* (unit-module unit)))
+                              (setf (unit-forms unit)
+                                    (loop for (form . location) in (unit-raw-forms unit)
+                                          append (let ((*location* location))
+                                                   (collecting-errors (convert-top-level form)))))
+                              unit)))
+      ;; Those that waited for a module no macro made
+      (loop for module being the hash-values of *dylan-modules*
+            do (define-pending-module module))
       (check-undefined-variables)
       (let ((program (make-program units *dylan-modules* (reverse *diagnostics*))))
         (setf (program-macro-literal-keys program) *macro-literal-keys*)
@@ -220,6 +227,7 @@ begin forms."
   (when (consp form)
     (case (car form)
       ((dylan::define-module)
+       (setf (gethash form *module-forms*) t)
        (collecting-errors (declare-module form)))
       ((dylan::begin)
        (when (proper-list-p form)

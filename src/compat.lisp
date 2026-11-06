@@ -1379,7 +1379,10 @@ for the Lisp handlers to have back if no Dylan handler takes it."
      ;; Worded as a compiled program's primitives word them, where they
      ;; have one.
      (let* ((expected (type-error-expected-type condition))
-            (wording (cond ((member expected '(list cons)) "not a list")
+            (wording (cond ((eq expected 'list) "not a list")
+                           ;; Storing into the car or cdr of what is
+                           ;; not a pair
+                           ((eq expected 'cons) "not a pair")
                            ((eq expected 'character) "not a character")
                            ((or (member expected '(integer fixnum))
                                 (and (consp expected) (eq (car expected) 'integer)))

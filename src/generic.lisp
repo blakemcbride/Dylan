@@ -543,27 +543,46 @@ the rest (on the same arguments, unless it is given others)."
 ;;;; dropped when a method is added or removed, and when any class's
 ;;;; precedence list changes (*CLASS-STRUCTURE-EPOCH*).
 
+(defvar *extended-float-singletons* (make-symbol "EXTENDED-FLOATS")
+  "The key, in a position's table of singleton objects, of the table that
+maps the value of each <extended-float> among them to its index: two
+extended floats of one value are the same object (ID?), though not EQL.")
+
 (defun singleton-objects-by-position (methods nrequired)
   "A vector holding, for each required argument, NIL or an EQL table
 mapping each object that singleton specializers of METHODS name in that
-position to an index of its own."
-  (let ((objects (make-array nrequired :initial-element nil)))
+position to an index of its own (an <extended-float>, by its value, in
+the table under *EXTENDED-FLOAT-SINGLETONS*)."
+  (let ((objects (make-array nrequired :initial-element nil))
+        (count 0))
     (dolist (method methods objects)
       (loop for specializer in (method.specializers method)
             for i from 0 below nrequired
             when (singleton? specializer)
-              do (let ((table (or (aref objects i)
-                                  (setf (aref objects i)
-                                        (make-hash-table :test 'eql)))))
-                   (unless (nth-value 1 (gethash (singleton.object specializer)
-                                                 table))
-                     (setf (gethash (singleton.object specializer) table)
-                           (hash-table-count table))))))))
+              do (let* ((object (singleton.object specializer))
+                        (table (or (aref objects i)
+                                   (setf (aref objects i)
+                                         (make-hash-table :test 'eql)))))
+                   (when (extended-float? object)
+                     (setf object (extended-float-value object)
+                           table (or (gethash *extended-float-singletons*
+                                              table)
+                                     (setf (gethash *extended-float-singletons*
+                                                    table)
+                                           (make-hash-table :test 'eql)))))
+                   (unless (nth-value 1 (gethash object table))
+                     (setf (gethash object table) (incf count))))))))
 
 (declaim (inline dispatch-key))
 (defun dispatch-key (singletons i argument)
   (let ((objects (svref singletons i)))
-    (or (and objects (values (gethash argument objects)))
+    (or (and objects
+             (if (extended-float? argument)
+                 (let ((floats (gethash *extended-float-singletons* objects)))
+                   (and floats
+                        (values (gethash (extended-float-value argument)
+                                         floats))))
+                 (values (gethash argument objects))))
         (get-type argument))))
 
 (defun dispatch-cache (data)

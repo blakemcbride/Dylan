@@ -1026,4 +1026,21 @@ answer
 {the class <method>}
 base
 ")
+ ;; A slot specification's faults are worded alike in both (chapter 6
+ ;; gives the options).
+ (slot-option-unknown
+  "(define-class <c> (<object>) (s foo: 1))
+(print 'x)"
+  ""
+  :compile-error "slot: unknown option foo:")
+ (slot-setter-not-a-name
+  "(define-class <c> (<object>) (s setter: 5))
+(print 'x)"
+  ""
+  :compile-error "slot setter: 5 is not a variable name")
+ (slot-allocation-unknown
+  "(define-class <c> (<object>) (s allocation: foo))
+(print 'x)"
+  ""
+  :compile-error "slot s: allocation: must be one of the symbols instance, class, each-subclass, constant and virtual, not foo")
 )

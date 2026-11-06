@@ -331,75 +331,86 @@
 ;;; Parsing and compiling the DEFINE-CLASS form
 
 (defun expand-slot (slot)
+  "SLOT, a slot specification of define-class or define-slot, as a slot.
+Its faults are worded as the compiler to C words them."
   (labels
-      ((build-slot (pairs default-getter)
-         (validate-keywords
-          pairs
-          '(:getter :setter :type :init-value :init-function :init-keyword
-            :required-init-keyword :allocation)
-          #'dylan%error)
-         ;; Chapter 6: each keyword at most once.
-         (let ((keys (loop for key in pairs by #'cddr collect key)))
-           (loop for tail on keys
-                 when (member (car tail) (cdr tail))
-                   do (dylan%error "slot -- slot option given twice"
-                                   (car tail) pairs)))
+      ((check-options (pairs)
+         ;; Keyword/value pairs, each keyword one a slot takes, and each at
+         ;; most once (chapter 6)
+         (let ((seen '()))
+           (loop for rest = pairs then (cddr rest)
+                 until (null rest)
+                 do (cond ((not (and (consp rest) (keyword? (car rest))
+                                     (consp (cdr rest))))
+                           (dylan%error "slot: bad keyword options ~a" rest))
+                          ((not (member (car rest)
+                                        '(:getter :setter :type :init-value
+                                          :init-function :init-keyword
+                                          :required-init-keyword :allocation)))
+                           (dylan%error "slot: unknown option ~a" (car rest)))
+                          ((member (car rest) seen)
+                           (dylan%error "slot: option ~a given twice" (car rest)))
+                          (t (push (car rest) seen))))))
+       (simple-name? (x) (and (symbolp x) (variable-name? x)))
+       (build-slot (pairs default-getter)
+         (check-options pairs)
          (let* ((getter
-                 (dylan%find-keyword
-                  pairs :getter
-                  (lambda ()
-                    (or default-getter
-                        (dylan%error "slot expander -- no getter name"
-                                     pairs)))))
-               (setter
-                 (let ((setter (dylan%find-keyword
-                                pairs :setter (lambda ()
-                                                (if (variable-name? getter)
-                                                    `(setter ,getter)
-                                                    nil)))))
-                   (if (false? setter) nil setter)))   ; setter: #f
-               (type (dylan%find-keyword pairs :type (lambda () '<object>)))
-               (has-initial-value? t))
-           (let ((init-value
-                   (dylan%find-keyword pairs :init-value
-                                       (lambda ()
-                                         (setf has-initial-value? nil)
-                                         nil)))
-                 (init-function
-                   (dylan%find-keyword pairs :init-function (lambda () nil)))
-                 (init-keyword
-                   (dylan%find-keyword pairs :init-keyword (lambda () nil)))
-                 (required-init-keyword
-                   (dylan%find-keyword pairs :required-init-keyword
-                                       (lambda () nil)))
-                 (allocation
-                   (dylan%find-keyword pairs :allocation
-                                       (lambda () 'instance))))
-             (if (and (variable-name? getter)
-                      (or (not setter) (variable-name? setter))
-                      (or (not has-initial-value?) (not init-function))
-                      (or (not required-init-keyword)
-                          (and (not init-keyword) (not has-initial-value?)
-                               (not init-function)))
-                      (member allocation '(instance class each-subclass
-                                           constant virtual)))
-                 (make-slot getter      ; debug-name
-                            getter setter type init-value has-initial-value?
-                            init-function init-keyword required-init-keyword
-                            allocation nil nil)
-                 (dylan%error "slot expander -- bad slot"
-                              getter setter has-initial-value? init-value
-                              init-function init-keyword
-                              required-init-keyword allocation))))))
+                  (dylan%find-keyword
+                   pairs :getter
+                   (lambda ()
+                     (or default-getter
+                         (dylan%error "slot: no getter name in ~a" slot)))))
+                (setter
+                  (let ((setter (dylan%find-keyword
+                                 pairs :setter (lambda () `(setter ,getter)))))
+                    (if (false? setter) nil setter)))   ; setter: #f
+                (type (dylan%find-keyword pairs :type (lambda () '<object>)))
+                (has-initial-value? t)
+                (init-value
+                  (dylan%find-keyword pairs :init-value
+                                      (lambda ()
+                                        (setf has-initial-value? nil)
+                                        nil)))
+                (init-function
+                  (dylan%find-keyword pairs :init-function (lambda () nil)))
+                (init-keyword
+                  (dylan%find-keyword pairs :init-keyword (lambda () nil)))
+                (required-init-keyword
+                  (dylan%find-keyword pairs :required-init-keyword
+                                      (lambda () nil)))
+                (allocation
+                  (dylan%find-keyword pairs :allocation (lambda () 'instance))))
+           (unless (simple-name? getter)
+             (dylan%error "slot: bad getter name ~a" getter))
+           (when (and setter (not (variable-name? setter)))
+             (dylan%error "slot setter: ~a is not a variable name" setter))
+           (when (and has-initial-value? init-function)
+             (dylan%error "slot ~a: both init-value: and init-function:" getter))
+           (when (and init-keyword (not (keyword? init-keyword)))
+             (dylan%error "slot ~a: init-keyword: must be a keyword" getter))
+           (when (and required-init-keyword (not (keyword? required-init-keyword)))
+             (dylan%error "slot ~a: required-init-keyword: must be a keyword" getter))
+           (when (and required-init-keyword
+                      (or init-keyword has-initial-value? init-function))
+             (dylan%error "slot ~a: required-init-keyword: with an init-keyword: or initial value"
+                          getter))
+           (unless (member allocation '(instance class each-subclass constant virtual))
+             (dylan%error "slot ~a: allocation: must be one of the symbols instance, class, each-subclass, constant and virtual, not ~a"
+                          getter allocation))
+           (make-slot getter            ; debug-name
+                      getter setter type init-value has-initial-value?
+                      init-function init-keyword required-init-keyword
+                      allocation nil nil))))
     (cond ((and (symbolp slot) (not (null slot)))
+           (unless (simple-name? slot)
+             (dylan%error "slot: bad getter name ~a" slot))
            (make-slot slot slot `(setter ,slot) '<object> nil nil nil nil nil
                       'instance nil nil))
           ((and (consp slot) (keyword? (car slot)))
            (build-slot slot nil))
-          ((and (consp slot) (symbolp (car slot)) (not (null (car slot)))
-                (variable-name? (car slot)))
+          ((and (consp slot) (simple-name? (car slot)))
            (build-slot (cdr slot) (car slot)))
-          (t (dylan%error "slot expander -- bad slot specification" slot)))))
+          (t (dylan%error "bad slot specification ~a" slot)))))
 
 (defun expand-slots (slots)
   (mapcar #'expand-slot slots))

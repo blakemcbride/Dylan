@@ -25,6 +25,23 @@
 ;;;; program's restrictions, the compiler's own diagnostics, threads -- and
 ;;;; is skipped.
 
+;;; The control stack and heap of bin/dylan (src/build-dylan.lisp): 1 GB
+;;; and 8 GB at least, so that the programs run as they do there.
+(let ((stack (* 1024 1024 1024))
+      (heap (max (sb-ext:dynamic-space-size) (* 8 1024 1024 1024))))
+  (when (or (< (extern-alien "thread_control_stack_size" unsigned-long) stack)
+            (< (sb-ext:dynamic-space-size) heap))
+    (sb-ext:exit
+     :code (sb-ext:process-exit-code
+            (sb-ext:run-program
+             sb-ext:*runtime-pathname*
+             (append (list "--control-stack-size" (format nil "~dMB" (floor stack (* 1024 1024)))
+                           "--dynamic-space-size" (format nil "~dMB" (floor heap (* 1024 1024)))
+                           "--script" (sb-ext:native-namestring *load-truename*))
+                     (rest sb-ext:*posix-argv*))
+             :input t :output t :error t))
+     :abort t)))
+
 (load (merge-pathnames "../../src/load-dylan.lisp"
                        (directory-namestring *load-truename*)))
 

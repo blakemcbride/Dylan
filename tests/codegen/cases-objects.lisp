@@ -1236,13 +1236,20 @@ inner
 (set! f g)
 (print (f 1))
 (define-generic-function dg (x))
+(define old-setter (setter element))
+(define old-car car)
+(define old-plus +)
 (print (setter element))
 (print (try (method () (set! (setter element) (method (v i x) (list 'set i x))))))
 (print (try (method () (set! (element (vector 1 2) 0) 5))))
 (print (try (method () (set! car cdr))))
 (print (try (method () (car '(1 2)))))
 (print (try (method () (set! + -))))
-(print (try (method () (+ 5 2))))"
+(print (try (method () (+ 5 2))))
+(set! (setter element) old-setter)
+(set! car old-car)
+(set! + old-plus)
+(print (list (car '(1 2)) (+ 5 2) (bind ((v (vector 1 2))) (set! (element v 0) 5) v)))"
   "1
 2
 2
@@ -1255,6 +1262,7 @@ g
 (2)
 {method -}
 3
+(1 7 #(5 2))
 ")
  ;; The library's functions assigned and restored; the library's own calls
  ;; are unaffected.

@@ -2176,4 +2176,25 @@ error
   "(923 8560 9424 8064 411 612 7305 42955 68944)
 (955 8544 9398 8072 42956 68944 7305 8490 304)
 ")
+ ;; A range's element at an index is computed, not walked to, and is
+ ;; FROM + index * BY (chapter 12).
+ (range-element-by-arithmetic
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (element (range from: 10 by: 5) 100000000))
+(print (element (range from: 10 through: 0 by: -2) 3))
+(print (element (range from: 1 through: 2 by: 1/4) 4))
+(print (element (range from: 1 size: 3) 5 default: 'none))
+(print (element (range from: 1 size: 3) -1 default: 'none))
+(print (try (method () (element (range from: 1 size: 3) 3))))
+(print (element (range from: 0.5 by: 0.25) 4))
+(print (element (range from: 1 size: 3) 2.0 default: 'd))"
+  "500000010
+4
+2
+none
+none
+\"ERR: element: there is no element at the index 3\"
+1.5
+3
+")
 )

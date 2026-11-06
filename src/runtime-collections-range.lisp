@@ -196,6 +196,28 @@
  (one-arg 'range <range>
           (lambda (range) (or-false (range-size range)))))
 
+;;; A range's element at an index is FROM + index*BY, as its iteration
+;;; gives it (runtime-collections-iterate.lisp), found without the walk.
+(add-method
+ dylan/element
+ (dylan%dylan-callable->method
+  (make-param-list `((range ,<range>) (key ,<integer>)) nil nil '(:default))
+  (lambda (multiple-values next-method range key &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:default))
+    (let ((size (collection-size range)))
+      (if (and (>= key 0) (or (null size) (< key size)))
+          (+ (dylan-call dylan/get-range-start range)
+             (* key (dylan-call dylan/get-range-step range)))
+          (let* ((default-marker (cons 1 2))
+                 (default (dylan%find-keyword rest :default
+                                              (lambda () default-marker))))
+            (if (eq default default-marker)
+                (dylan-call dylan/error
+                            "element: there is no element at the index ~s"
+                            key)
+                default)))))))
+
 (add-method dylan/class-for-copy
             (dylan%function->method one-range
                                     (lambda (x) (declare (ignore x)) <list>)))

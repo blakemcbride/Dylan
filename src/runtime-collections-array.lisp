@@ -63,8 +63,8 @@
            (dylan-call dylan/as (dylan-call dylan/class-for-copy array)
                        new-array))
         (let ((key (current-element key-sequence state)))
-          (dylan-call dylan/setter/element/ new-array key
-                      (dylan-call dylan/element array key))))))))
+          (library-element-setter new-array key
+                      (library-element array key))))))))
 
 (add-method
  dylan/as
@@ -279,7 +279,7 @@ in a compiled program."
                  (lambda (kind index) (aref-error array-instance kind index)))
               (aref row index)))
            ((and (consp indices) (null (cdr indices)))
-            (dylan-call dylan/element array-instance (car indices)))
+            (library-element array-instance (car indices)))
            (t (aref-error array-instance :count nil))))))
 
 (defparameter dylan/setter/aref/
@@ -300,7 +300,7 @@ in a compiled program."
                    (lambda (kind index) (aref-error array-instance kind index)))
                 (setf (aref row index) new-value)))
              ((and (consp indices) (null (cdr indices)))
-              (dylan-call dylan/setter/element/ array-instance (car indices)
+              (library-element-setter array-instance (car indices)
                           new-value))
              (t (aref-error array-instance :count nil)))))))
 

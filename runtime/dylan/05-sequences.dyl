@@ -203,7 +203,7 @@ module: dylan
 ;;; the vector sorted.
 (define %sort-vector
   (method (v test)
-    (bind ((n (size v)) (from v) (to (%make-vector n #f)) (less? (id? test binary<)))
+    (bind ((n (%vector-size v)) (from v) (to (%make-vector n #f)) (less? (id? test binary<)))
       (for ((width 1 (binary* width 2)))
            ((not (binary< width n)) from)
         (for ((low 0 (binary+ low (binary* 2 width))))
@@ -218,10 +218,12 @@ module: dylan
                        (or (not (binary< i middle))
                            ;; binary< called directly is done inline on numbers
                            (if less?
-                               (binary< (element from j) (element from i))
-                               (test (element from j) (element from i)))))
-                  (begin (set! (element to k) (element from j)) (set! j (binary+ j 1)))
-                  (begin (set! (element to k) (element from i)) (set! i (binary+ i 1)))))))
+                               (binary< (%vector-element from j) (%vector-element from i))
+                               (test (%vector-element from j) (%vector-element from i)))))
+                  (begin (%vector-element-setter to k (%vector-element from j))
+                         (set! j (binary+ j 1)))
+                  (begin (%vector-element-setter to k (%vector-element from i))
+                         (set! i (binary+ i 1)))))))
         (bind ((t from)) (set! from to) (set! to t))))))
 
 ;;; The elements of the sequence S in a fresh simple object vector
@@ -231,7 +233,7 @@ module: dylan
            (v (%make-vector (%list-length l) #f)))
       (for ((l l (cdr l)) (i 0 (binary+ i 1)))
            ((id? l '()) v)
-        (set! (element v i) (car l))))))
+        (%vector-element-setter v i (car l))))))
 
 (define-generic-function sort (sequence #key test stable))
 (define-method sort ((s <sequence>) #key (test <) stable)
@@ -239,8 +241,8 @@ module: dylan
          (class (class-for-copy s)))
     (if (id? class <simple-object-vector>)
         v
-        (%from-list class (for ((i (binary- (size v) 1) (binary- i 1))
-                                (l '() (cons (element v i) l)))
+        (%from-list class (for ((i (binary- (%vector-size v) 1) (binary- i 1))
+                                (l '() (cons (%vector-element v i) l)))
                                ((binary< i 0) l))))))
 
 (define-generic-function sort! (sequence #key test stable))
@@ -249,8 +251,8 @@ module: dylan
 
 (define-method sort! ((s <mutable-sequence>) #key (test <) stable)
   (bind ((v (%sort-vector (%elements-vector s) (if (id? test <) binary< test))))
-    (%replace-elements! s (for ((i (binary- (size v) 1) (binary- i 1))
-                                (l '() (cons (element v i) l)))
+    (%replace-elements! s (for ((i (binary- (%vector-size v) 1) (binary- i 1))
+                                (l '() (cons (%vector-element v i) l)))
                                ((binary< i 0) l)))))
 
 ;;; Particular elements
@@ -278,7 +280,7 @@ module: dylan
 (define-generic-function last (sequence #key default))
 (define-method last ((s <sequence>) #key (default %no-default))
   (bind ((state (initial-state s)))
-    (cond ((not (size s)) (error "last: the sequence is unbounded"))
+    (cond ((not (%library-size s)) (error "last: the sequence is unbounded"))
           ((not state)
            (if (id? default %no-default) (error "last: the sequence is empty") default))
           (else:
@@ -288,10 +290,10 @@ module: dylan
 
 (define-generic-function (setter last) (sequence new-value))
 (define-method (setter last) ((s <mutable-sequence>) new-value)
-  (bind ((n (size s)))
+  (bind ((n (%library-size s)))
     (cond ((not n) (error "last: the sequence is unbounded"))
           ((zero? n) (error "last: the sequence is empty"))
-          (else: (set! (element s (binary- n 1)) new-value)))))
+          (else: (%library-element-setter s (binary- n 1) new-value)))))
 
 ;;; Searching: the index of the COUNTth place PATTERN occurs in BIG.
 

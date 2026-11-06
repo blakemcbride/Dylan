@@ -277,6 +277,27 @@ methods that work through the protocol. They may be slow (the default
 do better should also define methods for \code{element},
 \code{(setter element)}, \code{size} or \code{member?}.
 
+\index{size@\code{size}!a program's method}\index{element@\code{element}!a program's method}
+Such methods must agree with the iteration protocol: they are faster
+ways to the same answers. A program may also add methods to
+\code{size}, \code{element} and \code{(setter element)} for the
+library's own classes --- vectors, strings, lists, deques, stretchy
+vectors, ranges, tables and arrays --- but these change only the
+program's own calls of those three, and of \code{first}, \code{second}
+and \code{third} and their setters, which call \code{element} and
+\code{(setter element)}. The library's other functions read a
+collection of one of its own classes as the library defines it, and
+one of the program's classes, including the program's subclass of a
+library class, through the program's methods:
+
+\begin{dylan}
+(define-method size ((v <simple-object-vector>)) 1)
+(define v (vector 'a 'b 'c))
+(size v)                          ; => 1
+(last v)                          ; => c
+(copy-sequence v)                 ; => #(a b c)
+\end{dylan}
+
 \subsection{A sequence}
 
 This class is an immutable sequence of the first \meta{count} squares,

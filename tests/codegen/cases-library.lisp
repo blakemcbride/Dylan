@@ -2109,4 +2109,31 @@ error
 \"AB\"
 (1 2 3)
 ")
+ ;; A program's size and element methods for the library's classes change
+ ;; only its own calls of them, and first, second and third (design note
+ ;; 28); the library's functions use its own.  For a program's own class
+ ;; they use the program's.
+ (library-own-size-and-element
+  "(define-method size ((v <simple-object-vector>)) 1)
+(define-method element ((v <simple-object-vector>) (i <integer>) #key default) (list 'el i))
+(define v (vector 'a 'b 'c))
+(print (list (size v) (element v 1) (first v) (third v)))
+(print (list (last v) (copy-sequence v) (find-key v (method (x) (id? x 'b)))
+             (key-sequence v) (dimensions v) (sort (vector 3 1 2)) (fill! (vector 1 2 3) 0 start: 1)))
+(print (format #f \"~a\" v))
+(define-method element ((s <byte-string>) (i <integer>) #key default) #\\z)
+(print (list (element \"abc\" 0) (first \"abc\") (last \"abc\") (format #f \"~a!\" \"abc\") (as <list> \"abc\")))
+(define-class <three> (<sequence>))
+(define-method initial-state ((s <three>)) 0)
+(define-method next-state ((s <three>) i) (if (< i 2) (+ i 1) #f))
+(define-method current-element ((s <three>) i) (* 10 i))
+(define-method size ((s <three>)) 2)
+(define t3 (make <three>))
+(print (list (size t3) (last t3) (as <list> t3) (key-sequence t3)))"
+  "(1 (el 1) (el 0) (el 2))
+(c #(a b c) 1 {range 0 by 1 size 3} (3) #(1 2 3) #(1 0 0))
+\"#(a b c)\"
+(#\\z #\\z #\\c \"abc!\" (#\\a #\\b #\\c))
+(2 20 (0 10 20) {range 0 by 1 size 2})
+")
 )

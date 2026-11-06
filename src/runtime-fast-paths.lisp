@@ -66,3 +66,7 @@
 ;;; The operators the fast paths inline: assigning one turns its own off.
 (dolist (entry *fast-paths*)
   (pushnew (third entry) (gethash (first entry) *fast-path-variables*)))
+
+;;; The library is loaded: its own size and element, which the library's
+;;; functions use (runtime-collections-iterate.lisp)
+(snapshot-library-collection-methods)

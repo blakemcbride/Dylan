@@ -33,7 +33,7 @@ module: dylan
   (method ((array <array>))
     (if (%instance? array <%general-array>)
         (%dimensions array)
-        (list (size array)))))
+        (list (%library-size array)))))
 
 (define %row-major
   (method (array indices)
@@ -54,7 +54,7 @@ module: dylan
     (if (%instance? array <%general-array>)
         (%vector-element (%data array) (%row-major array indices))
         (if (and (%pair? indices) (id? (cdr indices) '()))
-            (element array (car indices))
+            (%library-element array (car indices) %no-default)
             (error "aref: the wrong number of indices for ~s" array)))))
 
 (define (setter aref)
@@ -65,7 +65,7 @@ module: dylan
       (if (%instance? array <%general-array>)
           (%vector-element-setter (%data array) (%row-major array indices) new-value)
           (if (and (%pair? indices) (id? (cdr indices) '()))
-              (set! (element array (car indices)) new-value)
+              (%library-element-setter array (car indices) new-value)
               (error "aref: the wrong number of indices for ~s" array))))))
 
 (define-method size ((a <%general-array>)) (%vector-size (%data a)))
@@ -75,7 +75,7 @@ module: dylan
 
 (define-method element ((a <%general-array>) (indices <sequence>) #key (default %no-default))
   (bind ((l (as <list> indices)))
-    (if (and (= (size l) (size (%dimensions a)))
+    (if (and (= (%list-length l) (%list-length (%dimensions a)))
              (every? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
                      l (%dimensions a)))
         (apply aref a l)
@@ -85,17 +85,18 @@ module: dylan
 
 (define-method (setter element) ((a <%general-array>) (indices <sequence>) new-value)
   (bind ((l (as <list> indices)))
-    (unless (and (= (size l) (size (%dimensions a)))
+    (unless (and (= (%list-length l) (%list-length (%dimensions a)))
                  (every? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
                          l (%dimensions a)))
       (error "element: there is no element at ~s" indices))
     (apply (setter aref) a (append l (list new-value)))))
 
 ;;; Row-major iteration; the state is the row-major index.
-(define-method initial-state ((a <%general-array>)) (if (zero? (size a)) #f 0))
+(define-method initial-state ((a <%general-array>)) (if (zero? (%vector-size (%data a))) #f 0))
 (define-method next-state ((a <%general-array>) (i <integer>))
-  (bind ((j (binary+ i 1))) (if (binary< j (size a)) j #f)))
-(define-method final-state ((a <%general-array>)) (if (zero? (size a)) #f (binary- (size a) 1)))
+  (bind ((j (binary+ i 1))) (if (binary< j (%vector-size (%data a))) j #f)))
+(define-method final-state ((a <%general-array>))
+  (bind ((n (%vector-size (%data a)))) (if (zero? n) #f (binary- n 1))))
 (define-method previous-state ((a <%general-array>) (i <integer>)) (if (zero? i) #f (binary- i 1)))
 (define-method current-element ((a <%general-array>) (i <integer>)) (%vector-element (%data a) i))
 (define-method (setter current-element) ((a <%general-array>) (i <integer>) new-value)

@@ -91,10 +91,38 @@ define-module forms before the first other form, which define it."
                   (setf module-variables (append new-variables module-variables))
                   (setf *program-variables* (append new-variables *program-variables*)))))))))
 
+;;; The library's generic functions, each with its methods, and the fast
+;;; paths' guards, each with its value, as the library left them: a
+;;; program's methods for the library's generic functions are forgotten
+;;; too.
+(defvar *library-methods*
+  (loop for (nil variable) in dylan%lisp-names-of-predefined-names
+        when (and (boundp variable) (dylan%generic-function? (symbol-value variable)))
+          collect (let ((generic-function (symbol-value variable)))
+                    (cons generic-function
+                          (copy-list (generic-function-data.methods
+                                      (generic-function-data generic-function)))))))
+
+(defvar *fast-path-guards*
+  (let ((guards '()))
+    (maphash (lambda (variable symbols)
+               (declare (ignore variable))
+               (dolist (guard symbols)
+                 (pushnew guard guards)))
+             *fast-path-variables*)
+    (mapcar (lambda (guard) (cons guard (symbol-value guard))) guards)))
+
 (defun forget-program ()
   "Undo the program's definitions in dylan-user, for the next program:
 its module variables lose their values, and are macros and read-only no
-longer."
+longer, and the library's generic functions lose the methods it added."
+  (loop for (generic-function . methods) in *library-methods*
+        do (let ((data (generic-function-data generic-function)))
+             (unless (equal methods (generic-function-data.methods data))
+               (setf (generic-function-data.methods data) (copy-list methods)
+                     (generic-function-data.cache data) nil))))
+  (loop for (guard . value) in *fast-path-guards*
+        do (setf (symbol-value guard) value))
   (dolist (name *program-variables*)
     (let ((variable (name->module-variable name)))
       (makunbound variable)

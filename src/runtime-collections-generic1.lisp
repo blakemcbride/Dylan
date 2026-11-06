@@ -83,8 +83,8 @@
                                       (true?
                                        (dylan-call
                                         dylan/=
-                                        (dylan-call dylan/element coll-1 key)
-                                        (dylan-call dylan/element coll-2 key))))
+                                        (library-element coll-1 key)
+                                        (library-element coll-2 key))))
                                  (setf state (next-state key-sequence-1 state))
                                  (return nil))))))))))))
 
@@ -233,7 +233,7 @@ new instance of CLASS, by default FIRST's class-for-copy."
       (setf keys (sort keys #'<)))
     (flet ((value-at (key)
              (dylan-call dylan/apply proc
-                         (mapcar (lambda (c) (dylan-call dylan/element c key))
+                         (mapcar (lambda (c) (library-element c key))
                                  collections))))
       (if (subclass? class <sequence>)
           (dylan-call dylan/as class (mapcar #'value-at keys))
@@ -246,7 +246,7 @@ new instance of CLASS, by default FIRST's class-for-copy."
                                                           first))
                       (dylan-call dylan/make class))))
             (dolist (key keys result)
-              (dylan-call dylan/setter/element/ result key (value-at key))))))))
+              (library-element-setter result key (value-at key))))))))
 
 (defun map-to-class (class proc li rest)
   "The results of PROC on the elements of LI and the REST of the
@@ -337,10 +337,10 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
            (let ((keys (aligned-keys (cons mut-coll sources))))
              (iterate-until
               (lambda (key)
-                (dylan-call dylan/setter/element/ mut-coll key
+                (library-element-setter mut-coll key
                             (dylan-call dylan/apply proc
                                         (mapcar (lambda (c)
-                                                  (dylan-call dylan/element
+                                                  (library-element
                                                               c key))
                                                 sources)))
                 nil)
@@ -456,28 +456,21 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
   (lambda (multiple-values next-method collection predicate &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:skip :failure))
+    ;; In the order of iteration, each element once (as the compiler to C
+    ;; does it): the index of a sequence's, else the current key.
     (let ((skip (dylan%find-keyword rest :skip (lambda () 0)))
           (failure (dylan%find-keyword rest :failure (lambda () dylan%false)))
-          (key-sequence (dylan-call dylan/key-sequence collection)))
-      (loop with key-state = (initial-state key-sequence)
-            with satisfied = 0
-            do (cond ((not key-state) (return failure))
-                     ((true? (dylan-call predicate
-                                  (dylan-call dylan/element
-                                              collection
-                                              (current-element
-                                                          key-sequence
-                                                          key-state))))
-                      (if (> satisfied (- skip 1))
-                          (return (current-element
-                                              key-sequence key-state))
-                          (progn
-                            (setf key-state (next-state
-                                                        key-sequence key-state))
-                            (incf satisfied))))
-                     (t (setf key-state (next-state
-                                                    key-sequence
-                                                    key-state)))))))))
+          (sequence? (sequence? collection)))
+      (do ((state (initial-state collection) (next-state collection state))
+           (index 0 (+ index 1)))
+          ((not state) failure)
+        (when (true? (dylan-call predicate (current-element collection state)))
+          ;; A skip below 1 skips none
+          (if (not (< 0 skip))
+              (return (if sequence?
+                          index
+                          (current-key collection state)))
+              (decf skip))))))))
 
 (defparameter dylan/replace-elements!
   (dylan%generic-fn

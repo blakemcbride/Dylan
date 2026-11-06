@@ -521,15 +521,20 @@ compiled library's %from-list does."
         (lambda (multiple-values next-method sequence &rest rest)
           (declare (ignore multiple-values))
           (dylan%keyword-validate next-method rest '(:default))
-          (let ((size (collection-size sequence)))
-            (cond ((null size)
+          ;; The last element the iteration reaches (as the compiler to C
+          ;; finds it)
+          (let ((state (initial-state sequence)))
+            (cond ((null (collection-size sequence))
                    (dylan-call dylan/error "last: the sequence is unbounded"))
-                  ((plusp size)
-                   (dylan-call dylan/element sequence (- size 1)))
-                  (t (dylan%find-keyword
-                      rest :default
-                      (lambda ()
-                        (dylan-call dylan/error "last: the sequence is empty")))))))))
+                  ((not state)
+                   (dylan%find-keyword
+                    rest :default
+                    (lambda ()
+                      (dylan-call dylan/error "last: the sequence is empty"))))
+                  (t (do ((previous state state)
+                          (state (next-state sequence state)
+                                 (next-state sequence state)))
+                         ((not state) (current-element sequence previous)))))))))
       generic-function)))
 
 ;;; Design note 12: the methods are on <stretchy-vector> and <deque>.
@@ -554,7 +559,7 @@ compiled library's %from-list does."
               (dylan-call dylan/error "last: the sequence is unbounded"))
              ((zerop size)
               (dylan-call dylan/error "last: the sequence is empty")))
-       (dylan-call dylan/setter/element/ sequence (- size 1) new-value)
+       (library-element-setter sequence (- size 1) new-value)
        new-value))))
 
 (defun check-subsequence (test? big big-state pattern pattern-state)
@@ -605,7 +610,7 @@ compiled library's %from-list does."
             (if (<= count (+ 1 (collection-size big)))
                 (- count 1)
                 dylan%false)))
-        (loop with first-of-pattern = (dylan-call dylan/first pattern)
+        (loop with first-of-pattern = (library-element pattern 0)
               with state = (initial-state big)
               with num-found = 0
               with index = 0
@@ -682,7 +687,7 @@ compiled library's %from-list does."
   (lambda (mut-seq key new-value)
     (let ((index (index-key key)))
       (if index
-          (dylan-call dylan/setter/element/ mut-seq index new-value)
+          (library-element-setter mut-seq index new-value)
           (dylan-call dylan/error
                       "element: there is no element at the index ~s"
                       key))))))

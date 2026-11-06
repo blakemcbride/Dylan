@@ -51,16 +51,36 @@ module: dylan
         (error "element: there is no element at the index ~s" key))
       i)))
 
+(define %stretchy-element
+  (method (v key default)
+    (bind ((index (%index-key key)))
+      (if (and index (not (negative? index)) (binary< index (%count v)))
+          (%vector-element (%data v) index)
+          (if (id? default %no-default)
+              (error "element: there is no element at the index ~s" key)
+              default)))))
+
+(define %stretchy-element-setter
+  (method (v key new-value)
+    (%vector-element-setter (%data v) (%stretchy-check v key) new-value)))
+
 (define-method element ((v <stretchy-vector>) key #key (default %no-default))
-  (bind ((index (%index-key key)))
-    (if (and index (not (negative? index)) (binary< index (%count v)))
-        (%vector-element (%data v) index)
-        (if (id? default %no-default)
-            (error "element: there is no element at the index ~s" key)
-            default))))
+  (%stretchy-element v key default))
 
 (define-method (setter element) ((v <stretchy-vector>) key new-value)
-  (%vector-element-setter (%data v) (%stretchy-check v key) new-value))
+  (%stretchy-element-setter v key new-value))
+
+;;; The library's own (04-collections.dyl), for a direct instance
+(define-method %library-size ((v <stretchy-vector>))
+  (if (id? (%object-class v) <stretchy-vector>) (%count v) (size v)))
+(define-method %library-element ((v <stretchy-vector>) key default)
+  (if (id? (%object-class v) <stretchy-vector>)
+      (%stretchy-element v key default)
+      (next-method)))
+(define-method %library-element-setter ((v <stretchy-vector>) key new-value)
+  (if (id? (%object-class v) <stretchy-vector>)
+      (%stretchy-element-setter v key new-value)
+      (next-method)))
 
 (define-method initial-state ((v <stretchy-vector>)) (if (zero? (%count v)) #f 0))
 (define-method next-state ((v <stretchy-vector>) (i <integer>))

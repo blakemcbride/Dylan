@@ -409,7 +409,7 @@
     (dylan%keyword-validate next-method rest '(:default))
     (let ((index (index-key key)))
       (if index
-          (dylan-apply dylan/element vector index rest)
+          (apply #'library-element vector index rest)
           (dylan%find-keyword
            rest :default
            (lambda ()

@@ -61,8 +61,8 @@
            (dylan-call dylan/as (dylan-call dylan/class-for-copy table)
                        new-table))
         (let ((key (current-element key-sequence state)))
-          (dylan-call dylan/setter/element/ new-table key
-                      (dylan-call dylan/element table key))))))))
+          (library-element-setter new-table key
+                      (library-element table key))))))))
 
 (add-method
  dylan/as
@@ -80,8 +80,8 @@
               ((not state) table)
             (let ((cur-element (current-element
                                            key-sequence state)))
-              (dylan-call dylan/setter/element/ table cur-element
-                          (dylan-call dylan/element collection
+              (library-element-setter table cur-element
+                          (library-element collection
                                       cur-element)))))))))
 
 ;;;
@@ -249,12 +249,11 @@ many keys share a hash code; growing would not help them."
                          ((not state) table)
                        (let ((current-key (current-element
                                                       key-sequence state)))
-                         (dylan-call
-                          dylan/setter/element/
+                         (library-element-setter
                           table current-key
                           (dylan-call dylan/apply proc
                                       (mapcar (lambda (coll)
-                                                (dylan-call dylan/element
+                                                (library-element
                                                             coll current-key))
                                               all-collections))))))))))))
 
@@ -268,6 +267,6 @@ many keys share a hash code; growing would not help them."
   (make-param-list `((table ,<table>) (state ,<object>) (new-value ,<object>))
                    nil nil nil)
   (lambda (table state new-value)
-    (dylan-call dylan/setter/element/ table
+    (library-element-setter table
                 (current-key table state)
                 new-value))))

@@ -43,6 +43,11 @@ module: dylan
   (%vector-ref v index default))
 (define-method (setter element) ((v <simple-object-vector>) index new-value)
   (%vector-set v index new-value))
+(define-method %library-size ((v <simple-object-vector>)) (%vector-size v))
+(define-method %library-element ((v <simple-object-vector>) index default)
+  (%vector-ref v index default))
+(define-method %library-element-setter ((v <simple-object-vector>) index new-value)
+  (%vector-set v index new-value))
 
 (define-method make ((class (singleton <simple-object-vector>)) #key (size 0) (fill #f))
   (%make-vector size fill))
@@ -80,4 +85,4 @@ module: dylan
 ;;; A vector is an array, so an explicit-key collection too: its keys are
 ;;; its indices.
 (define-method current-key ((v <vector>) (i <integer>)) i)
-(define-method key-sequence ((v <vector>)) (range up-to: (size v)))
+(define-method key-sequence ((v <vector>)) (range up-to: (%library-size v)))

@@ -156,10 +156,69 @@
   (dylan-call dylan/setter/current-element/ collection (dylan-state state)
               new-value))
 
+;;; The library's own size and element.  A program may add methods to
+;;; size, element and (setter element) for the library's classes, but they
+;;; change only its own calls of them (and of first, second and third,
+;;; which call element: design note 28).  The library's functions read a
+;;; collection of one of its own classes as the library defines it -- by
+;;; copies of the three generic functions, made when the library is
+;;; loaded (SNAPSHOT-LIBRARY-COLLECTION-METHODS), which the program's
+;;; methods do not reach -- and one of the program's classes through the
+;;; generic functions themselves.
+
+(defvar *library-classes* nil
+  "The classes the library defines, once it is loaded: a hash set.")
+(defvar *library-size* nil)
+(defvar *library-element* nil)
+(defvar *library-element-setter* nil)
+
+(declaim (inline library-instance-p))
+(defun library-instance-p (object)
+  (and *library-classes* (gethash (get-type object) *library-classes*)))
+
+(defun library-size (collection)
+  (dylan-call (if (library-instance-p collection) *library-size* dylan/size)
+              collection))
+
+(defun library-element (collection key &rest default)
+  (apply #'dylan-call
+         (if (library-instance-p collection) *library-element* dylan/element)
+         collection key default))
+
+(defun library-element-setter (collection key new-value)
+  (dylan-call (if (library-instance-p collection)
+                  *library-element-setter*
+                  dylan/setter/element/)
+              collection key new-value))
+
+(defun snapshot-generic-function (generic-function)
+  "A generic function with GENERIC-FUNCTION's parameters and methods."
+  (let* ((data (generic-function-data generic-function))
+         (copy (dylan%create-generic-function (generic-function-data.name data)
+                                              (generic-function-data.nrequired data)
+                                              (generic-function-data.keys data)
+                                              (generic-function-data.rest? data))))
+    (setf (generic-function-data.methods (generic-function-data copy))
+          (copy-list (generic-function-data.methods data)))
+    copy))
+
+(defun snapshot-library-collection-methods ()
+  "Run when the library is loaded: record its classes and its methods for
+size, element and (setter element)."
+  (let ((classes (make-hash-table :test 'eq)))
+    (loop for (nil variable) in (symbol-value 'dylan%lisp-names-of-predefined-names)
+          do (when (and (boundp variable) (class? (symbol-value variable)))
+               (setf (gethash (symbol-value variable) classes) t)))
+    (setf (gethash <%general-array> classes) t)
+    (setf *library-size* (snapshot-generic-function dylan/size)
+          *library-element* (snapshot-generic-function dylan/element)
+          *library-element-setter* (snapshot-generic-function dylan/setter/element/)
+          *library-classes* classes)))
+
 (defun collection-size (collection)
-  "The size of COLLECTION, or NIL where Dylan's SIZE answers #f (an
-unbounded collection)."
-  (false->nil (dylan-call dylan/size collection)))
+  "The size of COLLECTION, as the library reads it, or NIL where SIZE
+answers #f (an unbounded collection)."
+  (false->nil (library-size collection)))
 
 ;;
 ;; INITIAL-STATE
@@ -382,7 +441,7 @@ unbounded collection)."
  dylan/current-element
  (dylan%function->method
   (make-param-list `((array ,<array>) (state ,<sequence>)) nil nil nil)
-  (lambda (array state) (dylan-call dylan/element array state))))
+  (lambda (array state) (library-element array state))))
 (add-method
  dylan/current-element
  (dylan%function->method
@@ -498,8 +557,7 @@ runs out before the DONE? test causes an exit."
                         (funcall done?
                                  (dylan-apply fn
                                               (mapcar (lambda (collection)
-                                                        (dylan-call
-                                                         dylan/element
+                                                        (library-element
                                                          collection key))
                                                       collections))))
                       keys)))
@@ -645,7 +703,7 @@ integer, whatever the sequence, as in a compiled program."
     (dylan%keyword-validate next-method rest '(:default))
     (let ((index (index-key key)))
       (if index
-          (dylan-apply dylan/element seq index rest)
+          (apply #'library-element seq index rest)
           (dylan%find-keyword rest :default
                               (lambda ()
                                 (dylan-call dylan/error

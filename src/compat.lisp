@@ -544,7 +544,7 @@ it."
             (format stream "{~a" (if (eq class <%general-array>)
                                      "<array>"
                                      (dylan-class-name class)))
-            (let ((size (dylan-call dylan/size object)))
+            (let ((size (library-size object)))
               (cond ((false? size)
                      (out " ..."))
                     ((plusp size)

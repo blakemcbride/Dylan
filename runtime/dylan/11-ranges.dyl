@@ -90,13 +90,23 @@ module: dylan
                      (error "as: the elements of ~s are not in steps" c)))))))))
 (define-method empty? ((r <range>)) (and (%size r) (zero? (%size r))))
 
+(define %range-ref
+  (method (r key default)
+    (bind ((index (%index-key key)))
+      (if (and index (%range-index? r index))
+          (%range-element r index)
+          (if (id? default %no-default)
+              (error "element: there is no element at the index ~s" key)
+              default)))))
+
 (define-method element ((r <range>) key #key (default %no-default))
-  (bind ((index (%index-key key)))
-    (if (and index (%range-index? r index))
-        (%range-element r index)
-        (if (id? default %no-default)
-            (error "element: there is no element at the index ~s" key)
-            default))))
+  (%range-ref r key default))
+
+;;; The library's own (04-collections.dyl), for a direct instance
+(define-method %library-size ((r <range>))
+  (if (id? (%object-class r) <range>) (%size r) (size r)))
+(define-method %library-element ((r <range>) key default)
+  (if (id? (%object-class r) <range>) (%range-ref r key default) (next-method)))
 
 (define-method initial-state ((r <range>)) (if (%range-index? r 0) 0 #f))
 (define-method next-state ((r <range>) (i <integer>))

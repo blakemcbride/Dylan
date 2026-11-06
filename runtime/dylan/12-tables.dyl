@@ -37,24 +37,40 @@ module: dylan
 
 (define-method size ((t <table>)) (%count t))
 
+(define %table-element
+  (method (t key default)
+    (bind ((entry (%table-find t key)))
+      (cond (entry (cdr entry))
+            ((id? default %no-default) (error "element: the table has no key ~s" key))
+            (else: default)))))
+
 (define-method element ((t <table>) key #key (default %no-default))
-  (bind ((entry (%table-find t key)))
-    (cond (entry (cdr entry))
-          ((id? default %no-default) (error "element: the table has no key ~s" key))
-          (else: default))))
+  (%table-element t key default))
 
 ;;; Setting the element of a key the table does not have adds it.
+(define %table-element-setter
+  (method (t key new-value)
+    (bind ((entry (%table-find t key)))
+      (if entry
+          (%set-cdr! entry new-value)
+          (begin
+            (bind ((k (%bucket-index t key)))
+              (%vector-element-setter (%buckets t) k
+                                      (cons (cons key new-value) (%vector-element (%buckets t) k))))
+            (set! (%count t) (binary+ (%count t) 1))
+            (%table-grow t)
+            new-value)))))
+
 (define-method (setter element) ((t <table>) key new-value)
-  (bind ((entry (%table-find t key)))
-    (if entry
-        (%set-cdr! entry new-value)
-        (begin
-          (bind ((k (%bucket-index t key)))
-            (%vector-element-setter (%buckets t) k
-                                    (cons (cons key new-value) (%vector-element (%buckets t) k))))
-          (set! (%count t) (binary+ (%count t) 1))
-          (%table-grow t)
-          new-value))))
+  (%table-element-setter t key new-value))
+
+;;; The library's own (04-collections.dyl), for a direct instance
+(define-method %library-size ((t <table>))
+  (if (id? (%object-class t) <table>) (%count t) (size t)))
+(define-method %library-element ((t <table>) key default)
+  (if (id? (%object-class t) <table>) (%table-element t key default) (next-method)))
+(define-method %library-element-setter ((t <table>) key new-value)
+  (if (id? (%object-class t) <table>) (%table-element-setter t key new-value) (next-method)))
 
 (define-generic-function remove-key! (table key))
 (define-method remove-key! ((t <table>) key)
@@ -99,7 +115,7 @@ module: dylan
       (bind ((t (make <table>)))
         (for-each ((key (key-sequence c)))
                   ()
-          (set! (element t key) (element c key)))
+          (%library-element-setter t key (%library-element c key %no-default)))
         t)))
 
 ;;; map-into a table: the keys of the sources, which the table gains if it
@@ -108,12 +124,13 @@ module: dylan
   (bind ((collections (cons c more)))
     (for-each ((key (%common-keys collections)))
               ()
-      (set! (element t key)
-            (apply f (%list-map (method (c) (element c key)) collections))))
+      (%library-element-setter
+       t key
+       (apply f (%list-map (method (c) (%library-element c key %no-default)) collections))))
     t))
 
 (define-method shallow-copy ((t <table>))
   (bind ((copy (make <table>)))
     (for ((state (initial-state t) (next-state t state)))
          ((not state) copy)
-      (set! (element copy (current-key t state)) (current-element t state)))))
+      (%library-element-setter copy (current-key t state) (current-element t state)))))

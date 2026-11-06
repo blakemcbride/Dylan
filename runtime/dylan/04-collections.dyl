@@ -61,7 +61,7 @@ module: dylan
        ((not state) (%list-reverse keys))))
 
 (define-method key-sequence ((c <sequence>))
-  (bind ((n (size c)))
+  (bind ((n (%library-size c)))
     (if n (range up-to: n) (range))))
 
 ;;; The index a sequence's key denotes, or #f.  The default element below
@@ -116,6 +116,26 @@ module: dylan
         (n 0 (binary+ n 1)))
        ((not state) n)))
 
+;;; The library's own size and element.  A program may add methods to
+;;; size, element and (setter element) for the library's classes, but they
+;;; change only its own calls of them (and of first, second and third,
+;;; which call element: design note 28).  The library's functions read a
+;;; collection of one of its own classes as the library defines it, and
+;;; one of the program's classes through the generic functions.  The
+;;; methods for the library's classes are with the classes; those for a
+;;; class a program may subclass first check that the object is a direct
+;;; instance.
+(define-generic-function %library-size (collection))
+(define-method %library-size ((c <object>)) (size c))
+
+(define-generic-function %library-element (collection key default))
+(define-method %library-element ((c <object>) key default)
+  (if (id? default %no-default) (element c key) (element c key default: default)))
+
+(define-generic-function %library-element-setter (collection key new-value))
+(define-method %library-element-setter ((c <object>) key new-value)
+  (set! (element c key) new-value))
+
 (define-generic-function empty? (collection))
 (define-method empty? ((c <collection>)) (not (initial-state c)))
 
@@ -149,7 +169,7 @@ module: dylan
           (loop (%list-map initial-state collections)))
         (for-each ((key (%common-keys collections)))
                   ()
-          (function (%list-map (method (c) (element c key)) collections))))))
+          (function (%list-map (method (c) (%library-element c key %no-default)) collections))))))
 
 ;;; Keys are matched with =: a key-sequence is made afresh, and the keys
 ;;; of an array, or of a table keyed by lists or strings, are not id? to
@@ -159,8 +179,8 @@ module: dylan
 (define %common-keys
   (method (collections)
     (bind ((key-sequences (%list-map key-sequence collections))
-           (bounded (choose size key-sequences))
-           (unbounded (choose (method (k) (not (size k))) key-sequences))
+           (bounded (choose %library-size key-sequences))
+           (unbounded (choose (method (k) (not (%library-size k))) key-sequences))
            (ordered (concatenate bounded unbounded)))
       (bind-methods ((loop (keys more)
                        (if (id? more '())
@@ -199,8 +219,9 @@ module: dylan
                            (make class))))
           (for-each ((key (%common-keys collections)))
                     ()
-            (set! (element result key)
-                  (apply f (%list-map (method (c) (element c key)) collections))))
+            (%library-element-setter
+             result key
+             (apply f (%list-map (method (c) (%library-element c key %no-default)) collections))))
           result)
         (bind ((results '()))
           (%each-group collections
@@ -224,8 +245,9 @@ module: dylan
         (bind ((keys (intersection (key-sequence target) (%common-keys collections) test: =)))
           (for-each ((key keys))
                     ()
-            (set! (element target key)
-                  (apply f (%list-map (method (c) (element c key)) collections))))
+            (%library-element-setter
+             target key
+             (apply f (%list-map (method (c) (%library-element c key %no-default)) collections))))
           target))))
 
 (define-generic-function any? (procedure collection #rest more-collections))
@@ -311,7 +333,7 @@ module: dylan
 ;;; before START; MESSAGE reports them if not.
 (define %check-start-end
   (method (message s start end)
-    (bind ((n (size s)))
+    (bind ((n (%library-size s)))
       (when (or (not (%instance? start <integer>)) (negative? start)
                 (and n (binary< n start))
                 (and end (or (not (%instance? end <integer>)) (binary< end start)
@@ -337,13 +359,13 @@ module: dylan
 ;;; and the elements of the same key are =.
 
 (define-method binary= ((x <collection>) (y <collection>))
-  (and (= (size x) (size y))
+  (and (= (%library-size x) (%library-size y))
        ;; A default no element of Y can be.  (%no-default is element's
        ;; own mark for no default, which signals an error.)
        (bind ((absent (list #f)))
          (every? (method (key)
-                   (bind ((other (element y key default: absent)))
-                     (and (not (id? other absent)) (= (element x key) other))))
+                   (bind ((other (%library-element y key absent)))
+                     (and (not (id? other absent)) (= (%library-element x key %no-default) other))))
                  (key-sequence x)))))
 
 (define-method binary= ((x <sequence>) (y <sequence>))

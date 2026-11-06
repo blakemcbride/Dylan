@@ -215,7 +215,8 @@ reader had reached."
                                           file
                                           (min (file-position stream)
                                                (max 0 (1- (length text)))))
-                               :message (format nil "~a" e))))))
+                               ;; Worded as bin/dylan reports it
+                               :message (dylan::batch-error-message e))))))
               (when (eq form eof) (return))
               (push (cons form (make-location file start)) forms))))
         (values file module (nreverse forms))))))

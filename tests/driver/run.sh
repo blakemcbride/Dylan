@@ -274,6 +274,9 @@ check "an output directory that is missing" sh -c "'$dylanc' -k -o nodir/sub/p b
 printf "(print 'ok)\n" > 'q"x.dyl'
 printf 'x' > q
 check "a \" in the file's name" sh -c "'$dylanc' 'q\"x.dyl' && test \"\$(./'q\"x')\" = ok"
+# UTF-8 cannot encode a surrogate: both write U+FFFD for one
+printf '(write-line (as <unicode-string> (list (as <character> #xD800) #\\a)))\n' > surr.dyl
+check "a surrogate is written as U+FFFD" sh -c "'$dylanc' surr.dyl && ./surr > surr.c.out && '$dylan' < surr.dyl > surr.l.out 2>&1 && printf '\"\\357\\277\\275a\"\\n' > surr.want && cmp -s surr.c.out surr.want && grep -q \"\$(cat surr.want)\" surr.l.out"
 # The options a program is compiled with do not change the methods it
 # finds by reflection
 printf '(print (size (generic-function-methods size)))\n' > methods.dyl

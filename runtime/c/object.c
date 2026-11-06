@@ -95,6 +95,9 @@ D dy_make_vector(size_t size, D fill) {
 /* ---------------------------------------------------------- Debugging */
 
 void dy_put_char(FILE *out, uint32_t c) {
+    /* UTF-8 has no encoding for a surrogate: it goes out as U+FFFD, the
+     * replacement character, as in the interactive implementation. */
+    if (c >= 0xD800 && c <= 0xDFFF) c = 0xFFFD;
     if (c < 0x80) fputc((int)c, out);
     else if (c < 0x800) { fputc(0xC0 | (c >> 6), out); fputc(0x80 | (c & 0x3F), out); }
     else if (c < 0x10000) {

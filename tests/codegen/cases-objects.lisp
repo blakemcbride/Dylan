@@ -937,4 +937,31 @@ before
 #t
 #f
 ")
+ ;; An instance made before define-slot added a slot has it, initialized
+ ;; as make would have, by every way of reading it (chapter 6: no program
+ ;; sees an instance without the slot).
+ (define-slot-on-earlier-instances
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <pt> (<object>) x)
+(define early (make <pt>))
+(define early2 (make <pt>))
+(define early3 (make <pt>))
+(define-slot <pt> z init-value: 7)
+(define-slot <pt> w init-function: (method () (list 'fresh)))
+(define-slot <pt> v)
+(print (slot-initialized? early z))
+(print (try (method () (slot-value early (slot-descriptor early z)))))
+(print (slot-value early2 (slot-descriptor early2 w)))
+(print (slot-initialized? early3 w))
+(print (w early3))
+(print (slot-initialized? early v))
+(print (try (method () (slot-value early (slot-descriptor early v)))))"
+  "#t
+7
+(fresh)
+#t
+(fresh)
+#f
+\"ERR: slot-value: the slot is not initialized: {instance of <pt>}\"
+")
 )

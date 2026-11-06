@@ -764,6 +764,25 @@ slot SD in the object VAR."
 (defun owner-or-class-spec (sd)
   (if (sdef-class sd) (make-spec :class (sdef-class sd)) (owner-spec sd)))
 
+(defun emit-late-slot-initialization (sd)
+  "Code that, with PLACE the instance's storage for SD's slot, gives an
+instance made before define-slot added the slot its initial value now
+(chapter 6: no program sees an instance without the slot), checked
+against the slot's type as make checks it."
+  (let ((spec (sdef-spec sd)))
+    (when (and (eq (sdef-allocation sd) :instance) (sdef-class sd)
+               (or (slot-spec-init-value spec) (slot-spec-init-function spec)))
+      (emit-object "    if (*place == DY_UNBOUND && ~a != DY_UNBOUND) {"
+                   (sdef-c sd (if (slot-spec-init-value spec) "init" "initfn")))
+      (emit-object "        D value = ~a;"
+                   (if (slot-spec-init-value spec)
+                       (sdef-c sd "init")
+                       (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))
+      (when (slot-spec-type spec)
+        (emit-object "        if (~a != DY_UNBOUND) dy_check_type(value, ~a);"
+                     (sdef-c sd "type") (sdef-c sd "type")))
+      (emit-object "        *place = value;~%    }"))))
+
 (defun gen-accessors (sd)
   "The getter and setter methods of the slot definition SD."
   (let ((methods '())
@@ -774,22 +793,7 @@ slot SD in the object VAR."
     (emit-object "    (void)a1; (void)a2; (void)a3;")
     (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
     (emit-storage-ref sd "a0")
-    (let ((spec (sdef-spec sd)))
-      (when (and (eq (sdef-allocation sd) :instance) (sdef-class sd)
-                 (or (slot-spec-init-value spec) (slot-spec-init-function spec)))
-        ;; An instance made before define-slot added the slot takes its
-        ;; initial value now (chapter 6), checked against the slot's type
-        ;; as make checks it.
-        (emit-object "    if (*place == DY_UNBOUND && ~a != DY_UNBOUND) {"
-                     (sdef-c sd (if (slot-spec-init-value spec) "init" "initfn")))
-        (emit-object "        D value = ~a;"
-                     (if (slot-spec-init-value spec)
-                         (sdef-c sd "init")
-                         (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))
-        (when (slot-spec-type spec)
-          (emit-object "        if (~a != DY_UNBOUND) dy_check_type(value, ~a);"
-                       (sdef-c sd "type") (sdef-c sd "type")))
-        (emit-object "        *place = value;~%    }")))
+    (emit-late-slot-initialization sd)
     (emit-object "    if (DY_UNLIKELY(*place == DY_UNBOUND)) dy_unbound_slot(~a);" (slot-name-c sd))
     (emit-object "    return *place;~%}")
     (push (make-gmethod :specs (list (owner-or-class-spec sd))
@@ -1368,7 +1372,10 @@ objects, makers."
                    (:instance
                     (emit-object "        int32_t i = w->slot_offsets ? w->slot_offsets[~d] : -1;"
                                  (gethash (sdef-getter sd) *instance-slot-numbers*))
-                    (emit-object "        if (i >= 0) return DY_BOOL(((DyInstance *)DY_PTR(a0))->slots[i] != DY_UNBOUND);"))
+                    (emit-object "        if (i >= 0) {")
+                    (emit-object "    D *place = &((DyInstance *)DY_PTR(a0))->slots[i];")
+                    (emit-late-slot-initialization sd)
+                    (emit-object "        return DY_BOOL(*place != DY_UNBOUND);~%        }"))
                    ((:class :constant)
                     (emit-object "        return DY_BOOL(~a != DY_UNBOUND);" (sdef-c sd "cell")))
                    (:each-subclass

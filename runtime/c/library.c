@@ -888,9 +888,19 @@ static D *slot_place(D instance, DySlotDescriptor *sd) {
 
 PRIMITIVE(slot_value) {
     need(self, argc, 2, 2);
-    D v = *slot_place(a0, as_descriptor(a1));
-    if (v == DY_UNBOUND) dy_error("slot-value: the slot is not initialized", a0);
-    return v;
+    DySlotDescriptor *sd = as_descriptor(a1);
+    D *place = slot_place(a0, sd);
+    /* An instance made before define-slot added the slot takes its initial
+     * value now, as its getter gives it (chapter 6). */
+    if (*place == DY_UNBOUND && sd->kind == 0
+        && (sd->init_value != DY_UNBOUND || sd->init_function != DY_UNBOUND)) {
+        D value = sd->init_value != DY_UNBOUND ? sd->init_value
+                                               : DY_CALL(sd->init_function, 0, 0, 0, 0, 0);
+        if (sd->type != DY_UNBOUND) dy_check_type(value, sd->type);
+        *place = value;
+    }
+    if (*place == DY_UNBOUND) dy_error("slot-value: the slot is not initialized", a0);
+    return *place;
 }
 
 PRIMITIVE(slot_value_setter) {

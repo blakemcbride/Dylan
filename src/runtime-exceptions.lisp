@@ -321,7 +321,8 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (make-param-list `((restart ,<restart>)) nil nil nil)
   (lambda (multiple-values next-method restart)
     (declare (ignore restart))
-    (dylan-full-call dylan/values multiple-values next-method))))
+    ;; Nothing to ask, as in a compiled program
+    (dylan-full-call dylan/values multiple-values next-method dylan%false))))
 
 (defparameter dylan/return-query
   (dylan%generic-fn 'return-query
@@ -334,9 +335,14 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (make-param-list `((condition ,<condition>)) nil nil nil)
   (lambda (multiple-values next-method condition)
     (declare (ignore condition))
-    (dylan-display "RETURN-QUERY: please type in a list of values")
-    (dylan-newline)
-    (dylan-full-apply dylan/values multiple-values next-method (dylan-read)))))
+    (if *batch*
+        ;; No one to ask: the program's next forms are not the answer.
+        ;; As in a compiled program, #f.
+        (dylan-full-call dylan/values multiple-values next-method dylan%false)
+        (progn
+          (dylan-display "RETURN-QUERY: please type in a list of values")
+          (dylan-newline)
+          (dylan-full-apply dylan/values multiple-values next-method (dylan-read)))))))
 
 ;;; Operators for Introspection
 

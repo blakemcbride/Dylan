@@ -186,11 +186,14 @@ a compiled program reports an unhandled error, and exit with status 1."
                 ;; Any error, Dylan's or one only Lisp knows of, can
                 ;; return to the loop from the debugger.
                 (with-simple-restart (dylan-rep "Return to the Dylan read-eval-print loop.")
-                  (with-abort-handler
-                    (lambda ()
-                      (implementation-specific/eval
-                       (append preamble
-                               (list (make-result-form compiled-output)))))))
+                  ;; A program run from a file has no loop to return to:
+                  ;; an <abort> no handler takes is an error, as in a
+                  ;; compiled program.
+                  (funcall (if *batch* #'funcall #'with-abort-handler)
+                           (lambda ()
+                             (implementation-specific/eval
+                              (append preamble
+                                      (list (make-result-form compiled-output)))))))
                 (setf rep-module-variables
                       (append new-vars rep-module-variables)))))))))))
 

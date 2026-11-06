@@ -174,6 +174,19 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# Read from a file, a program has no read-eval-print loop's restart:
+# abort ends it as an unhandled error, and it sees no handlers of its own
+cat > abort.dyl <<'EOF'
+(define hs '())
+(do-handlers (method (type test function description) (set! hs (cons type hs))))
+(print hs)
+(abort)
+(print 5)
+EOF
+"$dylan" < abort.dyl > abort.out 2> abort.err; status=$?
+check "bin/dylan < file: abort's status is 1" test "$status" = 1
+check "bin/dylan < file: abort ends the run, with no handlers" sh -c 'grep -q "^()" abort.out && ! grep -q "^5" abort.out'
+check "bin/dylan < file: abort reported" grep -q "^Dylan error: no handler was established for the restart" abort.err
 # The C compiler's warnings about a constant vector the library's bounds
 # checks guard are not shown
 echo '(print (third #(1 2) default: 5))' > bounds.dyl

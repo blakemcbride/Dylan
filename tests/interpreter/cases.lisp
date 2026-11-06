@@ -67,4 +67,13 @@ mod
 (other single other)
 (both other other)
 ")
+ ;; A module redefined may not come to use itself (chapter 5).  (The
+ ;; compiler to C does not redefine modules.)
+ (module-use-cycle
+  "(define-module m1 (use dylan))
+(define-module m2 (use dylan) (use m1))
+(define-module m1 (use dylan) (use m2))
+(print 'after)"
+  ""
+  :error "modules use each other")
 )

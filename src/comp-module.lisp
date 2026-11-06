@@ -299,10 +299,32 @@ symbol) -- refers to in the current module."
           (when (gethash variable (module.imports module))
             (dylan%error "define-module -- cannot export or create an imported variable"
                          variable name)))))
+    ;; A module redefined must not come to use itself (chapter 5).
+    (dolist (clause clauses)
+      (when (and (eq (car clause) 'use)
+                 (or (eq (cadr clause) name) (module-uses? (cadr clause) name)))
+        (dylan%error "define-module -- modules use each other" name
+                     (cadr clause))))
     (setf (module.exports module) (remove-duplicates exports))
     (setf (gethash name *dylan-modules*) module)
     (update-using-modules name)
     name))
+
+(defun module-uses? (name target)
+  "Does the module NAME use the module TARGET, directly or through others?"
+  (let ((seen '()) (todo (list name)))
+    (loop while todo
+          do (let ((module (gethash (pop todo) *dylan-modules*)))
+               (when module
+                 (dolist (clause (module.clauses module))
+                   (when (eq (car clause) 'use)
+                     (let ((used (cadr clause)))
+                       (when (eq used target)
+                         (return-from module-uses? t))
+                       (unless (member used seen)
+                         (push used seen)
+                         (push used todo))))))))
+    nil))
 
 (defvar *modules-being-updated* '())
 

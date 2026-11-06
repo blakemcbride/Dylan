@@ -949,7 +949,10 @@ slot-descriptors leaves them out, as a compiled program does.")
 
 (defparameter dylan/init-keyword
   (dylan%generic-fn 'init-keyword one-slot
-                    (lambda (slot) (or-false (slot.init-keyword slot)))))
+                    ;; Chapter 6: required-init-keyword: is "like
+                    ;; init-keyword:", so it is the slot's init-keyword too.
+                    (lambda (slot) (or-false (or (slot.init-keyword slot)
+                                                 (slot.required-init-keyword slot))))))
 
 (defparameter dylan/init-value (dylan%generic-fn 'init-value one-slot nil))
 

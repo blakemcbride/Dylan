@@ -1049,4 +1049,11 @@ base
 (print 'x)"
   ""
   :compile-error "not a class: 5")
+ ;; Chapter 6: required-init-keyword: is like init-keyword:, so init-keyword
+ ;; answers it (chapter 11).
+ (init-keyword-of-required-slot
+  "(define-class <p> (<object>) (y required-init-keyword: y:) (z init-keyword: z:) (w init-value: 1))
+(print (map init-keyword (slot-descriptors <p>)))"
+  "#(y: z: #f)
+")
 )

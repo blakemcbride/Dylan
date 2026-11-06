@@ -79,6 +79,21 @@
 ;;; is never resolved again.
 (defvar *resolved-names* (make-hash-table :test #'eq))
 
+(defun module-own-name (module symbol setter?)
+  "A Lisp name for MODULE's own variable SYMBOL (or (SETTER SYMBOL)) that no
+other module's has."
+  (let ((base (new-name "" symbol
+                        (concatenate 'string "@"
+                                     (string-downcase
+                                      (symbol-name (module.name module)))))))
+    (if setter? (name->setter base) base)))
+
+(defun library-name? (symbol)
+  "Is SYMBOL the name of a variable of the library?"
+  (or (member symbol dylan%predefined-names)
+      (let ((dylan (gethash 'dylan *dylan-modules*)))
+        (and dylan (member symbol (module.exports dylan))))))
+
 (defun module-variable-name (module symbol setter?)
   "The Lisp name of the variable MODULE owns under SYMBOL (or, if SETTER?,
 under (SETTER SYMBOL))."
@@ -90,16 +105,13 @@ under (SETTER SYMBOL))."
                    ((constantp symbol) (name->lisp-safe-name symbol))
                    (t (new-name "" symbol "@dylan"))))
             ((dylan-user)
-             (cond (setter? (name->setter symbol))
+             ;; Its own symbol -- unless the library has a variable of
+             ;; that name, which DYLAN-USER does not import (chapter 5).
+             (cond ((library-name? symbol) (module-own-name module symbol setter?))
+                   (setter? (name->setter symbol))
                    ((constantp symbol) (name->lisp-safe-name symbol))
                    (t symbol)))
-            (t
-             (let ((base (new-name "" symbol
-                                   (concatenate 'string "@"
-                                                (string-downcase
-                                                 (symbol-name
-                                                  (module.name module)))))))
-               (if setter? (name->setter base) base))))))
+            (t (module-own-name module symbol setter?)))))
     ;; A DYLAN-USER variable's Lisp name is its own symbol, which other
     ;; modules must still resolve for themselves.
     (unless (eq name symbol)

@@ -112,6 +112,10 @@ define-module forms before the first other form, which define it."
              *fast-path-variables*)
     (mapcar (lambda (guard) (cons guard (symbol-value guard))) guards)))
 
+(defvar *dylan-user-module* (gethash 'dylan-user *dylan-modules*)
+  "The module dylan-user as the implementation defines it, which a program
+may define again.")
+
 (defun forget-program ()
   "Undo the program's definitions in dylan-user, for the next program:
 its module variables lose their values, and are macros and read-only no
@@ -129,6 +133,7 @@ longer, and the library's generic functions lose the methods it added."
       (remhash variable *read-only-variables*)))
   (clrhash *dylan-macros*)              ; a macro's own name is not among them
   (clrhash *symbol-spellings*)          ; chapter 15: how a symbol was spelled
+  (setf (gethash 'dylan-user *dylan-modules*) *dylan-user-module*)
   (setf *program-variables* '()))
 
 ;;; Not CONDITION-MESSAGE, which would replace the runtime's own function of

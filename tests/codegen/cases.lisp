@@ -405,4 +405,35 @@ other
   "(50000 0 49999 1249975000)
 (50000 #f \"s5\")
 ")
+ ;; A name dylan-user excludes from the dylan module is free for a
+ ;; variable of its own (chapter 5), a class here; the library's is unchanged.
+ (excluded-class-name-is-free
+  "(define-module dylan-user (use dylan exclude: (<range>)))
+(define-class <range> (<object>))
+(print (as <list> (range from: 1 size: 3)))
+(print (instance? (make <range>) <range>))"
+  "(1 2 3)
+#t
+")
+ ;; A name dylan-user excludes from the dylan module is free for a
+ ;; variable of its own (chapter 5), even one the library holds a class in.
+ (excluded-names-are-free
+  "(define-module dylan-user (use dylan exclude: (<table> reverse)))
+(define <table> 42)
+(define reverse 'mine)
+(print (list <table> reverse))"
+  "(42 mine)
+")
+ ;; With element renamed, (setter element) in dylan-user is a variable of
+ ;; its own (chapter 5), not the library's.
+ (renamed-setter-is-free
+  "(define-module dylan-user (use dylan rename: ((element => elt))))
+(define-method (setter element) (v (x <integer>)) (list 'mine v x))
+(print ((setter element) 1 2))
+(define v (vector 1 2))
+(set! (elt v 0) 9)
+(print v)"
+  "(mine 1 2)
+#(9 2)
+")
 )

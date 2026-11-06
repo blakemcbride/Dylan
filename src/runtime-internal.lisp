@@ -412,7 +412,8 @@ first, and adds an initial NIL next-method argument."
                (return-from dylan%for-each dylan%false))))))
   (dolist (collection collections)
     (unless (subclass? (get-type collection) <collection>)
-      (dylan-call dylan/error "for-each -- not a collection" collection)))
+      ;; As a compiled program finds it: initial-state has no method
+      (dylan-call dylan/initial-state collection)))
   (collections-iterate fn
                        (lambda (result) (and result (car result)))
                        dylan%false
@@ -445,8 +446,13 @@ compiler.lisp) and the VALUES of its unquoted expressions."
                                  (cond ((marker? e 'dylan%qq-splice)
                                         (setf result
                                               (revappend
-                                               (iterate->list #'identity
-                                                              (value e))
+                                               ;; Converted as a compiled
+                                               ;; program converts it, and
+                                               ;; walked, which a dotted
+                                               ;; list's tail ends
+                                               (iterate->list
+                                                #'identity
+                                                (dylan-call dylan/as <list> (value e)))
                                                result)))
                                        ((marker? e 'dylan%qq-tail)
                                         (setf tail (value e)))

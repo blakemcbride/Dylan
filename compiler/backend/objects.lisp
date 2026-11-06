@@ -759,9 +759,12 @@ slot SD in the object VAR."
                                                      (sdef-getter sd)
                                                      (sdef-setter sd)))))))
              ;; Chapter 6: the getter and setter are generic functions even
-             ;; if no method is added.
-             (gfun-for (sdef-getter sd))
-             (when (sdef-setter sd) (gfun-for (sdef-setter sd)))))
+             ;; if no method is added, of one argument and of two.
+             (let ((getter (gfun-for (sdef-getter sd))))
+               (unless (gfun-required getter) (setf (gfun-required getter) 1)))
+             (when (sdef-setter sd)
+               (let ((setter (gfun-for (sdef-setter sd))))
+                 (unless (gfun-required setter) (setf (gfun-required setter) 2))))))
   ;; initialize has its method on <object>.
   (let ((init (gethash (dylan-var "initialize") *gfuns*)))
     (when init

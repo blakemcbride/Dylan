@@ -830,4 +830,16 @@ b-slot
 (setter gg)
 <c>
 ")
+ ;; A virtual slot's getter and setter take one argument and two before
+ ;; they have methods (chapter 6).
+ (virtual-slot-arity
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <c> (<object>) (v allocation: virtual))
+(print (function-arguments v))
+(print (function-arguments (setter v)))
+(print (try (method () (v 1))))"
+  "1
+2
+\"ERR: no applicable method for v\"
+")
 )

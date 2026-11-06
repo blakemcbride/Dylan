@@ -189,6 +189,9 @@ expression that evaluates to a class or singleton, chapter 6.)"
 (defun resolve-class (atom what)
   (let ((v (static-value atom)))
     (or (and (eq (car v) :global) (global-class (second v)))
+        ;; A constant is never a class
+        (and (eq (car v) :constant)
+             (compile-error "not a class: ~a" (dylan-form-string (second v))))
         (compile-error "~a must be a class known at compile time" what))))
 
 (defun constant-class (value)

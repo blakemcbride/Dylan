@@ -1043,4 +1043,10 @@ base
 (print 'x)"
   ""
   :compile-error "slot s: allocation: must be one of the symbols instance, class, each-subclass, constant and virtual, not foo")
+ ;; A superclass that is a constant is never a class.
+ (superclass-not-a-class
+  "(define-class <c> (5))
+(print 'x)"
+  ""
+  :compile-error "not a class: 5")
 )

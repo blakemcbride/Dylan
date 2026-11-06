@@ -159,11 +159,18 @@ continuations, so a CATCH/THROW pair suffices."
   (call-with-escape-continuation receiver))
 
 (defun dylan%dotimes (count result-fn fn)
-  ;; Used for the DOTIMES special form
-  (loop for n from 0
-        do (if (>= n count)
-               (return (funcall result-fn n))
-               (funcall fn n))))
+  ;; Used for the DOTIMES special form.  A count that is not a Lisp real
+  ;; (an extended float, or no number) is compared by Dylan's <, as a
+  ;; compiled program compares every count.
+  (if (realp count)
+      (loop for n from 0
+            do (if (>= n count)
+                   (return (funcall result-fn n))
+                   (funcall fn n)))
+      (loop for n from 0
+            do (if (true? (dylan-call dylan/< n count))
+                   (funcall fn n)
+                   (return (funcall result-fn n))))))
 
 (defun dylan%while (test thunk)
   ;; Used for the UNTIL and WHILE special forms

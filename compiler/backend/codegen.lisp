@@ -132,7 +132,12 @@ generated.")
         (unless (and *line-location* (string= (car *line-location*) file)
                      (= (cdr *line-location*) line))
           (setf *line-location* (cons file line))
-          (push (format nil "#line ~d ~a" line (c-name-string file)) *lines*))))))
+          (push (format nil "#line ~d ~a" line (line-file-name file)) *lines*))))))
+
+(defun line-file-name (name)
+  "NAME, a file's, as a #line directive's string: with _ for each \", \\
+and newline, which C compilers copy unescaped into the assembler."
+  (c-name-string (substitute-if #\_ (lambda (c) (member c '(#\" #\\ #\Newline))) name)))
 
 (defun emit (control &rest arguments)
   (note-line)

@@ -134,10 +134,13 @@ modules share a file."
 
 (defun header-pathname (c-file)
   "The header the C files of the program C-FILE share: named for it, but
-with no ?, which in the #include that names it could begin a trigraph,
-which C11 reads there too."
+with _ for each ?, which in the #include that names it could begin a
+trigraph, which C11 reads there too, and for each \" or \\, which would
+end or change the name there."
   (let ((c-file (native-pathname c-file)))
-    (make-pathname :name (substitute #\_ #\? (pathname-name c-file)) :type "h"
+    (make-pathname :name (substitute-if #\_ (lambda (c) (member c '(#\? #\" #\\ #\Newline)))
+                                        (pathname-name c-file))
+                   :type "h"
                    :defaults c-file)))
 
 (defun module-c-file (c-file module)
@@ -293,7 +296,7 @@ program's own source files.")
 #line DY_RESET by a #line directive back to FILE."
   (with-open-file (out file :direction :output :if-exists :supersede)
     (let ((line 1)
-          (name (c-name-string (native-name file))))
+          (name (line-file-name (native-name file))))
       (dolist (item items)
         (with-input-from-string (in item)
           (loop for text = (read-line in nil)

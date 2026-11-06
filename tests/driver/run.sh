@@ -248,6 +248,16 @@ printf 'module: a*b\n\n(define-method g () 2)\n' > m2.dyl
 printf 'module: my-dylan\n\n(define-method h () 3)\n' > m3.dyl
 printf 'module: main\n\n(print (list (f) (g) (h)))\n' > m4.dyl
 check "modules a/b, a*b and my-dylan" sh -c "'$dylanc' -k -o mods2 mdefs.dyl m1.dyl m2.dyl m3.dyl m4.dyl && test \"\$(./mods2)\" = '(1 2 3)' && test -f mods2-a_2f_b.c -a -f mods2-a_2a_b.c -a -f mods2-my-dylan.c"
+# Inputs and outputs that cannot be read or written are reported, not
+# Lisp backtraces
+mkdir adir
+check "a directory as the input" sh -c "'$dylanc' -o x adir 2>&1 | grep -q 'adir is a directory'"
+printf '(print (size "a\377b"))\n' > badutf.dyl
+check "a byte that is not UTF-8 is read as U+FFFD" sh -c "'$dylanc' badutf.dyl && test \"\$(./badutf)\" = 3"
+check "an output directory that is missing" sh -c "'$dylanc' -k -o nodir/sub/p badutf.dyl 2>&1 | grep -q '^dylanc: cannot write'"
+printf "(print 'ok)\n" > 'q"x.dyl'
+printf 'x' > q
+check "a \" in the file's name" sh -c "'$dylanc' 'q\"x.dyl' && test \"\$(./'q\"x')\" = ok"
 
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

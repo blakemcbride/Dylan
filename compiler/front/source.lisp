@@ -178,7 +178,15 @@ NIL) and the index at which the forms begin."
   (sb-ext:native-namestring (native-pathname x)))
 
 (defun read-file-text (pathname)
-  (with-open-file (in (native-pathname pathname) :external-format :utf-8)
+  "The text of the file PATHNAME, UTF-8, a byte that cannot be read as
+UTF-8 read as U+FFFD, as the interpreter reads it."
+  (let ((found (probe-file (native-pathname pathname))))
+    (when (and found (null (pathname-name found)) (null (pathname-type found)))
+      (error 'sb-int:simple-file-error :pathname pathname
+                                :format-control "~a is a directory, not a file"
+                                :format-arguments (list (native-name pathname)))))
+  (with-open-file (in (native-pathname pathname)
+                      :external-format '(:utf-8 :replacement #\ufffd))
     (let* ((text (make-string (file-length in)))
            (end (read-sequence text in)))
       (subseq text 0 end))))

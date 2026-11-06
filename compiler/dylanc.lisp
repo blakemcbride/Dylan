@@ -98,7 +98,10 @@ Options:
                        (t (push a files))))))
     (when (null files) (usage-error "no files to compile."))
     (dolist (f files)
-      (unless (probe-file (native-pathname f)) (usage-error "~a does not exist." f)))
+      (let ((found (probe-file (native-pathname f))))
+        (unless found (usage-error "~a does not exist." f))
+        (unless (or (pathname-name found) (pathname-type found))
+          (usage-error "~a is a directory, not a file." f))))
     (list* :files (nreverse files) options)))
 
 (defun default-output (file)
@@ -172,6 +175,10 @@ deleted but the executable."
                            (compile-files files c-file))
                        (protected-file (e)
                          (format *error-output* "dylanc: ~a.~%" e)
+                         (finish 2))
+                       (file-error (e)
+                         (format *error-output* "dylanc: cannot write ~a.~%"
+                                 (native-name (file-error-pathname e)))
                          (finish 2)))))
         (unless c-files (finish 1))
         (unless (getf options :c-only)

@@ -92,8 +92,13 @@ of its own."
 
 (defun location-form-number (program location)
   "The number of the top-level form LOCATION is in, or NIL."
-  (let ((starts (and location (program-form-starts program)
-                     (gethash (location-file location) (program-form-starts program)))))
+  (form-number-in (program-form-starts program) location))
+
+(defun form-number-in (form-starts location)
+  "The number of the top-level form LOCATION is in, by FORM-STARTS (see
+PROGRAM-FORM-STARTS), or NIL."
+  (let ((starts (and location form-starts
+                     (gethash (location-file location) form-starts))))
     (when (and starts (plusp (length starts)))
       (let ((index (location-index location))
             (found nil))
@@ -184,7 +189,19 @@ saying why the file could not be read."
                   (read-source (car source) (cdr source)))
               (setf number (note-forms file forms number symbol-forms form-starts))
               (push (list file (or module "dylan-user") forms) specs)))))
-    (let ((program (front-end-units (nreverse specs) :diagnostics *diagnostics*)))
+    (let ((program
+            ;; A macro that makes a symbol while form N is converted makes
+            ;; it before a later form, read already, spells it: the
+            ;; symbol is spelled as the macro made it, and made by form N.
+            (let ((dylan::*respell-symbol-p*
+                    (lambda (symbol)
+                      (let* ((key (form-symbol-key symbol))
+                             (first (gethash key symbol-forms))
+                             (now (form-number-in form-starts *location*)))
+                        (when (and first now (< 0 now first))
+                          (setf (gethash key symbol-forms) now)
+                          t)))))
+              (front-end-units (nreverse specs) :diagnostics *diagnostics*))))
       (setf (program-spellings program) dylan::*symbol-spellings*
             (program-symbol-forms program) symbol-forms
             (program-form-starts program) form-starts)

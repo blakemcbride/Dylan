@@ -274,8 +274,15 @@ can vanish while a caller walks it."
 
 (defvar *symbol-spellings* (make-hash-table :test #'eq))
 
+(defvar *respell-symbol-p* nil
+  "NIL, or a function of a symbol already spelled that answers whether a
+new spelling replaces it.  The compiler to C reads the whole program before
+its macros run, so a spelling it has read may be one that only a later form
+writes (compiler/front/front-end.lisp).")
+
 (defun remember-spelling (symbol spelling)
-  (unless (gethash symbol *symbol-spellings*)
+  (when (or (not (gethash symbol *symbol-spellings*))
+            (and *respell-symbol-p* (funcall *respell-symbol-p* symbol)))
     (setf (gethash symbol *symbol-spellings*) spelling))
   symbol)
 

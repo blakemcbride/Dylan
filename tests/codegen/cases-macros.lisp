@@ -198,4 +198,23 @@ error
 (print 'done)"
   "done
 ")
+ ;; Chapter 15: a symbol is spelled as it is first entered. One a macro
+ ;; makes while a form is compiled is entered before a later form spells it.
+ (macro-made-symbol-spelling
+  "(define-macro m () (list 'quote (as <symbol> \"MiXeD\")))
+(print (m))
+(print 'mixed)
+(print (as <symbol> \"MIXED\"))
+(define-macro k () (as <keyword> \"KeY\"))
+(print (k))
+(print key:)
+(define-macro n2 () (list 'quote (as <symbol> \"FreSh\")))
+(print (n2))"
+  "MiXeD
+MiXeD
+MiXeD
+KeY:
+KeY:
+FreSh
+")
 )

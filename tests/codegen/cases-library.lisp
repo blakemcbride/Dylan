@@ -2221,4 +2221,25 @@ none
   "(#f #f (1 2) \"ab\")
 #f
 ")
+ ;; curry, rcurry, always, compose, complement, disjoin and conjoin answer
+ ;; methods (chapter 10), of #rest alone.
+ (functional-operations-are-methods
+  "(define fs (list (curry + 1) (rcurry - 1) (always 3) (compose list +) (complement odd?)
+                 (disjoin odd? zero?) (conjoin odd? positive?)))
+(do (method (f)
+      (bind ((req rest keys (function-arguments f)))
+        (print (list (instance? f <method>) (object-class f) (method-specializers f)
+                     (applicable-method? f 1) req rest keys))))
+    fs)
+(print (list ((first fs) 2) ((second fs) 5) ((third fs)) ((element fs 3) 1 2)
+             ((element fs 4) 2) ((element fs 5) 0) ((element fs 6) 1)))"
+  "(#t {the class <method>} () #t 0 #t #f)
+(#t {the class <method>} () #t 0 #t #f)
+(#t {the class <method>} () #t 0 #t #f)
+(#t {the class <method>} () #t 0 #t #f)
+(#t {the class <method>} () #t 0 #t #f)
+(#t {the class <method>} () #t 0 #t #f)
+(#t {the class <method>} () #t 0 #t #f)
+(3 4 3 (3) #t #t #t)
+")
 )

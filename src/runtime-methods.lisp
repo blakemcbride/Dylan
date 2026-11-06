@@ -177,10 +177,20 @@
                       (return nil))
                     (setf prev-obj x))))))))
 
+(defun rest-method (dylan-callable)
+  "DYLAN-CALLABLE, a Lisp function of the multiple-values vector, the next
+method and any number of arguments, as a <method> of #rest alone, as the
+compiled library's functional operations make: chapter 10's functions are
+generic functions and methods."
+  (dylan%dylan-callable->method (make-param-list '() nil t nil) dylan-callable))
+
 (defparameter dylan/always
   (dylan%function->method
    one-object
-   (lambda (obj) (lambda (&rest args) (declare (ignore args)) obj))))
+   (lambda (obj)
+     (rest-method (lambda (multiple-values next-method &rest args)
+                    (declare (ignore multiple-values next-method args))
+                    obj)))))
 
 (defparameter dylan/id?
   (dylan%function->method
@@ -1119,8 +1129,9 @@ slot-descriptors leaves them out, as a compiled program does.")
   (dylan%function->method
    one-function
    (lambda (fn)
-     (make-dylan-callable
-      (lambda (&rest args) (bool (false? (dylan-apply fn args))))))))
+     (rest-method (lambda (multiple-values next-method &rest args)
+                    (declare (ignore multiple-values next-method))
+                    (bool (false? (dylan-apply fn args))))))))
 
 (defparameter dylan/compose
   (dylan%function->method
@@ -1128,15 +1139,16 @@ slot-descriptors leaves them out, as a compiled program does.")
    (lambda (fn &rest rest-fns)
      (if (null rest-fns)
          fn
-         (lambda (multiple-values next-method &rest args)
-           (declare (ignore next-method))
-           (labels ((compose (fn rest-fns)
-                      (if (null rest-fns)
-                          (dylan-apply fn args)
-                          (dylan-call fn (compose (car rest-fns)
-                                                  (cdr rest-fns))))))
-             (dylan-mv-call fn multiple-values
-                            (compose (car rest-fns) (cdr rest-fns)))))))))
+         (rest-method
+          (lambda (multiple-values next-method &rest args)
+            (declare (ignore next-method))
+            (labels ((compose (fn rest-fns)
+                       (if (null rest-fns)
+                           (dylan-apply fn args)
+                           (dylan-call fn (compose (car rest-fns)
+                                                   (cdr rest-fns))))))
+              (dylan-mv-call fn multiple-values
+                             (compose (car rest-fns) (cdr rest-fns))))))))))
 
 (defparameter dylan/disjoin
   (dylan%function->method
@@ -1144,7 +1156,7 @@ slot-descriptors leaves them out, as a compiled program does.")
    ;; A new function, even of one predicate, as the compiled library makes;
    ;; the last predicate's values are all answered.
    (lambda (fn &rest rest-fns)
-     (lambda (multiple-values next-method &rest args)
+     (rest-method (lambda (multiple-values next-method &rest args)
        (declare (ignore next-method))
        (loop with current = fn
              with remaining = rest-fns
@@ -1154,7 +1166,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                       (if (true? value)
                           (return value)
                           (progn (setf current (car remaining))
-                                 (pop remaining))))))))))
+                                 (pop remaining)))))))))))
 
 (defparameter dylan/conjoin
   (dylan%function->method
@@ -1162,7 +1174,7 @@ slot-descriptors leaves them out, as a compiled program does.")
    ;; A new function, even of one predicate, as the compiled library makes;
    ;; the last predicate's values are all answered.
    (lambda (fn &rest rest-fns)
-     (lambda (multiple-values next-method &rest args)
+     (rest-method (lambda (multiple-values next-method &rest args)
        (declare (ignore next-method))
        (loop with current = fn
              with remaining = rest-fns
@@ -1171,20 +1183,20 @@ slot-descriptors leaves them out, as a compiled program does.")
                     (if (true? (dylan-apply current args))
                         (progn (setf current (car remaining))
                                (pop remaining))
-                        (return dylan%false))))))))
+                        (return dylan%false)))))))))
 
 (defparameter dylan/curry
   (dylan%function->method
    function-and-arguments
    (lambda (fn &rest curried-args)
-     (lambda (multiple-values next-method &rest args)
+     (rest-method (lambda (multiple-values next-method &rest args)
        (declare (ignore next-method))
-       (dylan-mv-apply fn multiple-values (append curried-args args))))))
+       (dylan-mv-apply fn multiple-values (append curried-args args)))))))
 
 (defparameter dylan/rcurry
   (dylan%function->method
    function-and-arguments
    (lambda (fn &rest curried-args)
-     (lambda (multiple-values next-method &rest args)
+     (rest-method (lambda (multiple-values next-method &rest args)
        (declare (ignore next-method))
-       (dylan-mv-apply fn multiple-values (append args curried-args))))))
+       (dylan-mv-apply fn multiple-values (append args curried-args)))))))

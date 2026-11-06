@@ -135,8 +135,13 @@ longer, and the library's generic functions lose the methods it added."
 ;;; that name, the message of a Dylan condition, and print conditions as
 ;;; #[dylan-instance ...].
 (defun lisp-condition-message (condition)
-  "The message of the Lisp CONDITION on one line, without the Error: prefix."
-  (let ((text (string-trim '(#\Space #\Newline #\Tab) (format nil "~a" condition))))
+  "The message of the Lisp CONDITION on one line, without the Error: prefix:
+for the host's errors that are Dylan's too, as bin/dylan reports them."
+  (let ((text (string-trim '(#\Space #\Newline #\Tab)
+                           (if (typep condition
+                                      '(or program-error arithmetic-error type-error))
+                               (batch-error-message condition)
+                               (format nil "~a" condition)))))
     (if (and (> (length text) 7) (string= "Error: " text :end2 7))
         (subseq text 7)
         text)))

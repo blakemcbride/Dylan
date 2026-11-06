@@ -634,4 +634,23 @@ x
   "(#f #t #t 5)
 \"a thread ended with an unhandled condition: 5\"
 ")
+ ;; An error a handler signals, even one the implementation's own operations
+ ;; signal, goes to the handlers in effect -- the same one too: there is no
+ ;; condition wall (chapter 13).
+ (error-in-handler-is-signalled
+  "(define count 0)
+(print (bind-exit (k)
+  (handler-bind (<error> (method (c n) (set! count (+ count 1))
+                           (if (< count 2) (car 5) (k 'done))))
+    (car 5))))"
+  "done
+")
+ ;; A handler called with the wrong number of arguments is an error, which
+ ;; the handlers in effect -- that one again -- are offered, until the
+ ;; error is reported (chapter 13).
+ (handler-of-wrong-arity
+  "(handler-bind (<error> (method (c) 'x)) (error \"e\"))
+(print 'after)"
+  ""
+  :error "wrong number of arguments (2)")
 )

@@ -1311,6 +1311,13 @@ program prints it."
           (dylan-format-message format-string format-args))
   (force-output *error-output*))
 
+(defvar *reflection-depth* 0
+  "How many Lisp errors are being reflected into Dylan, one inside the
+handling of another.")
+
+(defparameter *maximum-reflection-depth* 3
+  "Below SBCL's own limit of nested errors (SB-KERNEL:*MAXIMUM-ERROR-DEPTH*).")
+
 (defun implementation-specific/catch-all-errors (handler thunk)
   ;; A handler that returns normally declines, and the condition goes on to
   ;; the next Lisp handler -- which is what
@@ -1319,13 +1326,27 @@ program prints it."
   ;; A Lisp error raised by a Dylan default handler has already been
   ;; offered to every Dylan handler, which all declined (chapter 13), so it
   ;; is not reflected back into Dylan a second time.
+  ;;
+  ;; Common Lisp turns a handler-bind's handlers off while one of them
+  ;; runs, so HANDLER -- which runs the Dylan handlers -- runs inside a
+  ;; handler-bind of its own: a Lisp error in a Dylan handler is reflected
+  ;; too, as one the handler signals with error would be (there is no
+  ;; condition wall, chapter 13).  A handler that fails on every condition
+  ;; it is given would fail without end; past *MAXIMUM-REFLECTION-DEPTH*
+  ;; the error is declined, and ends the program as an unhandled one, as a
+  ;; compiled program's ends when its stack is nearly exhausted.
   (handler-bind ((error (lambda (condition)
-                          (unless (and (typep condition
-                                              '(or dylan-condition
-                                                   unhandled-dylan-condition))
-                                       (offered-to-dylan-p condition))
-                            (funcall handler condition)))))
+                          (unless (or (and (typep condition
+                                                  '(or dylan-condition
+                                                       unhandled-dylan-condition))
+                                           (offered-to-dylan-p condition))
+                                      (>= *reflection-depth* *maximum-reflection-depth*))
+                            (let ((*reflection-depth* (1+ *reflection-depth*)))
+                              (implementation-specific/catch-all-errors
+                               handler
+                               (lambda () (funcall handler condition))))))))
     (funcall thunk)))
+
 
 (defun implementation-specific/reflect-condition (condition)
   "The format string and arguments of the Dylan <simple-error> that

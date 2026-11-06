@@ -79,6 +79,13 @@ program reports it."
      ;; As display prints it, through its class's print-object
      (with-output-to-string (s)
        (dylan-display (unhandled-dylan-condition-object condition) s)))
+    ;; The Lisp errors that are Dylan's too, as a handler would see them
+    ((or program-error arithmetic-error type-error)
+     (multiple-value-bind (message irritants)
+         (implementation-specific/reflect-condition condition)
+       (if (eq message *reflected-error-tag*)
+           (princ-to-string condition)
+           (dylan-format-message message irritants))))
     (t (princ-to-string condition))))
 
 (defun end-batch-run (condition hook)

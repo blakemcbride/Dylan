@@ -316,6 +316,17 @@ _Noreturn void dy_error(const char *message, D irritant) {
     report("error", message, irritant);
 }
 
+/* dy_error with the message BEFORE NAME AFTER, however long NAME is. */
+_Noreturn void dy_error_naming(const char *before, const char *name, const char *after,
+                               D irritant) {
+    size_t a = strlen(before), b = strlen(name), c = strlen(after);
+    char *message = dy_alloc_bytes(a + b + c + 1);
+    memcpy(message, before, a);
+    memcpy(message + a, name, b);
+    memcpy(message + a + b, after, c + 1);
+    dy_error(message, irritant);
+}
+
 void dy_check_type(D value, D type) {
     if (dy_specializer_matches(value, type)) return;
     if (can_signal(type_error_hook)) {

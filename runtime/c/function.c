@@ -126,9 +126,7 @@ _Noreturn void dy_wrong_argument_count(D f, intptr_t argc) {
 }
 
 _Noreturn void dy_unbound_variable(const char *name) {
-    char message[256];
-    snprintf(message, sizeof message, "the variable %s has no value", name);
-    dy_error(message, 0);
+    dy_error_naming("the variable ", name, " has no value", 0);
 }
 
 _Noreturn void dy_odd_keyword_arguments(D f) {

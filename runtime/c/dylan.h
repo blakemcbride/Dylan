@@ -347,6 +347,8 @@ void dy_init(void);
 /* Report a run-time error and stop.  (Phase 6 makes these signal Dylan
  * conditions.)  IRRITANT is shown after the message unless it is 0. */
 _Noreturn void dy_error(const char *message, D irritant);
+_Noreturn void dy_error_naming(const char *before, const char *name, const char *after,
+                               D irritant);
 _Noreturn void dy_integer_overflow(void);
 _Noreturn void dy_division_by_zero(void);
 /* A float operation's result neither finite nor exact -- an infinity or a

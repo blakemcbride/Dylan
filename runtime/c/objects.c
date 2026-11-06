@@ -41,22 +41,15 @@ static const char *generic_name(D generic) {
 }
 
 _Noreturn void dy_no_applicable_method(D generic) {
-    char message[256];
-    snprintf(message, sizeof message, "no applicable method for %s",
-             generic_name(generic));
-    dy_error(message, 0);
+    dy_error_naming("no applicable method for ", generic_name(generic), "", 0);
 }
 
 _Noreturn void dy_unbound_slot(const char *getter) {
-    char message[256];
-    snprintf(message, sizeof message, "the slot %s is not initialized", getter);
-    dy_error(message, 0);
+    dy_error_naming("the slot ", getter, " is not initialized", 0);
 }
 
 _Noreturn void dy_not_a_slot(const char *getter, D instance) {
-    char message[256];
-    snprintf(message, sizeof message, "%s is not a slot of the object", getter);
-    dy_error(message, instance);
+    dy_error_naming("", getter, " is not a slot of the object", instance);
 }
 
 void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,

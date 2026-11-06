@@ -392,4 +392,17 @@ other
   "#f
 1
 ")
+ ;; A quoted list of 50,000 elements, of integers and of strings, made by a
+ ;; macro.
+ (long-quoted-list
+  "(define-macro long-list (n) (list 'quote (as <list> (range from: 0 size: n))))
+(define big (long-list 50000))
+(print (list (size big) (first big) (last big) (reduce1 + big)))
+(define-macro long-strings (n)
+  (list 'quote (map (method (i) (format #f \"s~a\" (modulo i 7))) (range from: 0 size: n))))
+(define big2 (long-strings 50000))
+(print (list (size big2) (id? (first big2) (element big2 7)) (last big2)))"
+  "(50000 0 49999 1249975000)
+(50000 #f \"s5\")
+")
 )

@@ -203,12 +203,34 @@ named SPELLING."
   "The C name of a static pair holding LIST.  KEY, if not NIL, makes it
 the object of the literal written there; equal lists of the compiler's own
 are one object."
-  (let ((head (c-constant data (car list) (and key (format nil "~a.a" key))))
-        (tail (c-constant data (cdr list) (and key (format nil "~a.d" key)))))
-    (multiple-value-bind (name old) (content-name data "dy_pair_"
-                                                  (format nil "~a ~a~@[ @~a~]" head tail key))
-      (unless old
-        (define-c data "static DyPair ~a = { &dy_wrapper_pair, ~a, ~a };" name head tail))
+  ;; A loop down the list, not a recursion, so that a long one does not
+  ;; exhaust the stack; and the Nth tail's key is KEY.dN, not KEY.d.d...,
+  ;; so that the keys do not grow with the list.
+  (let ((pairs '())                     ; (pair . key), the last first
+        (base key)
+        (n 0))
+    (loop for x = list then (cdr x)
+          for first = t then nil
+          while (consp x)
+          do (let ((own (and (not first) *literal-keys* (gethash x *literal-keys*))))
+               (when own (setf base own n 0))
+               (push (cons x (cond (first key)
+                                   (own own)
+                                   (base (format nil "~a.d~d" base n))))
+                     pairs)
+               (incf n)))
+    (let ((tail (c-constant data (cdr (car (first pairs)))
+                            (and base (format nil "~a.d~d" base n))))
+          (name nil))
+      (loop for (pair . k) in pairs
+            do (let ((head (c-constant data (car pair) (and k (format nil "~a.a" k)))))
+                 (multiple-value-bind (pair-name old)
+                     (content-name data "dy_pair_" (format nil "~a ~a~@[ @~a~]" head tail k))
+                   (unless old
+                     (define-c data "static DyPair ~a = { &dy_wrapper_pair, ~a, ~a };"
+                               pair-name head tail))
+                   (setf name pair-name
+                         tail (address pair-name)))))
       name)))
 
 (defun c-vector (data elements &optional key)

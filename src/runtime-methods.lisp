@@ -1016,13 +1016,13 @@ slot-descriptors leaves them out, as a compiled program does.")
            (let ((exact (->exact class object)))
              (if (integerp exact)
                  exact
-                 (dylan-call dylan/error "as -- not an integral value"
-                             class object))))
+                 (dylan-call dylan/error "as: ~s cannot be converted to ~s"
+                             object class))))
          (->ratio (class object)
            (let ((exact (->exact class object)))
              (if (integerp exact)
-                 (dylan-call dylan/error "as -- not representable as a ratio"
-                             class object)
+                 (dylan-call dylan/error "as: ~s cannot be converted to ~s"
+                             object class)
                  exact)))
          (->float-of (format)
            (lambda (class object)
@@ -1047,7 +1047,11 @@ slot-descriptors leaves them out, as a compiled program does.")
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <character>))
                                   (object ,<integer>)) nil nil nil)
-               (lambda (class object) (declare (ignore class)) (code-char object))))
+               (lambda (class object)
+                 (declare (ignore class))
+                 (if (<= 0 object #x10FFFF)
+                     (code-char object)
+                     (dylan-call dylan/error "not a character code: ~s" object)))))
   ;; number conversions
   (add-method dylan/as
               (dylan%function->method

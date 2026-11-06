@@ -972,10 +972,9 @@ slot-descriptors leaves them out, as a compiled program does.")
      (flet ((applicable? (method)
               (and (>= (length args) (method.nrequired method))
                    (method-applicable? method args))))
-       (bool (cond ((dylan%generic-function? fn)
-                    (any? #'applicable? (generic-function.methods fn)))
-                   ((dylan%method? fn) (applicable? fn))
-                   (t nil)))))))
+       (bool (if (dylan%generic-function? fn)
+                 (any? #'applicable? (generic-function.methods fn))
+                 (applicable? fn)))))))
 
 ;;; Chapter 8: apply is a function, not a generic function.
 (defparameter dylan/apply

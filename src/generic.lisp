@@ -103,11 +103,16 @@ keywords, which chapter 6 says accepts none; else the list of keywords."
   "The last function GET-TYPE was asked about, and its class (see
 FUNCTION-TYPE in runtime-top.lisp).")
 
+(defvar *rest-param-list* (%make-param-list 0 '() nil t nil)
+  "The parameters of a Lisp function the runtime gives a program that is
+not made a method -- next-method, say: #rest alone, as a compiled program's
+such functions are methods of.")
+
 (defun method-data (method)
-  (let ((data (oned-table/get *method-data* method nil)))
-    (if (not data)
-        (dylan-call dylan/error "not a method" method)
-        data)))
+  (or (oned-table/get *method-data* method nil)
+      (if (and (functionp method) (not (dylan%generic-function? method)))
+          *rest-param-list*
+          (dylan-call dylan/error "not a method" method))))
 
 (defun method.param-list (method) (method-data method))
 (defun method.specializers (method) (param-list.specializers (method-data method)))

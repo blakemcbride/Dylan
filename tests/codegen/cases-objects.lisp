@@ -1002,4 +1002,28 @@ answer
 \"ERR: slot-value: the object does not have the slot: {instance of <pt>}\"
 \"ERR: slot-value: the object does not have the slot: other\"
 ")
+ ;; next-method is a method, of #rest alone (chapter 10: every function is a
+ ;; generic function or a method).
+ (next-method-is-a-method
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method g ((x <object>)) 'base)
+(define-method g ((x <integer>))
+  (print (instance? next-method <method>))
+  (print (instance? next-method <function>))
+  (print (try (method () (method-specializers next-method))))
+  (print (try (method () (list (function-arguments next-method)))))
+  (print (try (method () (applicable-method? next-method 1))))
+  (print next-method)
+  (print (object-class next-method))
+  (next-method))
+(print (g 1))"
+  "#t
+#t
+()
+(0)
+#t
+{an anonymous method}
+{the class <method>}
+base
+")
 )

@@ -57,9 +57,10 @@
   (let ((last *last-function-type*))
     (if (eq (car last) fn)
         (cdr last)
-        (let ((type (cond ((dylan%generic-function? fn) <generic-function>)
-                          ((dylan%method? fn) <method>)
-                          (t <function>))))
+        ;; Chapter 10: every function is a generic function or a method;
+        ;; a Lisp function the runtime gives a program, next-method say,
+        ;; is a method of #rest alone (METHOD-DATA).
+        (let ((type (if (dylan%generic-function? fn) <generic-function> <method>)))
           (setf *last-function-type* (cons fn type))
           type))))
 

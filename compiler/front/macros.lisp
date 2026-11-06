@@ -459,6 +459,27 @@ it has yet to be set up.")
 
 (defvar *expansion-depth* 0)
 
+(defvar *macro-literal-keys* nil
+  "An EQ table: each list, string and vector a macro made while the program
+was converted -> a key of its own (see PROGRAM-LITERAL-KEYS); or NIL.")
+
+(defun note-macro-literals (expansion)
+  "Give each list, string and vector in EXPANSION that the macro made, not
+read from the source, a key of its own, so that the C has an object for
+each, as the interpreter does, and does not merge equal ones."
+  (when *macro-literal-keys*
+    (let ((positions (and *source-file* (source-file-positions *source-file*))))
+      (labels ((walk (x)
+                 (loop while (and (or (consp x) (vectorp x))
+                                  (not (gethash x *macro-literal-keys*))
+                                  (not (and positions (gethash x positions))))
+                       do (setf (gethash x *macro-literal-keys*)
+                                (format nil "macro:~d" (hash-table-count *macro-literal-keys*)))
+                          (cond ((consp x) (walk (car x)) (setf x (cdr x)))
+                                ((stringp x) (return))
+                                (t (map nil #'walk x) (return))))))
+        (walk expansion)))))
+
 (defvar *expansion-trace* nil
   "A stream to write each macro use and its expansion to, or NIL.")
 
@@ -543,6 +564,7 @@ value.  An error in it is a compile error, its message beginning with WHAT."
               (compile-error (e) (error e))
               (error (e)
                 (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))
+      (note-macro-literals expansion)
       (when *expansion-trace*
         (format *expansion-trace* "~@[~a: ~]~a~%  => ~a~%"
                 (and *location* (location-string *location*))

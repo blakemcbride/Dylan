@@ -160,4 +160,21 @@ error
    (m 1 2)"
   ""
   :compile-error "macro m: wrong number of arguments in (m 1 2)")
+ ;; Each list, string and vector a macro makes is an object of its own,
+ ;; however like another it is; one expansion's is one object.
+ (macro-made-literals
+  "(define-macro mv () (vector 1 2))
+(define v1 (mv))
+(define v2 (mv))
+(set! (element v1 0) 99)
+(print (list v1 v2))
+(define-macro ms () (concatenate \"a\" \"b\"))
+(define-macro two () (bind ((s (concatenate \"x\" \"y\"))) (list 'list s s)))
+(define-method f () (mv))
+(print (list (id? (f) (f)) (id? (ms) (ms)) (= (ms) (ms))))
+(bind ((p (two))) (print (id? (first p) (second p))))"
+  "(#(99 2) #(1 2))
+(#t #f #t)
+#t
+")
 )

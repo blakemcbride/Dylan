@@ -29,9 +29,10 @@
   (symbol-forms nil)                    ; "s:name" or "k:name", the name
                                         ; in lower case -> the top-level
                                         ; form that first spells it
-  (form-starts nil))                    ; source file -> a vector of
+  (form-starts nil)                     ; source file -> a vector of
                                         ; (index . form) for each of its
                                         ; top-level forms
+  (macro-literal-keys nil))             ; see *MACRO-LITERAL-KEYS*
 
 ;;; A symbol is made, with the case it is spelled in, when the form that
 ;;; first spells it is read; in the read-eval-print loop that is after the
@@ -74,8 +75,12 @@ STARTS.  Answer the last number given."
 
 (defun program-literal-keys (program)
   "An EQ table: each string, list and vector read from PROGRAM's sources
--> \"file:index\", where it was written."
+-> \"file:index\", where it was written; and each a macro made -> a key
+of its own."
   (let ((keys (make-hash-table :test #'eq)))
+    (when (program-macro-literal-keys program)
+      (maphash (lambda (object key) (setf (gethash object keys) key))
+               (program-macro-literal-keys program)))
     (dolist (unit (program-units program))
       (let ((file (unit-file unit)))
         (when file
@@ -176,6 +181,7 @@ saying why the file could not be read."
         (*compile-time-variables* :new)
         (*variable-counter* 0)
         (*dylan-modules* nil)
+        (*macro-literal-keys* (make-hash-table :test #'eq))
         (*location* nil))
     (initialize-modules)
     ;; Modules first.
@@ -204,7 +210,9 @@ saying why the file could not be read."
                       append (let ((*location* location))
                                (collecting-errors (convert-top-level form)))))))
       (check-undefined-variables)
-      (make-program units *dylan-modules* (reverse *diagnostics*)))))
+      (let ((program (make-program units *dylan-modules* (reverse *diagnostics*))))
+        (setf (program-macro-literal-keys program) *macro-literal-keys*)
+        program))))
 
 (defun declare-modules-in (form)
   "Declare the modules the top-level FORM defines, looking into top-level

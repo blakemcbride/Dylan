@@ -235,5 +235,19 @@ cat >> empty.lisp <<'EOF'
 EOF
 check "dylan:empty-environment!" sh -c 'sbcl --script empty.lisp 2>&1 | grep -q "^(3 4 5)"'
 
+# Modules whose names differ only in characters a file name cannot hold,
+# and one whose name ends in -dylan, each have a C file of their own
+cat > mdefs.dyl <<'EOF2'
+(define-module a/b (use dylan) (export f))
+(define-module a*b (use dylan) (export g))
+(define-module my-dylan (use dylan) (export h))
+(define-module main (use dylan) (use a/b) (use a*b) (use my-dylan))
+EOF2
+printf 'module: a/b\n\n(define-method f () 1)\n' > m1.dyl
+printf 'module: a*b\n\n(define-method g () 2)\n' > m2.dyl
+printf 'module: my-dylan\n\n(define-method h () 3)\n' > m3.dyl
+printf 'module: main\n\n(print (list (f) (g) (h)))\n' > m4.dyl
+check "modules a/b, a*b and my-dylan" sh -c "'$dylanc' -k -o mods2 mdefs.dyl m1.dyl m2.dyl m3.dyl m4.dyl && test \"\$(./mods2)\" = '(1 2 3)' && test -f mods2-a_2f_b.c -a -f mods2-a_2a_b.c -a -f mods2-my-dylan.c"
+
 echo "$checks checks, $failures failures"
 [ "$failures" = 0 ]

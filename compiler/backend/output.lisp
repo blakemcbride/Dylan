@@ -123,7 +123,14 @@ from its head to its closing brace."
 ;;; Writing
 
 (defun module-file-stem (module)
-  (substitute-if #\_ (lambda (c) (not (or (alphanumericp c) (char= c #\-)))) module))
+  "MODULE's name as part of a file name: each character but an ASCII
+letter, digit or - as its code in hex between two _, so that no two
+modules share a file."
+  (with-output-to-string (out)
+    (loop for c across module
+          do (if (or (char<= #\a c #\z) (char<= #\A c #\Z) (char<= #\0 c #\9) (char= c #\-))
+                 (write-char c out)
+                 (format out "_~(~x~)_" (char-code c))))))
 
 (defun header-pathname (c-file)
   "The header the C files of the program C-FILE share: named for it, but

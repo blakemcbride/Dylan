@@ -196,7 +196,7 @@ is compiled once (LIBRARY-OBJECT)."
                                       :size size :debug debug :variant variant
                                       :lto lto))
          (objects (mapcar (lambda (file)
-                            (if (and *separate-library* (library-c-file-p file))
+                            (if (and *separate-library* (library-c-file-p file (first c-files)))
                                 (library-object file cc options)
                                 file))
                           c-files)))
@@ -216,9 +216,10 @@ is compiled once (LIBRARY-OBJECT)."
 (defparameter *library-cache-size* 40
   "How many objects of the library's C are kept: the newest.")
 
-(defun library-c-file-p (file)
-  (let ((name (pathname-name (native-pathname file))))
-    (and (> (length name) 6) (string= "-dylan" name :start2 (- (length name) 6)))))
+(defun library-c-file-p (file main)
+  "Is FILE the library's C file, of the program whose C file is MAIN?"
+  (equal (pathname-name (native-pathname file))
+         (pathname-name (module-c-file main "dylan"))))
 
 (defun file-text (file)
   (with-open-file (in (native-pathname file) :external-format :latin-1)

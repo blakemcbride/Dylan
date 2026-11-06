@@ -256,7 +256,11 @@ temporary directory, deleted after the build):
   module, one file for each module. A program written in
   \code{dylan-user} has \file{\meta{name}-dylan-user.c}; a program with
   modules \code{counting} and \code{app} has
-  \file{\meta{name}-counting.c} and \file{\meta{name}-app.c} too.
+  \file{\meta{name}-counting.c} and \file{\meta{name}-app.c} too. A
+  character of a module's name other than an ASCII letter, a digit or
+  \code{-} is written in the file's name as its code in hexadecimal
+  between two \code{\_}: module \code{a/b}'s file is
+  \file{\meta{name}-a\_2f\_b.c}.
 \item[\file{\meta{name}-dylan.c}] The library's functions: the module
   \code{dylan}, written in Dylan in \file{runtime/dylan/} and compiled
   with every program. This is the largest file by far, about a megabyte.

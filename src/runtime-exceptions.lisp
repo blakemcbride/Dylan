@@ -163,6 +163,9 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
                                       ": not a condition or a string: ~s")
                          (car args))))))
 
+(defvar *running-handlers* '()
+  "The frames from the innermost handler running (DYLAN/SIGNAL).")
+
 (defparameter dylan/signal
   (lambda (multiple-values next-method &rest args)
     (declare (ignore next-method))
@@ -178,11 +181,17 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
                                     (subclass? condition-type handler-type))
                                 (true? (dylan-call handler-test condition)))
                            (let ((handler (cadar frames)))
-                             (dylan-mv-call
-                              handler multiple-values condition
-                              (lambda (multiple-values next-method)
-                                (declare (ignore multiple-values next-method))
-                                (frame-loop (cdr frames)))))
+                             ;; A handler running holds a binding (its
+                             ;; frames), so one that signals without end
+                             ;; exhausts the binding stack, as it exhausts
+                             ;; a compiled program's stack.
+                             (dylan%check-binding-stack)
+                             (let ((*running-handlers* frames))
+                               (dylan-mv-call
+                                handler multiple-values condition
+                                (lambda (multiple-values next-method)
+                                  (declare (ignore multiple-values next-method))
+                                  (frame-loop (cdr frames))))))
                            (frame-loop (cdr frames))))
                      (dylan-mv-call dylan/default-handler multiple-values
                                     condition))))

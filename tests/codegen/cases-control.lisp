@@ -653,6 +653,45 @@ x
 (print 'after)"
   ""
   :error "wrong number of arguments (2)")
+ ;; Errors signalled by handlers, one inside another, end as a recursion
+ ;; too deep does: "the stack is exhausted" is signalled, and a handler can
+ ;; catch it.
+ (stack-exhausted-in-handlers
+  "(define depth 0)
+(define deepest 0)
+(print (bind-exit (done)
+  (handler-bind (<error> (method (c n)
+                           (set! depth (+ depth 1))
+                           (set! deepest (max depth deepest))
+                           (if (= (condition-format-string c) \"the stack is exhausted\")
+                               (done (condition-format-string c))
+                               (error \"again\"))))
+    (error \"e\"))))
+(print (> deepest 1000))
+(print (bind-exit (done)
+  (handler-bind (<error> (method (c n)
+                           (if (= (condition-format-string c) \"the stack is exhausted\")
+                               (done (condition-format-string c))
+                               (car 5))))
+    (car 5))))
+(define n 0)
+(print (bind-exit (done)
+  (handler-bind (<error> (method (c next) (set! n (+ n 1)) (if (> n 5) (done n) (car 5))))
+    (car 5))))
+(print 'after)"
+  "\"the stack is exhausted\"
+#t
+\"the stack is exhausted\"
+6
+after
+")
+ ;; A handler that signals an error each time it is called ends the
+ ;; program as a recursion too deep would.
+ (handler-signals-without-end
+  "(handler-bind (<error> (method (c n) (error \"again\"))) (error \"e\"))
+(print (quote after))"
+  ""
+  :error "the stack is exhausted")
  ;; Errors of the implementation's own operations are worded alike in both
  ;; implementations (the user manual, chapter 11).
  (error-wording-agrees

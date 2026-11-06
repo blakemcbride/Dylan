@@ -1281,8 +1281,9 @@ larger than a compiled one), above the host's guard pages."
 
 (defun implementation-specific/binding-stack-room ()
   "How many bytes are left of the calling thread's stack of dynamic
-bindings, each handler's among them: SBCL's is 1 MB."
-  (- (* 1024 1024) (sb-kernel::binding-stack-usage)))
+bindings, each handler's among them: SBCL's is 1 MB, of which the last
+64 KB are guard pages."
+  (- (* (- 1024 64) 1024) (sb-kernel::binding-stack-usage)))
 
 (defun implementation-specific/induce-error (format-string format-args)
   (call-with-dylan-restarts
@@ -1321,12 +1322,26 @@ program prints it."
           (dylan-format-message format-string format-args))
   (force-output *error-output*))
 
-(defvar *reflection-depth* 0
-  "How many Lisp errors are being reflected into Dylan, one inside the
-handling of another.")
+(defconstant +nested-traps-soft+ 6
+  "With this many errors that SBCL raised from a trap -- a value of the
+wrong type, a call with the wrong number of arguments -- each being
+handled inside the last, the next is not reflected: \"the stack is
+exhausted\" is signalled instead, as a compiled program signals it at its
+stack's soft limit.")
 
-(defparameter *maximum-reflection-depth* 3
-  "Below SBCL's own limit of nested errors (SB-KERNEL:*MAXIMUM-ERROR-DEPTH*).")
+(defconstant +nested-traps-hard+ 8
+  "SBCL's runtime handles at most 8 such errors one inside another, and
+dies on a ninth: at this many the next is declined, and reported as an
+unhandled error, as a compiled program reports the runtime's errors
+below its stack's hard limit.")
+
+(defvar *nesting-exhausted* nil
+  "True while the error that says the nesting is exhausted is handled.")
+
+;;; SBCL counts an error from a trap twice, and stops at 10 (ERROR-ERROR):
+;;; the limits above, and the binding stack's (DYLAN/SIGNAL), end nested
+;;; errors first.
+(setf sb-kernel:*maximum-error-depth* 1000000)
 
 (defun implementation-specific/catch-all-errors (handler thunk)
   ;; A handler that returns normally declines, and the condition goes on to
@@ -1342,19 +1357,26 @@ handling of another.")
   ;; handler-bind of its own: a Lisp error in a Dylan handler is reflected
   ;; too, as one the handler signals with error would be (there is no
   ;; condition wall, chapter 13).  A handler that fails on every condition
-  ;; it is given would fail without end; past *MAXIMUM-REFLECTION-DEPTH*
-  ;; the error is declined, and ends the program as an unhandled one, as a
-  ;; compiled program's ends when its stack is nearly exhausted.
+  ;; it is given would fail without end; +NESTED-TRAPS-SOFT+ and
+  ;; +NESTED-TRAPS-HARD+ end it as a compiled program's stack limits do.
   (handler-bind ((error (lambda (condition)
-                          (unless (or (and (typep condition
-                                                  '(or dylan-condition
-                                                       unhandled-dylan-condition))
-                                           (offered-to-dylan-p condition))
-                                      (>= *reflection-depth* *maximum-reflection-depth*))
-                            (let ((*reflection-depth* (1+ *reflection-depth*)))
-                              (implementation-specific/catch-all-errors
-                               handler
-                               (lambda () (funcall handler condition))))))))
+                          (unless (and (typep condition
+                                              '(or dylan-condition
+                                                   unhandled-dylan-condition))
+                                       (offered-to-dylan-p condition))
+                            (let ((depth sb-kernel:*free-interrupt-context-index*))
+                              (cond ((>= depth +nested-traps-hard+))
+                                    ((and (>= depth +nested-traps-soft+)
+                                          (not *nesting-exhausted*))
+                                     (let ((*nesting-exhausted* t))
+                                       (implementation-specific/catch-all-errors
+                                        handler
+                                        (lambda ()
+                                          (dylan-call dylan/error "the stack is exhausted")))))
+                                    (t
+                                     (implementation-specific/catch-all-errors
+                                      handler
+                                      (lambda () (funcall handler condition))))))))))
     (funcall thunk)))
 
 

@@ -91,7 +91,7 @@
         ((keyword? obj) <keyword>)
         ((symbolp obj) <symbol>)
         ((dylan-stream? obj)
-         (if (eq (dylan-stream-target obj) :string) <string-stream> <stream>))
+         (if (eq (dylan-stream-target obj) :string) <string-stream> <%fd-stream>))
         (t <object>)))
 
 (defun dylan-list-length (l)

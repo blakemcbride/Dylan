@@ -2268,4 +2268,33 @@ none
 (#t {the class <method>} () #t 0 #t #f)
 (3 4 3 (3) #t #t #t)
 ")
+ ;; <stream> is abstract; *standard-output* is of an internal subclass;
+ ;; only the library's streams can be printed to, and stream-contents takes
+ ;; a string stream.
+ (stream-classes
+  "(define-macro try (e)
+  `(print (handler-case ,e
+            ((<error> condition: c)
+             (apply format #f (condition-format-string c) (condition-format-arguments c))))))
+(define-class <my> (<stream>))
+(define-class <my2> (<string-stream>))
+(print (object-class *standard-output*))
+(print (subclass? (object-class *standard-error*) <stream>))
+(print (make <my>))
+(try (make <stream>))
+(try (print 1 stream: (make <my>)))
+(try (print 1 stream: (make <my2>)))
+(try (stream-contents (make <my2>)))
+(try (stream-contents *standard-output*))
+(try (stream-contents 5))"
+  "{the class <%fd-stream>}
+#t
+{stream}
+\"cannot make an instance of this class: {the class <stream>}\"
+\"not a stream: {stream}\"
+\"not a stream: {stream}\"
+\"stream-contents: not a string stream: {stream}\"
+\"stream-contents: not a string stream: {stream}\"
+\"stream-contents: not a string stream: 5\"
+")
 )

@@ -173,6 +173,10 @@
   (make-dylan-class '<stream> (list <object>) '() nil))
 (defparameter <string-stream>           ; Instantiable (an extension)
   (make-dylan-class '<string-stream> (list <stream>) '() nil))
+(defparameter <%fd-stream>              ; Internal: *standard-output*'s class
+  ;; As in a compiled program, object-class answers this one for
+  ;; *standard-output* and *standard-error*; no program can name it.
+  (make-dylan-class '<%fd-stream> (list <stream>) '() nil))
 (defparameter <boolean>                 ; Internal: the class of #t and #f
   ;; The manual names no class for #t and #f.  As in a compiled program,
   ;; object-class answers this one, which no program can name.
@@ -195,7 +199,7 @@
                      <mutable-collection> <sequence>
                      <mutable-explicit-key-collection> <mutable-sequence>
                      <function> <method> <class> <slot-descriptor>
-                     <symbol> <keyword> <character> <stream>))
+                     <symbol> <keyword> <character> <stream> <%fd-stream>))
   (setf (class.abstract? class) t))
 
 (dolist (class (list <complex> <real> <rectangular-complex> <rational>

@@ -261,7 +261,7 @@ cannot read from a stream or a file.
 
 \begin{description}
 \item[\code{<stream>}]\index{<stream>@\code{<stream>}} The class of all
-  streams.
+  streams. It is abstract: \code{(make <stream>)} is an error.
 \item[\code{*standard-output*}]\index{*standard-output*@\code{*standard-output*}}
   A stream that writes to the program's standard output.
 \item[\code{*standard-error*}]\index{*standard-error*@\code{*standard-error*}}
@@ -297,7 +297,8 @@ the stream to write to. It defaults to \code{*standard-output*}, and
 \code{<stream>} cannot usefully be subclassed by a program. The
 operation that puts characters on a stream is internal to the library,
 so printing to an instance of your own subclass of \code{<stream>} is an
-error.
+error, and so is \code{stream-contents} of any stream but one made by
+\code{(make <string-stream>)}.
 
 \section{\code{format}}\label{sec:printing-format}
 

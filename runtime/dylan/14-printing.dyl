@@ -29,6 +29,7 @@ module: dylan
 ;;; Streams
 
 (define-class <stream> (<object>))
+(define-method make ((class (singleton <stream>)) #rest arguments) (%abstract class))
 
 (define-class <%fd-stream> (<stream>)
   (%fd init-keyword: fd:))
@@ -48,6 +49,8 @@ module: dylan
 
 (define stream-contents
   (method (s)
+    (unless (id? (%object-class s) <string-stream>)
+      (error "stream-contents: not a string stream: ~s" s))
     (bind ((chars (%chars s)))
       (concatenate-as (if (every? (method (c) (binary< (as <integer> c) 256)) chars)
                           <byte-string>
@@ -57,7 +60,11 @@ module: dylan
 (define %stream
   (method (stream)
     (cond ((or (not stream) (id? stream #t)) *standard-output*)
-          ((%instance? stream <stream>) stream)
+          ;; Only the library's streams: a program's subclass of
+          ;; <stream> has no way to take characters.
+          ((or (id? (%object-class stream) <%fd-stream>)
+               (id? (%object-class stream) <string-stream>))
+           stream)
           (else: (error "not a stream: ~s" stream)))))
 
 ;;; print-object

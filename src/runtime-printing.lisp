@@ -50,8 +50,11 @@
 
 (defparameter dylan/stream-contents
   (dylan%function->method
-   (make-param-list `((stream ,<string-stream>)) nil nil nil)
-   #'dylan-stream-result))
+   one-object
+   (lambda (stream)
+     (unless (and (dylan-stream? stream) (eq (dylan-stream-target stream) :string))
+       (dylan-call dylan/error "stream-contents: not a string stream: ~s" stream))
+     (dylan-stream-result stream))))
 
 ;;; print-object
 

@@ -659,7 +659,10 @@ implementation differs, a note says so.
 
 \noindent Both implementations add the stream class \code{<stream>},
 a direct subclass of \code{<object>} with the subclass
-\code{<string-stream>} (Chapter~\ref{ch:printing}). The compiler to C
+\code{<string-stream>} (Chapter~\ref{ch:printing}), and an internal
+subclass, the class of \code{*standard-output*} and
+\code{*standard-error*}, which prints as
+\code{\{the class <\%fd-stream>\}}. The compiler to C
 has further classes for its threads (Chapter~\ref{ch:extensions}), also
 direct subclasses of \code{<object>}: \code{<thread>}, \code{<lock>},
 \code{<condition-variable>} and \code{<atomic-integer>}. \code{<lock>}

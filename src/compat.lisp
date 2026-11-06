@@ -518,6 +518,9 @@ it."
          (cond
            ;; Chapter 13: a condition prints as its message.
            ((subclass? class <condition>) (out (condition-message object)))
+           ;; A program's subclass of <stream> prints as the library's
+           ;; streams do, by the print-object method on <stream>.
+           ((subclass? class <stream>) (out "{stream}"))
            ((subclass? class <range>)
             (out "{range ")
             (rec (range-start object))

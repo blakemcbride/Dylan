@@ -57,6 +57,7 @@ static Saved save_values(D primary) {
 
 static D restore_values(Saved s) {
     DyThread *t = dy_thread;
+    dy_reserve_values(s.count);
     t->mv_count = s.count;
     if (s.values) memcpy(t->mv, s.values, s.count * sizeof(D));
     return s.primary;
@@ -91,8 +92,9 @@ static D exit_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
         dy_error("an exit procedure was called after its bind-exit returned", 0);
     DyThread *t = dy_thread;
     D in_registers[4] = { a0, a1, a2, a3 };
+    dy_reserve_values(argc);
     for (intptr_t i = 0; i < argc; i++)
-        t->mv[i] = i < 4 ? in_registers[i] : t->args[i - 4];
+        t->mv[i] = i < 4 ? in_registers[i] : *dy_argument_slot(i);
     t->mv_count = argc;
     dy_unwind_to(target);
 }

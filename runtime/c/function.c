@@ -18,6 +18,8 @@ void dy_init_thread(void) {
     dy_thread = dy_alloc_root(sizeof(DyThread));
     memset(dy_thread, 0, sizeof(DyThread));
     dy_thread->mv_count = 1;
+    dy_thread->mv = dy_thread->mv_inline;
+    dy_thread->mv_size = DY_INLINE_VALUES;
     dy_find_stack();
 #ifdef DY_MPS
     dy_mps_thread_start();
@@ -33,6 +35,8 @@ void dy_end_thread(void) {
     dy_mps_thread_end();
 #endif
     dy_free_root(dy_thread->thread_variables);
+    if (dy_thread->more_args) dy_free_root(dy_thread->more_args);
+    if (dy_thread->mv != dy_thread->mv_inline) dy_free_root(dy_thread->mv);
     dy_free_root(dy_thread);
     dy_thread = NULL;
 }
@@ -92,7 +96,7 @@ D dy_collect_arguments(intptr_t argc, intptr_t start, D a0, D a1, D a2, D a3) {
     D in_registers[4] = { a0, a1, a2, a3 };
     D list = DY_EMPTY;
     for (intptr_t i = argc - 1; i >= start; i--)
-        list = dy_pair(i < 4 ? in_registers[i] : dy_thread->args[i - 4], list);
+        list = dy_pair(i < 4 ? in_registers[i] : *dy_argument_slot(i), list);
     return list;
 }
 
@@ -103,7 +107,7 @@ D dy_collect_arguments_into(DyPair *pairs, intptr_t argc, intptr_t start,
     for (intptr_t i = argc - 1; i >= start; i--) {
         DyPair *p = &pairs[i - start];
         p->wrapper = &dy_wrapper_pair;
-        p->head = i < 4 ? in_registers[i] : dy_thread->args[i - 4];
+        p->head = i < 4 ? in_registers[i] : *dy_argument_slot(i);
         p->tail = list;
         list = DY_OBJ(p);
     }
@@ -139,8 +143,38 @@ _Noreturn void dy_unknown_keyword(D f, D keyword) {
     dy_error("keyword argument not accepted", keyword);
 }
 
-_Noreturn void dy_too_many_arguments(void) {
-    dy_error("too many arguments or values (the limit is 1024)", 0);
+/* Larger areas, of at least twice the size, keeping what is there: the
+ * callee of apply reads its own arguments while it stores the ones it
+ * passes on. */
+static size_t grown(intptr_t old, intptr_t n) {
+    intptr_t size = old * 2;
+    if (size < n) size = n;
+    return (size_t)size;
+}
+
+void dy_grow_arguments(intptr_t n) {
+    DyThread *t = dy_thread;
+    size_t size = grown(t->more_args_size ? t->more_args_size : DY_AREA_ARGUMENTS,
+                        n - DY_AREA_ARGUMENTS);
+    D *more = dy_alloc_root(size * sizeof(D));
+    memset(more, 0, size * sizeof(D));
+    if (t->more_args) {
+        memcpy(more, t->more_args, (size_t)t->more_args_size * sizeof(D));
+        dy_free_root(t->more_args);
+    }
+    t->more_args = more;
+    t->more_args_size = (intptr_t)size;
+}
+
+void dy_grow_values(intptr_t n) {
+    DyThread *t = dy_thread;
+    size_t size = grown(t->mv_size, n);
+    D *mv = dy_alloc_root(size * sizeof(D));
+    memset(mv, 0, size * sizeof(D));
+    memcpy(mv, t->mv, (size_t)t->mv_size * sizeof(D));
+    if (t->mv != t->mv_inline) dy_free_root(t->mv);
+    t->mv = mv;
+    t->mv_size = (intptr_t)size;
 }
 
 /* ---------------------------------------------------------- Backquote */

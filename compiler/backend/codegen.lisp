@@ -39,7 +39,6 @@
 
 ;;; ---------------------------------------------------------- C functions
 
-(defconstant +max-arguments+ 1024 "As DY_MAX_ARGUMENTS in dylan.h.")
 
 (defstruct (cfun (:constructor make-cfun (fn c-name)))
   fn
@@ -115,7 +114,7 @@ hand, a branch of an if that tested it (types.lisp).")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 14 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 15 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -473,6 +472,8 @@ values as a Dylan function does."
       (let ((first (or (first exprs) "DY_FALSE")))
         (case (dest-kind dest)
           ((:return :mv)
+           (when (> (length exprs) +inline-values+)
+             (emit "dy_reserve_values(~d);" (length exprs)))
            (loop for x in exprs for i from 0
                  do (emit "dy_thread->mv[~d] = ~a;" i x))
            (emit "dy_thread->mv_count = ~d;" (length exprs))
@@ -534,11 +535,11 @@ values as a Dylan function does."
   "Store the arguments past the fourth in the argument area; answer the
 C expressions for a0..a3 and the count."
   (let ((cs (mapcar #'atom-c args)))
-    (when (> (length cs) +max-arguments+)
-      (compile-error "a call with more than ~d arguments" +max-arguments+))
+    (when (> (length cs) +area-arguments+)
+      (emit "dy_reserve_arguments(~d);" (length cs)))
     (loop for c in (nthcdr 4 cs)
-          for i from 0
-          do (emit "dy_thread->args[~d] = ~a;" i c))
+          for i from 4
+          do (emit "~a = ~a;" (arg-c i) c))
     (values (loop for i below 4 collect (or (nth i cs) "0"))
             (length cs))))
 
@@ -851,7 +852,7 @@ values may have changed by the time it returns.)"
         (emit "if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
     (emit "return ~a_spec(self~{, ~a~});" (cfun-c-name cfun)
           (append (loop for var in required for i from 0
-                        for a = (if (< i 4) (format nil "a~d" i) (format nil "dy_thread->args[~d]" (- i 4)))
+                        for a = (arg-c i)
                         collect (if (unboxed-p var) (format nil "DY_DOUBLE(~a)" a) a))
                   (mapcar (lambda (k) (v-name (ir-key-var k))) keys)))
     (with-output-to-string (out)
@@ -971,13 +972,9 @@ specialized entry, made with *SPEC* SPEC."
                   (emit "if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
                  ((> r 0)
                   (emit "if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r)))
-           (when (> r +max-arguments+) (compile-error "a method with more than ~d parameters"
-                                                      +max-arguments+))
            (loop for var in required
                  for i from 0
-                 do (emit-bind var (if (< i 4)
-                                       (format nil "a~d" i)
-                                       (format nil "dy_thread->args[~d]" (- i 4)))))))
+                 do (emit-bind var (arg-c i)))))
     (loop for var in (cfun-env cfun)
           for i from 0
           do (emit "~a = ((DyFunction *)DY_PTR(self))->env[~d];" (v-name var) i))

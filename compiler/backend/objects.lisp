@@ -1173,7 +1173,15 @@ functions call their primitives -- use them?"
                  (some (lambda (v) (member v functions)) (referenced-variables top))))
           (ir-program-toplevels ir))))
 
-(defun arg-c (i) (if (< i 4) (format nil "a~d" i) (format nil "dy_thread->args[~d]" (- i 4))))
+(defconstant +area-arguments+ 1024 "As DY_AREA_ARGUMENTS in dylan.h.")
+(defconstant +inline-values+ 1024 "As DY_INLINE_VALUES in dylan.h.")
+
+(defun arg-c (i)
+  "The C lvalue of argument I: a0..a3, the thread's argument area, or
+past +AREA-ARGUMENTS+ its overflow."
+  (cond ((< i 4) (format nil "a~d" i))
+        ((< i +area-arguments+) (format nil "dy_thread->args[~d]" (- i 4)))
+        (t (format nil "dy_thread->more_args[~d]" (- i +area-arguments+)))))
 
 (defun keyword-array (keywords)
   "The C name of a static array of KEYWORDS (Lisp keywords)."

@@ -88,7 +88,7 @@ void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
     D in_registers[4] = { a0, a1, a2, a3 };
     if ((argc - start) % 2 != 0) dy_odd_keyword_arguments(f);
     for (intptr_t i = start; i < argc; i += 2) {
-        D key = i < 4 ? in_registers[i] : dy_thread->args[i - 4];
+        D key = i < 4 ? in_registers[i] : *dy_argument_slot(i);
         if (!dy_kind_p(key, DY_KIND_KEYWORD)) dy_odd_keyword_arguments(f);
         if (accepted) {
             size_t j = 0;
@@ -107,7 +107,8 @@ static D captured_next_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     D next = c->env[0];
     if (argc == 0) {
         argc = DY_INT_VALUE(c->env[1]);
-        for (intptr_t i = 4; i < argc; i++) dy_thread->args[i - 4] = c->env[2 + i];
+        dy_reserve_arguments(argc);
+        for (intptr_t i = 4; i < argc; i++) *dy_argument_slot(i) = c->env[2 + i];
         a0 = argc > 0 ? c->env[2] : 0;
         a1 = argc > 1 ? c->env[3] : 0;
         a2 = argc > 2 ? c->env[4] : 0;
@@ -123,7 +124,7 @@ D dy_capture_next(D next, intptr_t argc, D a0, D a1, D a2, D a3) {
     f->env[0] = next;
     f->env[1] = DY_INT(argc);
     f->env[2] = a0; f->env[3] = a1; f->env[4] = a2; f->env[5] = a3;
-    for (intptr_t i = 4; i < argc; i++) f->env[2 + i] = dy_thread->args[i - 4];
+    for (intptr_t i = 4; i < argc; i++) f->env[2 + i] = *dy_argument_slot(i);
     return c;
 }
 
@@ -142,17 +143,17 @@ D dy_find_keyword(D pairs, D keyword) {
 }
 
 D dy_call_list(D f, D first, D list) {
-    D args[DY_MAX_ARGUMENTS];
-    intptr_t n = 0;
-    args[n++] = first;
-    for (D l = list; l != DY_EMPTY; l = dy_tail(l)) {
-        if (n == DY_MAX_ARGUMENTS) dy_too_many_arguments();
-        args[n++] = dy_head(l);
+    intptr_t n = 1;
+    for (D l = list; l != DY_EMPTY; l = dy_tail(l)) n++;
+    dy_reserve_arguments(n);
+    D a[4] = { first, 0, 0, 0 };
+    intptr_t i = 1;
+    for (D l = list; l != DY_EMPTY; l = dy_tail(l), i++) {
+        if (i < 4) a[i] = dy_head(l);
+        else *dy_argument_slot(i) = dy_head(l);
     }
-    for (intptr_t i = 4; i < n; i++) dy_thread->args[i - 4] = args[i];
     dy_thread->next_method = DY_FALSE;
-    return DY_CALL(f, args[0], n > 1 ? args[1] : 0, n > 2 ? args[2] : 0,
-                   n > 3 ? args[3] : 0, n);
+    return DY_CALL(f, a[0], a[1], a[2], a[3], n);
 }
 
 static D default_initialize_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {

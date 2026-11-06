@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 14
+#define DY_ABI_VERSION 15
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -759,13 +759,16 @@ uint32_t dy_char_upcase(uint32_t c);
  *
  * SELF is the function object called.  The first four arguments are
  * A0..A3 (unused ones are 0); argument i >= 4 is in the thread's argument
- * area, dy_thread->args[i - 4], which the callee reads before it calls
- * anything.  One prototype for every function is what lets a tail call
+ * area, dy_thread->args[i - 4], or past DY_AREA_ARGUMENTS in its overflow,
+ * dy_thread->more_args (dy_argument_slot), which the callee reads before
+ * it calls anything.  A caller of more than DY_AREA_ARGUMENTS arguments
+ * makes room for them first (dy_reserve_arguments).  One prototype for every function is what lets a tail call
  * be compiled as a jump (musttail).
  *
  * A function returns its first value.  The number of values, and all of
  * them when there is not exactly one, are in dy_thread->mv_count and
- * dy_thread->mv.  A caller that wants every value sets mv_count to 1
+ * dy_thread->mv, which holds DY_INLINE_VALUES values and grows when more
+ * are given (dy_reserve_values).  A caller that wants every value sets mv_count to 1
  * before the call; a function returns a single value without touching
  * mv_count, except that one that has made a call (which may have left
  * another count there) sets it to 1 first.  values sets it. */
@@ -827,13 +830,21 @@ typedef struct DySingleton {       /* (singleton object)                */
     D object;
 } DySingleton;
 
-#define DY_MAX_ARGUMENTS 1024
-#define DY_MAX_VALUES    1024
+/* A call has any number of arguments, and values any number of values:
+ * the first DY_AREA_ARGUMENTS arguments use the thread's own argument
+ * area, the rest its overflow; the values are in mv, which starts as
+ * mv_inline and grows. */
+#define DY_AREA_ARGUMENTS 1024
+#define DY_INLINE_VALUES  1024
 
 typedef struct DyThread {
     intptr_t mv_count;
-    D mv[DY_MAX_VALUES];
-    D args[DY_MAX_ARGUMENTS - 4];  /* arguments 4 and up                 */
+    D *mv;                         /* mv_inline, or a larger root area  */
+    D args[DY_AREA_ARGUMENTS - 4]; /* arguments 4 and up                 */
+    D *more_args;                  /* arguments DY_AREA_ARGUMENTS and up */
+    intptr_t more_args_size;
+    intptr_t mv_size;
+    D mv_inline[DY_INLINE_VALUES];
     /* The next method of the method being entered: set by the caller,
        read by the method before it calls anything. */
     D next_method;
@@ -952,7 +963,23 @@ _Noreturn void dy_wrong_argument_count(D f, intptr_t argc);
 _Noreturn void dy_unbound_variable(const char *name);
 _Noreturn void dy_odd_keyword_arguments(D f);
 _Noreturn void dy_unknown_keyword(D f, D keyword);
-_Noreturn void dy_too_many_arguments(void);
+
+/* Room for N arguments, or N values, in the thread (the out-of-line parts
+ * grow the areas). */
+void dy_grow_arguments(intptr_t n);
+void dy_grow_values(intptr_t n);
+static inline void dy_reserve_arguments(intptr_t n) {
+    if (DY_UNLIKELY(n > DY_AREA_ARGUMENTS + dy_thread->more_args_size)) dy_grow_arguments(n);
+}
+static inline void dy_reserve_values(intptr_t n) {
+    if (DY_UNLIKELY(n > dy_thread->mv_size)) dy_grow_values(n);
+}
+
+/* Where argument I >= 4 is: the argument area or its overflow. */
+static inline D *dy_argument_slot(intptr_t i) {
+    return i < DY_AREA_ARGUMENTS ? &dy_thread->args[i - 4]
+                                 : &dy_thread->more_args[i - DY_AREA_ARGUMENTS];
+}
 
 /* A module variable's value, which it must have. */
 static inline D dy_check_bound(D value, const char *name) {
@@ -1050,7 +1077,7 @@ static inline D dy_argument(intptr_t i, D a0, D a1, D a2, D a3) {
     case 1: return a1;
     case 2: return a2;
     case 3: return a3;
-    default: return dy_thread->args[i - 4];
+    default: return *dy_argument_slot(i);
     }
 }
 

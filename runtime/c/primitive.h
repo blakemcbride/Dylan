@@ -11,7 +11,7 @@
 #include "dylan.h"
 
 #define ARG(i) ((i) == 0 ? a0 : (i) == 1 ? a1 : (i) == 2 ? a2 : (i) == 3 ? a3 \
-                : dy_thread->args[(i) - 4])
+                : *dy_argument_slot(i))
 
 #define U __attribute__((unused))
 /* The entry is external, dy_prim_NAME_entry, so that compiled code can

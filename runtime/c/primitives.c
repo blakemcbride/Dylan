@@ -56,6 +56,7 @@ PRIMITIVE(vector) {
 /* ------------------------------------------------------------ Calling */
 
 PRIMITIVE(values) {
+    dy_reserve_values(argc);
     DyThread *t = dy_thread;
     for (intptr_t i = 0; i < argc; i++) t->mv[i] = ARG(i);
     t->mv_count = argc;
@@ -80,28 +81,40 @@ PRIMITIVE(set_sequence_hook) {
 }
 
 static Spread spread_arguments(intptr_t argc, D a0, D a1, D a2, D a3) {
-    D args[DY_MAX_ARGUMENTS];
-    intptr_t n = 0;
-    for (intptr_t i = 1; i + 1 < argc; i++) args[n++] = ARG(i);
+    /* apply's own arguments between the function and the last are kept
+     * first: the sequence hook's call may overwrite the argument area. */
+    intptr_t before = argc - 2;
+    D small[64];
+    D *kept = before <= 64 ? small : dy_alloc_words((size_t)before);
+    for (intptr_t i = 0; i < before; i++) kept[i] = ARG(i + 1);
     D last = ARG(argc - 1);
+    DyVector *v = NULL;
+    intptr_t count = 0;
     if (dy_kind_p(last, DY_KIND_SIMPLE_OBJECT_VECTOR)) {
-        DyVector *v = DY_PTR(last);
-        if (n + DY_INT_VALUE(v->size) > DY_MAX_ARGUMENTS) dy_too_many_arguments();
-        for (intptr_t i = 0; i < DY_INT_VALUE(v->size); i++) args[n++] = v->data[i];
-        last = DY_EMPTY;
-    } else if (last != DY_EMPTY && !dy_kind_p(last, DY_KIND_PAIR) && sequence_hook) {
-        /* "The last arg must be a sequence" (chapter 8) */
-        last = DY_CALL(sequence_hook, last, 0, 0, 0, 1);
+        v = DY_PTR(last);
+        count = DY_INT_VALUE(v->size);
+    } else {
+        if (last != DY_EMPTY && !dy_kind_p(last, DY_KIND_PAIR) && sequence_hook)
+            /* "The last arg must be a sequence" (chapter 8) */
+            last = DY_CALL(sequence_hook, last, 0, 0, 0, 1);
+        for (D l = last; l != DY_EMPTY; l = dy_tail(l)) {
+            /* An improper list: a <type-error> of its tail (design note 16) */
+            if (!dy_kind_p(l, DY_KIND_PAIR)) dy_check_type(l, dy_wrapper_list.class);
+            count++;
+        }
     }
-    for (D l = last; l != DY_EMPTY; l = dy_tail(l)) {
-        /* An improper list: a <type-error> of its tail (design note 16) */
-        if (!dy_kind_p(l, DY_KIND_PAIR)) dy_check_type(l, dy_wrapper_list.class);
-        if (n == DY_MAX_ARGUMENTS) dy_too_many_arguments();
-        args[n++] = dy_head(l);
+    intptr_t n = before + count;
+    dy_reserve_arguments(n);
+    Spread s = { { 0, 0, 0, 0 }, n };
+    D l = last;
+    for (intptr_t i = 0; i < n; i++) {
+        D x;
+        if (i < before) x = kept[i];
+        else if (v) x = v->data[i - before];
+        else { x = dy_head(l); l = dy_tail(l); }
+        if (i < 4) s.a[i] = x;
+        else *dy_argument_slot(i) = x;
     }
-    for (intptr_t i = 4; i < n; i++) dy_thread->args[i - 4] = args[i];
-    Spread s = { { n > 0 ? args[0] : 0, n > 1 ? args[1] : 0,
-                   n > 2 ? args[2] : 0, n > 3 ? args[3] : 0 }, n };
     return s;
 }
 
@@ -273,7 +286,7 @@ static D *arguments_after(intptr_t first, intptr_t argc, D a0, D a1, D a2, D a3,
     *n = argc - first;
     D *args = dy_alloc_words(*n + 1);
     for (intptr_t i = first; i < argc; i++)
-        args[i - first] = i < 4 ? in_registers[i] : dy_thread->args[i - 4];
+        args[i - first] = i < 4 ? in_registers[i] : *dy_argument_slot(i);
     return args;
 }
 

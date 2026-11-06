@@ -86,11 +86,22 @@ types again before each round; leave IR analyzed afresh."
     (loop for top in (ir-program-toplevels ir)
           for i from 0
           do (setf (gethash top order) i)
-             (labels ((walk (e)
+             (labels ((note (var)
+                        (when (and var (not (gethash var order)))
+                          (setf (gethash var order) i)))
+                      (note-slot (slot)
+                        (note (slot-spec-getter slot))
+                        (note (slot-spec-setter slot)))
+                      (walk (e)
                         (typecase e
-                          (ir-define-variable
-                           (unless (gethash (ir-define-variable-var e) order)
-                             (setf (gethash (ir-define-variable-var e) order) i)))
+                          (ir-define-variable (note (ir-define-variable-var e)))
+                          ;; A class's and a generic function's variable has
+                          ;; its value once its definition runs (chapter 6)
+                          (ir-define-class (note (ir-define-class-var e))
+                                           (mapc #'note-slot (ir-define-class-slots e)))
+                          (ir-define-slot (note-slot (ir-define-slot-slot e)))
+                          (ir-define-generic (note (ir-define-generic-var e)))
+                          (ir-define-method (note (ir-define-method-var e)))
                           (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
                           (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
                           (ir-seq (mapc #'walk (ir-seq-forms e)))
@@ -101,24 +112,27 @@ types again before each round; leave IR analyzed afresh."
 (defun defined-before-p (var fn)
   "Is the module variable VAR defined by a top-level form before the one
 FN's code is in?  Then FN's code runs only once VAR has its value: the
-top-level forms run in order, and FN is made by its own -- unless FN's
-code is in a method of a generic function, which a compiled program has
-from its start (objects.lisp, BUILD-GENERICS)."
-  (let ((top fn))
-    (loop while (ir-fn-parent top)
-          do (when (eq (ir-fn-kind top) :method)
-               (return-from defined-before-p nil))
-             (setf top (ir-fn-parent top)))
-    (let ((defined (gethash var *toplevel-order*))
-          (here (gethash top *toplevel-order*)))
-      (and defined here (< defined here)))))
+top-level forms run in order, and FN is made by its own -- a method too,
+which is attached only when its define-method runs (chapter 6)."
+  (let ((defined (gethash var *toplevel-order*))
+        (here (gethash (fn-toplevel fn) *toplevel-order*)))
+    (and defined here (< defined here))))
+
+(defun within-method-of-p (fn var)
+  "Is FN's code that of a method of the generic function VAR, or within
+one?  Then VAR has its value: the method is attached."
+  (loop for f = fn then (ir-fn-parent f)
+        while f
+        thereis (let ((m (gethash f *method-of-fn*)))
+                  (and m (eq (gmethod-var m) var)))))
 
 (defun known-bound-p (var fn)
   "Does the module variable VAR surely have a value when FN's code reads
-it: a class or generic function, the library's, or defined before?"
-  (or (gethash var *constant-globals*)
-      (eq (module-var-module var) (dylan-module))
-      (defined-before-p var fn)))
+it: the library's, defined before, or the generic function a method of
+which FN's code is in?"
+  (or (eq (module-var-module var) (dylan-module))
+      (defined-before-p var fn)
+      (and (gethash var *gfuns*) (within-method-of-p fn var))))
 
 ;;; Which methods qualify
 
@@ -218,8 +232,10 @@ in order."
                                (instance-slot-number g (if (= n 1) :getter :setter))))
                      (null (inline-cases g args))
                      (or (let ((sole (sole-method g)))
-                           (and sole (= n (gfun-required g)) sole))
-                         (resolved-method g args))))
+                           (and sole (= n (gfun-required g))
+                                (method-certain-p sole caller)
+                                sole))
+                         (resolved-method g args nil caller))))
              (fn (and m (eq (gmethod-kind m) :ir) (gmethod-fn m))))
         (when (and fn
                    (inlinable-fn-p fn bodies (size-limit args))

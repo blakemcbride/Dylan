@@ -671,11 +671,13 @@ TYPE (or NIL), and which is OBJECT if that is not :UNKNOWN: :YES, :NO or
           ((and c (typep (const-value c) '(or symbol character integer))) (const-value c))
           (t :unknown))))
 
-(defun resolved-method (g args &optional (types (mapcar #'atom-type args)))
-  "The method of G a call on ARGS, whose classes are TYPES, goes straight
-to, if it is known when compiling: an IR method that does not call
-next-method, given the keyword arguments it takes, if any."
-  (let* ((r (gfun-required g))
+(defun resolved-method (g args &optional types site)
+  "The method of G a call on ARGS, whose classes are TYPES, in the code of
+the fn SITE, goes straight to, if it is known when compiling: an IR method
+that does not call next-method, given the keyword arguments it takes, if
+any, and surely attached there (METHOD-CERTAIN-P)."
+  (let* ((types (or types (mapcar #'atom-type args)))
+         (r (gfun-required g))
          (n (length args)))
     (when (and (not *reflective-methods*)
                (>= n r)
@@ -700,6 +702,7 @@ next-method, given the keyword arguments it takes, if any."
                (gmethod-fn m)
                (not (uses-next-method-p (gmethod-fn m)))
                (resolved-keywords-p m (nthcdr r args))
+               (method-certain-p m site)
                m))))))
 
 (defun resolved-keywords-p (m pairs)
@@ -783,9 +786,12 @@ of a call of G on ARGS."
     (and next (plusp (ivar-ref-count next)))))
 
 (defun gen-dispatched-call (g args dest tail)
-  (let* ((resolved (resolved-method g args))
-         (sole (or (sole-method g) resolved))
-         (m (or (spec-method g) resolved))
+  (let* ((site (cfun-fn *cfun*))
+         (resolved (resolved-method g args nil site))
+         ;; Straight to a method only if it is surely attached here
+         (certain (lambda (m) (and m (method-certain-p m site) m)))
+         (sole (or (funcall certain (sole-method g)) resolved))
+         (m (or (funcall certain (spec-method g)) resolved))
          (spec (and m (not tail)
                     (spec-call-c (gmethod-fn m) (format nil "DY_OBJ(&~a)" (gmethod-object-c m))
                                  args))))

@@ -156,8 +156,9 @@ keywords (NIL, :ANY, or a list)."
                     (:constructor make-ir-call (function arguments)))
   function arguments
   (tail-p nil)
-  (kind :unknown))                      ; :unknown, :known (a fn whose call
+  (kind :unknown)                       ; :unknown, :known (a fn whose call
                                         ; sites are tracked) or :exit
+  (site nil))                           ; the IR-FN whose code it is in
 
 (defstruct (ir-prim (:include ir-node) (:constructor make-ir-prim (name arguments)))
   name arguments)

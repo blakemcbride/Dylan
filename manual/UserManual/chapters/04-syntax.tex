@@ -544,38 +544,28 @@ Put definitions at top level.
 
 \subsection{When things happen}\label{sec:syntax-when}
 
-The two implementations agree on what a program means, but not on when a
-definition takes effect, because one runs a static program and the other
-is interactive.
+Top-level forms are evaluated in order, from the first file to the last
+(at the prompt, as they are typed). A definition takes effect when it is
+evaluated, and not before: a variable, class or generic function has no
+value until its definition has been evaluated, and \code{define-method}
+adds its method to the generic function then. A method may be called
+from a form before its definition only if that form runs after the
+definition has been evaluated --- from the body of a method, say, called
+later.
 
-The \textbf{Common Lisp implementation} evaluates each top-level form when
-it reaches it, at the prompt or in a file. A definition takes effect then,
-and not before; a later form may redefine a variable, which only draws a
-warning, or redefine a class or add methods to a generic function that is
-already in use.
-
-The \textbf{compiler to C} compiles a whole program at once. Every class,
-generic function and method the program defines exists before any of its
-expressions run, wherever in the program it is defined. The top-level
-expressions, and the initial values of \code{define}, are then evaluated in
-order, from the first file to the last. A method may therefore be called
-by an expression that comes before its definition in the source, but a
-variable defined with \code{define} has no value until its definition has
-been evaluated.
-
-%! c-only
 \begin{dylan}
-(later 2)                   ; => 20
+(later 2)                   ; => error: later has no value yet
 (define-method later (x) (* x 10))
+(later 2)                   ; => 20
 later-var                   ; => error: later-var has no value yet
 (define later-var 5)
 \end{dylan}
 
-\noindent In the Common Lisp implementation the first expression is an error
-too, since \code{later} is not yet defined when it is evaluated.
-
-A static program is also stricter about definitions. In the compiler to C a
-class or generic function may be defined only once, a name cannot be
+\noindent The two implementations differ in what they allow a program to
+define again. In the Common Lisp implementation a later form may redefine
+a variable, which only draws a warning, or redefine a class. In the
+compiler to C, which compiles a static program, a class or generic
+function may be defined only once, a name cannot be
 defined both by \code{define} and as a generic function, and a variable
 that holds a class or a generic function cannot be assigned. These are
 errors when compiling. Chapter~\ref{ch:dylanc} lists the full set of restrictions.

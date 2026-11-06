@@ -51,10 +51,6 @@
   (spec nil))                           ; its specialized entry: NIL,
                                         ; :ONLY (its only body) or :COPY
 
-(defvar *toplevel-order* nil
-  "Top-level IR-FN -> its place in the program, and module variable -> the
-place of the top-level form that defines it (inline.lisp, TOPLEVEL-ORDER).")
-
 (defvar *direct-next* nil
   "In a method whose next method is only called, and with no arguments
 called with the method's own, the next method's variable and the C
@@ -283,7 +279,7 @@ signals if the result is too large (chapter 8), and nothing is allocated."
        (if (and (member (dest-kind dest) '(:bind :set)) (unboxed-p (dest-var dest)))
            (deliver-double dest (atom-double-c e))
            (deliver dest (atom-c e))))
-      (ir-global-ref (deliver dest (global-ref-c e)))
+      (ir-global-ref (deliver dest (global-ref-c e dest)))
       (ir-global-set
        (let ((var (ir-global-set-var e)))
          (when (module-var-predefined-p var)
@@ -351,10 +347,20 @@ signals if the result is too large (chapter 8), and nothing is allocated."
          (deliver dest (c-constant *cdata* (module-var-name var)))))
       (ir-bind-exit (gen-local-exit e dest))
       (ir-unwind (error "Internal error: an unwind-protect was not lowered."))
-      ;; Generic functions and methods are static: nothing to do at run
-      ;; time.  A class's slot values are evaluated where it is defined.
-      (ir-define-generic (deliver dest (definition-value (ir-define-generic-var e))))
-      (ir-define-method (deliver dest (definition-value (ir-define-method-var e))))
+      ;; A program's generic function has its value, and its method is
+      ;; attached, when the definition runs (chapter 6); the rest of their
+      ;; work is done when compiling.  A class's slot values are evaluated
+      ;; where it is defined.
+      (ir-define-generic
+       (let* ((g (gethash (ir-define-generic-var e) *gfuns*))
+              (flag (and g (gfun-defined-c g))))
+         (when flag (emit "~a = 1;" flag)))
+       (deliver dest (definition-value (ir-define-generic-var e))))
+      (ir-define-method
+       (let ((m (gethash (ir-define-method-fn e) *method-of-fn*)))
+         (when (and m (added-when-run-p m))
+           (dolist (line (method-attachment-c m)) (emit "~a" line))))
+       (deliver dest (definition-value (ir-define-method-var e))))
       (ir-define-class
        (gen-class-definition e)
        (deliver dest (definition-value (ir-define-class-var e))))
@@ -376,17 +382,29 @@ every use of VAR has instead, or something without effect no one uses?"
            (and (zerop (ivar-ref-count var))
                 (or (atom-p value) (ir-lambda-p value)
                     (and (ir-global-ref-p value)
-                         (gethash (ir-global-ref-var value) *constant-globals*)))))))
+                         (gethash (ir-global-ref-var value) *constant-globals*)
+                         (known-bound-p (ir-global-ref-var value) (ivar-binder var))))))))
 
 (defun definition-value (var)
   "A defining form answers the name it defines: a symbol, or the list
 (setter name)."
   (c-constant *cdata* (module-var-name var)))
 
-(defun global-ref-c (e)
+(defun global-ref-c (e &optional dest)
   (let ((var (ir-global-ref-var e)))
     (cond
-      ((gethash var *constant-globals*))
+      ((gethash var *constant-globals*)
+       ;; A program's class or generic function: its variable has no
+       ;; value until its definition has run, unless that is sure.
+       (let ((flag (defined-flag-c var)))
+         (if (and flag
+                  (not (known-bound-p var (cfun-fn *cfun*)))
+                  (not (and dest (eq (dest-kind dest) :bind)
+                            (gethash (dest-var dest) *own-class-refs*))))
+             (format nil "(dy_check_defined(~a, ~a), ~a)" flag
+                     (c-utf8-literal (module-var-string var))
+                     (gethash var *constant-globals*))
+             (gethash var *constant-globals*))))
       ;; The library may define one of the dylan module's variables.
       ((and (module-var-predefined-p var) (null (module-var-definitions var)))
         (let ((c (predefined-c-value var *classes*)))
@@ -1091,8 +1109,10 @@ with the arguments FN was given?"
 
 (defun inert-toplevel-p (fn)
   "Is FN a top-level form that does nothing when run: a define-method or
-define-generic-function, whose work the compiler has done?"
+define-generic-function of the library's, whose work the compiler has
+done?  (A program's attaches its method, or gives its variable a value.)"
   (and (eq (ir-fn-kind fn) :toplevel)
+       (ir-fn-library-p fn)
        (labels ((inert (e)
                   (typecase e
                     (ir-let (and (typep (ir-let-value e) '(or const ivar ir-global-ref))
@@ -1156,6 +1176,8 @@ each of its Dylan functions -> the name of the module it was written in."
         (*gclasses* (make-hash-table :test #'eq))
         (*gfuns* (make-hash-table :test #'eq))
         (*method-of-fn* (make-hash-table :test #'eq))
+        (*definition-fns* (make-hash-table :test #'eq))
+        (*own-class-refs* (make-hash-table :test #'eq))
         (*constant-globals* (make-hash-table :test #'eq))
         (*sdef-of-node* (make-hash-table :test #'eq))
         (*singleton-sdefs* '())

@@ -1113,4 +1113,106 @@ base
 \"function-arguments: not a function: 5\"
 \"not a function: 5\"
 ")
+ ;; A definition takes effect when it is evaluated: a generic called before
+ ;; its first define-method has no value, and a second define-method with
+ ;; the same specializers replaces the first when it runs.
+ (definitions-in-program-order
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(print (try (method () (double 10))))
+(define-method double ((thing <number>)) (+ thing thing))
+(define-method z () 'first)
+(print (z))
+(define-method z () 'second)
+(print (z))
+(print (try (method () (v))))
+(define v (method () 1))"
+  "\"the variable double@dylan-user has no value\"
+first
+second
+\"the variable v@dylan-user has no value\"
+")
+ ;; Each method is added when its define-method runs: until then dispatch,
+ ;; next-method and generic-function-methods do not see it.
+ (methods-attached-when-run
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(define-method g ((x <integer>)) 'int)
+(print (try (method () (g \"s\"))))
+(define-method g ((x <string>)) 'str)
+(print (g \"s\"))
+(print (size (generic-function-methods g)))
+(define-method h ((x <number>)) (list 'num))
+(define-method h ((x <integer>)) (list 'int1 (next-method)))
+(print (h 1))
+(define-method h ((x <integer>)) (list 'int2 (next-method)))
+(print (h 1))
+(print (map (method (m) (first (method-specializers m))) (generic-function-methods h)))
+(define-class <c> (<object>))
+(print (try (method () (c-print (make <c>)))))
+(define-method c-print (x) (format #f \"~s\" x))
+(print (try (method () (c-print (make <c>)))))
+(define-method print-object ((x <c>) s e) (display \"{a c}\" stream: s))
+(print (try (method () (c-print (make <c>)))))
+(define-method fib (n) (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
+(print (fib 20))
+(define-method outer () (define-method inner () 'inner) 'outer)
+(print (try (method () (inner))))
+(print (outer))
+(print (inner))"
+  "\"no applicable method for g\"
+str
+2
+(int1 (num))
+(int2 (num))
+({the class <number>} {the class <integer>})
+\"the variable c-print@dylan-user has no value\"
+\"{instance of <c>}\"
+\"{a c}\"
+6765
+\"the variable inner@dylan-user has no value\"
+outer
+inner
+")
+ ;; A class, its slot accessors and a define-generic-function have no value
+ ;; until their definition is evaluated.
+ (classes-defined-when-run
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(print (try (method () <c>)))
+(print (try (method () (make <c>))))
+(print (try (method () (x 1))))
+(define-class <c> (<object>) (x init-value: 1))
+(print (x (make <c>)))
+(print (try (method () g)))
+(define-generic-function g (a))
+(print g)"
+  "\"the variable <c>@dylan-user has no value\"
+\"the variable <c>@dylan-user has no value\"
+\"the variable x@dylan-user has no value\"
+1
+\"the variable g@dylan-user has no value\"
+{the generic function g}
+")
+ ;; A slot's options may name the class being defined.
+ (class-names-itself-in-slots
+  "(define-method try (f)
+  (handler-case (f)
+    ((<error> condition: c)
+     (apply format #f (condition-format-string c) (condition-format-arguments c)))))
+(define-class <a> (<object>) (x init-value: <a>))
+(print (x (make <a>)))
+(define-class <e> (<object>) (y init-function: (method () <e>)))
+(print (y (make <e>)))
+(print (try (method () (begin (print <d>) (define-class <d> (<object>))))))"
+  "{the class <a>}
+{the class <e>}
+\"the variable <d>@dylan-user has no value\"
+")
 )

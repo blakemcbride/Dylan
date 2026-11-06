@@ -960,6 +960,12 @@ static inline D dy_check_bound(D value, const char *name) {
     return value;
 }
 
+/* A program's class or generic function variable has its value once its
+ * definition has run (chapter 6): DEFINED is the flag that says so. */
+static inline void dy_check_defined(int defined, const char *name) {
+    if (DY_UNLIKELY(!defined)) dy_unbound_variable(name);
+}
+
 /* VALUES[START..END) as a list. */
 D dy_list_of(const D *values, intptr_t start, intptr_t end);
 
@@ -1134,6 +1140,11 @@ bool dy_specializer_matches(D x, D spec);
 intptr_t dy_method_required(D f, D *first);
 
 _Noreturn void dy_no_applicable_method(D generic);
+
+/* A program's define-method has run: METHOD is attached to GENERIC, the
+ * N methods REPLACED (those with its specializers) detached; what the
+ * reflective functions find (chapter 10). */
+void dy_add_method(D generic, D method, const D *replaced, intptr_t n);
 _Noreturn void dy_unbound_slot(const char *getter);
 _Noreturn void dy_not_a_slot(const char *getter, D instance);
 

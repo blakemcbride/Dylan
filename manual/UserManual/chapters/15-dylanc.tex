@@ -688,8 +688,9 @@ as tail calls, or raise the stack limit with \cmd{ulimit -s}.
 
 \index{static program}
 The compiler compiles a \term{static program}: everything the program
-defines is known when it is compiled, and its classes and generic
-functions do not change while it runs. That is what lets the compiler
+defines is known when it is compiled, and its classes, generic functions
+and methods are those its definitions make, each taking effect when its
+definition runs (Section~\ref{sec:syntax-when}). That is what lets the compiler
 lay out every class, compile every generic function's dispatch in
 advance, and call methods directly. The 1992 manual describes a dynamic
 language in which a running program may add methods and slots and make
@@ -712,8 +713,7 @@ generic functions are fixed when it is compiled
 \end{shell}
 
 (The message is on one line; it is broken here to fit the page.)
-Define methods with \code{define-method} instead, which adds them when
-the program is compiled. A class cannot be defined twice
+Define methods with \code{define-method} instead. A class cannot be defined twice
 (``\code{<a> is defined twice (classes cannot be redefined)}'').
 
 \paragraph{Specializers and superclasses known when compiling.}

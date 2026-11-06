@@ -120,6 +120,7 @@ evaluated when it is made."
      (setf (ir-fn-escapes-p (ir-lambda-fn e)) t)
      (scan-made-fn (ir-lambda-fn e) fn))
     (ir-call
+     (setf (ir-call-site e) fn)
      (let ((f (ir-call-function e)))
        (when (ivar-p f) (note-use f fn :call e)))
      (dolist (a (ir-call-arguments e)) (scan-atom a fn)))

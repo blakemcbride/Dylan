@@ -328,7 +328,6 @@ specializers, the new method replaces it. \meta{name} may be a setter name,
 \code{(setter \meta{symbol})} (Section~\ref{sec:functions-setters}). At the
 interactive prompt \code{define-method} returns the name.
 
-%! lisp-only
 \begin{dylan}
 (define-method area ((r <integer>)) (* r r))
 (area 3)                       ; => 9
@@ -336,10 +335,8 @@ interactive prompt \code{define-method} returns the name.
 (area 3)                       ; => 27
 \end{dylan}
 
-\noindent That is the Common Lisp implementation, where each definition
-takes effect when it is evaluated. In the compiler to C all of a program's
-methods exist before it starts (Section~\ref{sec:syntax-when}), so the later
-definition simply wins: both calls of \code{area} above return 27.
+\noindent Each definition takes effect when it is evaluated
+(Section~\ref{sec:syntax-when}).
 
 \noindent It is an error for \meta{name} to hold something other than a
 generic function. The compiler to C also refuses to add methods to the

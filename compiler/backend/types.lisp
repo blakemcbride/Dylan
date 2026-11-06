@@ -217,7 +217,8 @@ used only to call them, and the sole methods of generic functions used so."
              (let ((m (or (sole-method what)
                           (resolved-method what (if swap
                                                     (reverse (ir-call-arguments e))
-                                                    (ir-call-arguments e))))))
+                                                    (ir-call-arguments e))
+                                           nil (ir-call-site e)))))
                (and m (gmethod-fn m)))))))
 
 (defun made-class (c-name args)
@@ -392,7 +393,7 @@ NIL for <object>."
                                                   (let ((types (mapcar #'atom-type* args)))
                                                     (if (member :none types)
                                                         (return-from call-type :none)
-                                                        (let ((m (resolved-method what args types)))
+                                                        (let ((m (resolved-method what args types (ir-call-site e))))
                                                           (and m (gmethod-fn m))))))))))
                        (if callee
                            (multiple-value-bind (r found) (gethash callee results)

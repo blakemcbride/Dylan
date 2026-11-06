@@ -62,7 +62,21 @@ reflection, and call it?  If not, methods need no direct entries.")
   order)
 
 (defstruct gfun var c-name required variable-p methods declared-keys
-  (object-c nil))
+  (object-c nil)
+  (defined-c nil))                      ; C name of the flag set once a
+                                        ; definition of it has run, for a
+                                        ; program's generic function
+
+(defvar *own-class-refs* nil
+  "IVAR -> T for a variable bound to a class's value only for a slot
+option of its own define-class, where the class is already its value.")
+
+(defvar *toplevel-order* nil
+  "Top-level IR-FN -> its place in the program, and module variable -> the
+place of the top-level form that defines it (inline.lisp, TOPLEVEL-ORDER).")
+
+(defvar *definition-fns* nil
+  "Definition node -> the IR-FN whose code it is in.")
 
 (defstruct gmethod
   specs                                 ; SPECs, one per required parameter
@@ -73,7 +87,18 @@ reflection, and call it?  If not, methods need no direct entries.")
   object-c                              ; C name of its <method> object
   entry-c                               ; C function dispatch calls
   location
-  order)
+  order
+  var                                   ; the generic function's MODULE-VAR
+  (flag-c nil)                          ; C name of the flag set while it is
+                                        ; attached: a program's method
+                                        ; (chapter 6: when its define-method
+                                        ; runs); NIL if always attached
+  (toplevel nil)                        ; for a program's method, the index
+                                        ; of the top-level form whose own
+                                        ; code defines it, or NIL
+  (siblings '()))                       ; the other methods with its
+                                        ; specializers, which replace it or
+                                        ; it replaces
 
 (defstruct (spec (:constructor make-spec (kind class &optional value c)))
   kind                                  ; :class or :singleton
@@ -271,12 +296,14 @@ its C the object, which the define-slot stores."
 ;;; --------------------------------------------------------- Definitions
 
 (defun collect-definitions (ir)
-  "The definition nodes of IR, in program order."
+  "The definition nodes of IR, in program order.  Each is noted in
+*DEFINITION-FNS* with the fn whose code it is in."
   (let ((found '()))
     (dolist (fn (ir-fns ir))
       (labels ((walk (e)
                  (typecase e
                    ((or ir-define-class ir-define-slot ir-define-method ir-define-generic)
+                    (setf (gethash e *definition-fns*) fn)
                     (push e found))
                    (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
                    (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
@@ -287,6 +314,19 @@ its C the object, which the define-slot stores."
                    (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e))))))
         (walk (ir-fn-body fn))))
     (nreverse found)))
+
+(defun note-own-class-refs (definitions)
+  "Note in *OWN-CLASS-REFS* the variables bound to a class for an option of
+its own define-class's slots: as the slots are made the class is the
+variable's value (chapter 6's slot types and initial values may name it)."
+  (dolist (d definitions)
+    (when (ir-define-class-p d)
+      (dolist (slot (ir-define-class-slots d))
+        (dolist (a (list (slot-spec-type slot) (slot-spec-init-value slot)))
+          (let ((v (and (ivar-p a) (gethash a *let-values*))))
+            (when (and (ir-global-ref-p v)
+                       (eq (ir-global-ref-var v) (ir-define-class-var d)))
+              (setf (gethash a *own-class-refs*) t))))))))
 
 (defmacro at-node ((node) &body body)
   `(let ((*location* (or (ir-node-location ,node) *location*))) ,@body))
@@ -734,8 +774,20 @@ in layout order."
                                       (class-info-name s)))))
       (loop for (message c1 c2) in (slot-clash-checks g)
             do (emit "if (!dy_identical(~a, ~a)) dy_error(~a, 0);"
-                     c1 c2 (c-utf8-literal message)))
-      (emit "~a = 1;" (gclass-ready-c g)))))
+                     c1 c2 (c-utf8-literal message)))))
+  ;; A program's slots' getters and setters are generic functions from
+  ;; now on, with these methods (chapter 6).
+  (unless (library-location-p (ir-node-location node))
+    (dolist (sd (gethash node *sdef-of-node*))
+      (dolist (var (list (sdef-getter sd) (sdef-setter sd)))
+        (let ((g (and var (gethash var *gfuns*))))
+          (when g
+            (when (gfun-defined-c g) (emit "~a = 1;" (gfun-defined-c g)))
+            (dolist (m (gfun-methods g))
+              (when (and (eq (gmethod-sdef m) sd) (added-when-run-p m))
+                (dolist (line (method-attachment-c m)) (emit "~a" line)))))))))
+  (when (ir-define-class-p node)
+    (emit "~a = 1;" (gclass-ready-c (gethash (ir-define-class-var node) *gclasses*)))))
 
 ;;; Accessors
 
@@ -864,11 +916,14 @@ against the slot's type as make checks it."
                                             (ir-fn-free-vars fn)))))
            (let ((m (make-gmethod
                      :specs (mapcar #'resolve-specializer (ir-fn-specializers fn))
-                     :kind :ir :fn fn
+                     :kind :ir :fn fn :var var
                      :rest-p (and (ir-fn-rest fn) t)
                      :keys (let ((k (ir-fn-keys fn)))
                              (if (listp k) (mapcar #'ir-key-keyword k) k))
-                     :location *location* :order (incf *definition-order*))))
+                     :location *location* :order (incf *definition-order*)
+                     :toplevel (let ((in (gethash d *definition-fns*)))
+                                 (and in (eq (ir-fn-kind in) :toplevel)
+                                      (gethash in *toplevel-order*))))))
              (setf (gethash fn *method-of-fn*) m)
              (push m (gfun-methods (gfun-for var)))))))))
   ;; Slot accessors
@@ -911,16 +966,45 @@ against the slot's type as make checks it."
                    (find-if #'define-variable-node-p (module-var-definitions var))))))
         (compile-error "~a is defined both as a variable and as a generic function"
                        (name-string (module-var-name var)))))
-    ;; In program order; a method with the same specializers as an
-    ;; earlier one replaces it (chapter 10).
-    (let ((methods '()))
-      (dolist (m (sort (copy-list (gfun-methods g)) #'< :key #'gmethod-order))
-        (setf methods (remove-if (lambda (old)
-                                   (and (= (length (gmethod-specs old)) (length (gmethod-specs m)))
-                                        (every #'same-spec-p (gmethod-specs old) (gmethod-specs m))))
-                                 methods))
-        (setf methods (append methods (list m))))
+    ;; In program order.  A method with the same specializers as another
+    ;; replaces it when its define-method runs (chapters 6 and 10), so the
+    ;; program has both, and each of a program's methods a flag set while
+    ;; it is attached, which dispatch tests.
+    (flet ((same-specs-p (a b)
+             (and (= (length (gmethod-specs a)) (length (gmethod-specs b)))
+                  (every #'same-spec-p (gmethod-specs a) (gmethod-specs b)))))
+      (let ((methods '()))
+        ;; The library's own, which it has from the start: a later one
+        ;; replaces an earlier.
+        (dolist (m (sort (copy-list (gfun-methods g)) #'< :key #'gmethod-order))
+          (unless (program-method-p m)
+            (setf methods (remove-if (lambda (old)
+                                       (and (not (program-method-p old)) (same-specs-p old m)))
+                                     methods)))
+          (setf methods (append methods (list m))))
+        (dolist (m methods)
+          (setf (gmethod-var m) (gfun-var g)
+                (gmethod-siblings m)
+                (remove-if-not (lambda (other) (and (not (eq other m)) (same-specs-p other m)))
+                               methods)))
+        (setf (gfun-methods g) methods)))
+    (let ((methods (gfun-methods g)))
+      (dolist (m methods)
+        (when (or (program-method-p m) (some #'program-method-p (gmethod-siblings m)))
+          ;; Named apart from the library's objects, whose names must not
+          ;; depend on the program
+          (let ((name (format nil "~a_on~d" (gfun-c-name g) (position m methods))))
+            (setf (gmethod-flag-c m) name)
+            ;; The library's are attached from the start.
+            (declare-object "static unsigned char ~a~:[~; = 1~];" name
+                            (not (added-when-run-p m))))))
       (setf (gfun-methods g) methods))
+    ;; A program's generic function has no value until one of its
+    ;; definitions has run (chapter 6).
+    (unless (eq (module-var-module var) (dylan-module))
+      (let ((name (format nil "~a_defined" (gfun-c-name g))))
+        (setf (gfun-defined-c g) name)
+        (declare-object "static int ~a;" name)))
     ;; The parameter lists must be congruent (chapter 6).
     (dolist (m (gfun-methods g))
       (multiple-value-bind (required variable) (method-shape m)
@@ -945,6 +1029,75 @@ against the slot's type as make checks it."
                                (format nil "~{~a~^ ~}" (mapcar #'dylan-string missing)))))))))
     (unless (gfun-required g) (setf (gfun-required g) 0))
     (setf (gethash var *constant-globals*) (address (gfun-c-name g)))))
+
+;;; When methods are attached (chapter 6)
+
+(defun program-method-p (m)
+  "Is M a method a program's define-method makes?"
+  (and (eq (gmethod-kind m) :ir) (not (ir-fn-library-p (gmethod-fn m)))))
+
+(defun library-location-p (location)
+  (and location (location-p location) (library-source-file-p (location-file location))))
+
+(defun added-when-run-p (m)
+  "Is M attached to its generic function when the program's definition
+of it runs -- a define-method, or the define-class or define-slot of a
+slot it reads or writes -- not from the start?"
+  (or (program-method-p m)
+      (and (member (gmethod-kind m) '(:getter :setter))
+           (not (library-location-p (sdef-location (gmethod-sdef m)))))))
+
+(defun method-attachment-c (m)
+  "The C statements that attach M, as its definition does when it runs:
+the methods with its specializers are detached."
+  (let ((g (gethash (gmethod-var m) *gfuns*))
+        (replaced (gmethod-siblings m)))
+    (append
+     (loop for s in replaced
+           when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
+     (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
+     (and (gfun-defined-c g) (list (format nil "~a = 1;" (gfun-defined-c g))))
+     (list (if replaced
+               (format nil "dy_add_method(~a, ~a, (const D[]){ ~{~a~^, ~} }, ~d);"
+                       (address (gfun-c-name g)) (address (gmethod-object-c m))
+                       (mapcar (lambda (r) (address (gmethod-object-c r))) replaced)
+                       (length replaced))
+               (format nil "dy_add_method(~a, ~a, NULL, 0);"
+                       (address (gfun-c-name g)) (address (gmethod-object-c m))))))))
+
+(defun defined-flag-c (var)
+  "The C name of the flag that says whether VAR, the variable of a
+program's class or generic function, has its value yet; NIL if it is not
+one."
+  (unless (eq (module-var-module var) (dylan-module))
+    (let ((c (gethash var *gclasses*))
+          (g (gethash var *gfuns*)))
+      (cond (c (gclass-ready-c c))
+            (g (gfun-defined-c g))))))
+
+(defun fn-toplevel (fn)
+  (loop while (ir-fn-parent fn) do (setf fn (ir-fn-parent fn)))
+  fn)
+
+(defun fn-within-p (fn outer)
+  (loop for f = fn then (ir-fn-parent f)
+        while f
+        thereis (eq f outer)))
+
+(defun method-certain-p (m site)
+  "Is M surely attached whenever the code of the fn SITE runs, so that a
+call there may go straight to it (or have its code inline)?  So it is if
+it is always attached; or if its define-method, a top-level form of its
+own that nothing replaces, ran before SITE's top-level form, or SITE's
+code is M's own."
+  (or (null (gmethod-flag-c m))
+      (and site
+           (program-method-p m)
+           (null (gmethod-siblings m))
+           (gmethod-toplevel m)
+           (or (fn-within-p site (gmethod-fn m))
+               (let ((here (gethash (fn-toplevel site) *toplevel-order*)))
+                 (and here (< (gmethod-toplevel m) here)))))))
 
 ;;; Method objects and direct entries
 
@@ -1026,25 +1179,57 @@ no next method."
 (defvar *leaves* nil "list of methods -> leaf label, for one generic.")
 (defvar *nexts* nil "list of methods -> next-method object C name.")
 
+(defun next-c (methods)
+  "The C expression for the next method of a call that has METHODS, in
+order, left to run: #f if none of them is attached."
+  (let ((flags '()))
+    (dolist (m methods)
+      (if (gmethod-flag-c m)
+          (push (gmethod-flag-c m) flags)
+          (return-from next-c (next-object methods))))
+    (if flags
+        (format nil "((~{~a~^ || ~}) ? ~a : DY_FALSE)" (reverse flags) (next-object methods))
+        "DY_FALSE")))
+
+(defun emit-method-runs (methods nexts pad)
+  "Emit the code that runs the first attached method of METHODS, NEXTS
+being the next-method expression for each: answer whether one surely is."
+  (loop for m in methods
+        for next in nexts
+        for flag = (gmethod-flag-c m)
+        do (when flag (emit-object "~aif (~a) {" pad flag))
+           (emit-object "~a~:[~;    ~]dy_thread->next_method = ~a;" pad flag next)
+           (emit-object "~a~:[~;    ~]DY_TAIL_CALL_DIRECT(~a, ~a, a0, a1, a2, a3, argc);"
+                        pad flag (gmethod-entry-c m) (address (gmethod-object-c m)))
+           (if flag
+               (emit-object "~a}" pad)
+               (return t))
+        finally (return nil)))
+
 (defun next-object (methods)
-  "The C expression for the next method that runs METHODS in order."
+  "The C expression for the next method that runs the first attached
+method of METHODS, with the rest after it."
   (if (null methods)
       "DY_FALSE"
       (address
        (or (gethash methods *nexts*)
            (setf (gethash methods *nexts*)
                  (let* ((name (cdata-name *cdata* "dy_next_"))
-                        (m (first methods))
-                        (after (next-object (rest methods))))
+                        ;; Made first, apart: making them emits functions.
+                        (nexts (loop for tail on methods collect (next-c (rest tail)))))
                    (declare-object "static D ~a_entry(D, D, D, D, D, intptr_t);" name)
                    (declare-object "static DyFunction ~a;" name)
                    (emit-object "static DyFunction ~a = { &dy_wrapper_method, ~a_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };"
                                 name name)
                    (emit-object "static D ~a_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {"
                                 name)
-                   (emit-object "    (void)self;~%    dy_thread->next_method = ~a;" after)
-                   (emit-object "    DY_TAIL_CALL_DIRECT(~a, ~a, a0, a1, a2, a3, argc);~%}"
-                                (gmethod-entry-c m) (address (gmethod-object-c m)))
+                   (emit-object "    (void)self;")
+                   (unless (emit-method-runs methods nexts "    ")
+                     ;; (Not reached: the call checked that one is attached.)
+                     (emit-object "    dy_no_applicable_method(~a);"
+                                  (address (gfun-c-name (gethash (gmethod-var (first methods))
+                                                                 *gfuns*)))))
+                   (emit-object "}")
                    name))))))
 
 (defun spec-rank (spec class)
@@ -1190,7 +1375,8 @@ methods are METHODS, or NIL."
                  (gen-dispatch-tree g 0 (mapcar (lambda (m) (list m)) (gfun-methods g)) 1)
                  (reverse *object-text*)))
          (leaves (loop for methods being the hash-keys of *leaves* using (hash-value label)
-                       collect (list label methods (next-object (rest methods))
+                       collect (list label methods
+                                     (loop for tail on methods collect (next-c (rest tail)))
                                      (leaf-keyword-check g methods)))))
     (declare-object "static D ~a(D, D, D, D, D, intptr_t);" name)
     (emit-object "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" name)
@@ -1200,13 +1386,13 @@ methods are METHODS, or NIL."
     (dotimes (i r)
       (emit-object "    D x~d = ~a; (void)x~d;" i (arg-c i) i))
     (dolist (line tree) (emit-object "~a" line))
-    (loop for (label methods next check) in (sort leaves #'string< :key #'first)
+    (loop for (label methods nexts check) in (sort leaves #'string< :key #'first)
           do (emit-object "~a:" label)
              (when check (emit-object "    ~a" check))
-             (emit-object "    dy_thread->next_method = ~a;" next)
-             (emit-object "    DY_TAIL_CALL_DIRECT(~a, ~a, a0, a1, a2, a3, argc);"
-                          (gmethod-entry-c (first methods))
-                          (address (gmethod-object-c (first methods)))))
+             ;; The first of them attached (a program's method is once its
+             ;; define-method has run)
+             (unless (emit-method-runs methods nexts "    ")
+               (emit-object "    goto no_method;")))
     (emit-object "no_method:~%    dy_no_applicable_method(self);~%}")))
 
 (defun function-info-c (required rest keys)
@@ -1232,8 +1418,11 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
                  (if (consp name)
                      (address (c-symbol *cdata* (name-string name) :symbol))
                      (c-constant *cdata* name)))
+               ;; Those attached from the start: a program's are added
+               ;; as their definitions run (ADD-METHOD-C).
                (address (c-vector *cdata* (mapcar (lambda (m) (address (gmethod-object-c m)))
-                                                  (gfun-methods g))))
+                                                  (remove-if #'added-when-run-p
+                                                             (gfun-methods g)))))
                (gfun-required g)
                (let ((declared (gfun-declared-keys g)))
                  (function-info-c (gfun-required g)
@@ -1325,6 +1514,7 @@ by code that the compiler has found does not let it escape."
 need, which GENERATE-C places."
   (let ((definitions (collect-definitions ir)))
     (collect-let-values ir)
+    (note-own-class-refs definitions)
     (build-classes definitions)
     (build-slots definitions)
     (loop for g being the hash-values of *gclasses*

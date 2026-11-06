@@ -222,7 +222,8 @@ the keyword arguments REST."
  (dylan%function->method
   (make-param-list `((byte-string ,<byte-string>)) nil 'rest nil)
   (lambda (string-1 &rest rest)
-    (let ((result string-1))
+    ;; A new string, even of one argument (chapter 12)
+    (let ((result (copy-seq string-1)))
       (dolist (s (mapcar (lambda (seq) (dylan-call dylan/as <byte-string> seq))
                          rest)
                result)

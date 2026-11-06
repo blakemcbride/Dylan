@@ -2211,4 +2211,14 @@ none
 \"ERR: a <byte-string> holds only 8-bit characters: #\\\\λ\"
 \"cab\"
 ")
+ ;; concatenate returns a new sequence, even of one argument (chapter 12).
+ (concatenate-of-one-is-new
+  "(define l (list 1 2))
+(define s \"ab\")
+(print (list (id? l (concatenate l)) (id? s (concatenate s)) (concatenate l) (concatenate s)))
+(define v (vector 1 2))
+(print (id? v (concatenate v)))"
+  "(#f #f (1 2) \"ab\")
+#f
+")
 )

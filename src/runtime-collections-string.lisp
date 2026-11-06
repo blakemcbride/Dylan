@@ -213,12 +213,9 @@ the keyword arguments REST."
    (dylan%function->method
     (make-param-list `((string ,class) (object ,<object>)) nil nil nil)
     (lambda (the-string new-element)
-      (if (characterp new-element)
-          (string-like the-string
-                       (concatenate 'string (string new-element) the-string))
-          (dylan-call dylan/error
-                      "(add <string> <object>) -- cannot add a non-character to string"
-                      the-string new-element))))))
+      (check-byte-character the-string new-element)
+      (string-like the-string
+                   (concatenate 'string (string new-element) the-string))))))
 
 (add-method
  dylan/concatenate

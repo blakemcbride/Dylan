@@ -2197,4 +2197,18 @@ none
 1.5
 3
 ")
+ ;; add, add! and add-new put no character above 255 into a <byte-string>
+ ;; (chapter 12).
+ (byte-string-add-checks-characters
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define lam (as <character> 955))
+(print (try (method () (add \"ab\" lam))))
+(print (try (method () (add! (make <byte-string> size: 1 fill: #\\a) lam))))
+(print (try (method () (add-new \"ab\" lam))))
+(print (add \"ab\" #\\c))"
+  "\"ERR: a <byte-string> holds only 8-bit characters: #\\\\λ\"
+\"ERR: a <byte-string> holds only 8-bit characters: #\\\\λ\"
+\"ERR: a <byte-string> holds only 8-bit characters: #\\\\λ\"
+\"cab\"
+")
 )

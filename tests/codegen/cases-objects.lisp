@@ -808,4 +808,15 @@ b-slot
 (print (handler-case (f \"s\") ((<error> condition: c) (list (condition-format-string c) (condition-format-arguments c)))))"
   "(\"no applicable method for f\" ())
 ")
+ ;; <, = and > answer #t or #f whatever true value a program's binary< or
+ ;; binary= answers (chapter 9).
+ (comparisons-answer-booleans
+  "(define-class <v> (<object>) (n init-keyword: n:))
+(define-method binary< ((a <v>) (b <v>)) (if (binary< (n a) (n b)) 'yes #f))
+(define-method binary= ((a <v>) (b <v>)) (if (binary= (n a) (n b)) 'same #f))
+(define v1 (make <v> n: 1))
+(define v2 (make <v> n: 2))
+(print (list (< v1 v2) (= v1 v1) (> v2 v1) (< v1 v2 v2) (<= v1 v2) (< 1 2) (= 3 3)))"
+  "(#t #t #t #f #t #t #t)
+")
 )

@@ -175,6 +175,18 @@ CLASS-NAME."
   "Primitives the compiler writes into each program, whose entries are not
 dy_prim_NAME_entry.")
 
+(defun library-comparisons-p ()
+  "Have binary< and binary= the library's methods alone, which answer #t
+or #f?  Only then may (< a b), (= a b) and (> a b) call them directly
+(*VARIADIC-REWRITES*): a program's method may answer another true value,
+which <, = and > answer as #t (chapter 9)."
+  (every (lambda (name)
+           (let ((g (gethash (dylan-var name) *gfuns*)))
+             (or (null g)
+                 (every (lambda (m) (and (gmethod-fn m) (ir-fn-library-p (gmethod-fn m))))
+                        (gfun-methods g)))))
+         '("binary<" "binary=")))
+
 (defun call-callee (e)
   "What E calls, if known: (values :generic gfun swap?), (values :fold
 gfun), (values :primitive c-name), or NIL."
@@ -190,7 +202,9 @@ gfun), (values :primitive c-name), or NIL."
         (when (eq (module-var-module var) (dylan-module))
           (loop for (name count target swap?) in *variadic-rewrites*
                 when (and (= n count) (eq var (dylan-var name))
-                          (gethash (dylan-var target) *gfuns*))
+                          (gethash (dylan-var target) *gfuns*)
+                          (or *library-comparisons*
+                              (not (member name '("<" "=" ">") :test #'string=))))
                   do (setf var (dylan-var target) swap swap?)
                      (return)))
         (let ((g (gethash var *gfuns*)))

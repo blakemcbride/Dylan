@@ -81,6 +81,9 @@ inline operation tests its arguments when run.")
 (defvar *cfun* nil "The CFUN being generated.")
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
 (defvar *used-primitives* nil)
+(defvar *library-comparisons* t
+  "Have binary< and binary= the library's methods alone?  See
+LIBRARY-COMPARISONS-P (calls.lisp).")
 (defvar *extended-floats* t
   "Can the program make an <extended-float>?  See MAKES-EXTENDED-FLOATS-P
 (calls.lisp).")
@@ -1167,11 +1170,13 @@ each of its Dylan functions -> the name of the module it was written in."
         (*temp-counter* 0)
         (*toplevel-order* (toplevel-order ir))
         (*extended-floats* t)
+        (*library-comparisons* t)
         (fns (ir-fns ir)))
     (setf *reflective-methods* (uses-method-reflection-p ir)
           *extended-floats* (makes-extended-floats-p ir))
     (number-thread-variables ir)
     (prepare-object-system ir)
+    (setf *library-comparisons* (library-comparisons-p))
     (unless *debug*
       (inline-calls ir)
       (setf fns (ir-fns ir)))

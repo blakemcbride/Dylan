@@ -432,6 +432,14 @@ of pre-existing module variables.  CONTINUE is a function that receives:
 (defparameter dylan%predefined-variables
   (mapcar #'cadr dylan%lisp-names-of-predefined-names))
 
+;;; Chapter 15: a symbol prints as it was first written, and the
+;;; implementation's own names come first -- the variables the dylan
+;;; module exports, in lower case, as in the compiler to C.
+(dolist (name dylan%predefined-names)
+  (let ((spelling (string-downcase (symbol-name name))))
+    (unless (search "dylan/setter/" spelling)
+      (remember-spelling name spelling))))
+
 (defun compile-to-file (file-name &rest expressions)
   "Compile the Dylan EXPRESSIONS, writing the resulting Lisp program to
 FILE-NAME."

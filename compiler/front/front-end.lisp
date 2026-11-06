@@ -151,13 +151,23 @@ sources, if LIBRARY).  For tests."
                         (library-files)))
            (list (cons name text)))))
 
+(defun system-spellings ()
+  "A table of the spellings of the implementation's own names, which are
+entered before any program's (chapter 15): the variables the dylan module
+exports, in lower case, as in the Common Lisp implementation."
+  (let ((table (make-hash-table :test #'eq)))
+    (dolist (name (append *dylan-module-names* *dylan-module-extension-names*)
+                  table)
+      (setf (gethash (dylan-name name) table) name))))
+
 (defun front-end-sources (sources)
   "SOURCES is a list of (name . text); a text may instead be a diagnostic
 saying why the file could not be read."
   (let ((*diagnostics* '())
         (specs '())
-        ;; The case a symbol is first written in is the program's own.
-        (dylan::*symbol-spellings* (make-hash-table :test #'eq))
+        ;; The case a symbol is first written in is the program's own,
+        ;; but for the implementation's own names, which come first.
+        (dylan::*symbol-spellings* (system-spellings))
         (symbol-forms (make-hash-table :test #'equal))
         (form-starts (make-hash-table :test #'eq))
         (number 0))
@@ -166,7 +176,12 @@ saying why the file could not be read."
           (push (cdr source) *diagnostics*)
           (collecting-errors
             (multiple-value-bind (file module forms)
-                (read-source (car source) (cdr source))
+                ;; The library's other names are its own business.
+                (let ((dylan::*symbol-spellings*
+                        (if (search "/runtime/dylan/" (car source))
+                            (make-hash-table :test #'eq)
+                            dylan::*symbol-spellings*)))
+                  (read-source (car source) (cdr source)))
               (setf number (note-forms file forms number symbol-forms form-starts))
               (push (list file (or module "dylan-user") forms) specs)))))
     (let ((program (front-end-units (nreverse specs) :diagnostics *diagnostics*)))

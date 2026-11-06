@@ -827,12 +827,11 @@ done with \code{as}:
 \end{dylan}
 
 \noindent The spelling remembered is the first anywhere, and the
-implementation's own names come first. In the compiler to C that
-includes every name the library uses, so \code{'Size} prints as
-\code{size} and \code{Test:} as \code{test:} there, while the Common
-Lisp implementation, which predefines fewer names, prints them
-\code{Size} and \code{Test:}. Either way \code{(id? 'size 'Size)} is
-\code{\#t}; only the printing differs.
+implementation's own names come first: the variables the \code{dylan}
+module exports, in lower case. So \code{'Size} prints as \code{size},
+while \code{'Mine} and \code{Test:}, which are not among them, print as
+written. Either way \code{(id? 'size 'Size)} is \code{\#t}; only the
+printing differs.
 
 \index{symbol!comparison}
 Symbols are compared only by identity: \code{(= 'abc 'ABC)} and

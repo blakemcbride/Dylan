@@ -436,4 +436,13 @@ other
   "(mine 1 2)
 #(9 2)
 ")
+ ;; A symbol prints as it was first written, and the implementation's own
+ ;; names -- the variables the dylan module exports, in lower case -- come
+ ;; first (chapter 15).
+ (system-name-spellings
+  "(print (list 'Element 'SIZE 'Car 'Mine Test: 'mine test: 'STATE 'Format))
+(print (as <string> 'Vector))"
+  "(element size car Mine Test: Mine Test: STATE format)
+\"vector\"
+")
 )

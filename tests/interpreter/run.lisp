@@ -116,6 +116,13 @@ define-module forms before the first other form, which define it."
   "The module dylan-user as the implementation defines it, which a program
 may define again.")
 
+(defvar *system-spellings*
+  (let ((copy (make-hash-table :test #'eq)))
+    (maphash (lambda (symbol spelling) (setf (gethash symbol copy) spelling))
+             *symbol-spellings*)
+    copy)
+  "The spellings of the implementation's own names (chapter 15).")
+
 (defun forget-program ()
   "Undo the program's definitions in dylan-user, for the next program:
 its module variables lose their values, and are macros and read-only no
@@ -132,7 +139,11 @@ longer, and the library's generic functions lose the methods it added."
       (makunbound variable)
       (remhash variable *read-only-variables*)))
   (clrhash *dylan-macros*)              ; a macro's own name is not among them
-  (clrhash *symbol-spellings*)          ; chapter 15: how a symbol was spelled
+  ;; Chapter 15: how a symbol was spelled, but for the implementation's
+  ;; own names
+  (clrhash *symbol-spellings*)
+  (maphash (lambda (symbol spelling) (setf (gethash symbol *symbol-spellings*) spelling))
+           *system-spellings*)
   (setf (gethash 'dylan-user *dylan-modules*) *dylan-user-module*)
   (setf *program-variables* '()))
 

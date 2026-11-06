@@ -355,6 +355,11 @@ signals if the result is too large (chapter 8), and nothing is allocated."
                                                (stack-object-p (dest-var dest))))))
       (ir-define-variable
        (let ((var (ir-define-variable-var e)))
+         ;; A define of a variable that already has a value warns
+         ;; (chapter 4): another define of it ran, or this one ran before.
+         (unless (or (library-var-p var) (module-var-thread-local-p var))
+           (emit "if (~a != DY_UNBOUND) dy_redefining_variable(~a);" (global-c-name var)
+                 (c-utf8-literal (name-string (module-var-name var)))))
          (emit "~a = ~a;" (global-c-name var) (atom-c (ir-define-variable-value e)))
          (let ((name (name-string (module-var-name var))))
            ;; A predefined method prints with its name (chapter 8's

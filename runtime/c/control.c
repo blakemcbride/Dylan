@@ -423,6 +423,12 @@ PRIMITIVE(warn) {
     fputc('\n', stderr);
     return DY_FALSE;
 }
+void dy_redefining_variable(const char *name) {
+    fflush(stdout);
+    fputs("Dylan warning: redefining variable ", stderr);
+    fputs(name, stderr);
+    fputc('\n', stderr);
+}
 PRIMITIVE(break_message) {
     need(self, argc, 1, 1);
     fflush(stdout);

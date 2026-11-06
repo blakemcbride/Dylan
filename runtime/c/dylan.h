@@ -350,6 +350,8 @@ _Noreturn void dy_error(const char *message, D irritant);
 _Noreturn void dy_error_naming(const char *before, const char *name, const char *after,
                                D irritant);
 _Noreturn void dy_integer_overflow(void);
+/* Warn, as define does when its variable already has a value (chapter 4). */
+void dy_redefining_variable(const char *name);
 _Noreturn void dy_division_by_zero(void);
 /* A float operation's result neither finite nor exact -- an infinity or a
  * NaN -- is an error, as Common Lisp signals it (chapter 14): overflow,

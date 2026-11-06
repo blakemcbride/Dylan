@@ -239,6 +239,25 @@ printf 'Dylan warning: warn {pt 2}\nDylan break: brk {pt 3}\nDylan error: OOPS {
 check "a report through print-object" sh -c "test $status = 1 && cmp -s report.err report.want"
 "$dylan" < report.dyl > report.out 2> report.err; status=$?
 check "bin/dylan: a report through print-object" sh -c "test $status = 1 && cmp -s report.err report.want"
+# A define of a variable that already has a value warns (chapter 4), in
+# both: another define of it ran, or this one ran before
+cat > redefine.dyl <<'EOF2'
+(define foo 10)
+(define foo 20)
+(define (setter baz) 1)
+(define (setter baz) 2)
+(define-method f (n) (define qq n) qq)
+(f 1)
+(f 2)
+(define-method g () (define once 1) once)
+(g)
+(print (list foo (setter baz) qq once))
+EOF2
+printf 'Dylan warning: redefining variable foo\nDylan warning: redefining variable (setter baz)\nDylan warning: redefining variable qq\n' > redefine.want
+"$dylanc" -o redefine redefine.dyl >/dev/null 2>&1; ./redefine > redefine.out 2> redefine.err; status=$?
+check "a second define warns" sh -c "test $status = 0 && cmp -s redefine.err redefine.want && grep -q '^(20 2 2 1)' redefine.out"
+"$dylan" < redefine.dyl > redefine.out 2> redefine.err; status=$?
+check "bin/dylan: a second define warns" sh -c "test $status = 0 && cmp -s redefine.err redefine.want && grep -q '^(20 2 2 1)' redefine.out"
 # dylan:empty-environment! forgets what the loop defined, so that each
 # name can be defined again: classes, generic functions and macros too
 echo "(load \"$here/../../src/load-dylan.lisp\")" > empty.lisp

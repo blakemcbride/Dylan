@@ -38,12 +38,11 @@ definition has been evaluated (Section~\ref{sec:syntax-when}). A variable create
 \code{define} may be assigned with \code{set!}
 (Section~\ref{sec:control-assignment}).
 
-Defining a variable that already exists in the module is allowed by the
-Common Lisp implementation, which warns \code{redefining variable} and
-stores the new value; in the compiler to C, defining a variable twice with
-\code{define} simply stores twice, but defining a name both with
-\code{define} and as a class or generic function is an error when
-compiling.
+Defining a variable that already has a value is allowed: \code{define}
+warns \code{redefining variable} on the standard error and stores the new
+value, whether another \code{define} of the variable ran or this one ran
+before. In the compiler to C, defining a name both with \code{define} and
+as a class or generic function is an error when compiling.
 
 \begin{notebox}
 Later design notes changed \code{define}: one renamed it

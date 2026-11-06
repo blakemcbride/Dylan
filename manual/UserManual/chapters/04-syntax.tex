@@ -561,9 +561,9 @@ later-var                   ; => error: later-var has no value yet
 \end{dylan}
 
 \noindent The two implementations differ in what they allow a program to
-define again. In the Common Lisp implementation a later form may redefine
-a variable, which only draws a warning, or redefine a class. In the
-compiler to C, which compiles a static program, a class may be defined
+define again. In both a later \code{define} may redefine a variable,
+which only draws a warning; in the Common Lisp implementation a later
+form may also redefine a class. In the compiler to C, which compiles a static program, a class may be defined
 only once, a name cannot be
 defined both by \code{define} and as a generic function, and a read-only
 variable (Section~\ref{sec:modules-readonly}) cannot be assigned. These

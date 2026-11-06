@@ -85,7 +85,7 @@
    'logbit? two-integers
    (lambda (index integer)
      (when (minusp index)
-       (dylan-call dylan/error "logbit? -- negative index" index integer))
+       (dylan-call dylan/error "logbit?: negative index: ~s" index))
      (bool (logbitp index integer)))))
 
 (defparameter dylan/logeqv

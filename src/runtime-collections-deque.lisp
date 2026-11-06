@@ -308,7 +308,7 @@
                    (dylan-call dylan/set-deque-front! deque nil)
                    (dylan-call dylan/set-deque-last! deque nil)))
              old-front-value)
-           (dylan-call dylan/error "pop -- deque is empty" deque))))))
+           (dylan-call dylan/error "pop: the deque is empty"))))))
 
 (defparameter dylan/push-last
   (dylan%generic-fn
@@ -338,7 +338,7 @@
                    (dylan-call dylan/set-deque-last! deque nil)
                    (dylan-call dylan/set-deque-front! deque nil)))
              old-last-value)
-           (dylan-call dylan/error "pop-last -- deque is empty" deque))))))
+           (dylan-call dylan/error "pop-last: the deque is empty"))))))
 
 ;;;
 ;;; Mutable Collection

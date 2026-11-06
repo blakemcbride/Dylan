@@ -398,8 +398,7 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
                     nil nil nil)
    (lambda (proc collection)
      (if (true? (dylan-call dylan/empty? collection))
-         (dylan-call dylan/error "reduce1 -- collection argument is empty"
-                     proc collection)
+         (dylan-call dylan/error "reduce1: the collection is empty")
          (loop with cur-value = (current-element collection
                                             (initial-state
                                                         collection))

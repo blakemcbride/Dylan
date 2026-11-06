@@ -362,9 +362,7 @@
             (dylan-call dylan/set-range-end! range start)
             (dylan-call dylan/set-range-step! range (- step))
             range)
-          (dylan-call dylan/error
-                      "(reverse! <range>) -- can't reverse unbounded range"
-                      range))))))
+          (dylan-call dylan/error "reverse: the range is unbounded"))))))
 
 (add-method
  dylan/last

@@ -348,7 +348,7 @@ signals if the result is too large (chapter 8), and nothing is allocated."
            ;; The value threads made from now on start with.
            (emit "dy_thread_variable_defaults[~d] = ~a;"
                  (gethash var *thread-variables*) (atom-c (ir-define-variable-value e))))
-         (deliver dest (c-constant *cdata* (name-symbol (module-var-name var))))))
+         (deliver dest (c-constant *cdata* (module-var-name var)))))
       (ir-bind-exit (gen-local-exit e dest))
       (ir-unwind (error "Internal error: an unwind-protect was not lowered."))
       ;; Generic functions and methods are static: nothing to do at run
@@ -379,8 +379,9 @@ every use of VAR has instead, or something without effect no one uses?"
                          (gethash (ir-global-ref-var value) *constant-globals*)))))))
 
 (defun definition-value (var)
-  "A defining form answers the name it defines."
-  (c-constant *cdata* (name-symbol (module-var-name var))))
+  "A defining form answers the name it defines: a symbol, or the list
+(setter name)."
+  (c-constant *cdata* (module-var-name var)))
 
 (defun global-ref-c (e)
   (let ((var (ir-global-ref-var e)))

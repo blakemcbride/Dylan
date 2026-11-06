@@ -819,4 +819,15 @@ b-slot
 (print (list (< v1 v2) (= v1 v1) (> v2 v1) (< v1 v2 v2) (<= v1 v2) (< 1 2) (= 3 3)))"
   "(#t #t #t #f #t #t #t)
 ")
+ ;; A definition of (setter x) answers the name (setter x) (chapters 4 and 6).
+ (setter-definition-value
+  "(print (define (setter ee) 3))
+(print (define-method (setter ff) (v x) v))
+(print (define-generic-function (setter gg) (v x)))
+(print (define-class <c> (<object>) (s setter: (setter s))))"
+  "(setter ee)
+(setter ff)
+(setter gg)
+<c>
+")
 )

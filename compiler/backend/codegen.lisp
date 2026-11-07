@@ -389,16 +389,22 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       ;; where it is defined.
       (ir-define-generic
        (let ((g (gethash (ir-define-generic-var e) *gfuns*)))
-         (if (gethash e *inconsistent-declarations*)
-             (emit "dy_error_naming(\"define-generic-function: \", ~a, \" is inconsistent with the existing generic function\", 0);"
-                   (c-utf8-literal (name-string (module-var-name (ir-define-generic-var e)))))
-             (when g
-               (dolist (line (generic-definition-c g)) (emit "~a" line))
-               (when (gfun-declared-c g) (emit "~a = 1;" (gfun-declared-c g))))))
+         (cond
+           ((gethash e *incongruent*)
+            (emit-incongruent (gethash e *incongruent*) (ir-define-generic-var e)))
+           ((gethash e *inconsistent-declarations*)
+            (emit "dy_error_naming(\"define-generic-function: \", ~a, \" is inconsistent with the existing generic function\", 0);"
+                  (c-utf8-literal (name-string (module-var-name (ir-define-generic-var e))))))
+           (g
+            (dolist (line (generic-definition-c g)) (emit "~a" line))
+            (when (gfun-declared-c g) (emit "~a = 1;" (gfun-declared-c g))))))
        (deliver dest (definition-value (ir-define-generic-var e))))
       (ir-define-method
-       (let ((m (gethash (ir-define-method-fn e) *method-of-fn*)))
-         (when (and m (added-when-run-p m))
+       (let ((m (gethash (ir-define-method-fn e) *method-of-fn*))
+             (incongruent (gethash (ir-define-method-fn e) *incongruent*)))
+         (when incongruent
+           (emit-incongruent incongruent (ir-define-method-var e)))
+         (when (and m (added-when-run-p m) (not incongruent))
            (dolist (line (method-attachment-c m (and (gmethod-closure-c m)
                                                      (make-method-closure m))))
              (emit "~a" line))))
@@ -410,6 +416,12 @@ signals if the result is too large (chapter 8), and nothing is allocated."
        (gen-class-definition e)
        (deliver dest (c-constant *cdata* (name-symbol (module-var-name
                                                        (slot-spec-getter (ir-define-slot-slot e))))))))))
+
+(defun emit-incongruent (error var)
+  "The error, as (before-name . after-name), a definition of the generic
+function in VAR signals when it runs, its method not congruent with it."
+  (emit "dy_error_naming(~a, ~a, ~a, 0);" (c-utf8-literal (car error))
+        (c-utf8-literal (name-string (module-var-name var))) (c-utf8-literal (cdr error))))
 
 (defun emit-read-only-check (var)
   "For a set! or define of VAR, a generic function's variable that a
@@ -1257,6 +1269,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*definition-fns* (make-hash-table :test #'eq))
         (*generic-declarations* (make-hash-table :test #'eq))
         (*inconsistent-declarations* (make-hash-table :test #'eq))
+        (*incongruent* (make-hash-table :test #'eq))
         (*own-class-refs* (make-hash-table :test #'eq))
         (*constant-globals* (make-hash-table :test #'eq))
         (*sdef-of-node* (make-hash-table :test #'eq))

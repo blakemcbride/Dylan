@@ -267,6 +267,16 @@ checked them; a direct call (next-method #f) is checked here."
                  (return list)
             finally (return list))))
 
+(defun missing-keys (data param-list)
+  "The keywords the generic function's DATA declares that the method's
+PARAM-LIST does not accept, in the order declared."
+  (let ((method-keys (param-list.keys param-list)))
+    (if (or (param-list.rest? param-list) (eq method-keys :any)
+            (not (consp (generic-function-data.keys data))))
+        '()
+        (remove-if (lambda (key) (and (consp method-keys) (member key method-keys)))
+                   (generic-function-data.keys data)))))
+
 (defun missing-required-keys-p (data param-list)
   "True if the generic function's DATA declares keywords that the method's
 PARAM-LIST does not accept."
@@ -304,17 +314,20 @@ whose DATA is given, or NIL."
            (dylan-call dylan/error
                        "add-method -- generic function is read-only"
                        generic-function))
+          ;; As the compiler to C words them, which checks in this order
+          ((congruency-error data param-list)
+           (dylan-call dylan/error
+                       (format nil "the parameter list of a method of ~a is not congruent with its generic function"
+                               (or (generic-function-print-name generic-function)
+                                   "an anonymous generic function"))))
           ((missing-required-keys-p data param-list)
            (dylan-call dylan/error
-                       "add-method -- generic function requires certain keys"
-                       (generic-function-data.keys data)))
-          (t (let ((specific-error (congruency-error data param-list)))
-               (when specific-error
-                 (dylan-call dylan/error
-                             (concatenate 'string
-                                          "add-method -- parameter lists not congruent, "
-                                          specific-error)
-                             generic-function method)))))
+                       (format nil "a method of ~a does not accept the keys its generic function names: ~{~a~^ ~}"
+                               (or (generic-function-print-name generic-function)
+                                   "an anonymous generic function")
+                               (mapcar (lambda (key)
+                                         (with-output-to-string (out) (dylan-write key out)))
+                                       (missing-keys data param-list))))))
     (check-not-frozen generic-function method "add-method")
     (let ((old-method (find-method generic-function
                                    (method.specializers method))))

@@ -70,6 +70,8 @@ reflection, and call it?  If not, methods need no direct entries.")
   (defined-c nil)                       ; C name of the flag set once a
                                         ; definition of it has run, for a
                                         ; program's generic function
+  (incongruent '())                     ; slot accessor methods not
+                                        ; congruent with it, never added
   (declared-c nil))                     ; C name of the flag set once its
                                         ; define-generic-function has run,
                                         ; for one whose variable a set! or
@@ -84,11 +86,15 @@ option of its own define-class, where the class is already its value.")
 place of the top-level form that defines it (inline.lisp, TOPLEVEL-ORDER).")
 
 (defvar *generic-declarations* nil
-  "MODULE-VAR -> its first define-generic-function, which the generic
-function follows.")
+  "MODULE-VAR -> its define-generic-functions and the methods of its
+define-methods, newest first.")
 (defvar *inconsistent-declarations* nil
   "The later define-generic-functions not consistent with the first, an
 error when they run (chapter 6).")
+(defvar *incongruent* nil
+  "A define-method's IR-FN, or an IR-DEFINE-GENERIC, -> the error, as
+(before-name . after-name), that the definition signals when it runs: the
+method is not congruent with its generic function (chapter 6).")
 
 (defvar *definition-fns* nil
   "Definition node -> the IR-FN whose code it is in.")
@@ -889,9 +895,12 @@ superclass's gives it: what a virtual slot keeps."
         (let ((g (and var (gethash var *gfuns*))))
           (when g
             (dolist (line (generic-definition-c g)) (emit "~a" line))
-            (dolist (m (gfun-methods g))
+            (dolist (m (append (gfun-methods g) (gfun-incongruent g)))
               (when (and (eq (gmethod-sdef m) sd) (added-when-run-p m))
-                (dolist (line (method-attachment-c m)) (emit "~a" line)))))))))
+                (if (gethash m *incongruent*)
+                    ;; Not congruent with the generic function (chapter 6)
+                    (emit-incongruent (gethash m *incongruent*) var)
+                    (dolist (line (method-attachment-c m)) (emit "~a" line))))))))))
   (when (ir-define-class-p node)
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
       (if (program-gclass-p g)
@@ -1031,21 +1040,16 @@ slot SD in the object VAR."
     (at-node (d)
       (typecase d
         (ir-define-generic
-         (block build-generics-declaration
-          (let* ((var (ir-define-generic-var d))
-                (g (gfun-for var))
-                (first (gethash var *generic-declarations*)))
-           ;; Chapter 6: a generic function may be declared again,
-           ;; consistently: the same required parameters, #rest and keys.
-           (when first
-             (unless (consistent-declarations-p first d)
-               (setf (gethash d *inconsistent-declarations*) t))
-             (return-from build-generics-declaration))
-           (setf (gethash var *generic-declarations*) d)
-           (setf (gfun-required g) (ir-define-generic-required d)
-                 (gfun-variable-p g) (or (ir-define-generic-rest d)
-                                         (and (ir-define-generic-keys d) t))
-                 (gfun-declared-keys g) (or (ir-define-generic-keys d) :none)))))
+         (let ((var (ir-define-generic-var d)))
+           (gfun-for var)
+           (push d (gethash var *generic-declarations*))))
+        ;; A slot's getter and setter, given their methods when the
+        ;; define-class or define-slot runs
+        ((or ir-define-class ir-define-slot)
+         (dolist (sd (gethash d *sdef-of-node*))
+           (push (list :accessor sd :getter) (gethash (sdef-getter sd) *generic-declarations*))
+           (when (sdef-setter sd)
+             (push (list :accessor sd :setter) (gethash (sdef-setter sd) *generic-declarations*)))))
         (ir-define-method
          (let* ((fn (ir-define-method-fn d))
                 (var (ir-define-method-var d)))
@@ -1064,6 +1068,7 @@ slot SD in the object VAR."
                                  (and in (eq (ir-fn-kind in) :toplevel)
                                       (gethash in *toplevel-order*))))))
              (setf (gethash fn *method-of-fn*) m)
+             (push m (gethash var *generic-declarations*))
              (push m (gfun-methods (gfun-for var)))))))))
   ;; Slot accessors
   (loop for sds in (cons *singleton-sdefs*
@@ -1082,6 +1087,8 @@ slot SD in the object VAR."
              (when (sdef-setter sd)
                (let ((setter (gfun-for (sdef-setter sd))))
                  (unless (gfun-required setter) (setf (gfun-required setter) 2))))))
+  (loop for g being the hash-values of *gfuns*
+        do (settle-generic g (reverse (gethash (gfun-var g) *generic-declarations*))))
   ;; initialize has its method on <object>.
   (let ((init (gethash (dylan-var "initialize") *gfuns*)))
     (when init
@@ -1091,6 +1098,93 @@ slot SD in the object VAR."
             (gfun-methods init))))
   (loop for g being the hash-values of *gfuns*
         do (finish-generic g)))
+
+(defparameter +not-congruent+
+  (cons "the parameter list of a method of " " is not congruent with its generic function"))
+
+(defun method-congruence-error (m required variable-p declared)
+  "The error, as (before-name . after-name), that adding M signals when its
+generic function takes REQUIRED arguments, more if VARIABLE-P, and
+declares the keys DECLARED (chapter 6); or NIL."
+  (multiple-value-bind (r v) (method-shape m)
+    (cond ((or (/= r required) (not (eq (and v t) (and variable-p t))))
+           +not-congruent+)
+          ((and (consp declared) (eq (gmethod-kind m) :ir)
+                (not (gmethod-rest-p m)) (listp (gmethod-keys m)))
+           (let ((missing (remove-if (lambda (k) (member k (gmethod-keys m))) declared)))
+             (and missing
+                  (cons "a method of "
+                        (format nil " does not accept the keys its generic function names: ~{~a~^ ~}"
+                                (mapcar #'dylan-string missing)))))))))
+
+(defun same-declared-keys-p (a b)
+  "Do the keys A and B of two declarations (NIL, :ANY or a list) agree?"
+  (cond ((or (null a) (null b)) (and (null a) (null b)))
+        ((or (atom a) (atom b)) (and (atom a) (atom b)))
+        (t (and (subsetp a b) (subsetp b a)))))
+
+(defun settle-generic (g events)
+  "Settle the parameter list of the generic function G from EVENTS, in
+the order they run, as the interpreter does when they run (chapter 6):
+its define-generic-functions, the methods of its define-methods, and
+(:ACCESSOR sdef kind) for a slot whose getter or setter it is.  The first
+gives the parameter list: a define-method's method a provisional one, a
+define-generic-function or a slot a fixed one.  A method not congruent
+with it is an error when its definition runs, and is never added.  A
+define-generic-function then takes over a provisional one, unless the
+methods so far are not congruent with it, an error when it runs; with a
+fixed one it must be consistent, or it is an error when it runs."
+  (let ((state nil)                     ; NIL, :PROVISIONAL or :FIXED
+        required rest keys declared-p (attached '()))
+    (labels ((variable-p () (or rest (and keys t)))
+             (declared () (and declared-p (or keys :none)))
+             (fix (r rs ks dgf)
+               (setf state :fixed required r rest rs keys ks declared-p dgf))
+             (add (m)
+               (let ((err (method-congruence-error m required (variable-p) (declared))))
+                 (cond ((null err) (push m attached))
+                       ((eq (gmethod-kind m) :ir)
+                        (setf (gethash (gmethod-fn m) *incongruent*) err
+                              (gfun-methods g) (remove m (gfun-methods g))))
+                       (t
+                        (setf (gethash m *incongruent*) err
+                              (gfun-methods g) (remove m (gfun-methods g)))
+                        (push m (gfun-incongruent g)))))))
+      (dolist (e events)
+        (cond
+          ((ir-define-generic-p e)
+           (let ((r (ir-define-generic-required e))
+                 (rs (and (ir-define-generic-rest e) t))
+                 (ks (ir-define-generic-keys e)))
+             (case state
+               ((nil) (fix r rs ks t))
+               (:provisional
+                (if (or (/= r required)
+                        (some (lambda (m)
+                                (method-congruence-error m r (or rs (and ks t)) (or ks :none)))
+                              attached))
+                    (setf (gethash e *incongruent*) +not-congruent+)
+                    (fix r rs ks t)))
+               (:fixed
+                (if (and (= r required) (eq rs rest) (same-declared-keys-p ks keys))
+                    (setf declared-p t)
+                    (setf (gethash e *inconsistent-declarations*) t))))))
+          ((consp e)
+           (destructuring-bind (sd kind) (cdr e)
+             ;; The slot makes the generic function if there is none.
+             (unless state (fix (if (eq kind :getter) 1 2) nil nil nil))
+             (let ((m (find-if (lambda (m) (and (eq (gmethod-sdef m) sd) (eq (gmethod-kind m) kind)))
+                               (gfun-methods g))))
+               (when m (add m)))))
+          ((null state)
+           (multiple-value-bind (r v) (method-shape e)
+             (setf state :provisional required r rest (and v t) keys nil declared-p nil)
+             (push e attached)))
+          (t (add e))))
+      (when state
+        (setf (gfun-required g) required
+              (gfun-variable-p g) (variable-p)
+              (gfun-declared-keys g) (declared))))))
 
 (defun finish-generic (g)
   (let ((var (gfun-var g)))
@@ -1181,7 +1275,7 @@ slot SD in the object VAR."
       (let ((declared (gfun-declared-keys g)))
         (when (and (consp declared) (eq (gmethod-kind m) :ir)
                    (not (gmethod-rest-p m)) (listp (gmethod-keys m)))
-          (let ((missing (set-difference declared (gmethod-keys m))))
+          (let ((missing (remove-if (lambda (k) (member k (gmethod-keys m))) declared)))
             (when missing
               (let ((*location* (or (gmethod-location m) *location*)))
                 (compile-error "a method of ~a does not accept the keys its generic function names: ~a"

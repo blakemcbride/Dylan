@@ -350,8 +350,10 @@ All the methods of a generic function, and its
 \code{define-generic-function} if it has one, must have \term{congruent}
 parameter lists: the same number of required parameters, and either all of
 them have \code{\#rest} or \code{\#key} (or both), or none has either.
-Adding a method that is not congruent is an error, reported when compiling
-by the compiler to C.
+Adding a method that is not congruent is an error when its
+\code{define-method} runs (``the parameter list of a method of \meta{name}
+is not congruent with its generic function''), and the method is not
+added.
 
 Nothing else has to agree. Each method has its own specializers, and they
 are what dispatch chooses among. The parameter names, the keywords named
@@ -448,7 +450,8 @@ other than a generic function.
 (function-arguments tag)       ; => 1, #f, (color:)
 (define-method tint (x #key shade) shade)
 (define-generic-function tint (x #key hue))
-                               ; => error: the method does not accept hue:
+; => error: the parameter list of a method of tint is not congruent
+;    with its generic function
 \end{dylan}
 
 The options are keyword/value pairs reserved by the manual for future use.

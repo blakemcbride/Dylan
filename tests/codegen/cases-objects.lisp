@@ -302,10 +302,12 @@ pong
   "(define g 1) (define-method g (x) x)"
   ""
   :error "g is defined both as a variable and as a generic function")
+ ;; A method not congruent with its generic function: an error when its
+ ;; define-method runs (chapter 6)
  (not-congruent
   "(define-method h (x) x) (define-method h (x y) x)"
   ""
-  :compile-error "not congruent")
+  :error "the parameter list of a method of h is not congruent with its generic function")
  (dynamic-specializer
   "(define-method i ((x (singleton (list 1)))) x)"
   ""
@@ -502,7 +504,7 @@ not-a-singleton
    (define-method g (a #key bar) 1)
    (print (g 1))"
   ""
-  :compile-error "generic function")
+  :error "a method of g does not accept the keys its generic function names: foo:")
 
  ;; Chapter 6: a redefined slot's type must be within the inherited one's
  (slot-type-narrowed
@@ -612,7 +614,7 @@ b-slot
   "(define-method g1 (x) x)
    (define-generic-function g1 (x y))"
   ""
-  :compile-error "is not congruent with its generic function")
+  :error "the parameter list of a method of g1 is not congruent with its generic function")
 
  ;; The reflective functions: define-slot answers the slot's name
  ;; (chapter 6); function-arguments of the predefined functions follows
@@ -1865,4 +1867,62 @@ found
 3
 "
   :error "h is defined both as a variable and as a generic function")
+ ;; A method not congruent with its generic function, or not accepting its keys,
+ ;; is an error when its define-method runs, and is not added; a
+ ;; define-generic-function after define-methods takes over their generic
+ ;; function if they are congruent with it (chapter 6).
+ (congruence-checked-when-run
+  "(define-method k (a) (list 'one a))
+(define try (method (f) (handler-case (f) ((<error> condition: c) (condition-format-string c)))))
+(print (try (method () (define-method k (a b) b) 'no)))
+(print (k 1))
+(define-method k ((a <integer>)) (list 'int a))
+(print (k 1))
+(print (k \"s\"))
+(define-method j (a #rest r) (list a r))
+(define-generic-function j (a #key x))
+(print (j 1 x: 2))
+(define-method j ((a <integer>) #key x) (list 'int a x))
+(print (j 1 x: 3))
+(print (try (method () (define-method j ((a <string>) #key y) 'bad))))
+(print (j \"s\" x: 4))
+(print (size (generic-function-methods j)))
+(print (size (generic-function-methods k)))"
+  "\"the parameter list of a method of k is not congruent with its generic function\"
+(one 1)
+(int 1)
+(one \"s\")
+(1 (x: 2))
+(int 1 3)
+\"a method of j does not accept the keys its generic function names: x:\"
+(\"s\" (x: 4))
+2
+2
+")
+ ;; A slot's getter or setter not congruent with its generic function is an
+ ;; error when its define-class runs ...
+ (accessor-congruence-when-run
+  "(define-generic-function z (o))
+(define-class <c> (<object>) (z init-value: 3) (w init-value: 4 setter: #f))
+(print (z (make <c>)))
+(define-method w ((s <string>)) s)
+(print (list (w (make <c>)) (w \"s\")))
+(define-method v (o p) p)
+(define-class <d> (<object>) (v))"
+  "3
+(4 \"s\")
+"
+  :error "the parameter list of a method of v is not congruent with its generic function")
+ ;; ... and a slot fixes the parameter list a later define-generic-function
+ ;; must be consistent with (chapter 6).
+ (declaration-after-accessor
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-generic-function x (o))
+(print (x (make <a>)))
+(define-class <b> (<object>) (y init-value: 2))
+(define try (method (f) (handler-case (f) ((<error> condition: c) (condition-format-string c)))))
+(define-generic-function y (o #key k))"
+  "1
+"
+  :error "define-generic-function: y is inconsistent with the existing generic function")
 )

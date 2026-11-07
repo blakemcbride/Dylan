@@ -318,7 +318,7 @@ error
   "(define-generic-function g2 (a b))
    (define-method g2 (a b c) a)"
   ""
-  :compile-error "")
+  :error "the parameter list of a method of g2 is not congruent with its generic function")
 
  ;; 6.x Parameter List Congruency: #key against none is not congruent
  ;; (specification)
@@ -326,7 +326,7 @@ error
   "(define-method g4 (a b #key) a)
    (define-method g4 ((a <integer>) b) a)"
   ""
-  :compile-error "")
+  :error "the parameter list of a method of g4 is not congruent with its generic function")
 
  ;; 6.x Specializing Required Parameters: classes and singletons; the
  ;; closest match is chosen (specification)

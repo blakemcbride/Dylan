@@ -92,13 +92,13 @@ it has there."
   (multiple-value-bind (owner symbol) (resolve-symbol module (name-symbol name))
     (owned-variable owner (same-kind-name symbol name))))
 
-(defun defining-module-var (module name form-name)
+(defun defining-module-var (module name form-name &optional macro-ok)
   "The variable a definition of NAME in MODULE defines.  Chapter 5: a
 module may not define a variable it imports -- unless the module it comes
 from names it in a create clause, which asks for exactly that (design note
-32)."
+32).  Unless MACRO-OK, it may not be a macro."
   (let ((var (lookup-module-var module name)))
-    (when (module-var-macro var)
+    (when (and (module-var-macro var) (not macro-ok))
       (compile-error "~a of ~a: ~a is a macro" form-name (name-string name) (name-string name)))
     (let ((owner (module-var-module var)))
       (unless (or (eq owner module)

@@ -525,7 +525,8 @@ value.  An error in it is a compile error, its message beginning with WHAT."
       (compile-error "define-macro: ~a is not a name" name))
     (unless (proper-list-p parameters)
       (compile-error "define-macro ~a: bad parameter list ~a" name parameters))
-    (let ((var (defining-module-var *module* name "define-macro")))
+    ;; A second define-macro replaces the macro for the forms after it.
+    (let ((var (defining-module-var *module* name "define-macro" t)))
       (when (module-var-definitions var)
         (compile-error "define-macro: ~a is defined as a variable too" name))
       (setf (module-var-macro var)

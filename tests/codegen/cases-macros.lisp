@@ -241,4 +241,19 @@ FreSh
 6
 "
   :error "the variable twice@dylan-user has no value")
+ ;; A second define-macro replaces the macro for the forms after it (chapter 16).
+ (macro-defined-twice
+  "(define-macro m () 1)
+(print (m))
+(define f (method () (m)))
+(define-macro m () 2)
+(print (m))
+(print (f))
+(define-macro m (x) `(list ,x ,x))
+(print (m 3))"
+  "1
+2
+1
+(3 3)
+")
 )

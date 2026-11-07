@@ -119,9 +119,9 @@ macro that never stops expanding is reported (``one never stops?'').
   defined, and fails when it runs; the compiler warns of it.
 \item A name cannot be both a macro and a variable. \code{(define m 2)}
   after \code{(define-macro m () 1)}, or a use of \code{m} other than as
-  the operator of a call, is an error (``m is a macro''). In the
-  interactive implementation a \code{define-macro} may replace a macro,
-  as a \code{define} may replace a variable.
+  the operator of a call, is an error (``m is a macro''). A second
+  \code{define-macro} of a name replaces the macro for the forms after
+  it, as a second \code{define} replaces a variable's value.
 \item A call of a macro must be a proper list, and must supply arguments
   its parameter list accepts (``macro m: wrong number of arguments in
   (m 1 2)'').

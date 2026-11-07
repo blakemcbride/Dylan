@@ -108,14 +108,14 @@ square
    (set! <shape> 3)
    (print 'not-reached)"
   ""
-  :compile-error "<shape>")
+  :error "<shape> holds a class or generic function and cannot be assigned")
 
  (ch05-read-only-generic
   "(define-generic-function perimeter (shape))
    (set! perimeter 3)
    (print 'not-reached)"
   ""
-  :compile-error "perimeter")
+  :error "perimeter holds a class or generic function and cannot be assigned")
 
  ;; 5 Readonly Variables: \"The object contained in the variable can still
  ;; be modified\"; and a variable made by define can be assigned.

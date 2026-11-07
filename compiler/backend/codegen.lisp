@@ -305,16 +305,22 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       (ir-global-ref (deliver dest (global-ref-c e dest)))
       (ir-global-set
        (let ((var (ir-global-set-var e)))
-         ;; Chapter 5: the variables of classes and of
-         ;; define-generic-function are read-only.
-         (when (read-only-var-p var)
-           (compile-error "~a holds a class or generic function and cannot be assigned"
-                          (name-string (module-var-name var))))
-         ;; Chapter 7: an error if the variable is not defined when the
-         ;; set! is done.
-         (emit "(void)dy_check_bound(~a, ~a);" (global-c-name var)
-               (c-utf8-literal (module-var-string var)))
-         (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))
+         (if (read-only-var-p var)
+             ;; Chapter 5: the variables of classes and of
+             ;; define-generic-function are read-only, an error when the
+             ;; set! is done -- after the one of a variable with no value
+             ;; yet.
+             (let ((flag (defined-flag-c var)))
+               (when flag
+                 (emit "dy_check_defined(~a, ~a);" flag (c-utf8-literal (module-var-string var))))
+               (emit "dy_error_naming(\"\", ~a, \" holds a class or generic function and cannot be assigned\", 0);"
+                     (c-utf8-literal (name-string (module-var-name var)))))
+             (progn
+               ;; Chapter 7: an error if the variable is not defined when
+               ;; the set! is done.
+               (emit "(void)dy_check_bound(~a, ~a);" (global-c-name var)
+                     (c-utf8-literal (module-var-string var)))
+               (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))))
          (deliver dest (atom-c (ir-global-set-value e)))))
       (ir-set
        (let ((var (ir-set-var e)) (value (ir-set-value e)))

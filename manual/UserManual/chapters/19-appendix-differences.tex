@@ -193,10 +193,8 @@ manual leaves a choice open or where the host shows through. A portable
 program depends on none of these; each is described where it arises.
 
 \begin{itemize}
-\item Assigning a read-only module variable is a compile error in the
-  compiler to C and an error when it runs in the interactive
-  implementation, which also needs modules declared before use
-  (Sections~\ref{sec:modules-readonly} and~\ref{sec:modules-lisp}).
+\item The interactive implementation needs modules declared before use
+  (Section~\ref{sec:modules-lisp}).
 \item A compiled program that an unhandled error stops reports it on
   the standard error, \code{Dylan error:} and the message, as the
   interactive implementation does when it runs a file from its standard

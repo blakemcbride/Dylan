@@ -441,7 +441,7 @@ error
   "(define-class <ro> (<object>))
    (set! <ro> 3)"
   ""
-  :compile-error "")
+  :error "<ro> holds a class or generic function and cannot be assigned")
 
  ;; 6.x Slot Options: the <rectangle> example
  (ch06-rectangle

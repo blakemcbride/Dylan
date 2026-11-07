@@ -1606,6 +1606,11 @@ need, which GENERATE-C places."
                    (compile-error "~a is defined both as a class and otherwise"
                                   (name-string (module-var-name (gclass-var g))))))))
     (build-generics definitions)
+    ;; A set! of a read-only variable stores nothing: it is an error when
+    ;; it runs (chapter 5).
+    (loop for var being the hash-keys of *assigned-globals*
+          when (read-only-var-p var)
+            do (remhash var *assigned-globals*))
     (method-objects)))
 
 (defun finish-object-system ()

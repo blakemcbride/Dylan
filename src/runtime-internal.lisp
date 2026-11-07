@@ -103,7 +103,7 @@ after it."
   (when (gethash variable *read-only-variables*)
     (dylan-call dylan/error
                 (format nil "~a holds a class or generic function and cannot be assigned"
-                        (dylan-symbol->string (if (consp name) (cadr name) name))))))
+                        (definition-name-string name)))))
 
 (defun dylan%note-redefinition (variable name)
   "Chapter 4: DEFINE of a variable that already has a value warns."

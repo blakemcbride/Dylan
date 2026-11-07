@@ -312,7 +312,44 @@ pong
  (assign-class
   "(define-class <z> (<object>)) (set! <z> 3)"
   ""
-  :compile-error "cannot be assigned")
+  :error "<z> holds a class or generic function and cannot be assigned")
+ ;; Chapter 5: assigning a read-only variable -- a class's, or a
+ ;; define-generic-function's -- is an error when the set! runs; one that
+ ;; never runs is no error, and one before the definition finds no value.
+ (read-only-assigned-when-run
+  "(define-method try (thunk)
+  (handler-case (thunk)
+    ((<error> condition: c) (format #t \"error: ~a~%\" (condition-format-string c)))))
+(try (method () (print <p>)))
+(try (method () (print g)))
+(try (method () (set! <p> 3)))
+(try (method () (set! g 3)))
+(define-class <p> (<object>))
+(define-generic-function g (x))
+(define-generic-function (setter gg) (v x))
+(try (method () (set! <p> 3)))
+(try (method () (set! g 3)))
+(try (method () (set! (setter gg) 3)))
+(try (method () (set! <integer> 3)))
+(print (instance? (make <p>) <p>))
+(define-method g ((x <integer>)) (* x 2))
+(print (g 4))
+(print (list <p> g <integer>))
+(define-method never () (set! <p> 3))
+(print 'ran)"
+  "error: the variable <p>@dylan-user has no value
+error: the variable g@dylan-user has no value
+error: the variable <p>@dylan-user has no value
+error: the variable g@dylan-user has no value
+error: <p> holds a class or generic function and cannot be assigned
+error: g holds a class or generic function and cannot be assigned
+error: (setter gg) holds a class or generic function and cannot be assigned
+error: <integer> holds a class or generic function and cannot be assigned
+#t
+8
+({the class <p>} {the generic function g} {the class <integer>})
+ran
+")
 
  ;; define-slot on a singleton gives the one object a slot (chapter 6):
  ;; instance or constant, initialized when the define-slot runs, more

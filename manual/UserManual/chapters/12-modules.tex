@@ -443,16 +443,16 @@ library's functions, as the 1992 manual's own example \code{(set! (setter
 element) ...)} has them. A call through such a variable finds whatever it
 holds when the call runs.
 
-The two implementations check this at different times. The compiler to C
-refuses the program:
+Assigning a read-only variable is an error when the assignment runs; a
+\code{set!} that never runs is no error. A compiled program that does not
+handle the error reports it and stops:
 
 \begin{shell}
-e3.dyl:2:1: error: <p> holds a class or generic function and cannot be assigned
+Dylan error: <p> holds a class or generic function and cannot be assigned
 \end{shell}
 
 \noindent
-The interactive implementation signals an error when the assignment is
-run:
+At the interactive prompt:
 
 \begin{repl}
 ? (define-class <p> (<object>))

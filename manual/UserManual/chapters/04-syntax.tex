@@ -564,9 +564,8 @@ later-var                   ; => error: later-var has no value yet
 define again. In both a later \code{define} may redefine a variable,
 which only draws a warning; in the Common Lisp implementation a later
 form may also redefine a class. In the compiler to C, which compiles a static program, a class may be defined
-only once, a name cannot be
-defined both by \code{define} and as a generic function, and a read-only
-variable (Section~\ref{sec:modules-readonly}) cannot be assigned. These
+only once, and a name cannot be
+defined both by \code{define} and as a generic function. These
 are errors when compiling. Chapter~\ref{ch:dylanc} lists the full set of restrictions.
 
 \subsection{Source files and the module: header}\label{sec:syntax-files}

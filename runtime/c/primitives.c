@@ -355,7 +355,7 @@ static bool same_specializer(D x, D y) {
  * a define-method of a variable that holds it adds one (chapter 6); then
  * it chooses its methods when it is called, as sorted-applicable-methods
  * sorts them.  It enters a method by its object, whose entry takes its
- * next method from dispatch_next. */
+ * next method from dispatch_next, if dispatch_for is the object. */
 
 static D made_dispatch(D self, D a0, D a1, D a2, D a3, intptr_t argc);
 
@@ -381,7 +381,9 @@ static D made_next(D methods, D owner) {
 
 static D run_methods(D methods, D a0, D a1, D a2, D a3, intptr_t argc) {
     D m = dy_head(methods);
-    dy_thread->dispatch_next = made_next(dy_tail(methods), ((DyFunction *)DY_PTR(m))->owner);
+    D next = made_next(dy_tail(methods), ((DyFunction *)DY_PTR(m))->owner);
+    dy_thread->dispatch_for = m;            /* a slot's getter or setter */
+    dy_thread->dispatch_next = next;        /* ignores them */
     DY_TAIL_CALL(m, a0, a1, a2, a3, argc);
 }
 

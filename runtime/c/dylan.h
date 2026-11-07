@@ -893,9 +893,10 @@ typedef struct DyThread {
     /* The next method of the method being entered: set by the caller,
        read by the method before it calls anything. */
     D next_method;
-    /* Its next method, for a method a generic function made when the
+    /* For DISPATCH_FOR, a method a generic function made when the
        program runs is calling (dy_add_method_when_run), which enters it
-       by its object; 0 otherwise. */
+       by its object: its next method.  DISPATCH_FOR is 0 otherwise. */
+    D dispatch_for;
     D dispatch_next;
     /* A pending tail call, in trampoline mode; TAIL_ENTRY, if not NULL,
        is the entry to use instead of TAIL_FUNCTION's own. */

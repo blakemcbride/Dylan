@@ -2081,4 +2081,52 @@ made
 \"ERR: f is defined both as a variable and as a generic function\"
 \"ERR: f is defined both as a variable and as a generic function\"
 ")
+ ;; Chapter 6: a slot's getter and setter are added, as define-method's
+ ;; methods are, to the generic functions their variables hold.
+ (slot-accessor-on-another-generic
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-generic-function label (x))
+(define-method label ((x <integer>)) 'int)
+(define tag label)
+(define-generic-function (setter label) (x v))
+(define (setter tag) (setter label))
+(define-class <box> (<object>) (tag init-value: 'boxed))
+(define b (make <box>))
+(print (list (label b) (label 3) (tag b)))
+(set! (tag b) 'new)
+(print (label b))
+(define-generic-function two (x y))
+(define name two)
+(print (try (method () (define-class <c> (<object>) name))))
+(define made (make <generic-function> required: 1))
+(define size-of made)
+(define-class <d> (<object>) (size-of init-value: 7))
+(print (made (make <d>)))"
+  "(boxed int boxed)
+new
+\"ERR: the parameter list of a method of two is not congruent with its generic function\"
+7
+")
+ ;; A generic function make makes, given a getter and methods that call
+ ;; next-method; one of its methods called as a value has no next method.
+ (made-generic-with-slot-and-methods
+  "(define made (make <generic-function> required: 1 debug-name: 'made))
+(define size-of made)
+(define-class <d> (<object>) (size-of init-value: 7))
+(define-class <e> (<d>))
+(define-method made ((x <e>)) (list 'e (next-method)))
+(print (made (make <e>)))
+(define-method made ((x <object>)) (list 'obj (next-method)))
+(define-method made ((x <integer>)) (list 'int (next-method)))
+(print (handler-case (made 3) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define m (find-method made (list <integer>)))
+(print (handler-case (m 4) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (made (make <d>)))
+(print (map (method (m) (size (method-specializers m))) (generic-function-methods made)))"
+  "(e 7)
+\"ERR: not a function: #f\"
+\"ERR: not a function: #f\"
+7
+(1 1 1 1)
+")
 )

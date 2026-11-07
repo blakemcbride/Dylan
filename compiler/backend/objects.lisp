@@ -908,13 +908,24 @@ superclass's gives it: what a virtual slot keeps."
       (dolist (var (list (sdef-getter sd) (sdef-setter sd)))
         (let ((g (and var (gethash var *gfuns*))))
           (when g
-            (dolist (line (generic-definition-c g)) (emit "~a" line))
-            (dolist (m (append (gfun-methods g) (gfun-incongruent g)))
-              (when (and (eq (gmethod-sdef m) sd) (added-when-run-p m))
-                (if (gethash m *incongruent*)
-                    ;; Not congruent with the generic function (chapter 6)
-                    (emit-incongruent (gethash m *incongruent*) var)
-                    (dolist (line (method-attachment-c m)) (emit "~a" line))))))))))
+            (let ((methods (remove-if-not (lambda (m)
+                                            (and (eq (gmethod-sdef m) sd) (added-when-run-p m)))
+                                          (append (gfun-methods g) (gfun-incongruent g)))))
+              (flet ((own ()
+                       (dolist (line (generic-definition-c g)) (emit "~a" line))
+                       (dolist (m methods)
+                         (if (gethash m *incongruent*)
+                             ;; Not congruent with the generic function (chapter 6)
+                             (emit-incongruent (gethash m *incongruent*) var)
+                             (dolist (line (method-attachment-c m)) (emit "~a" line))))))
+                ;; Or to another generic function the variable holds
+                (let ((foreign (find-if (lambda (m)
+                                          (or (gmethod-copies m) (gmethod-foreign-errors m)
+                                              (gmethod-made m)))
+                                        methods)))
+                  (if foreign
+                      (emit-foreign-attachment foreign var #'own)
+                      (own))))))))))
   (when (ir-define-class-p node)
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
       (if (program-gclass-p g)
@@ -1239,6 +1250,20 @@ does."
                          (ir-lambda-p (gethash atom *let-values*))))
                    (t (setf *held-made* t) (return :all)))))))))
 
+(defun attached-when-run ()
+  "The program's methods its definitions attach when they run: those of
+its define-methods and its slots' getters and setters (which are given
+their generic function's variable here)."
+  (let ((found '()))
+    (loop for m being the hash-values of *method-of-fn*
+          when (program-method-p m) do (push m found))
+    (loop for g being the hash-values of *gfuns*
+          do (dolist (m (append (gfun-methods g) (gfun-incongruent g)))
+               (when (and (member (gmethod-kind m) '(:getter :setter)) (added-when-run-p m))
+                 (setf (gmethod-var m) (gfun-var g))
+                 (push m found))))
+    found))
+
 (defun add-foreign-copies ()
   "Chapter 6: define-method adds its method to the generic function its
 variable holds when it runs.  A program's variable that a set! or define
@@ -1247,11 +1272,10 @@ makes has a copy in each other generic function it may hold, attached
 when the definition runs and the variable holds that one -- or, not
 congruent with that one, the error then."
   (let ((all (loop for g being the hash-values of *gfuns* collect g)))
-    (loop for m being the hash-values of *method-of-fn*
+    (loop for m in (attached-when-run)
           for var = (gmethod-var m)
           for own = (gethash var *gfuns*)
-          when (and (program-method-p m)
-                    (or (gethash var *global-set-values*) (gethash var *global-definitions*)))
+          when (or (gethash var *global-set-values*) (gethash var *global-definitions*))
             do (let* ((*held-made* nil)
                       (targets (held-generics var)))
                  (when *held-made*
@@ -1311,9 +1335,9 @@ congruent with that one, the error then."
         ;; The library's own, which it has from the start: a later one
         ;; replaces an earlier.
         (dolist (m (sort (copy-list (gfun-methods g)) #'< :key #'gmethod-order))
-          (unless (program-method-p m)
+          (unless (flagged-method-p m)
             (setf methods (remove-if (lambda (old)
-                                       (and (not (program-method-p old)) (same-specs-p old m)))
+                                       (and (not (flagged-method-p old)) (same-specs-p old m)))
                                      methods)))
           (setf methods (append methods (list m))))
         (dolist (m methods)
@@ -1324,7 +1348,7 @@ congruent with that one, the error then."
         (setf (gfun-methods g) methods)))
     (let ((methods (gfun-methods g)))
       (dolist (m methods)
-        (when (or (program-method-p m) (some #'program-method-p (gmethod-siblings m)))
+        (when (or (flagged-method-p m) (some #'flagged-method-p (gmethod-siblings m)))
           ;; Named apart from the library's objects, whose names must not
           ;; depend on the program
           (let ((name (format nil "~a_on~d" (gfun-c-name g) (position m methods))))
@@ -1378,6 +1402,11 @@ congruent with that one, the error then."
     (setf (gethash var *constant-globals*) (address (gfun-c-name g)))))
 
 ;;; When methods are attached (chapter 6)
+
+(defun flagged-method-p (m)
+  "Has M a flag set while it is attached: a program's define-method's, or
+a copy of a method in another generic function (ADD-FOREIGN-COPIES)?"
+  (or (program-method-p m) (and (gmethod-original m) t)))
 
 (defun program-method-p (m)
   "Is M a method a program's define-method makes?"
@@ -1498,7 +1527,8 @@ code is M's own."
 (defun made-only-methods ()
   "The methods that a generic function made when the program runs may be
 given, but not their own: not congruent with it."
-  (loop for m being the hash-values of *method-of-fn*
+  (loop for m in (append (loop for m being the hash-values of *method-of-fn* collect m)
+                         (loop for g being the hash-values of *gfuns* append (gfun-incongruent g)))
         when (and (gmethod-made m)
                   (not (member m (gfun-methods (gethash (gmethod-var m) *gfuns*)))))
           collect m))
@@ -1589,9 +1619,9 @@ no next method."
   "With *MADE-GENERIC-DISPATCH*: the start of M's direct entry, which a
 generic function made when the program runs enters with its next method
 in dispatch_next, having chosen M and checked the arguments."
-  (emit-object "    if (DY_UNLIKELY(dy_thread->dispatch_next != 0)) {")
+  (emit-object "    if (DY_UNLIKELY(dy_thread->dispatch_for == self)) {")
   (emit-object "        dy_thread->next_method = dy_thread->dispatch_next;")
-  (emit-object "        dy_thread->dispatch_next = 0;")
+  (emit-object "        dy_thread->dispatch_for = 0;")
   (emit-object "        DY_TAIL_CALL_DIRECT(~a, self, a0, a1, a2, a3, argc);" (gmethod-entry-c m))
   (emit-object "    }"))
 

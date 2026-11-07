@@ -111,6 +111,8 @@
     "%function-arguments" "%slot-getter" "%slot-setter" "%slot-type"
     "%slot-allocation" "%init-value" "%init-function" "%init-keyword"
     "%slot-value" "%slot-initialized?" "%slot-descriptor"
-    "%slot-descriptors")
+    "%slot-descriptors"
+    ;; A define-generic-function of a variable imported from DYLAN
+    "%redeclare-generic")
   "Variables the DYLAN module owns, with values in the runtime, but does not
 export: for the library's own use.")

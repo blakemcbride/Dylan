@@ -259,8 +259,7 @@ own functions such as make take any keyword arguments, is #rest without
                        (generic-function.nrequired generic-function)
                        (bool (or (generic-function.rest? generic-function)
                                  (eq (generic-function.keys generic-function) :any)))
-                       (let ((keys (generic-function.keys generic-function)))
-                         (if (eq keys :any) dylan%false (or-false keys))))))))
+                       (keyword-sequence (generic-function.keys generic-function)))))))
 
 (defparameter dylan/make-polar
   (dylan%generic-fn 'make-polar two-reals

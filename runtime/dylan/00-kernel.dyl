@@ -145,7 +145,7 @@ module: dylan
   (%make-generic-function required debug-name (if rest? #t #f)
                           (cond ((not key?) #f)
                                 ((%instance? key? <sequence>) key?)
-                                (else: #()))))
+                                (else: '()))))
 
 ;;; initialize (chapter 6).  Its method on <object>, which does nothing,
 ;;; is the compiler's own.

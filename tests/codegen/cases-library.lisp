@@ -1139,7 +1139,7 @@ neg
    (for-each ((f (list id? not identity list cons car cdr vector values apply singleton)))
      () (print (fa f)))"
   "(2 #t #f)
-(1 #f #())
+(1 #f ())
 (1 #f (a: b:))
 (1 #f #f)
 (2 #t #f)

@@ -75,6 +75,37 @@ void dy_check_generic_variable(D value, D generic, const char *name) {
     dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);
 }
 
+/* Do the keys of two parameter lists, as function-arguments has them --
+   #f, () for #key alone, or a list of keywords -- agree? */
+static bool same_keys(D a, D b) {
+    if (a == DY_FALSE || b == DY_FALSE) return a == b;
+    if (a == DY_EMPTY || b == DY_EMPTY) return a == b;
+    for (D l = a; l != DY_EMPTY; l = dy_tail(l)) {
+        D m = b;
+        while (m != DY_EMPTY && dy_head(m) != dy_head(l)) m = dy_tail(m);
+        if (m == DY_EMPTY) return false;
+    }
+    for (D l = b; l != DY_EMPTY; l = dy_tail(l)) {
+        D m = a;
+        while (m != DY_EMPTY && dy_head(m) != dy_head(l)) m = dy_tail(m);
+        if (m == DY_EMPTY) return false;
+    }
+    return true;
+}
+
+/* A define-generic-function of a variable a module imports from another,
+   which holds its value already (chapter 6): it must be a generic
+   function, and the declaration consistent with it. */
+void dy_redeclare_generic(D value, const char *name, intptr_t required, bool rest, D keys) {
+    if (!dy_kind_p(value, DY_KIND_GENERIC))
+        dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
+    DyVector *info = DY_PTR(((DyGeneric *)DY_PTR(value))->info);
+    if (DY_INT_VALUE(info->data[0]) != required || (info->data[1] != DY_FALSE) != rest
+        || !same_keys(info->data[2], keys))
+        dy_error_naming("define-generic-function: ", name,
+                        " is inconsistent with the existing generic function", 0);
+}
+
 _Noreturn void dy_unbound_slot(const char *getter) {
     dy_error_naming("the slot ", getter, " is not initialized", 0);
 }

@@ -281,9 +281,13 @@
                             (gen-fn-param-error
                              params (list 'after-!rest (cdr after-rest))))
                            ((eq '!key (cadr after-rest))
-                            (parse-gen-fn-params
-                             (cddr after-rest) #'symbol-or-keyword
-                             (compile-keys rest)))
+                            ;; #key alone accepts no keywords but those
+                            ;; its methods name (chapter 6)
+                            (if (null (cddr after-rest))
+                                (funcall compiler name reqs rest t)
+                                (parse-gen-fn-params
+                                 (cddr after-rest) #'symbol-or-keyword
+                                 (compile-keys rest))))
                            (t (gen-fn-param-error
                                params
                                (list 'before-!key (cddr after-rest))))))))
@@ -325,8 +329,11 @@
                    ,(funcall set `(dylan%create-generic-function
                                    ',name ,(length reqs) ',keys
                                    ,(if rest t nil))))
-               (dylan%make-variable-read-only
-                ',(name->module-variable (variable->name name)))
+               ;; Chapter 6: it makes read-only the variable it creates;
+               ;; one the program imports from the library it only checks.
+               ,@(unless (member (variable->name name) dylan%predefined-variables)
+                   `((dylan%make-variable-read-only
+                      ',(name->module-variable (variable->name name)))))
                ',name)))))))
 
 ;;; Parsing and compiling the DEFINE-CLASS form

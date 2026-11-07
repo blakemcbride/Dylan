@@ -837,6 +837,18 @@ PRIMITIVE(function_arguments) {
     return t->mv[0];
 }
 
+/* (%redeclare-generic value name shape keys): a define-generic-function
+   of NAME, a variable the module imports from dylan, which holds VALUE
+   (chapter 6).  SHAPE is twice the number of required parameters, plus 1
+   for #rest; KEYS is #f, () for #key alone, or the keywords.  It answers
+   NAME. */
+PRIMITIVE(redeclare_generic) {
+    need(self, argc, 4, 4);
+    intptr_t shape = DY_INT_VALUE(a2);
+    dy_redeclare_generic(a0, dy_symbol_utf8(a1), shape / 2, shape % 2 != 0, a3);
+    return a1;
+}
+
 /* ------------------------------------------- Slot descriptors (ch. 11) */
 
 static DySlotDescriptor *as_descriptor(D x) {

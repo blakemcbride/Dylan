@@ -1218,6 +1218,7 @@ _Noreturn void dy_no_applicable_method(D generic);
  * reflective functions find (chapter 10). */
 void dy_add_method(D generic, D method, const D *replaced, intptr_t n);
 void dy_check_generic_variable(D value, D generic, const char *name);
+void dy_redeclare_generic(D value, const char *name, intptr_t required, bool rest, D keys);
 _Noreturn void dy_unbound_slot(const char *getter);
 _Noreturn void dy_not_a_slot(const char *getter, D instance);
 

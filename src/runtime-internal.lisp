@@ -153,9 +153,15 @@ congruent with it: DEFINE-METHOD gave it only what its first method had."
              (cond ((or (null a) (null b)) (and (null a) (null b)))
                    ((or (not (consp a)) (not (consp b))) (and (not (consp a)) (not (consp b))))
                    (t (and (subsetp a b) (subsetp b a))))))
+      ;; As function-arguments gives them: :ANY, with which the runtime's
+      ;; own functions such as make take any keywords, is #rest alone.
       (unless (and (= nrequired (generic-function-data.nrequired data))
-                   (eq rest? (generic-function-data.rest? data))
-                   (same-keys? keys (generic-function-data.keys data)))
+                   (eq (and rest? t)
+                       (and (or (generic-function-data.rest? data)
+                                (eq (generic-function-data.keys data) :any))
+                            t))
+                   (same-keys? keys (let ((k (generic-function-data.keys data)))
+                                      (if (eq k :any) nil k))))
         (dylan-call dylan/error
                     (format nil "define-generic-function: ~a is inconsistent with the existing generic function"
                             (definition-name-string name)))))))

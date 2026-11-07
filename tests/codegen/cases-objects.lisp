@@ -1925,4 +1925,60 @@ found
   "1
 "
   :error "define-generic-function: y is inconsistent with the existing generic function")
+ ;; Chapter 6: a define-generic-function of a variable the program imports
+ ;; from the library checks the library's generic function when it runs.
+ (generic-redeclared-from-library
+  "(print (define-generic-function size (c)))
+(print (size (list 1 2)))
+(print (define-generic-function element (c k #key default)))
+(print (handler-case (begin (define-generic-function size (c d)) 'no) ((<error> condition: e) (condition-format-string e))))
+(print (handler-case (begin (define-generic-function element (c k)) 'no) ((<error> condition: e) (condition-format-string e))))
+(print (handler-case (begin (define-generic-function car (c)) 'no) ((<error> condition: e) (condition-format-string e))))"
+  "size
+2
+element
+\"define-generic-function: size is inconsistent with the existing generic function\"
+\"define-generic-function: element is inconsistent with the existing generic function\"
+\"car is defined both as a variable and as a generic function\"
+")
+ ;; ... and of another module's, which stays read-only.
+ (generic-redeclared-from-module
+  "(define-module lib (use dylan) (export area))
+(define-generic-function area (shape))
+(define-method area ((s <integer>)) (* s s))
+(define-module app (use dylan) (use lib))
+(print (define-generic-function area (shape)))
+(define-method area ((s <string>)) (size s))
+(print (list (area 3) (area \"abcd\")))
+(print (handler-case (begin (define-generic-function area (a b)) 'no) ((<error> condition: e) (condition-format-string e))))
+(print (handler-case (begin (set! area 3) 'no) ((<error> condition: e) (condition-format-string e))))"
+  "area
+(9 4)
+\"define-generic-function: area is inconsistent with the existing generic function\"
+\"area holds a class or generic function and cannot be assigned\"
+")
+ ;; It creates no variable, so the library's stays assignable as before.
+ (generic-redeclared-library-assignable
+  "(define-generic-function size (c))
+(print (handler-case (begin (set! size size) (quote assigned)) ((<error> condition: e) (condition-format-string e))))"
+  "assigned
+")
+ ;; Chapter 10: function-arguments gives what define-generic-function
+ ;; declares: #rest, and #key alone as an empty sequence.
+ (function-arguments-declared-rest
+  "(define-generic-function g1 (c #key))
+(define-generic-function g2 (c #rest r))
+(define-generic-function g3 (c #rest r #key))
+(define-generic-function g4 (c #key a))
+(do (method (f) (bind ((r rest keys (function-arguments f))) (print (list r rest keys)))) (list g1 g2 g3 g4 make))
+(print (handler-case (begin (define-generic-function make (c #rest r)) (quote ok)) ((<error> condition: e) (condition-format-string e))))
+(print (handler-case (begin (define-generic-function make (c #rest r #key)) (quote ok)) ((<error> condition: e) (condition-format-string e))))"
+  "(1 #f ())
+(1 #t #f)
+(1 #t ())
+(1 #f (a:))
+(1 #t #f)
+ok
+\"define-generic-function: make is inconsistent with the existing generic function\"
+")
 )

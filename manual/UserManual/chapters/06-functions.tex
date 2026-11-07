@@ -459,7 +459,10 @@ Both implementations accept them and ignore them. A generic function may
 be declared again, as when a file is loaded a second time, if the new
 declaration has the same number of required parameters, the same
 \code{\#rest} and the same keys; a declaration that differs is an error
-when it is evaluated, and the generic function is left as it was.
+when it is evaluated, and the generic function is left as it was. The
+same holds for a generic function the module imports, such as the
+library's \code{size}: the declaration only checks it, and leaves the
+library's variable as it was.
 
 \section{Specializers and singletons}\label{sec:functions-singletons}
 

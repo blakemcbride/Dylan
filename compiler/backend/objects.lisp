@@ -66,6 +66,7 @@ reflection, and call it?  If not, methods need no direct entries.")
   (once nil))                           ; that node runs at most once
 
 (defstruct gfun var c-name required variable-p methods declared-keys
+  (declared-rest nil)                   ; a define-generic-function's #rest
   (object-c nil)
   (defined-c nil)                       ; C name of the flag set once a
                                         ; definition of it has run, for a
@@ -1184,7 +1185,8 @@ fixed one it must be consistent, or it is an error when it runs."
       (when state
         (setf (gfun-required g) required
               (gfun-variable-p g) (variable-p)
-              (gfun-declared-keys g) (declared))))))
+              (gfun-declared-keys g) (declared)
+              (gfun-declared-rest g) (and declared-p rest))))))
 
 (defun finish-generic (g)
   (let ((var (gfun-var g)))
@@ -1729,10 +1731,12 @@ NIL (no #key), :ANY (#key alone) or a list of keywords."
                                                              (gfun-methods g)))))
                (gfun-required g)
                (let ((declared (gfun-declared-keys g)))
+                 ;; Chapter 10: whether it accepts #rest is what its
+                 ;; define-generic-function says, or else its first method
                  (function-info-c (gfun-required g)
-                                  (and (gfun-variable-p g)
-                                       (or (not declared) (eq declared :none)
-                                           (some #'gmethod-rest-p (gfun-methods g))))
+                                  (if declared
+                                      (gfun-declared-rest g)
+                                      (gfun-variable-p g))
                                   (if (and declared (not (eq declared :none))) declared nil)))))
 
 ;;; make

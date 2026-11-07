@@ -459,8 +459,20 @@ does."
       (when l
         (compile-error "define-generic-function: unexpected ~a in parameter list"
                        (car l)))
-      (let ((var (defining-module-var *module* name "define-generic-function")))
-        (note-definition var (make-define-generic-node var required rest keys))))))
+      ;; Chapter 6: of a variable imported, which exists already, it
+      ;; checks the generic function the variable holds -- the library's
+      ;; when it runs, another module's as that module's own.
+      (let ((var (defining-module-var *module* name "define-generic-function" nil t)))
+        (if (and (eq (module-var-module var) (dylan-module))
+                 (not (eq *module* (dylan-module))))
+            (convert `(,(g "%redeclare-generic") ,name (quote ,name)
+                       ,(+ (* 2 required) (if rest 1 0))
+                       ,(case keys
+                          ((nil) +false+)
+                          ((:any) '(quote ()))
+                          (t `(quote ,keys))))
+                     env)
+            (note-definition var (make-define-generic-node var required rest keys)))))))
 
 ;;; DEFINE-CLASS and DEFINE-SLOT (chapter 11)
 ;;;

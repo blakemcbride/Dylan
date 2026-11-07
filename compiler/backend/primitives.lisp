@@ -85,6 +85,7 @@
     ("%init-value" . "init_value") ("%init-function" . "init_function")
     ("%init-keyword" . "init_keyword") ("%slot-value" . "slot_value")
     ("%slot-value-setter" . "slot_value_setter")
+    ("%redeclare-generic" . "redeclare_generic")
     ;; Written by the compiler into each program (objects.lisp), generic
     ;; functions as above
     ("%slot-initialized?" . "slot_initialized_p")

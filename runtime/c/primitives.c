@@ -349,6 +349,150 @@ static bool same_specializer(D x, D y) {
                         ((DySingleton *)DY_PTR(y))->object);
 }
 
+/* ---------------------- Generic functions made when the program runs */
+
+/* A generic function make makes has no methods (no_methods_entry) until
+ * a define-method of a variable that holds it adds one (chapter 6); then
+ * it chooses its methods when it is called, as sorted-applicable-methods
+ * sorts them.  It enters a method by its object, whose entry takes its
+ * next method from dispatch_next. */
+
+static D made_dispatch(D self, D a0, D a1, D a2, D a3, intptr_t argc);
+
+/* Run the first of METHODS, a list, with the rest as its next method. */
+static D run_methods(D methods, D a0, D a1, D a2, D a3, intptr_t argc);
+
+static D made_next_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    DY_TAIL_CALL_DIRECT(run_methods, ((DyFunction *)DY_PTR(self))->env[0],
+                        a0, a1, a2, a3, argc);
+}
+
+/* The next method that runs the first of METHODS, a list, or #f.  (Its
+ * one variable is stored after, not passed by address: the caller makes
+ * a tail call.) */
+static D made_next(D methods, D owner) {
+    static const D one[1];
+    if (methods == DY_EMPTY) return DY_FALSE;
+    D next = dy_make_closure_env(made_next_entry, DY_FALSE, 1, one);
+    ((DyFunction *)DY_PTR(next))->env[0] = methods;
+    ((DyFunction *)DY_PTR(next))->owner = owner;
+    return next;
+}
+
+static D run_methods(D methods, D a0, D a1, D a2, D a3, intptr_t argc) {
+    D m = dy_head(methods);
+    dy_thread->dispatch_next = made_next(dy_tail(methods), ((DyFunction *)DY_PTR(m))->owner);
+    DY_TAIL_CALL(m, a0, a1, a2, a3, argc);
+}
+
+static D made_dispatch(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    DyGeneric *g = DY_PTR(self);
+    D *info = ((DyVector *)DY_PTR(g->info))->data;
+    bool variable = info[1] != DY_FALSE || info[2] != DY_FALSE;
+    intptr_t r = g->required;
+    if (argc < r || (argc > r && !variable)) dy_wrong_argument_count(self, argc);
+    D *args = dy_alloc_words(r + 1);
+    for (intptr_t i = 0; i < r; i++)
+        args[i] = i == 0 ? a0 : i == 1 ? a1 : i == 2 ? a2 : i == 3 ? a3 : *dy_argument_slot(i);
+    DyVector *methods = DY_PTR(g->methods);
+    intptr_t count = DY_INT_VALUE(methods->size), k = 0;
+    D *found = dy_alloc_words(count + 1);
+    for (intptr_t i = 0; i < count; i++)
+        if (applicable(methods->data[i], args, r)) found[k++] = methods->data[i];
+    if (k == 0) dy_no_applicable_method(self);
+    for (intptr_t i = 1; i < k; i++) {      /* stable, most specific first */
+        D m = found[i];
+        intptr_t j = i;
+        while (j > 0 && more_specific(m, found[j - 1], args, r)) {
+            found[j] = found[j - 1];
+            j--;
+        }
+        found[j] = m;
+    }
+    /* The keywords the applicable methods accept, as the compiler's
+     * dispatch checks them (chapter 6) */
+    if (variable) {
+        bool keyed = info[2] != DY_FALSE, any = false;
+        intptr_t n = 0;
+        for (D l = info[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) n++;
+        for (intptr_t i = 0; i < k; i++) {
+            D *mi = ((DyVector *)DY_PTR(((DyFunction *)DY_PTR(found[i]))->info))->data;
+            if (mi[1] != DY_FALSE) any = true;
+            if (mi[2] != DY_FALSE) keyed = true;
+            for (D l = mi[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) n++;
+        }
+        if (keyed && any) {
+            dy_check_keywords(self, argc, r, a0, a1, a2, a3, NULL, 0);
+        } else if (keyed) {
+            D *accepted = dy_alloc_words(n + 1);
+            intptr_t j = 0;
+            for (D l = info[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) accepted[j++] = dy_head(l);
+            for (intptr_t i = 0; i < k; i++) {
+                D *mi = ((DyVector *)DY_PTR(((DyFunction *)DY_PTR(found[i]))->info))->data;
+                for (D l = mi[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) accepted[j++] = dy_head(l);
+            }
+            dy_check_keywords(self, argc, r, a0, a1, a2, a3, accepted, (size_t)j);
+        }
+    }
+    DY_TAIL_CALL_DIRECT(run_methods, dy_list_of(found, 0, k), a0, a1, a2, a3, argc);
+}
+
+/* A define-method of the variable NAME, which holds GENERIC, another
+ * generic function than its own: METHOD is added to it (chapter 6). */
+void dy_add_method_when_run(D generic, D method, const char *name) {
+    if (!dy_kind_p(generic, DY_KIND_GENERIC))
+        dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
+    DyGeneric *g = DY_PTR(generic);
+    if (g->entry != no_methods_entry && g->entry != made_dispatch)
+        dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);
+    const char *gname = g->name == DY_FALSE ? "an anonymous generic function" : dy_symbol_utf8(g->name);
+    D *gi = ((DyVector *)DY_PTR(g->info))->data;
+    D *mi = ((DyVector *)DY_PTR(((DyFunction *)DY_PTR(method))->info))->data;
+    if (DY_INT_VALUE(gi[0]) != DY_INT_VALUE(mi[0])
+        || (gi[1] != DY_FALSE || gi[2] != DY_FALSE) != (mi[1] != DY_FALSE || mi[2] != DY_FALSE))
+        dy_error_naming("the parameter list of a method of ", gname,
+                        " is not congruent with its generic function", 0);
+    /* The keys it declares, each named by the method, unless it takes
+     * #rest or #key alone */
+    if (dy_kind_p(gi[2], DY_KIND_PAIR) && mi[1] == DY_FALSE && mi[2] != DY_EMPTY) {
+        char missing[512] = "";
+        size_t used = 0;
+        for (D l = gi[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) {
+            D m = mi[2];
+            while (dy_kind_p(m, DY_KIND_PAIR) && dy_head(m) != dy_head(l)) m = dy_tail(m);
+            if (!dy_kind_p(m, DY_KIND_PAIR) && used < sizeof missing - 1)
+                used += (size_t)snprintf(missing + used, sizeof missing - used, "%s%s:",
+                                         used ? " " : "", dy_symbol_utf8(dy_head(l)));
+        }
+        if (used) {
+            char after[600];
+            snprintf(after, sizeof after,
+                     " does not accept the keys its generic function names: %s", missing);
+            dy_error_naming("a method of ", gname, after, 0);
+        }
+    }
+    /* It replaces the one with the same specializers (chapter 6). */
+    DyVector *methods = DY_PTR(g->methods);
+    D specs = ((DyFunction *)DY_PTR(method))->specializers;
+    D replaced[1] = { 0 };
+    intptr_t n = 0;
+    for (intptr_t i = 0; i < DY_INT_VALUE(methods->size) && n == 0; i++) {
+        D other = ((DyFunction *)DY_PTR(methods->data[i]))->specializers;
+        if (specs == DY_FALSE || other == DY_FALSE) {
+            if (specs == other) replaced[n++] = methods->data[i];
+            continue;
+        }
+        DyVector *a = DY_PTR(specs), *b = DY_PTR(other);
+        if (DY_INT_VALUE(a->size) != DY_INT_VALUE(b->size)) continue;
+        intptr_t j = 0;
+        while (j < DY_INT_VALUE(a->size) && same_specializer(a->data[j], b->data[j])) j++;
+        if (j == DY_INT_VALUE(a->size)) replaced[n++] = methods->data[i];
+    }
+    ((DyFunction *)DY_PTR(method))->owner = generic;
+    dy_add_method(generic, method, replaced, n);
+    g->entry = made_dispatch;
+}
+
 PRIMITIVE(find_method) {
     need(self, argc, 2, 2);
     DyVector *methods = DY_PTR(as_generic(a0)->methods);

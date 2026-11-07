@@ -32,6 +32,10 @@
 (defvar *global-definitions* nil
   "MODULE-VAR -> the atoms define gives it, for the variables define defines.")
 (defvar *assigned-globals* nil "MODULE-VAR -> T, for those set! assigns.")
+(defvar *global-set-values* nil "MODULE-VAR -> the atoms its set!s store.")
+(defvar *made-generic-dispatch* nil
+  "Can a define-method add its method to a generic function made when the
+program runs, which enters it by its object (dy_add_method_when_run)?")
 (defvar *gclasses* nil "MODULE-VAR -> GCLASS, for the program's classes.")
 (defvar *gfuns* nil "MODULE-VAR -> GFUN.")
 (defvar *method-of-fn* nil "IR-FN -> GMETHOD, for define-method fns.")
@@ -121,10 +125,17 @@ method is not congruent with its generic function (chapter 6).")
   (siblings '())                        ; the other methods with its
                                         ; specializers, which replace it or
                                         ; it replaces
-  (closure-c nil))                      ; for a method that refers to local
+  (closure-c nil)                       ; for a method that refers to local
                                         ; variables, the C name of the
                                         ; variable holding the closure its
                                         ; define-method made last
+  (original nil)                        ; for a copy, the method copied
+  (copies '())                          ; its copies in the other generic
+                                        ; functions its variable may hold
+  (foreign-errors '())                  ; (GFUN . error) for those it is not
+                                        ; congruent with
+  (made nil))                           ; its variable may hold a generic
+                                        ; function made when the program runs
 
 (defstruct (spec (:constructor make-spec (kind class &optional value c)))
   kind                                  ; :class or :singleton
@@ -166,7 +177,9 @@ order variables are met (CONTENT-NAME)."
                  (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
                  (ir-define-variable (push (ir-define-variable-value e)
                                            (gethash (ir-define-variable-var e) *global-definitions*)))
-                 (ir-global-set (setf (gethash (ir-global-set-var e) *assigned-globals*) t))
+                 (ir-global-set (setf (gethash (ir-global-set-var e) *assigned-globals*) t)
+                                (push (ir-global-set-value e)
+                                      (gethash (ir-global-set-var e) *global-set-values*)))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
                  (ir-if (walk (ir-if-then e)) (walk (ir-if-else e)))
                  (ir-letrec (walk (ir-letrec-body e)))
@@ -1090,6 +1103,7 @@ slot SD in the object VAR."
                  (unless (gfun-required setter) (setf (gfun-required setter) 2))))))
   (loop for g being the hash-values of *gfuns*
         do (settle-generic g (reverse (gethash (gfun-var g) *generic-declarations*))))
+  (add-foreign-copies)
   ;; initialize has its method on <object>.
   (let ((init (gethash (dylan-var "initialize") *gfuns*)))
     (when init
@@ -1187,6 +1201,83 @@ fixed one it must be consistent, or it is an error when it runs."
               (gfun-variable-p g) (variable-p)
               (gfun-declared-keys g) (declared)
               (gfun-declared-rest g) (and declared-p rest))))))
+
+(defun made-generic-p (atom)
+  "Is ATOM bound to what (make <generic-function> ...) makes?"
+  (let ((value (and (ivar-p atom) (not (ivar-assigned-p atom)) (gethash atom *let-values*))))
+    (and (ir-call-p value)
+         (equal (static-value (ir-call-function value)) (list :global (dylan-var "make")))
+         (ir-call-arguments value)
+         (equal (static-value (first (ir-call-arguments value)))
+                (list :global (dylan-var "<generic-function>"))))))
+
+(defvar *held-made* nil "Set by HELD-GENERICS when it finds a made one.")
+
+(defun held-generics (var &optional seen)
+  "The generic functions of the program the module variable VAR may hold
+from what its set!s and defines store: a list of GFUNs, or :ALL when it
+may be one not known when compiling.  A generic function made when the
+program runs is not one of them: finding one sets *HELD-MADE*, as :ALL
+does."
+  (let ((found '())
+        (seen (cons var seen)))
+    (dolist (atom (append (gethash var *global-definitions*) (gethash var *global-set-values*))
+                  found)
+      (let ((value (static-value atom)))
+        (case (car value)
+          (:global
+           (let ((w (second value)))
+             (unless (member w seen)
+               (let ((g (gethash w *gfuns*))
+                     (more (held-generics w seen)))
+                 (when (eq more :all) (return :all))
+                 (setf found (union found (if g (adjoin g more) more)))))))
+          ((:constant :singleton))
+          (t (cond ((made-generic-p atom) (setf *held-made* t))
+                   ;; A method, which is not a generic function
+                   ((and (ivar-p atom) (not (ivar-assigned-p atom))
+                         (ir-lambda-p (gethash atom *let-values*))))
+                   (t (setf *held-made* t) (return :all)))))))))
+
+(defun add-foreign-copies ()
+  "Chapter 6: define-method adds its method to the generic function its
+variable holds when it runs.  A program's variable that a set! or define
+may give another generic function: each method a define-method of it
+makes has a copy in each other generic function it may hold, attached
+when the definition runs and the variable holds that one -- or, not
+congruent with that one, the error then."
+  (let ((all (loop for g being the hash-values of *gfuns* collect g)))
+    (loop for m being the hash-values of *method-of-fn*
+          for var = (gmethod-var m)
+          for own = (gethash var *gfuns*)
+          when (and (program-method-p m)
+                    (or (gethash var *global-set-values*) (gethash var *global-definitions*)))
+            do (let* ((*held-made* nil)
+                      (targets (held-generics var)))
+                 (when *held-made*
+                   ;; Added when it runs, entered by its object
+                   (setf (gmethod-made m) t
+                         *made-generic-dispatch* t
+                         *reflective-methods* t))
+                 (dolist (g (remove own (if (eq targets :all) all targets)))
+                   (when (gfun-required g)
+                     (let ((err (method-congruence-error m (gfun-required g) (gfun-variable-p g)
+                                                         (gfun-declared-keys g))))
+                       (if err
+                           ;; With :ALL, only those it may be added to
+                           (unless (eq targets :all)
+                             (push (cons g err) (gmethod-foreign-errors m)))
+                           (let ((c (copy-gmethod m)))
+                             (setf (gmethod-var c) (gfun-var g)
+                                   (gmethod-flag-c c) nil (gmethod-toplevel c) nil
+                                   (gmethod-siblings c) '() (gmethod-closure-c c) nil
+                                   (gmethod-object-c c) nil (gmethod-original c) m
+                                   (gmethod-copies c) '() (gmethod-foreign-errors c) '())
+                             (push c (gmethod-copies m))
+                             (push c (gfun-methods g)))))))
+                 ;; Attached to its own only if the variable holds it then
+                 (when (or (gmethod-copies m) (gmethod-foreign-errors m) (gmethod-made m))
+                   (setf (gmethod-toplevel m) nil))))))
 
 (defun finish-generic (g)
   (let ((var (gfun-var g)))
@@ -1308,17 +1399,18 @@ slot it reads or writes -- not from the start?"
 closure its define-method made last."
   (or (gmethod-closure-c m) (address (gmethod-object-c m))))
 
-(defun method-attachment-c (m &optional previous)
+(defun method-attachment-c (m &optional previous (define t))
   "The C statements that attach M, as its definition does when it runs:
 the methods with its specializers are detached, and PREVIOUS, the
-closure of M made before, if any."
+closure of M made before, if any.  With DEFINE, the definition gives the
+generic function's variable its value too."
   (let ((g (gethash (gmethod-var m) *gfuns*))
         (replaced (gmethod-siblings m)))
     (append
      (loop for s in replaced
            when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
      (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
-     (generic-definition-c g)
+     (and define (generic-definition-c g))
      (let ((dropped (append (mapcar #'method-object-c-expr replaced)
                             (and previous (list previous)))))
        (list (if dropped
@@ -1359,19 +1451,23 @@ own: the library's C is the same for every program."
   (and (gethash var *assigned-globals*)
        (not (and fn (ir-fn-library-p fn) (library-var-p var)))))
 
-(defun generic-definition-c (g)
+(defun generic-definition-c (g &optional other)
   "The C statements a definition of the generic function G does when it
 runs, besides attaching a method: G's variable has its value (chapter 6).
 If the program assigns the variable, it is given G when it has no value,
-and must hold G otherwise."
+and must hold G otherwise -- or, given OTHER, a function of the C of
+the value and of the name, its C statement for any other value."
   (let ((var (gfun-var g)))
     (append
      (and (gfun-defined-c g) (list (format nil "~a = 1;" (gfun-defined-c g))))
      (and (variable-global-p var)
-          (let ((cell (global-c-name var)) (object (address (gfun-c-name g))))
-            (list (format nil "if (~a == DY_UNBOUND) ~a = ~a; else dy_check_generic_variable(~a, ~a, ~a);"
-                          cell cell object cell object
-                          (c-utf8-literal (name-string (module-var-name var))))))))))
+          (let ((cell (global-c-name var)) (object (address (gfun-c-name g)))
+                (name (c-utf8-literal (name-string (module-var-name var)))))
+            (list (if other
+                      (format nil "if (~a == DY_UNBOUND) ~a = ~a; else if (~a != ~a) ~a"
+                              cell cell object cell object (funcall other cell name))
+                      (format nil "if (~a == DY_UNBOUND) ~a = ~a; else dy_check_generic_variable(~a, ~a, ~a);"
+                              cell cell object cell object name))))))))
 
 (defun fn-toplevel (fn)
   (loop while (ir-fn-parent fn) do (setf fn (ir-fn-parent fn)))
@@ -1399,30 +1495,38 @@ code is M's own."
 
 ;;; Method objects and direct entries
 
+(defun made-only-methods ()
+  "The methods that a generic function made when the program runs may be
+given, but not their own: not congruent with it."
+  (loop for m being the hash-values of *method-of-fn*
+        when (and (gmethod-made m)
+                  (not (member m (gfun-methods (gethash (gmethod-var m) *gfuns*)))))
+          collect m))
+
 (defun method-objects ()
-  (loop for g being the hash-values of *gfuns*
-        do (dolist (m (gfun-methods g))
-             (unless (gmethod-object-c m)
-               (let ((name (cdata-name *cdata* "dy_method_")))
-                 (setf (gmethod-object-c m) name)
-                 (declare-object "DyFunction ~a;" name))))))
+  (dolist (m (append (loop for g being the hash-values of *gfuns* append (gfun-methods g))
+                     (made-only-methods)))
+    (unless (gmethod-object-c m)
+      (let ((name (cdata-name *cdata* "dy_method_")))
+        (setf (gmethod-object-c m) name)
+        (declare-object "DyFunction ~a;" name)))))
 
 (defun emit-method-objects ()
   "Emit each method's object.  Its specializers and its arguments are for
 the reflective functions, which can get at a method of a generic function
 only when *REFLECTIVE-METHODS*; otherwise they are dropped.  Its owner, the
 generic function, is how it prints (chapter 11's {a method on double})."
-  (loop for g being the hash-values of *gfuns*
-        do (dolist (m (gfun-methods g))
-             (unless (eq (gmethod-kind m) :default)
-               (emit-object "DyFunction ~a = { &dy_wrapper_method, ~a, ~a, ~a, ~a, NULL };"
-                            (gmethod-object-c m)
-                            (if (and (eq (gmethod-kind m) :ir) *reflective-methods*)
-                                (format nil "~a_direct" (gmethod-entry-c m))
-                                (gmethod-entry-c m))
-                            (if *reflective-methods* (spec-vector-c (gmethod-specs m)) "DY_FALSE")
-                            (if *reflective-methods* (method-info-c m) "DY_FALSE")
-                            (address (gfun-c-name g)))))))
+  (dolist (m (append (loop for g being the hash-values of *gfuns* append (gfun-methods g))
+                     (made-only-methods)))
+    (unless (eq (gmethod-kind m) :default)
+      (emit-object "DyFunction ~a = { &dy_wrapper_method, ~a, ~a, ~a, ~a, NULL };"
+                   (gmethod-object-c m)
+                   (if (and (eq (gmethod-kind m) :ir) *reflective-methods*)
+                       (format nil "~a_direct" (gmethod-entry-c m))
+                       (gmethod-entry-c m))
+                   (if *reflective-methods* (spec-vector-c (gmethod-specs m)) "DY_FALSE")
+                   (if *reflective-methods* (method-info-c m) "DY_FALSE")
+                   (address (gfun-c-name (gethash (gmethod-var m) *gfuns*)))))))
 
 (defparameter *method-reflection-functions*
   '("generic-function-methods" "find-method" "sorted-applicable-methods"))
@@ -1462,6 +1566,7 @@ no next method."
          (name (format nil "~a_direct" (gmethod-entry-c m))))
     (declare-object "static D ~a(D, D, D, D, D, intptr_t);" name)
     (emit-object "static D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" name)
+    (when *made-generic-dispatch* (emit-made-dispatch-entry m))
     (if (or (ir-fn-rest fn) (ir-fn-keys fn))
         (emit-object "    if (DY_UNLIKELY(argc < ~d)) dy_wrong_argument_count(self, argc);" r)
         (emit-object "    if (DY_UNLIKELY(argc != ~d)) dy_wrong_argument_count(self, argc);" r))
@@ -1479,6 +1584,16 @@ no next method."
     (emit-object "    dy_thread->next_method = DY_FALSE;")
     (emit-object "    DY_TAIL_CALL_DIRECT(~a, self, a0, a1, a2, a3, argc);~%}"
                  (gmethod-entry-c m))))
+
+(defun emit-made-dispatch-entry (m)
+  "With *MADE-GENERIC-DISPATCH*: the start of M's direct entry, which a
+generic function made when the program runs enters with its next method
+in dispatch_next, having chosen M and checked the arguments."
+  (emit-object "    if (DY_UNLIKELY(dy_thread->dispatch_next != 0)) {")
+  (emit-object "        dy_thread->next_method = dy_thread->dispatch_next;")
+  (emit-object "        dy_thread->dispatch_next = 0;")
+  (emit-object "        DY_TAIL_CALL_DIRECT(~a, self, a0, a1, a2, a3, argc);" (gmethod-entry-c m))
+  (emit-object "    }"))
 
 ;;; Dispatch
 
@@ -1875,12 +1990,16 @@ need, which GENERATE-C places."
 (defun finish-object-system ()
   "Emit what depends on the code of the methods: dispatch, method
 objects, makers."
-  (let ((*nexts* (make-hash-table :test #'equal)))
-    (loop for g being the hash-values of *gfuns*
-          do (dolist (m (gfun-methods g))
-               (when (and (eq (gmethod-kind m) :ir) *reflective-methods*)
-                 (emit-direct-entry m)))
-             (emit-dispatch g))
+  (let ((*nexts* (make-hash-table :test #'equal))
+        (direct (make-hash-table :test #'equal)))
+    (dolist (m (append (loop for g being the hash-values of *gfuns* append (gfun-methods g))
+                       (made-only-methods)))
+      ;; One for a method and its copies (ADD-FOREIGN-COPIES)
+      (when (and (eq (gmethod-kind m) :ir) *reflective-methods*
+                 (not (gethash (gmethod-entry-c m) direct)))
+        (setf (gethash (gmethod-entry-c m) direct) t)
+        (emit-direct-entry m)))
+    (loop for g being the hash-values of *gfuns* do (emit-dispatch g))
     (emit-method-objects)
     (loop for g being the hash-values of *gfuns* do (emit-generic-object g))
     (emit-slot-initialized-p)

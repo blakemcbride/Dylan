@@ -893,6 +893,10 @@ typedef struct DyThread {
     /* The next method of the method being entered: set by the caller,
        read by the method before it calls anything. */
     D next_method;
+    /* Its next method, for a method a generic function made when the
+       program runs is calling (dy_add_method_when_run), which enters it
+       by its object; 0 otherwise. */
+    D dispatch_next;
     /* A pending tail call, in trampoline mode; TAIL_ENTRY, if not NULL,
        is the entry to use instead of TAIL_FUNCTION's own. */
     DyEntry tail_entry;
@@ -1218,6 +1222,7 @@ _Noreturn void dy_no_applicable_method(D generic);
  * reflective functions find (chapter 10). */
 void dy_add_method(D generic, D method, const D *replaced, intptr_t n);
 void dy_check_generic_variable(D value, D generic, const char *name);
+void dy_add_method_when_run(D generic, D method, const char *name);
 void dy_redeclare_generic(D value, const char *name, intptr_t required, bool rest, D keys);
 _Noreturn void dy_unbound_slot(const char *getter);
 _Noreturn void dy_not_a_slot(const char *getter, D instance);

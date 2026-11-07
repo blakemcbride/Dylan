@@ -1981,4 +1981,104 @@ element
 ok
 \"define-generic-function: make is inconsistent with the existing generic function\"
 ")
+ ;; Chapter 6: define-method adds its method to the generic function its
+ ;; variable holds when it runs, which define or set! may have made another
+ ;; one, a generic function make made among them.
+ (define-method-on-another-generic
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-generic-function g (x))
+(define-method g ((x <integer>)) 'g-int)
+(define-method f (x) 'f)
+(set! f g)
+(define-method f ((x <string>)) 'f-string)
+(print (list (g \"a\") (g 1) (f \"b\")))
+(define-generic-function h (x y))
+(set! f h)
+(print (try (method () (define-method f ((x <string>)) 'bad))))
+(define-generic-function k (x #key a))
+(set! f k)
+(print (try (method () (define-method f ((x <string>) #key b) 'bad))))
+(set! f 3)
+(print (try (method () (define-method f ((x <string>)) 'bad))))
+(set! f (make <generic-function> required: 1))
+(define-method f ((x <integer>)) 'made)
+(print (f 3))"
+  "(f-string g-int f-string)
+\"ERR: the parameter list of a method of h is not congruent with its generic function\"
+\"ERR: a method of k does not accept the keys its generic function names: a:\"
+\"ERR: f is defined both as a variable and as a generic function\"
+made
+")
+ ;; A generic function make makes chooses the methods define-method gives
+ ;; it when it is called, as the compiler's own do.
+ (define-method-on-made-generic
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define f (make <generic-function> required: 1 debug-name: 'made))
+(define-method f ((x <integer>)) (list 'int x (next-method)))
+(define-method f ((x <number>)) (list 'num x))
+(define-method f ((x <string>)) (list 'str x))
+(print (list (f 3) (f 2.5) (f \"s\")))
+(print (try (method () (f 'sym))))
+(print (try (method () (f 1 2))))
+(define-method f ((x <string>)) (list 'str2 x))
+(print (f \"s\"))
+(print (size (generic-function-methods f)))
+(print (try (method () (define-method f ((x <string>) y) 'bad))))
+(define g (make <generic-function> required: 1))
+(print (try (method () (define-method g (x #key a) 'bad))))
+(define h (make <generic-function> required: 1 key?: #t))
+(define-method h (x #key a) (list 'a a))
+(define-method h ((x <integer>) #key b) (list 'b b (next-method)))
+(print (h 1 b: 2))
+(print (try (method () (h 'x b: 2))))
+(print f)
+(print (first (generic-function-methods f)))"
+  "((int 3 (num 3)) (num 2.5) (str \"s\"))
+\"ERR: no applicable method for made\"
+\"ERR: wrong number of arguments (2)\"
+(str2 \"s\")
+3
+\"ERR: the parameter list of a method of made is not congruent with its generic function\"
+\"ERR: the parameter list of a method of an anonymous generic function is not congruent with its generic function\"
+(b 2 (a #f))
+\"ERR: keyword argument not accepted: b:\"
+{the generic function made}
+{a method on made}
+")
+ ;; Through an alias: next-method, closures, a variable a parameter set, and
+ ;; define-generic-function of a variable holding another generic function.
+ (define-method-on-alias
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-generic-function g (x))
+(define-method g ((x <object>)) (list 'g-obj x))
+(define-method g ((x <integer>)) (list 'g-int x))
+(define f g)
+(define-method f ((x <integer>)) (list 'f-int x (next-method)))
+(print (g 3))
+(define make-adder
+  (method (n) (define-method f ((x <string>)) (list 'f-str x n (next-method)))))
+(make-adder 10)
+(print (g \"a\"))
+(make-adder 20)
+(print (g \"a\"))
+(print (size (generic-function-methods g)))
+(define install (method (gf) (set! f gf)))
+(define-generic-function k (a))
+(install k)
+(define-method f ((x <symbol>)) (list 'k-sym x))
+(print (k 'z))
+(print (try (method () (g 'z))))
+(print (try (method () (set! f 5))))
+(print (try (method () (define-generic-function f (x)))))
+(print (try (method () (define-generic-function f (x y)))))"
+  "(f-int 3 (g-obj 3))
+(f-str \"a\" 10 (g-obj \"a\"))
+(f-str \"a\" 20 (g-obj \"a\"))
+3
+(k-sym z)
+(g-obj z)
+5
+\"ERR: f is defined both as a variable and as a generic function\"
+\"ERR: f is defined both as a variable and as a generic function\"
+")
 )

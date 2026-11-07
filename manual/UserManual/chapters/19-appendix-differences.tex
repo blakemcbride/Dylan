@@ -119,8 +119,8 @@ to change them; a compiled program cannot:
   be known when compiling.
 \item A class cannot be defined twice.
 \item \code{(make <class> ...)} is an error when it runs. A
-  \code{<generic-function>} made by \code{make} has no methods, and none
-  can be added.
+  \code{<generic-function>} made by \code{make} is given methods only by
+  \code{define-method} of a variable that holds it.
 \item There is no evaluation or loading of code at run time.
 \end{itemize}
 

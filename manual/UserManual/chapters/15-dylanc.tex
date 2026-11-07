@@ -744,8 +744,9 @@ but a class owner must be known when compiling.
 \paragraph{Making classes and generic functions when running.}
 \code{(make <class> ...)} is an error when it runs (``cannot make an
 instance of this class''). \code{(make <generic-function> ...)}
-answers a generic function with no methods; since no method can be
-added, every call of it signals ``no applicable method''. \code{seal}
+answers a generic function with no methods, which a \code{define-method}
+of a variable that holds it adds to, as it does to any generic function;
+such a generic function chooses its methods when it is called. \code{seal}
 works as the manual says, and \code{make-read-only} answers its
 argument.
 

@@ -336,7 +336,15 @@ interactive prompt \code{define-method} returns the name.
 \end{dylan}
 
 \noindent Each definition takes effect when it is evaluated
-(Section~\ref{sec:syntax-when}).
+(Section~\ref{sec:syntax-when}). The method goes to the generic function
+the variable holds then, which may be another variable's, given to it by
+\code{define} or \code{set!}:
+
+\begin{dylan}
+(define area-of area)
+(define-method area-of ((r <string>)) (size r))
+(area "abc")                   ; => 3
+\end{dylan}
 
 \noindent It is an error for \meta{name} to hold something other than a
 generic function. The compiler to C also refuses to add methods to the
@@ -810,8 +818,14 @@ it independently, so removing it from one leaves it in the others:
 \noindent A generic function can also be made with \code{make}, with the
 init-keywords \code{required:} (the number of required arguments, which must
 be given), \code{rest?:}, \code{key?:} and \code{debug-name:}. It starts with
-no methods. In the compiler to C such a generic function can never have any,
-since methods cannot be added at run time, so it is of little use there.
+no methods. A \code{define-method} of a variable that holds it adds one, in
+both implementations; \code{add-method} is not in the compiler to C.
+
+\begin{dylan}
+(define enlarge-by-ten (make <generic-function> required: 1))
+(define-method enlarge-by-ten ((n <integer>)) (* n 10))
+(enlarge-by-ten 5)             ; => 50
+\end{dylan}
 
 %! lisp-only
 \begin{dylan}

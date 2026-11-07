@@ -388,27 +388,52 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       ;; work is done when compiling.  A class's slot values are evaluated
       ;; where it is defined.
       (ir-define-generic
-       (let ((g (gethash (ir-define-generic-var e) *gfuns*)))
-         (cond
-           ((gethash e *incongruent*)
-            (emit-incongruent (gethash e *incongruent*) (ir-define-generic-var e)))
-           ((gethash e *inconsistent-declarations*)
-            (emit "dy_error_naming(\"define-generic-function: \", ~a, \" is inconsistent with the existing generic function\", 0);"
-                  (c-utf8-literal (name-string (module-var-name (ir-define-generic-var e))))))
-           (g
-            (dolist (line (generic-definition-c g)) (emit "~a" line))
-            (when (gfun-declared-c g) (emit "~a = 1;" (gfun-declared-c g))))))
+       (let* ((var (ir-define-generic-var e))
+              (g (gethash var *gfuns*))
+              ;; Of a variable that holds another generic function, it
+              ;; checks that one (chapter 6).
+              (other (lambda (value name)
+                       (format nil "dy_redeclare_generic(~a, ~a, ~d, ~:[false~;true~], ~a);"
+                               value name (ir-define-generic-required e)
+                               (ir-define-generic-rest e)
+                               (let ((keys (ir-define-generic-keys e)))
+                                 (cond ((null keys) "DY_FALSE")
+                                       ((eq keys :any) "DY_EMPTY")
+                                       (t (c-constant *cdata* keys))))))))
+         (flet ((unless-other ()
+                  ;; The errors below are of its own generic function
+                  (when (and g (variable-global-p var))
+                    (let ((cell (global-c-name var)))
+                      (emit "if (~a != DY_UNBOUND && ~a != ~a) ~a else"
+                            cell cell (address (gfun-c-name g))
+                            (funcall other cell (c-utf8-literal (name-string (module-var-name var)))))))))
+           (cond
+             ((gethash e *incongruent*)
+              (unless-other)
+              (emit-incongruent (gethash e *incongruent*) var))
+             ((gethash e *inconsistent-declarations*)
+              (unless-other)
+              (emit "dy_error_naming(\"define-generic-function: \", ~a, \" is inconsistent with the existing generic function\", 0);"
+                    (c-utf8-literal (name-string (module-var-name var)))))
+             (g
+              (dolist (line (generic-definition-c g other)) (emit "~a" line))
+              (when (gfun-declared-c g) (emit "~a = 1;" (gfun-declared-c g)))))))
        (deliver dest (definition-value (ir-define-generic-var e))))
       (ir-define-method
-       (let ((m (gethash (ir-define-method-fn e) *method-of-fn*))
-             (incongruent (gethash (ir-define-method-fn e) *incongruent*)))
-         (when incongruent
-           (emit-incongruent incongruent (ir-define-method-var e)))
-         (when (and m (added-when-run-p m) (not incongruent))
-           (dolist (line (method-attachment-c m (and (gmethod-closure-c m)
-                                                     (make-method-closure m))))
-             (emit "~a" line))))
-       (deliver dest (definition-value (ir-define-method-var e))))
+       (let* ((var (ir-define-method-var e))
+              (m (gethash (ir-define-method-fn e) *method-of-fn*))
+              (incongruent (gethash (ir-define-method-fn e) *incongruent*)))
+         (flet ((own ()
+                  (when incongruent
+                    (emit-incongruent incongruent var))
+                  (when (and m (added-when-run-p m) (not incongruent))
+                    (dolist (line (method-attachment-c m (and (gmethod-closure-c m)
+                                                              (make-method-closure m))))
+                      (emit "~a" line)))))
+           (if (and m (or (gmethod-copies m) (gmethod-foreign-errors m) (gmethod-made m)))
+               (emit-foreign-attachment m var #'own)
+               (own)))
+         (deliver dest (definition-value var))))
       (ir-define-class
        (gen-class-definition e)
        (deliver dest (definition-value (ir-define-class-var e))))
@@ -416,6 +441,39 @@ signals if the result is too large (chapter 8), and nothing is allocated."
        (gen-class-definition e)
        (deliver dest (c-constant *cdata* (name-symbol (module-var-name
                                                        (slot-spec-getter (ir-define-slot-slot e))))))))))
+
+(defun emit-foreign-attachment (m var own)
+  "A define-method of VAR, which a set! or define may have given another
+generic function: its method M is added to the one VAR holds when it
+runs (chapter 6) -- by OWN, which emits that, to VAR's own, or else to the
+other one, a copy of M there (ADD-FOREIGN-COPIES)."
+  (let ((value (new-temp))
+        (first t))
+    (emit "~a = ~a;" value (global-c-name var))
+    (dolist (c (reverse (gmethod-copies m)))
+      (emit "~:[} else ~;~]if (~a == ~a) {" first value
+            (address (gfun-c-name (gethash (gmethod-var c) *gfuns*))))
+      (setf first nil)
+      (indented
+        (dolist (line (method-attachment-c c (and (gmethod-closure-c c) (make-method-closure c))
+                                           nil))
+          (emit "~a" line))))
+    (loop for (g . error) in (reverse (gmethod-foreign-errors m))
+          do (emit "~:[} else ~;~]if (~a == ~a) {" first value (address (gfun-c-name g)))
+             (setf first nil)
+             (indented (emit-incongruent error (gfun-var g))))
+    (when (gmethod-made m)
+      ;; One made when the program runs
+      (emit "~:[} else ~;~]if (~a != DY_UNBOUND && ~a != ~a && dy_kind_p(~a, DY_KIND_GENERIC)) {"
+            first value value (address (gfun-c-name (gethash var *gfuns*))) value)
+      (setf first nil)
+      (indented
+        (when (gmethod-closure-c m) (make-method-closure m))
+        (emit "dy_add_method_when_run(~a, ~a, ~a);" value (method-object-c-expr m)
+              (c-utf8-literal (name-string (module-var-name var))))))
+    (emit "} else {")
+    (indented (funcall own))
+    (emit "}")))
 
 (defun emit-incongruent (error var)
   "The error, as (before-name . after-name), a definition of the generic
@@ -1263,6 +1321,8 @@ each of its Dylan functions -> the name of the module it was written in."
         (*let-values* (make-hash-table :test #'eq))
         (*global-definitions* (make-hash-table :test #'eq))
         (*assigned-globals* (make-hash-table :test #'eq))
+        (*global-set-values* (make-hash-table :test #'eq))
+        (*made-generic-dispatch* nil)
         (*gclasses* (make-hash-table :test #'eq))
         (*gfuns* (make-hash-table :test #'eq))
         (*method-of-fn* (make-hash-table :test #'eq))
@@ -1316,7 +1376,9 @@ each of its Dylan functions -> the name of the module it was written in."
                                              (remove-if-not #'ivar-p (ir-fn-specializers fn)))))
                                #'< :key #'ivar-id))
                    (let ((m (gethash fn *method-of-fn*)))
-                     (when m (setf (gmethod-entry-c m) (cfun-c-name cfun))))
+                     (when m
+                       (dolist (c (cons m (gmethod-copies m)))
+                         (setf (gmethod-entry-c c) (cfun-c-name cfun)))))
                    (setf (gethash fn *cfuns*) cfun)
                    (push cfun cfuns)))
       (setf cfuns (nreverse cfuns))

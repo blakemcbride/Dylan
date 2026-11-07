@@ -690,7 +690,10 @@ holds."
                       (ir-call (multiple-value-bind (kind what) (call-callee v)
                                  (let ((class (and (eq kind :generic)
                                                    (resolved-make-class what (ir-call-arguments v)))))
-                                   (when class (push (list var :instance class) candidates))))
+                                   ;; (Not one define-slot may give a
+                                   ;; slot: such instances are kept.)
+                                   (when (and class (not (slot-changing-class-p class)))
+                                     (push (list var :instance class) candidates))))
                                (walk v))
                       (t (walk v)))
                     (walk (ir-let-body e))))

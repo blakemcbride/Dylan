@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 15
+#define DY_ABI_VERSION 16
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -825,7 +825,50 @@ typedef struct DySlotDescriptor {
     bool one_object;               /* a slot of one object (define-slot on
                                       a singleton): OWNER is the object,
                                       and CELL its storage                */
+    bool required;                 /* INIT_KEYWORD is required            */
+    bool hidden;                   /* the library's own, which
+                                      slot-descriptors leaves out         */
 } DySlotDescriptor;
+
+/* A class the program defines, whose slots define-slot may change when it
+ * runs (chapter 6), as the interpreter changes them: SLOTS, its slot
+ * descriptors in order, is made when its define-class runs (READY then
+ * holds the order the program's classes were defined in), and a
+ * define-slot puts its slot in the place of the one with the same getter,
+ * or after the rest, in the class and in each subclass defined so far
+ * that lacks one.  The instances made while one may still run (PENDING of
+ * them) are kept in EARLY, newest first, to be given the slot's initial
+ * value then. */
+typedef struct DyProgramClass {
+    D class;
+    int *ready;
+    D *slots;                      /* a <simple-object-vector>           */
+    D *early;                      /* a list                             */
+    int *pending;
+    const struct DyProgramClass *const *subclasses;  /* direct ones      */
+    intptr_t subclass_count;
+    const D *init_keys;            /* the keywords initialize's methods  */
+    intptr_t init_key_count;       /*   take, unless ANY_KEYS            */
+    bool any_keys;
+    const D *storage;              /* for a virtual slot, the slot it    */
+    intptr_t storage_count;        /*   keeps, by getter                 */
+} DyProgramClass;
+
+/* The slot descriptors of a class whose define-class runs: those of each
+ * of the N SUPERS (vectors) in turn, each getter's once, a more specific
+ * one reached later taking its place, then its own M, OWN, each in the
+ * place of the one with its getter or after the rest. */
+D dy_combine_slots(const D *supers, intptr_t n, const D *own, intptr_t m);
+/* SLOTS, as slot-descriptors answers them: without the hidden ones. */
+D dy_reported_slots(D slots);
+/* The descriptor in SLOTS with GETTER, or #f. */
+D dy_find_slot_descriptor(D slots, D getter);
+/* A define-slot of the slot DESCRIPTOR on the class OWNER runs. */
+void dy_define_class_slot(const DyProgramClass *owner, D descriptor);
+/* Initialize the slots of X, an instance of K, from the keyword arguments
+ * A0... (from index 1) as make does; answer them, as a list. */
+D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
+                D a2, D a3);
 
 typedef struct DySingleton {       /* (singleton object)                */
     DyWrapper *wrapper;

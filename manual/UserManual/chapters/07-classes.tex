@@ -376,14 +376,17 @@ must be \code{instance}, \code{constant} or \code{virtual}, without
 not, and the slot's accessors are generic functions with a method
 specialized on the singleton.
 
-In the Common Lisp implementation \code{define-slot} takes effect when it is
-evaluated, and instances that already exist gain the slot. In the compiler
-to C the slot is part of the program from the start: a slot defined on a
-class is in every instance ever made, and is listed by
-\code{slot-descriptors} even before the \code{define-slot} form is reached.
-The compiler to C also requires a class owner to be a class the program
-itself defines, known when compiling, rather than a built-in class or a
-value computed at run time; a singleton owner may be any object.
+\code{define-slot} takes effect when it is evaluated. From then on the
+class has the slot, and so does each subclass defined so far that has no
+slot with the same getter of its own; a class defined later inherits it.
+Instances that already exist gain the slot then, each given its initial
+value. \code{slot-descriptors} lists the slot after the ones the class
+had, or in the place of the one with the same getter that it replaces,
+and \code{make} takes its init-keyword; before the \code{define-slot}
+runs, neither does. The compiler to C requires a class owner to be a
+class the program itself defines, known when compiling, rather than a
+built-in class or a value computed at run time; a singleton owner may be
+any object.
 
 \section{Examining classes and objects}\label{sec:classes-reflection}
 
@@ -448,12 +451,14 @@ language.)
   inherited ones included: those of each direct superclass in turn, each
   slot where it first appears, and then the class's own. A slot redefined
   more specifically keeps its place. The built-in classes' own slots,
-  which no program can name, are not among them.
+  which no program can name, are not among them. An inherited slot has
+  the same descriptor in every class that has it.
 \item[\code{(slot-descriptor \meta{instance} \meta{getter})}] the slot that
   \meta{getter} reads in \meta{instance}, or \code{\#f}.
 \item[\code{(slot-getter \meta{sd})}, \code{(slot-setter \meta{sd})}] the
   getter and setter generic functions; \code{slot-setter} returns
-  \code{\#f} for a slot without a setter.
+  \code{\#f} for a slot without a setter. Both return \code{\#f} for a
+  slot defined by a class that has been sealed.
 \item[\code{(slot-type \meta{sd})}] the type, \code{<object>} if none was
   given.
 \item[\code{(slot-allocation \meta{sd})}] the allocation, a symbol.

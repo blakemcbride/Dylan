@@ -751,9 +751,9 @@ b-slot
 ")
 
  ;; Chapter 6, "Adding Slots After Instance Creation": an instance made
- ;; before define-slot added a typed slot takes its initial value when it
- ;; is updated (whenever that is), and the value is checked against the
- ;; slot's type, as make checks it.
+ ;; before define-slot added a typed slot takes its initial value when the
+ ;; define-slot runs, and the value is checked against the slot's type, as
+ ;; make checks it.
  (define-slot-initial-value-type
   "(define-method msg (thunk) (handler-case (thunk) ((<error> condition: c) (format #f \"~a\" c))))
    (define-class <b> (<object>))
@@ -1493,5 +1493,302 @@ made
 (1 2 3)
 (7 (num 7))
 (1999 z)
+")
+ ;; Chapter 6: a define-slot on a class takes effect when it runs, as the
+ ;; interpreter's does: slot-descriptors lists the slot only then.
+ (define-slot-when-run
+  "(define-method try (thunk)
+  (handler-case (thunk)
+    ((<error> condition: c) (format #t \"error: ~a~%\" (condition-format-string c)))))
+(define-class <pt> (<object>) (x init-value: 1))
+(define p (make <pt>))
+(print (size (slot-descriptors <pt>)))
+(print (map slot-getter (slot-descriptors <pt>)))
+(try (method () (print (weight p))))
+(try (method () (print (slot-initialized? p weight))))
+(define-slot <pt> weight init-value: 10)
+(print (size (slot-descriptors <pt>)))
+(print (weight p))
+(define q (make <pt>))
+(print (weight q))
+(set! (weight p) 5)
+(print (weight p))"
+  "1
+#({the generic function x})
+error: the variable weight@dylan-user has no value
+error: the variable weight@dylan-user has no value
+2
+10
+10
+5
+")
+ ;; The instances made before a define-slot runs are given its initial
+ ;; value when it runs; until then make takes no init-keyword of it, and a
+ ;; define-slot that never runs adds nothing.
+ (define-slot-existing-instances
+  "(define-method try (thunk)
+  (handler-case (thunk)
+    ((<error> condition: c) (format #t \"error: ~a~%\" (condition-format-string c)))))
+(define-class <pt> (<object>) (x init-value: 1))
+(define-class <sub> (<pt>))
+(define p (make <pt>))
+(print 'made-p)
+(try (method () (make <pt> w: 3)))
+(define-slot <pt> weight init-function: (method () (print 'init) 10))
+(print 'defined)
+(print (weight p))
+(define q (make <pt>))
+(print (weight q))
+(define-slot <pt> wk init-keyword: w: init-value: 0)
+(print (wk (make <pt> w: 3)))
+(print (wk p))
+(print (size (slot-descriptors <sub>)))
+(define s (make <sub>))
+(print (weight s))
+(define-method never () (define-slot <pt> ghost init-value: 0))
+(print (size (slot-descriptors <pt>)))"
+  "made-p
+error: keyword argument not accepted: ~s
+init
+defined
+10
+init
+10
+init
+3
+0
+3
+init
+10
+3
+")
+ ;; A subclass's instances made before a define-slot on its superclass
+ ;; runs are given the slot then too, after the class's own.
+ (define-slot-subclass-instances
+  "(define-method try (thunk)
+  (handler-case (thunk)
+    ((<error> condition: c) (format #t \"error: ~a~%\" (condition-format-string c)))))
+(define-class <pt> (<object>) (x init-value: 1))
+(define-class <sub> (<pt>))
+(define s (make <sub>))
+(define p (make <pt>))
+(define n 0)
+(define-slot <pt> weight init-function: (method () (set! n (+ n 1)) n))
+(print n)
+(try (method () (print (weight s))))
+(print (weight p))
+(print (slot-initialized? p weight))
+(print n)
+(try (method () (make <pt> zz: 3)))"
+  "2
+2
+1
+#t
+2
+error: keyword argument not accepted: ~s
+")
+ ;; A define-slot puts its slot in the place of one with the same getter,
+ ;; or after the rest, in the class and in the subclasses defined so far
+ ;; that lack one; a class defined later inherits the slots as they are.
+ (define-slot-order
+  "(define-class <a> (<object>) (g init-value: 1) (h init-value: 2))
+(define-class <b> (<a>) (k init-value: 3))
+(define-method names (c) (map slot-getter (slot-descriptors c)))
+(print (names <b>))
+(define-slot <b> g init-value: 10)
+(print (names <b>))
+(print (g (make <b>)))
+(define-slot <a> m init-value: 5)
+(print (names <a>))
+(print (names <b>))
+(define-class <c> (<b>))
+(print (names <c>))"
+  "#({the generic function g} {the generic function h} {the generic function k})
+#({the generic function g} {the generic function h} {the generic function k})
+10
+#({the generic function g} {the generic function h} {the generic function m})
+#({the generic function g} {the generic function h} {the generic function k} {the generic function m})
+#({the generic function g} {the generic function h} {the generic function k} {the generic function m})
+")
+ ;; define-slot when it runs: the instances given the slot newest first,
+ ;; the class's then its subclasses' breadth first; a redefinition gives
+ ;; the class's instances the new initial value but not a subclass's that
+ ;; has the slot already; required init-keywords, slot-initialized?,
+ ;; class and each-subclass slots; one run twice.
+ (define-slot-when-run-details
+  "(define-method try (thunk)
+  (handler-case (thunk)
+    ((<error> condition: c) (format #t \"error: ~a~%\" (condition-format-string c)))))
+(define-method names (c) (map slot-getter (slot-descriptors c)))
+(define n 0)
+(define-method next () (set! n (+ n 1)) n)
+(define-class <a> (<object>) (g init-function: next init-keyword: g:))
+(define-class <b> (<a>))
+(define-class <c> (<a>))
+(define-class <d> (<b>))
+(define a1 (make <a>))
+(define b1 (make <b>))
+(define c1 (make <c>))
+(define d1 (make <d>))
+(define a2 (make <a>))
+(print (map g (list a1 b1 c1 d1 a2)))
+(define-slot <a> h init-function: next)
+(print (map h (list a1 b1 c1 d1 a2)))
+(print (names <d>))
+(define-slot <b> g init-function: next init-keyword: g:)
+(print (map g (list a1 b1 c1 d1 a2)))
+(print (names <d>))
+(define-slot <a> r required-init-keyword: r:)
+(try (method () (make <c>)))
+(print (r (make <c> r: 7)))
+(try (method () (print (r c1))))
+(print (slot-initialized? c1 r))
+(print (slot-initialized? c1 h))
+(print (slot-getter (slot-descriptor d1 g)))
+(print (id? (slot-descriptor d1 g) (slot-descriptor b1 g)))
+(define-slot <c> shared allocation: class init-value: 'sh)
+(print (shared c1))
+(define-slot <a> each allocation: each-subclass init-value: 5)
+(set! (each b1) 6)
+(print (list (each a1) (each b1) (each d1) (each c1)))
+(define-class <e> (<d>) (k init-value: 'k))
+(print (names <e>))
+(define e1 (make <e> g: 'given r: 1))
+(print (list (g e1) (h e1) (k e1) (r e1)))
+(define-method again (v) (define-slot <c> twice init-value: v))
+(again 1)
+(print (twice c1))
+(set! (twice c1) 'changed)
+(again 2)
+(print (twice c1))
+(print (names <c>))
+(print n)"
+  "(1 2 3 4 5)
+(7 9 8 10 6)
+#({the generic function g} {the generic function h})
+(1 11 3 4 5)
+#({the generic function g} {the generic function h})
+error: make: the required init-keyword is missing: ~s
+7
+error: the slot r is not initialized
+#f
+#t
+{the generic function g}
+#f
+sh
+(5 6 5 5)
+#({the generic function g} {the generic function h} {the generic function r} {the generic function each} {the generic function k})
+(given 14 k 1)
+1
+2
+#({the generic function g} {the generic function h} {the generic function r} {the generic function shared} {the generic function each} {the generic function twice})
+14
+")
+ ;; make checks the required init-keywords before initializing any slot,
+ ;; and the keywords nothing takes after; define-slot with multiple
+ ;; inheritance.
+ (make-checks-in-order
+  "(define-method try (thunk)
+  (handler-case (thunk)
+    ((<error> condition: c) (format #t \"error: ~a~%\" (condition-format-string c)))))
+(define-method names (c) (map slot-getter (slot-descriptors c)))
+(define n 0)
+(define-method next () (set! n (+ n 1)) n)
+(define-class <p> (<object>) (u init-function: next) (v required-init-keyword: v:))
+(try (method () (make <p> zz: 1 v: 2)))
+(print n)
+(try (method () (make <p>)))
+(print n)
+(try (method () (make <p> v:)))
+(try (method () (make <p> 3 4)))
+(print n)
+(define-class <m1> (<object>) (a init-value: 1))
+(define-class <m2> (<object>) (b init-value: 2) (a init-value: 1))
+(define-class <mm> (<m1> <m2>) (c init-value: 3))
+(print (names <mm>))
+(define-slot <m2> d init-function: next)
+(define-slot <m1> e init-function: next)
+(print (names <mm>))
+(define x (make <mm>))
+(print (list (a x) (b x) (c x) (d x) (e x)))
+(define-class <q> (<object>) (w init-function: next))
+(define-method initialize ((q <q>) #rest keys) (print 'init))
+(make <q> anything: 1)
+(print n)"
+  "error: keyword argument not accepted: ~s
+1
+error: make: the required init-keyword is missing: ~s
+1
+error: the arguments after the required ones are not keyword/value pairs
+error: the arguments after the required ones are not keyword/value pairs
+1
+#({the generic function a} {the generic function b} {the generic function c})
+#({the generic function a} {the generic function b} {the generic function c} {the generic function d} {the generic function e})
+(1 2 3 2 3)
+init
+4
+")
+ ;; An inherited slot has one descriptor in every class that has it; slot-getter
+ ;; and slot-setter answer #f for a slot of a sealed class (chapter 11).
+ (slot-descriptor-identity
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <b> (<a>) (y init-value: 2))
+(define-class <c> (<object>) (z init-value: 3))
+(define-class <d> (<c> <b>))
+(define-method first-desc (c) (first (slot-descriptors c)))
+(print (id? (slot-descriptor (make <b>) x) (slot-descriptor (make <a>) x)))
+(print (id? (slot-descriptor (make <d>) x) (slot-descriptor (make <a>) x)))
+(print (id? (first-desc <b>) (first-desc <a>)))
+(print (id? (slot-descriptor (make <d>) x) (slot-descriptor (make <d>) x)))
+(print (id? (slot-descriptor (make <d>) z) (slot-descriptor (make <c>) z)))
+(print (slot-value (make <d>) (slot-descriptor (make <a>) x)))
+(print (slot-value (make <d>) (slot-descriptor (make <b>) y)))
+(define-class <e> (<simple-error>))
+(print (id? (first-desc <e>) (first-desc <simple-error>)))
+(define-generic-function w (o))
+(define-generic-function (setter w) (o v))
+(define-slot <a> w init-value: 9)
+(print (id? (slot-descriptor (make <d>) w) (slot-descriptor (make <a>) w)))
+(define t (make <table>))
+(set! (element t (slot-descriptor (make <a>) x)) 'found)
+(print (element t (slot-descriptor (make <d>) x) default: 'missing))
+(define da (slot-descriptor (make <b>) y))
+(define dx (slot-descriptor (make <a>) x))
+(seal <b>)
+(print (slot-getter da))
+(print (slot-getter dx))
+(print (slot-descriptor (make <b>) x))
+(define-class <k> (<object>) (kk allocation: constant init-value: 4))
+(print (slot-setter (slot-descriptor (make <k>) kk)))
+(define-class <m> (<object>) (mm init-value: 1))
+(define-class <n> (<m>) (nn init-value: 2))
+(define dm (slot-descriptor (make <n>) mm))
+(seal <n>)
+(print (slot-getter dm))
+(print (slot-getter (slot-descriptor (make <n>) nn)))
+(print (slot-setter (slot-descriptor (make <n>) nn)))
+(print (slot-value (make <n>) dm))
+(print (id? dm (slot-descriptor (make <m>) mm)))
+(print (map slot-getter (slot-descriptors <simple-error>)))"
+  "#t
+#t
+#t
+#t
+#t
+1
+2
+#t
+#t
+found
+#f
+{the generic function x}
+{slot x}
+#f
+{the generic function mm}
+#f
+#f
+1
+#t
+#({the generic function condition-format-string} {the generic function condition-format-arguments})
 ")
 )

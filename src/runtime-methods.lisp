@@ -618,17 +618,17 @@ slot-descriptors leaves them out, as a compiled program does.")
                       (if (class.sealed? class)
                           (vector)
                           ;; REMOVE-SLOT leaves empty entries behind.
-                          (remove-if (lambda (slot)
-                                       (or (null slot)
-                                           (gethash (slot.getter slot)
-                                                    *private-slot-getters*)))
-                                     (class.slots class))))))
-
-(defvar *sealed-classes* '()
-  "The classes SEAL has sealed.")
+                          (map 'vector #'slot-original
+                               (remove-if (lambda (slot)
+                                            (or (null slot)
+                                                (gethash (slot.getter slot)
+                                                         *private-slot-getters*)))
+                                          (class.slots class)))))))
 
 (defun slot-of-sealed-class? (slot)
-  (some (lambda (class) (find slot (class.slots class))) *sealed-classes*))
+  "Whether SLOT was added to a class that is now sealed."
+  (let ((owner (slot.owner (slot-original slot))))
+    (and (class? owner) (class.sealed? owner))))
 
 ;;; Chapter 11: #f for a slot in a sealed class.
 (defparameter dylan/slot-getter

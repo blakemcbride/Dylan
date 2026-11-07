@@ -163,3 +163,210 @@ static D default_initialize_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc)
 
 DyFunction dy_default_initialize = { &dy_wrapper_method, default_initialize_entry,
                                      DY_FALSE, DY_FALSE, DY_FALSE, NULL };
+
+/* ------------------------------------------- Slots define-slot may change */
+
+static DySlotDescriptor *descriptor(D d) { return (DySlotDescriptor *)DY_PTR(d); }
+
+/* Is the class A the class B or a subclass of it? */
+static bool class_within(D a, D b) {
+    return dy_wrapper_subtype(((DyClass *)DY_PTR(a))->instance_wrapper,
+                              ((DyClass *)DY_PTR(b))->instance_wrapper);
+}
+
+static intptr_t slot_position(const D *slots, intptr_t n, D getter) {
+    for (intptr_t i = 0; i < n; i++)
+        if (descriptor(slots[i])->getter == getter) return i;
+    return -1;
+}
+
+static D copy_slots(D work, intptr_t n) {
+    D v = dy_make_vector((size_t)n, DY_FALSE);
+    memcpy(DY_VECTOR_DATA(v), DY_VECTOR_DATA(work), (size_t)n * sizeof(D));
+    return v;
+}
+
+D dy_combine_slots(const D *supers, intptr_t n, const D *own, intptr_t m) {
+    intptr_t total = m;
+    for (intptr_t i = 0; i < n; i++)
+        if (supers[i] != DY_UNBOUND) total += DY_VECTOR_SIZE(supers[i]);
+    D work = dy_make_vector((size_t)total, DY_FALSE);
+    D *r = DY_VECTOR_DATA(work);
+    intptr_t count = 0;
+    for (intptr_t i = 0; i < n; i++) {
+        if (supers[i] == DY_UNBOUND) continue;
+        intptr_t size = DY_VECTOR_SIZE(supers[i]);
+        const D *data = DY_VECTOR_DATA(supers[i]);
+        for (intptr_t j = 0; j < size; j++) {
+            D d = data[j], getter = descriptor(d)->getter;
+            intptr_t at = slot_position(r, count, getter);
+            if (at < 0) { r[count++] = d; continue; }
+            if (slot_position(own, m, getter) >= 0) continue;   /* the class's own */
+            D origin = descriptor(d)->owner, was = descriptor(r[at])->owner;
+            if (origin != was && !class_within(was, origin) && class_within(origin, was))
+                r[at] = d;
+        }
+    }
+    for (intptr_t i = 0; i < m; i++) {
+        intptr_t at = slot_position(r, count, descriptor(own[i])->getter);
+        if (at >= 0) r[at] = own[i];
+        else r[count++] = own[i];
+    }
+    return copy_slots(work, count);
+}
+
+D dy_reported_slots(D slots) {
+    if (slots == DY_UNBOUND) return dy_make_vector(0, DY_FALSE);
+    intptr_t n = DY_VECTOR_SIZE(slots), kept = 0;
+    for (intptr_t i = 0; i < n; i++)
+        if (!descriptor(DY_VECTOR_DATA(slots)[i])->hidden) kept++;
+    D v = dy_make_vector((size_t)kept, DY_FALSE);
+    D *out = DY_VECTOR_DATA(v), *in = DY_VECTOR_DATA(slots);
+    for (intptr_t i = 0, k = 0; i < n; i++)
+        if (!descriptor(in[i])->hidden) out[k++] = in[i];
+    return v;
+}
+
+D dy_find_slot_descriptor(D slots, D getter) {
+    if (slots == DY_UNBOUND) return DY_FALSE;
+    intptr_t at = slot_position(DY_VECTOR_DATA(slots), DY_VECTOR_SIZE(slots), getter);
+    return at < 0 ? DY_FALSE : DY_VECTOR_DATA(slots)[at];
+}
+
+/* SLOTS with D in the place of the one with its getter, or after the rest */
+static D put_slot(D slots, D d) {
+    intptr_t n = DY_VECTOR_SIZE(slots);
+    intptr_t at = slot_position(DY_VECTOR_DATA(slots), n, descriptor(d)->getter);
+    D v = dy_make_vector((size_t)(at < 0 ? n + 1 : n), DY_FALSE);
+    memcpy(DY_VECTOR_DATA(v), DY_VECTOR_DATA(slots), (size_t)n * sizeof(D));
+    DY_VECTOR_DATA(v)[at < 0 ? n : at] = d;
+    return v;
+}
+
+/* The early instances, with what makes them added by other threads */
+static pthread_mutex_t early_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* Give each instance in EARLY the initial value of the slot D */
+static void initialize_early(const DyProgramClass *k, D d) {
+    pthread_mutex_lock(&early_lock);
+    D early = *k->early;
+    pthread_mutex_unlock(&early_lock);
+    for (; early != DY_EMPTY; early = dy_tail(early)) {
+        DySlotDescriptor *s = descriptor(d);
+        D value = s->init_function != DY_UNBOUND
+            ? DY_CALL(s->init_function, 0, 0, 0, 0, 0) : s->init_value;
+        if (value != DY_UNBOUND && s->type != DY_UNBOUND) dy_check_type(value, s->type);
+        D *place = dy_instance_slot(dy_head(early), (int32_t)s->number);
+        if (place) *place = value;
+    }
+}
+
+/* Append to QUEUE (of *SIZE, with room for *ROOM) the subclasses of K
+ * defined so far, the most recently defined first */
+static const DyProgramClass **queue_subclasses(const DyProgramClass **queue, intptr_t *size,
+                                               intptr_t *room, const DyProgramClass *k) {
+    intptr_t start = *size;
+    for (intptr_t i = 0; i < k->subclass_count; i++) {
+        const DyProgramClass *c = k->subclasses[i];
+        if (!*c->ready) continue;
+        if (*size == *room) {
+            *room = *room * 2 + 8;
+            queue = realloc(queue, (size_t)*room * sizeof *queue);
+            if (!queue) dy_error("out of memory", 0);
+        }
+        intptr_t j = (*size)++;
+        while (j > start && *queue[j - 1]->ready < *c->ready) { queue[j] = queue[j - 1]; j--; }
+        queue[j] = c;
+    }
+    return queue;
+}
+
+void dy_define_class_slot(const DyProgramClass *owner, D d) {
+    D getter = descriptor(d)->getter;
+    bool instance = descriptor(d)->kind == 0;
+    *owner->slots = put_slot(*owner->slots, d);
+    if (instance) initialize_early(owner, d);
+    /* Down through the subclasses, breadth first, as far as each lacks a
+     * slot with the getter */
+    intptr_t size = 0, room = 0, next = 0, seen_size = 0;
+    const DyProgramClass **queue = queue_subclasses(NULL, &size, &room, owner);
+    const DyProgramClass **seen = malloc((size_t)(room + 1) * sizeof *seen);
+    intptr_t seen_room = room + 1;
+    if (!seen) dy_error("out of memory", 0);
+    while (next < size) {
+        const DyProgramClass *c = queue[next++];
+        bool done = false;
+        for (intptr_t i = 0; i < seen_size; i++) if (seen[i] == c) done = true;
+        if (done) continue;
+        if (seen_size == seen_room) {
+            seen_room = seen_room * 2;
+            seen = realloc(seen, (size_t)seen_room * sizeof *seen);
+            if (!seen) dy_error("out of memory", 0);
+        }
+        seen[seen_size++] = c;
+        D slots = *c->slots;
+        if (slot_position(DY_VECTOR_DATA(slots), DY_VECTOR_SIZE(slots), getter) >= 0) continue;
+        *c->slots = put_slot(slots, d);
+        if (instance) initialize_early(c, d);
+        queue = queue_subclasses(queue, &size, &room, c);
+    }
+    free(queue);
+    free(seen);
+}
+
+/* The slot whose storage D, one of K's slots, initializes: D, or for a
+ * virtual slot the one it keeps; NULL if none */
+static DySlotDescriptor *storage_of(const DyProgramClass *k, D d) {
+    DySlotDescriptor *s = descriptor(d);
+    if (s->kind != 4) return s;
+    for (intptr_t i = 0; i < k->storage_count; i++)
+        if (descriptor(k->storage[i])->getter == s->getter) return descriptor(k->storage[i]);
+    return NULL;
+}
+
+/* As the interpreter makes an instance: the required init-keywords first,
+ * then each slot in order, then the keywords nothing takes */
+D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
+                D a2, D a3) {
+    D slots = *k->slots;
+    intptr_t n = DY_VECTOR_SIZE(slots);
+    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, NULL, 0);
+    D keys = dy_collect_arguments(argc, 1, a0, a1, a2, a3);
+    for (intptr_t i = 0; i < n; i++) {
+        DySlotDescriptor *s = storage_of(k, DY_VECTOR_DATA(slots)[i]);
+        if (s && s->kind == 0 && s->required
+            && dy_find_keyword(keys, s->init_keyword) == DY_UNSUPPLIED)
+            dy_error("make: the required init-keyword is missing", s->init_keyword);
+    }
+    for (intptr_t i = 0; i < n; i++) {
+        DySlotDescriptor *s = storage_of(k, DY_VECTOR_DATA(slots)[i]);
+        if (!s || s->kind != 0) continue;
+        D v = s->init_keyword != DY_FALSE ? dy_find_keyword(keys, s->init_keyword) : DY_UNSUPPLIED;
+        if (v == DY_UNSUPPLIED)
+            v = s->init_function != DY_UNBOUND ? DY_CALL(s->init_function, 0, 0, 0, 0, 0)
+                                               : s->init_value;
+        if (v == DY_UNBOUND) continue;
+        if (s->type != DY_UNBOUND) dy_check_type(v, s->type);
+        D *place = dy_instance_slot(x, (int32_t)s->number);
+        if (place) *place = v;
+    }
+    if (!k->any_keys) {
+        D accepted = dy_make_vector((size_t)(n + k->init_key_count), DY_FALSE);
+        D *names = DY_VECTOR_DATA(accepted);
+        intptr_t count = 0;
+        for (intptr_t i = 0; i < n; i++) {
+            DySlotDescriptor *s = storage_of(k, DY_VECTOR_DATA(slots)[i]);
+            if (s && s->init_keyword != DY_FALSE) names[count++] = s->init_keyword;
+        }
+        for (intptr_t i = 0; i < k->init_key_count; i++) names[count++] = k->init_keys[i];
+        dy_check_keywords(self, argc, 1, a0, a1, a2, a3, names, (size_t)count);
+    }
+    if (*k->pending > 0) {
+        D pair = dy_pair(x, DY_EMPTY);
+        pthread_mutex_lock(&early_lock);
+        ((DyPair *)DY_PTR(pair))->tail = *k->early;
+        *k->early = pair;
+        pthread_mutex_unlock(&early_lock);
+    }
+    return keys;
+}

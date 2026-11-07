@@ -59,7 +59,11 @@ reflection, and call it?  If not, methods need no direct entries.")
   spec                                  ; the IR's SLOT-SPEC
   id
   location
-  order)
+  order
+  (node nil)                            ; for a define-slot on a class, its
+                                        ; node: the slot is the class's only
+                                        ; once that has run
+  (once nil))                           ; that node runs at most once
 
 (defstruct gfun var c-name required variable-p methods declared-keys
   (object-c nil)
@@ -591,9 +595,12 @@ slot features the superior definition specified."
            (if class
                (let ((g (find class (loop for g being the hash-values of *gclasses* collect g)
                               :key #'gclass-info)))
-                 (unless g
+                 (unless (and g (program-gclass-p g))
                    (compile-error "define-slot: slots can be added only to classes the program defines"))
-                 (let ((sd (make-slot-definition class (ir-define-slot-slot d) *location*)))
+                 (let ((sd (make-slot-definition class (ir-define-slot-slot d) *location*))
+                       (in (gethash d *definition-fns*)))
+                   (setf (sdef-node sd) d
+                         (sdef-once sd) (and in (eq (ir-fn-kind in) :toplevel) t))
                    (setf (gethash d *sdef-of-node*) (list sd))
                    (setf (gclass-sdefs g) (append (gclass-sdefs g) (list sd)))))
                ;; Any other owner must be a singleton when the define-slot
@@ -704,6 +711,88 @@ in layout order."
                     (setf result (append result (list sd))))))))))
     result))
 
+;;; Classes whose slots define-slot changes when it runs (chapter 6), as
+;;; the interpreter changes them: each of the program's classes has its
+;;; slot descriptors in a vector made when its define-class runs, which a
+;;; define-slot on it or a superclass may change (DyProgramClass, dylan.h).
+
+(defun program-gclass-p (g)
+  "Is G a class the program defines, not the library?"
+  (not (library-location-p (gclass-location g))))
+
+(defun class-slots-c (info) (format nil "dy_slots_~a" (class-info-c-name info)))
+(defun program-class-c (info) (format nil "dy_pc_~a" (class-info-c-name info)))
+(defun early-c (info) (format nil "dy_early_~a" (class-info-c-name info)))
+(defun pending-c (info) (format nil "dy_pending_~a" (class-info-c-name info)))
+
+(defun class-define-slots ()
+  "The slot definitions of the define-slots on classes."
+  (loop for g being the hash-values of *gclasses*
+        append (remove-if-not #'sdef-node (gclass-sdefs g))))
+
+(defun define-slots-within (info)
+  "The define-slots on classes whose slot instances of the class INFO may
+gain: those on it or a superclass."
+  (remove-if-not (lambda (sd) (subclass-info-p info (sdef-class sd)))
+                 (class-define-slots)))
+
+(defun slot-changing-class-p (info)
+  "Must the instances of the program's class INFO be made by its slot
+descriptors when make runs, a define-slot on it or a superclass having
+changed them, or being yet to?"
+  (let ((g (class-gclass info)))
+    (and g (program-gclass-p g) (define-slots-within info) t)))
+
+(defun base-storage-sdefs (info)
+  "Of each instance slot of INFO, the definition its define-class or a
+superclass's gives it: what a virtual slot keeps."
+  (let ((result '()))
+    (dolist (c (class-info-cpl info))
+      (let ((g (class-gclass c)))
+        (when g
+          (dolist (sd (gclass-sdefs g))
+            (when (and (null (sdef-node sd)) (eq (sdef-allocation sd) :instance)
+                       (not (find (sdef-getter sd) result :key #'sdef-getter)))
+              (push sd result))))))
+    (nreverse result)))
+
+(defun declare-program-classes ()
+  (declare-object "static int dy_class_serial;")
+  (loop for g being the hash-values of *gclasses*
+        when (program-gclass-p g)
+          do (let ((info (gclass-info g)))
+               (declare-object "static D ~a = DY_UNBOUND;" (class-slots-c info))
+               (when (slot-changing-class-p info)
+                 (declare-object "static D ~a = DY_EMPTY;" (early-c info))
+                 (declare-object "static int ~a = ~d;" (pending-c info)
+                                 (count :instance (define-slots-within info)
+                                        :key #'sdef-allocation))
+                 (declare-object "static DyProgramClass ~a;" (program-class-c info))))))
+
+(defun emit-program-class (info init-keywords any)
+  "The DyProgramClass of INFO, a class SLOT-CHANGING-CLASS-P."
+  (let* ((g (class-gclass info))
+         (subclasses (loop for c in *classes*
+                           when (and (member info (class-info-supers c))
+                                     (slot-changing-class-p c))
+                             collect c))
+         (subs (and subclasses (cdata-name *cdata* "dy_subclasses_")))
+         (keys (and init-keywords (not any) (keyword-array init-keywords)))
+         (storage (base-storage-sdefs info))
+         (stores (and storage (cdata-name *cdata* "dy_storage_"))))
+    (when subs
+      (emit-object "static const DyProgramClass *const ~a[] = { ~{&~a~^, ~} };"
+                   subs (mapcar #'program-class-c subclasses)))
+    (when stores
+      (emit-object "static const D ~a[] = { ~{~a~^, ~} };"
+                   stores (mapcar (lambda (sd) (address (sdef-descriptor-c sd))) storage)))
+    (emit-object "static DyProgramClass ~a = { ~a, &~a, &~a, &~a, &~a, ~a, ~d, ~a, ~d, ~:[false~;true~], ~a, ~d };"
+                 (program-class-c info) (address (class-c-name info)) (gclass-ready-c g)
+                 (class-slots-c info) (early-c info) (pending-c info)
+                 (or subs "NULL") (length subclasses)
+                 (or keys "NULL") (if keys (length init-keywords) 0) any
+                 (or stores "NULL") (length storage))))
+
 ;;; Static storage of a slot definition: its type, init-value and
 ;;; init-function as evaluated, and the storage of shared slots.
 
@@ -711,6 +800,8 @@ in layout order."
 
 (defun declare-slot-storage (sd)
   (let ((spec (sdef-spec sd)))
+    (when (sdef-node sd)
+      (declare-object "static int ~a;" (sdef-c sd "ran")))
     (when (slot-spec-type spec)
       (declare-object "static D ~a = DY_UNBOUND;" (sdef-c sd "type")))
     (when (slot-spec-init-value spec)
@@ -798,7 +889,49 @@ in layout order."
               (when (and (eq (gmethod-sdef m) sd) (added-when-run-p m))
                 (dolist (line (method-attachment-c m)) (emit "~a" line)))))))))
   (when (ir-define-class-p node)
-    (emit "~a = 1;" (gclass-ready-c (gethash (ir-define-class-var node) *gclasses*)))))
+    (let ((g (gethash (ir-define-class-var node) *gclasses*)))
+      (if (program-gclass-p g)
+          (progn
+            (emit-class-slots g node)
+            (emit "~a = ++dy_class_serial;" (gclass-ready-c g)))
+          (emit "~a = 1;" (gclass-ready-c g)))))
+  ;; A define-slot on a class: the class's slot from now on, and its
+  ;; subclasses' that lack one with the getter; the instances made so far
+  ;; are given its initial value (chapter 6).
+  (dolist (sd (gethash node *sdef-of-node*))
+    (when (sdef-node sd)
+      (emit "~a = 1;" (sdef-c sd "ran"))
+      (emit "dy_define_class_slot(&~a, ~a);" (program-class-c (sdef-class sd))
+            (address (sdef-descriptor-c sd)))
+      (when (and (sdef-once sd) (eq (sdef-allocation sd) :instance))
+        (dolist (c *classes*)
+          (when (and (slot-changing-class-p c) (subclass-info-p c (sdef-class sd)))
+            (emit "if (--~a == 0) ~a = DY_EMPTY;" (pending-c c) (early-c c))))))))
+
+(defun emit-class-slots (g node)
+  "Code giving the program's class G, whose define-class NODE runs, its
+slot descriptors: its superclasses' as they are now, then its own."
+  (let* ((info (gclass-info g))
+         (supers (mapcar (lambda (super)
+                           (let ((sg (class-gclass super)))
+                             (if (and sg (program-gclass-p sg))
+                                 (class-slots-c super)
+                                 (address (c-vector *cdata*
+                                                    (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
+                                                            (reported-slot-definitions super)))))))
+                         (class-info-supers info)))
+         (own (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
+                      (gethash node *sdef-of-node*))))
+    (emit "{")
+    (emit "    const D supers[] = { ~{~a~^, ~} };" (or supers '("DY_UNBOUND")))
+    (if own
+        (progn
+          (emit "    const D own[] = { ~{~a~^, ~} };" own)
+          (emit "    ~a = dy_combine_slots(supers, ~d, own, ~d);" (class-slots-c info)
+                (length supers) (length own)))
+        (emit "    ~a = dy_combine_slots(supers, ~d, NULL, 0);" (class-slots-c info)
+              (length supers)))
+    (emit "}")))
 
 ;;; Accessors
 
@@ -831,25 +964,6 @@ slot SD in the object VAR."
 (defun owner-or-class-spec (sd)
   (if (sdef-class sd) (make-spec :class (sdef-class sd)) (owner-spec sd)))
 
-(defun emit-late-slot-initialization (sd)
-  "Code that, with PLACE the instance's storage for SD's slot, gives an
-instance made before define-slot added the slot its initial value now
-(chapter 6: no program sees an instance without the slot), checked
-against the slot's type as make checks it."
-  (let ((spec (sdef-spec sd)))
-    (when (and (eq (sdef-allocation sd) :instance) (sdef-class sd)
-               (or (slot-spec-init-value spec) (slot-spec-init-function spec)))
-      (emit-object "    if (*place == DY_UNBOUND && ~a != DY_UNBOUND) {"
-                   (sdef-c sd (if (slot-spec-init-value spec) "init" "initfn")))
-      (emit-object "        D value = ~a;"
-                   (if (slot-spec-init-value spec)
-                       (sdef-c sd "init")
-                       (format nil "DY_CALL(~a, 0, 0, 0, 0, 0)" (sdef-c sd "initfn"))))
-      (when (slot-spec-type spec)
-        (emit-object "        if (~a != DY_UNBOUND) dy_check_type(value, ~a);"
-                     (sdef-c sd "type") (sdef-c sd "type")))
-      (emit-object "        *place = value;~%    }"))))
-
 (defun gen-accessors (sd)
   "The getter and setter methods of the slot definition SD."
   (let ((methods '())
@@ -860,7 +974,6 @@ against the slot's type as make checks it."
     (emit-object "    (void)a1; (void)a2; (void)a3;")
     (emit-object "    if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);")
     (emit-storage-ref sd "a0")
-    (emit-late-slot-initialization sd)
     (emit-object "    if (DY_UNLIKELY(*place == DY_UNBOUND)) dy_unbound_slot(~a);" (slot-name-c sd))
     (emit-object "    return *place;~%}")
     (push (make-gmethod :specs (list (owner-or-class-spec sd))
@@ -1548,10 +1661,30 @@ by code that the compiler has found does not let it escape."
     (emit-object "D ~a(D self, D a0, D a1, D a2, D a3, intptr_t argc) {" name)
     (emit-object "    return ~a(dy_make_instance(&~a), self, a0, a1, a2, a3, argc);~%}"
                  filler (wrapper-c-name info))
+    (when (slot-changing-class-p info)
+      ;; Its slots are what define-slots have made them so far
+      (emit-program-class info (loop for m in init-methods
+                                     for k = (gmethod-keys m)
+                                     when (consp k) append k)
+                          any)
+      (emit-object "D ~a(D x, D self, D a0, D a1, D a2, D a3, intptr_t argc) {" filler)
+      (let ((readies (loop for c in (class-info-cpl info)
+                           for cg = (class-gclass c)
+                           when cg collect (gclass-ready-c cg))))
+        (emit-object "    if (!(~{~a~^ && ~})) dy_error(\"make: the class's define-class has not run yet\", a0);"
+                     readies))
+      (emit-object "    D keys = dy_fill_slots(x, &~a, self, argc, a0, a1, a2, a3);"
+                   (program-class-c info))
+      (when (and init init-methods)
+        (emit-object "    dy_call_list(~a, x, keys);" (address (gfun-c-name init))))
+      (emit-object "    (void)keys;~%    dy_thread->mv_count = 1;~%    return x;~%}")
+      (return-from emit-maker))
     (emit-object "D ~a(D x, D self, D a0, D a1, D a2, D a3, intptr_t argc) {" filler)
     (emit-object "    (void)self;")
-    (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, ~:[~a, ~d~;NULL, 0~*~]);"
-                 any (keyword-array keywords) (length keywords))
+    ;; As the interpreter makes an instance: the required init-keywords
+    ;; first, then each slot in the order slot-descriptors answers them,
+    ;; then the keywords nothing takes.
+    (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, NULL, 0);")
     (emit-object "    D keys = dy_collect_arguments(argc, 1, a0, a1, a2, a3), v;")
     (let ((readies (loop for c in (class-info-cpl info)
                          for cg = (class-gclass c)
@@ -1559,6 +1692,14 @@ by code that the compiler has found does not let it escape."
       (emit-object "    if (!(~{~a~^ && ~})) dy_error(\"make: the class's define-class has not run yet\", a0);"
                    readies))
     (emit-object "    DyInstance *object = DY_PTR(x);")
+    (setf slots (loop for reported in (reported-slot-definitions info)
+                      for sd = (find (sdef-getter reported) slots :key #'sdef-getter)
+                      when sd collect sd))
+    (dolist (sd slots)
+      (let ((keyword (slot-spec-required-init-keyword (sdef-spec sd))))
+        (when (and keyword (eq (sdef-allocation sd) :instance))
+          (emit-object "    if (dy_find_keyword(keys, ~a) == DY_UNSUPPLIED) dy_error(\"make: the required init-keyword is missing\", ~a);"
+                       (c-constant *cdata* keyword) (c-constant *cdata* keyword)))))
     (dolist (sd slots)
       (when (eq (sdef-allocation sd) :instance)
         (let* ((spec (sdef-spec sd))
@@ -1568,9 +1709,6 @@ by code that the compiler has found does not let it escape."
           (if keyword
               (emit-object "    v = dy_find_keyword(keys, ~a);" (c-constant *cdata* keyword))
               (emit-object "    v = DY_UNSUPPLIED;"))
-          (when (slot-spec-required-init-keyword spec)
-            (emit-object "    if (v == DY_UNSUPPLIED) dy_error(\"make: the required init-keyword is missing\", ~a);"
-                         (c-constant *cdata* keyword)))
           (cond ((slot-spec-init-value spec)
                  (emit-object "    if (v == DY_UNSUPPLIED) v = ~a;" (sdef-c sd "init")))
                 ((slot-spec-init-function spec)
@@ -1582,6 +1720,9 @@ by code that the compiler has found does not let it escape."
             (emit-object "        if (~a != DY_UNBOUND) dy_check_type(v, ~a);"
                          (sdef-c sd "type") (sdef-c sd "type")))
           (emit-object "        object->slots[~d] = v;~%    }" offset))))
+    (unless any
+      (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, ~a, ~d);"
+                   (keyword-array keywords) (length keywords)))
     (when (and init init-methods)
       (emit-object "    dy_call_list(~a, x, keys);" (address (gfun-c-name init))))
     (emit-object "    dy_thread->mv_count = 1;~%    return x;~%}")))
@@ -1606,6 +1747,7 @@ need, which GENERATE-C places."
                    (compile-error "~a is defined both as a class and otherwise"
                                   (name-string (module-var-name (gclass-var g))))))))
     (build-generics definitions)
+    (declare-program-classes)
     ;; A set! of a read-only variable stores nothing: it is an error when
     ;; it runs (chapter 5).
     (loop for var being the hash-keys of *assigned-globals*
@@ -1650,16 +1792,16 @@ objects, makers."
         do (dolist (sd (gclass-sdefs g))
              (let ((getter (gethash (sdef-getter sd) *gfuns*)))
                (when getter
-                 (emit-object "    if (a1 == ~a && dy_wrapper_subtype(w, &~a)) {"
-                              (address (gfun-c-name getter)) (wrapper-c-name (sdef-class sd)))
+                 (emit-object "    if (a1 == ~a && ~@[~a && ~]dy_wrapper_subtype(w, &~a)) {"
+                              (address (gfun-c-name getter))
+                              (and (sdef-node sd) (sdef-c sd "ran"))
+                              (wrapper-c-name (sdef-class sd)))
                  (ecase (sdef-allocation sd)
                    (:instance
                     (emit-object "        int32_t i = w->slot_offsets ? w->slot_offsets[~d] : -1;"
                                  (gethash (sdef-getter sd) *instance-slot-numbers*))
                     (emit-object "        if (i >= 0) {")
-                    (emit-object "    D *place = &((DyInstance *)DY_PTR(a0))->slots[i];")
-                    (emit-late-slot-initialization sd)
-                    (emit-object "        return DY_BOOL(*place != DY_UNBOUND);~%        }"))
+                    (emit-object "            return DY_BOOL(((DyInstance *)DY_PTR(a0))->slots[i] != DY_UNBOUND);~%        }"))
                    ((:class :constant)
                     (emit-object "        return DY_BOOL(~a != DY_UNBOUND);" (sdef-c sd "cell")))
                    (:each-subclass
@@ -1700,7 +1842,7 @@ objects, makers."
       (let ((spec (sdef-spec sd))
             (setter (and (sdef-setter sd) (gethash (sdef-setter sd) *gfuns*))))
         (declare-object "DySlotDescriptor ~a;" (sdef-descriptor-c sd))
-        (emit-object "DySlotDescriptor ~a = { &dy_wrapper_slot_descriptor, ~a, ~a, DY_UNBOUND, ~a, DY_UNBOUND, DY_UNBOUND, ~a, ~a, ~d, ~d, ~a };"
+        (emit-object "DySlotDescriptor ~a = { &dy_wrapper_slot_descriptor, ~a, ~a, DY_UNBOUND, ~a, DY_UNBOUND, DY_UNBOUND, ~a, ~a, ~d, ~d, ~a, false, ~:[false~;true~], ~:[false~;true~] };"
                      (sdef-descriptor-c sd)
                      (address (gfun-c-name (gethash (sdef-getter sd) *gfuns*)))
                      (if setter (address (gfun-c-name setter)) "DY_FALSE")
@@ -1714,7 +1856,9 @@ objects, makers."
                      (case (sdef-allocation sd)
                        ((:class :constant) (format nil "&~a" (sdef-c sd "cell")))
                        (:each-subclass (sdef-c sd "cells"))
-                       (t "NULL")))))
+                       (t "NULL"))
+                     (slot-spec-required-init-keyword spec)
+                     (library-private-slot-p sd))))
     ;; (slot-descriptor instance getter): the most specific definition first
     (emit-object "static D dy_slot_descriptor_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {")
     (emit-object "    (void)a2; (void)a3;")
@@ -1727,7 +1871,14 @@ objects, makers."
           (emit-object "    if (a1 == ~a && dy_identical(a0, ~a.object)) return ~a;"
                        (address (gfun-c-name getter)) (owner-c sd)
                        (address (sdef-descriptor-c sd))))))
-    (dolist (sd (stable-sort (copy-list sdefs) #'>
+    ;; A program's class: its slots as they are now
+    (loop for g being the hash-values of *gclasses*
+          when (program-gclass-p g)
+            do (emit-object "    if (w == &~a) return dy_find_slot_descriptor(~a, a1);"
+                            (wrapper-c-name (gclass-info g)) (class-slots-c (gclass-info g))))
+    (dolist (sd (stable-sort (remove-if (lambda (sd) (program-gclass-p (class-gclass (sdef-class sd))))
+                                        sdefs)
+                             #'>
                              :key (lambda (sd) (length (class-info-cpl (sdef-class sd))))))
       (emit-object "    if (a1 == ~a && dy_wrapper_subtype(w, &~a)) return ~a;"
                    (address (gfun-c-name (gethash (sdef-getter sd) *gfuns*)))
@@ -1743,12 +1894,15 @@ objects, makers."
     (emit-object "    if (dy_kind_p(a0, DY_KIND_CLASS) && ((DyClass *)DY_PTR(a0))->sealed) return ~a;"
                  (address (c-vector *cdata* '())))
     (loop for g being the hash-values of *gclasses*
-          do (let ((effective (remove-if #'library-private-slot-p
-                                         (reported-slot-definitions (gclass-info g)))))
-               (emit-object "    if (a0 == ~a) return ~a;"
-                            (address (class-c-name (gclass-info g)))
-                            (address (c-vector *cdata* (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
-                                                               effective))))))
+          do (if (program-gclass-p g)
+                 (emit-object "    if (a0 == ~a) return dy_reported_slots(~a);"
+                              (address (class-c-name (gclass-info g))) (class-slots-c (gclass-info g)))
+                 (let ((effective (remove-if #'library-private-slot-p
+                                             (reported-slot-definitions (gclass-info g)))))
+                   (emit-object "    if (a0 == ~a) return ~a;"
+                                (address (class-c-name (gclass-info g)))
+                                (address (c-vector *cdata* (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
+                                                                   effective)))))))
     (emit-object "    return ~a;~%}" (address (c-vector *cdata* '())))
     (declare-object "DyFunction dy_prim_slot_descriptors;")
     (emit-object "DyFunction dy_prim_slot_descriptors = { &dy_wrapper_method, dy_slot_descriptors_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };")))

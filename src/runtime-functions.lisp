@@ -326,10 +326,10 @@ own functions such as make take any keyword arguments, is #rest without
    (make-param-list `((instance ,<object>) (getter ,<generic-function>))
                     nil nil nil)
    (lambda (obj getter)
-     (or-false
-      (or (object-singleton-slot obj getter)
-          (same-slot-getter-in-slot-vector->slot
-           getter (class.slots (get-type obj))))))))
+     (let ((slot (or (object-singleton-slot obj getter)
+                     (same-slot-getter-in-slot-vector->slot
+                      getter (class.slots (get-type obj))))))
+       (if slot (slot-original slot) dylan%false)))))
 
 (defun singleton-slot-values (instance slot-desc)
   "The extra-slot-values vector holding SLOT-DESC, when it is a slot added
@@ -343,15 +343,17 @@ to INSTANCE's singleton rather than one of its class's slots."
 an inherited slot's descriptor, saying where that class stores the slot,
 which multiple inheritance can make another place than the superclass's;
 a descriptor of a class INSTANCE is not an instance of is an error."
-  (let ((class (get-type instance)))
-    (cond ((find slot-desc (class.slots class)) slot-desc)
-          ((and (class? class)
-                (some (lambda (super) (find slot-desc (class.slots super)))
-                      (class-precedence-list class)))
-           (same-slot-getter-in-slot-vector->slot (slot.getter slot-desc)
-                                                  (class.slots class)))
-          (t (dylan-call dylan/error "slot-value: the object does not have the slot: ~s"
-                         instance)))))
+  (flet ((find-in (class)
+           (find slot-desc (class.slots class)
+                 :key (lambda (slot) (and slot (slot-original slot))))))
+    (let ((class (get-type instance)))
+      (cond ((find-in class))
+            ((and (class? class)
+                  (some #'find-in (class-precedence-list class)))
+             (same-slot-getter-in-slot-vector->slot (slot.getter slot-desc)
+                                                    (class.slots class)))
+            (t (dylan-call dylan/error "slot-value: the object does not have the slot: ~s"
+                           instance))))))
 
 (defparameter dylan/slot-value
   (dylan%generic-fn
@@ -448,7 +450,6 @@ a descriptor of a class INSTANCE is not an instance of is an error."
                     (lambda (class)
                       (setf (class.sealed? class) t)
                       (setf (class.read-only? class) t)
-                      (pushnew class *sealed-classes*)
                       class)))
 
 (defparameter dylan/remove-slot

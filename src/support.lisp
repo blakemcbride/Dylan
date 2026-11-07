@@ -109,9 +109,19 @@ passed."
                                         ;  Each-Subclass = offset in class-data
                                         ;  Virtual = NIL
                                         ;  Constant = the value of the slot
-  (filtered nil))                       ; Virtual only: the inherited slot
+  (filtered nil)                        ; Virtual only: the inherited slot
                                         ; it overrides, whose storage it
                                         ; keeps (a "filtered slot")
+  (original nil)                        ; A copy: the slot it copies
+  (owner nil))                          ; The class or singleton the slot
+                                        ; was added to
+
+;;; Each class keeps its own copy of an inherited slot, saying where that
+;;; class stores it.  A program sees one descriptor for the slot in every
+;;; class that has it: the slot that was added, which the copies name.
+(declaim (inline slot-original))
+(defun slot-original (slot)
+  (or (slot.original slot) slot))
 
 ;;; The Scheme spelled this accessor SLOT.HAS-INITIAL-VALUE? but the record
 ;;; field HAS-INIT-VALUE?; keep the accessor name the rest of the system

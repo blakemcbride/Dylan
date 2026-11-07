@@ -183,7 +183,8 @@ in both -- the options' values id? -- or CLASS must define it."
                          (slot.init-function slot) (slot.init-keyword slot)
                          (slot.required-init-keyword slot)
                          (slot.allocation slot) inherited? data-location)))
-    (setf (slot.filtered copy) (slot.filtered slot))
+    (setf (slot.filtered copy) (slot.filtered slot)
+          (slot.original copy) (slot-original slot))
     copy))
 
 ;;; Filtered slots (chapter 6): a virtual slot that overrides an inherited
@@ -838,6 +839,7 @@ slots.")
                                has-init-value? init-function init-keyword
                                required-init-keyword allocation nil
                                (figure-data-location owner allocation))))
+      (setf (slot.owner new-slot) owner)
       (if (class? owner)
           (progn
             (add-a-slot owner new-slot

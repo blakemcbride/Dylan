@@ -844,8 +844,23 @@ static DySlotDescriptor *as_descriptor(D x) {
     return DY_PTR(x);
 }
 
-PRIMITIVE(slot_getter) { need(self, argc, 1, 1); return as_descriptor(a0)->getter; }
-PRIMITIVE(slot_setter) { need(self, argc, 1, 1); return as_descriptor(a0)->setter; }
+/* Chapter 11: #f for a slot of a sealed class */
+static bool of_sealed_class(const DySlotDescriptor *d) {
+    return !d->one_object && dy_kind_p(d->owner, DY_KIND_CLASS)
+        && ((DyClass *)DY_PTR(d->owner))->sealed;
+}
+
+PRIMITIVE(slot_getter) {
+    need(self, argc, 1, 1);
+    DySlotDescriptor *d = as_descriptor(a0);
+    return of_sealed_class(d) ? DY_FALSE : d->getter;
+}
+
+PRIMITIVE(slot_setter) {
+    need(self, argc, 1, 1);
+    DySlotDescriptor *d = as_descriptor(a0);
+    return of_sealed_class(d) ? DY_FALSE : d->setter;
+}
 PRIMITIVE(slot_allocation) { need(self, argc, 1, 1); return as_descriptor(a0)->allocation; }
 PRIMITIVE(init_keyword) { need(self, argc, 1, 1); return as_descriptor(a0)->init_keyword; }
 

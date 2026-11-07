@@ -451,7 +451,8 @@ anything to evaluate (if not, the expansion is X quoted)."
 ;;; Bodies run in the Common Lisp implementation of Dylan (src/), loaded
 ;;; with the compiler, in a compile-time environment of their own: its
 ;;; dylan library (which has gensym), and what define-for-macros has
-;;; defined.
+;;; defined.  It is the module DYLAN::COMPILE-TIME-MODULE makes, in which
+;;; the interpreter runs them too.
 
 (defvar *compile-time-variables* nil
   "The compile-time environment's module variables so far, or :NEW when
@@ -505,7 +506,7 @@ value.  An error in it is a compile error, its message beginning with WHAT."
   (when (eq *compile-time-variables* :new)
     (setf *compile-time-variables* '()))
   (handler-case
-      (let ((dylan::*current-module* 'dylan::dylan-user)
+      (let ((dylan::*current-module* (dylan::compile-time-module))
             (*standard-output* *error-output*)
             (result nil))
         (dylan::compile-expression

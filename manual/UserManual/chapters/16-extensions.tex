@@ -206,18 +206,18 @@ as it would hide a module variable:
 
 \index{define-for-macros@\code{define-for-macros}}
 Macro bodies run in the interactive Common Lisp implementation of Dylan
-(Chapter~\ref{ch:lisp}), which the compiler is loaded with. Under the
-compiler they run in a \emph{compile-time environment} of their own,
-separate from the program being compiled. It holds the whole library of
-the interactive implementation, \code{gensym}, and whatever
-\code{define-for-macros} has defined --- but nothing the program itself
-defines. A macro body that calls one of the program's functions fails:
+(Chapter~\ref{ch:lisp}), which the compiler is loaded with, in a
+\emph{compile-time environment} of their own, separate from the program.
+It holds the whole library of the interactive implementation,
+\code{gensym}, and whatever \code{define-for-macros} has defined ---
+but nothing the program itself defines. A macro body that calls one of
+the program's functions fails:
 
 \begin{dylan}
 (define helper (method (x) (list x x)))
 (define-macro use-helper (x) (helper x))
 (print (use-helper 3))
-; error: macro use-helper: unbound variable helper
+; error: macro use-helper: the variable helper@compile-time has no value
 \end{dylan}
 
 Functions and variables for macro bodies to use are defined with
@@ -227,8 +227,9 @@ Functions and variables for macro bodies to use are defined with
 \end{quote}
 
 \noindent at top level, which runs the \meta{form}s in the compile-time
-environment while compiling, and leaves nothing in the compiled program.
-A variable defined there keeps its value from one expansion to the next.
+environment while compiling, and leaves nothing in the compiled program:
+the program cannot see what they define. A variable defined there keeps
+its value from one expansion to the next.
 Here a helper builds the names of accessors for a macro that defines a
 class:
 
@@ -253,25 +254,17 @@ class:
 
 Two consequences of running macro bodies in the interactive
 implementation are worth knowing. First, under the compiler,
-\code{gensym} and anything \code{define-for-macros} defines exist only
-at compile time; a compiled program that calls \code{gensym} gets an
-error. Second,
+\code{gensym} exists only at compile time; a compiled program that
+calls \code{gensym} gets an error. Second,
 where the two implementations differ, a macro body sees the interactive
 one: it has bignums, for instance (Appendix~\ref{app:differences}).
 
-The interactive implementation itself has no separate environment: it
-compiles and runs a program a form at a time, and a macro's body runs,
-while the forms after its definition are compiled, in the same world as
-the program. Everything defined so far is visible to it, the program's
-own functions included, and what \code{define-for-macros} defines is as
-visible to the program as any other definition; the forms of a
-\code{define-for-macros} run once, as they are compiled, and are left
-out of the compiled code, as under the compiler. (\code{dylan:compile-file}
-compiles a whole file before any of it runs, so there, as under the
-compiler, a macro body can use only what \code{define-for-macros} has
-defined.) A program meant to run both ways should keep to what works
-under the compiler: helpers for macros in \code{define-for-macros}, and
-none of them called by the program itself.
+The interactive implementation compiles and runs a program a form at a
+time. A macro's body runs while the forms after its definition are
+compiled, and the forms of a \code{define-for-macros} run once, as they
+are compiled, and are left out of the compiled code. Both run in the
+same compile-time environment as under the compiler, apart from the
+program.
 
 \subsection{Macros and modules}\label{sec:ext-macro-modules}
 

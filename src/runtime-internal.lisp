@@ -55,7 +55,14 @@
 (defun module-variable-shown (name)
   "The module variable whose Lisp name is NAME as the compiler to C shows
 it: (setter foo) for the setter variable dylan/setter/foo/, its module
-after it."
+after it (the compile-time environment's as compile-time)."
+  (let* ((shown (module-variable-shown-1 name))
+         (at (search "@!" shown)))
+    (if at
+        (concatenate 'string (subseq shown 0 (1+ at)) (subseq shown (+ at 2)))
+        shown)))
+
+(defun module-variable-shown-1 (name)
   (let* ((string (symbol-name name))
          (prefix "DYLAN/SETTER/"))
     (if (and (> (length string) (1+ (length prefix)))

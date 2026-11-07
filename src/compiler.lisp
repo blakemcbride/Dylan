@@ -751,9 +751,9 @@ it; the last result form delivers MULTIPLE-VALUES?."
 ;;; compiled code runs, so that the forms compiled after it -- the rest of
 ;;; the file, when a file is compiled whole -- expand with it; the compiled
 ;;; code defines it again, so that a compiled file loaded later has it.
-;;; Here the compile-time environment is the program's own: whatever
-;;; DEFINE-FOR-MACROS defines, the program can see, where the compiler to C
-;;; keeps the two apart.
+;;; Macro bodies and the forms of DEFINE-FOR-MACROS are compiled in the
+;;; compile-time environment (COMPILE-TIME-MODULE), apart from the program,
+;;; as the compiler to C compiles them.
 
 (defparameter +max-expansions+ 100000)
 
@@ -845,30 +845,36 @@ call, with the macro's name, as the compiler to C reports it."
       (when (and (boundp variable)
                  (not (eq (symbol-value variable) the-unassigned-value)))
         (dylan%error "define-macro -- the name is a variable already" name))
-      (compile-expression
-       `(method ,params ,@body) nil module-vars
-       (lambda (new-vars preamble output)
-         ;; Now, for the forms compiled after this one ...
-         (dylan%define-macro variable name
-                             (implementation-specific/eval
-                              (append preamble (list output))))
-         ;; ... and again when the compiled code runs.
-         (funcall continue
-                  `(progn (dylan%define-macro ',variable ',name ,output) ',name)
-                  (append new-vars module-vars)))))))
+      (let ((code nil))
+        (with-compile-time-module
+          (compile-expression
+           `(method ,params ,@body) nil *compile-time-variables*
+           (lambda (new-vars preamble output)
+             (setf *compile-time-variables*
+                   (append new-vars *compile-time-variables*))
+             ;; Now, for the forms compiled after this one ...
+             (dylan%define-macro variable name
+                                 (implementation-specific/eval
+                                  (append preamble (list output))))
+             ;; ... and again when the compiled code runs.
+             (setf code `(progn (dylan%define-macro ',variable ',name ,output)
+                                ',name)))))
+        (funcall continue code module-vars)))))
 
 (defun compile-define-for-macros-form (forms module-vars bound-vars really-compile
                                        multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
   (unless (null bound-vars)
     (dylan%error "define-for-macros must be at top level"))
-  (compile-expression
-   `(begin ,@forms) nil module-vars
-   (lambda (new-vars preamble output)
-     ;; Run now, while compiling, as the compiler to C runs them, and
-     ;; left out of the compiled code, as it leaves them out.
-     (implementation-specific/eval (append preamble (list output)))
-     (funcall continue 'dylan%false (append new-vars module-vars)))))
+  ;; Run now, while compiling, as the compiler to C runs them, and left
+  ;; out of the compiled code, as it leaves them out.
+  (with-compile-time-module
+    (compile-expression
+     `(begin ,@forms) nil *compile-time-variables*
+     (lambda (new-vars preamble output)
+       (setf *compile-time-variables* (append new-vars *compile-time-variables*))
+       (implementation-specific/eval (append preamble (list output))))))
+  (funcall continue 'dylan%false module-vars))
 
 (defun compile-dotimes-form (forms module-vars bound-vars really-compile
                              multiple-values? continue)

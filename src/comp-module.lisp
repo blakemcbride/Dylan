@@ -397,6 +397,30 @@ module it names (or NIL).  Without a header the stream is left untouched."
                                                                  (1+ colon))))))))
                 module))))))
 
+;;; The compile-time environment (an extension: macros).  Macro bodies and
+;;; the forms of DEFINE-FOR-MACROS are compiled in a module of their own
+;;; that uses DYLAN, apart from the program's modules, here as under the
+;;; compiler to C: they see the library and what DEFINE-FOR-MACROS has
+;;; defined, and the program sees none of it.  No program can name the
+;;; module, since a symbol a program writes never begins with !.
+
+(defparameter +compile-time-module+ (intern "!COMPILE-TIME" '#:dylan))
+
+(defvar *compile-time-variables* '()
+  "The variables defined so far in the compile-time environment.")
+
+(defun compile-time-module ()
+  "The name of the compile-time environment's module, made if need be."
+  (unless (find-module +compile-time-module+ nil)
+    (let ((*current-module* *current-module*))
+      (dylan%define-module +compile-time-module+ '((use dylan))))
+    (setf *compile-time-variables* '()))
+  +compile-time-module+)
+
+(defmacro with-compile-time-module (&body body)
+  `(let ((*current-module* (compile-time-module)))
+     ,@body))
+
 (defun initialize-modules ()
   (clrhash *dylan-modules*)
   (setf (gethash 'dylan *dylan-modules*) (make-dylan-module :name 'dylan))

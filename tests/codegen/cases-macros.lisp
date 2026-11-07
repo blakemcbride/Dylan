@@ -217,4 +217,28 @@ KeY:
 KeY:
 FreSh
 ")
+ ;; Macro bodies run in a compile-time environment apart from the program,
+ ;; in both implementations: the program's own functions are not there ...
+ (macro-bodies-apart-from-program
+  "(define helper (method (x) (list x x)))
+(define-macro use-helper (x) (helper x))
+(print (use-helper 3))"
+  ""
+  :compile-error "macro use-helper: the variable helper@compile-time has no value")
+ ;; ... and the program cannot see what define-for-macros defines.
+ (define-for-macros-apart-from-program
+  "(define-for-macros
+  (define counter 0)
+  (define twice (method (x) (* 2 x))))
+(define-macro next-count () (set! counter (+ counter 1)) (twice counter))
+(print (list (next-count) (next-count)))
+(define counter 100)
+(print counter)
+(print (next-count))
+(print (twice 5))"
+  "(2 4)
+100
+6
+"
+  :error "the variable twice@dylan-user has no value")
 )

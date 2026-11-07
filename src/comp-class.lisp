@@ -312,9 +312,10 @@
       (lambda (ref set)
         `(if (dylan%not (or (dylan%eq? ,ref ',the-unassigned-value)
                             (dylan%generic-function? ,ref)))
+             ;; As the compiler to C words it
              (dylan-call dylan/error
-                         "define-generic-function -- already has a value"
-                         ',name ,ref ',reqs ',rest ',keys)
+                         ,(format nil "~a is defined both as a variable and as a generic function"
+                                  (definition-name-string name)))
              (progn
                ;; Chapter 6: an existing generic function is kept, with
                ;; its methods, if the definition is consistent with it.
@@ -430,9 +431,11 @@ Its faults are worded as the compiler to C words them."
                                           nil ; No required keywords
                                           nil))) ; No rest argument
                              ((dylan%not (dylan%generic-function? ,ref))
+                              ;; As the compiler to C words it
                               (dylan-call dylan/error
-                                          "Slot function -- already has a value"
-                                          ',(slot.debug-name slot) ,owner)))
+                                          ,(format nil "~a is defined both as a variable and as a generic function"
+                                                   (definition-name-string
+                                                    (variable->name name))))))
                        ,ref)))
                  (funcall continue nil mod-vars))))
     (get-mod-var

@@ -53,7 +53,7 @@ string
   "(define double 3)
    (define-method double ((thing <number>)) (+ thing thing))"
   ""
-  :compile-error "")
+  :error "double is defined both as a variable and as a generic function")
 
  ;; 6 define-generic-function: generic functions declared first, then
  ;; given methods; the body's parameters are lexical variables

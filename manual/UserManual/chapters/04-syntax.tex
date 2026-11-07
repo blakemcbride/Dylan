@@ -560,13 +560,15 @@ later-var                   ; => error: later-var has no value yet
 (define later-var 5)
 \end{dylan}
 
-\noindent The two implementations differ in what they allow a program to
-define again. In both a later \code{define} may redefine a variable,
-which only draws a warning; in the Common Lisp implementation a later
-form may also redefine a class. In the compiler to C, which compiles a static program, a class may be defined
-only once, and a name cannot be
-defined both by \code{define} and as a generic function. These
-are errors when compiling. Chapter~\ref{ch:dylanc} lists the full set of restrictions.
+\noindent In both implementations a later \code{define} may redefine a
+variable, which only draws a warning, and a variable \code{define-method}
+defined may be defined again by \code{define}. A \code{define-method} or
+\code{define-generic-function} of a variable that holds something other
+than a generic function is an error when it runs. The two implementations
+differ in one thing: in the Common Lisp implementation a later form may
+also redefine a class. In the compiler to C, which compiles a static
+program, a class may be defined only once; that is an error when
+compiling. Chapter~\ref{ch:dylanc} lists the full set of restrictions.
 
 \subsection{Source files and the module: header}\label{sec:syntax-files}
 

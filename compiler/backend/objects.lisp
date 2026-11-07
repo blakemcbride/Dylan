@@ -67,9 +67,13 @@ reflection, and call it?  If not, methods need no direct entries.")
 
 (defstruct gfun var c-name required variable-p methods declared-keys
   (object-c nil)
-  (defined-c nil))                      ; C name of the flag set once a
+  (defined-c nil)                       ; C name of the flag set once a
                                         ; definition of it has run, for a
                                         ; program's generic function
+  (declared-c nil))                     ; C name of the flag set once its
+                                        ; define-generic-function has run,
+                                        ; for one whose variable a set! or
+                                        ; define assigns: read-only from then
 
 (defvar *own-class-refs* nil
   "IVAR -> T for a variable bound to a class's value only for a slot
@@ -1090,7 +1094,15 @@ slot SD in the object VAR."
 
 (defun finish-generic (g)
   (let ((var (gfun-var g)))
-    (when (some (lambda (d) (define-variable-node-p d)) (module-var-definitions var))
+    ;; A program's variable may be defined both by define and as a generic
+    ;; function: each definition checks, when it runs, what the variable
+    ;; holds (chapters 4 and 6), so it holds its value in a cell, as an
+    ;; assigned one does.
+    (when (and (not (library-var-p var))
+               (some #'define-variable-node-p (module-var-definitions var)))
+      (setf (gethash var *assigned-globals*) t))
+    (when (and (library-var-p var)
+               (some (lambda (d) (define-variable-node-p d)) (module-var-definitions var)))
       ;; Placed at the program's definition, not the library's
       (let ((*location*
               (node-location
@@ -1146,7 +1158,13 @@ slot SD in the object VAR."
     (unless (eq (module-var-module var) (dylan-module))
       (let ((name (format nil "~a_defined" (gfun-c-name g))))
         (setf (gfun-defined-c g) name)
-        (declare-object "static int ~a;" name)))
+        (declare-object "static int ~a;" name))
+      ;; Its variable is read-only once its define-generic-function has
+      ;; run (chapter 5), not before.
+      (when (and (gfun-declared-keys g) (gethash var *assigned-globals*))
+        (let ((name (format nil "~a_declared" (gfun-c-name g))))
+          (setf (gfun-declared-c g) name)
+          (declare-object "static int ~a;" name))))
     ;; The parameter lists must be congruent (chapter 6).
     (dolist (m (gfun-methods g))
       (multiple-value-bind (required variable) (method-shape m)
@@ -1748,10 +1766,11 @@ need, which GENERATE-C places."
                                   (name-string (module-var-name (gclass-var g))))))))
     (build-generics definitions)
     (declare-program-classes)
-    ;; A set! of a read-only variable stores nothing: it is an error when
-    ;; it runs (chapter 5).
+    ;; A set! of a class's variable stores nothing: it is an error when
+    ;; it runs (chapter 5).  A generic function's is read-only only once
+    ;; its define-generic-function has run.
     (loop for var being the hash-keys of *assigned-globals*
-          when (read-only-var-p var)
+          when (global-class var)
             do (remhash var *assigned-globals*))
     (method-objects)))
 

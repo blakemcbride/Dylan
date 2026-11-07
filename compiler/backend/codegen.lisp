@@ -305,7 +305,7 @@ signals if the result is too large (chapter 8), and nothing is allocated."
       (ir-global-ref (deliver dest (global-ref-c e dest)))
       (ir-global-set
        (let ((var (ir-global-set-var e)))
-         (if (read-only-var-p var)
+         (if (global-class var)
              ;; Chapter 5: the variables of classes and of
              ;; define-generic-function are read-only, an error when the
              ;; set! is done -- after the one of a variable with no value
@@ -320,6 +320,7 @@ signals if the result is too large (chapter 8), and nothing is allocated."
                ;; the set! is done.
                (emit "(void)dy_check_bound(~a, ~a);" (global-c-name var)
                      (c-utf8-literal (module-var-string var)))
+               (emit-read-only-check var)
                (emit "~a = ~a;" (global-c-name var) (atom-c (ir-global-set-value e)))))
          (deliver dest (atom-c (ir-global-set-value e)))))
       (ir-set
@@ -363,6 +364,7 @@ signals if the result is too large (chapter 8), and nothing is allocated."
        (let ((var (ir-define-variable-var e)))
          ;; A define of a variable that already has a value warns
          ;; (chapter 4): another define of it ran, or this one ran before.
+         (emit-read-only-check var)
          (unless (or (library-var-p var) (module-var-thread-local-p var))
            (emit "if (~a != DY_UNBOUND) dy_redefining_variable(~a);" (global-c-name var)
                  (c-utf8-literal (name-string (module-var-name var)))))
@@ -390,7 +392,9 @@ signals if the result is too large (chapter 8), and nothing is allocated."
          (if (gethash e *inconsistent-declarations*)
              (emit "dy_error_naming(\"define-generic-function: \", ~a, \" is inconsistent with the existing generic function\", 0);"
                    (c-utf8-literal (name-string (module-var-name (ir-define-generic-var e)))))
-             (when g (dolist (line (generic-definition-c g)) (emit "~a" line)))))
+             (when g
+               (dolist (line (generic-definition-c g)) (emit "~a" line))
+               (when (gfun-declared-c g) (emit "~a = 1;" (gfun-declared-c g))))))
        (deliver dest (definition-value (ir-define-generic-var e))))
       (ir-define-method
        (let ((m (gethash (ir-define-method-fn e) *method-of-fn*)))
@@ -406,6 +410,15 @@ signals if the result is too large (chapter 8), and nothing is allocated."
        (gen-class-definition e)
        (deliver dest (c-constant *cdata* (name-symbol (module-var-name
                                                        (slot-spec-getter (ir-define-slot-slot e))))))))))
+
+(defun emit-read-only-check (var)
+  "For a set! or define of VAR, a generic function's variable that a
+define-generic-function makes read-only when it runs (chapter 5): the
+error if it has run."
+  (let ((g (gethash var *gfuns*)))
+    (when (and g (gfun-declared-c g))
+      (emit "if (~a) dy_error_naming(\"\", ~a, \" holds a class or generic function and cannot be assigned\", 0);"
+            (gfun-declared-c g) (c-utf8-literal (name-string (module-var-name var)))))))
 
 (defun never-false-p (atom)
   (let ((type (atom-type atom)))

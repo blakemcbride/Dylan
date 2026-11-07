@@ -296,10 +296,12 @@ pong
   ""
   :compile-error "a superclass must be a class known at compile time"
   :compiler-only t)
+ ;; A variable defined by define and as a generic function: an error when
+ ;; the second definition runs (chapters 4 and 6).
  (variable-and-generic
   "(define g 1) (define-method g (x) x)"
   ""
-  :compile-error "defined both as a variable and as a generic function")
+  :error "g is defined both as a variable and as a generic function")
  (not-congruent
   "(define-method h (x) x) (define-method h (x y) x)"
   ""
@@ -1791,4 +1793,76 @@ found
 #t
 #({the generic function condition-format-string} {the generic function condition-format-arguments})
 ")
+ ;; A variable may be defined by define and by define-method, define-class or
+ ;; define-slot, and assigned, in either order, until a define-generic-function
+ ;; makes it read-only; each definition checks, when it runs, what it holds
+ ;; (chapters 4, 5 and 6).
+ (generic-and-variable-definitions
+  "(define-method z () 1)
+(print (z))
+(define z 2)
+(print z)
+(define-class <a> (<object>) (x init-value: 5))
+(define p (make <a>))
+(print (x p))
+(define x 1)
+(print x)
+(set! x (method (o) 7))
+(print (x p))
+(define-method (setter w) (o v) v)
+(define (setter w) 4)
+(print (setter w))
+(define-method h () 1)
+(define f (method () (h)))
+(print (f))
+(set! h (method () 2))
+(print (f))
+(define h (method () 3))
+(print (f))
+(define-generic-function g (a))
+(define-method g ((a <integer>)) (* a 2))
+(print (g 4))
+(define t1 (method () (set! g 1)))
+(print (handler-case (t1) ((<error> condition: c) (condition-format-string c))))
+(print (g 6))"
+  "1
+2
+5
+1
+7
+4
+1
+2
+3
+8
+\"g holds a class or generic function and cannot be assigned\"
+12
+")
+ (define-then-define-generic-function
+  "(print 'start)
+(define y 1)
+(define-generic-function y (a))
+(print 'done)"
+  "start
+"
+  :error "y is defined both as a variable and as a generic function")
+ (define-generic-function-then-define
+  "(print 'start)
+(define-generic-function y (a))
+(define y 1)
+(print 'done)"
+  "start
+"
+  :error "y holds a class or generic function and cannot be assigned")
+ (set-before-define-generic-function
+  "(print 'start)
+(define-method h () 1)
+(set! h 3)
+(print h)
+(define-generic-function h ())
+(print 'done)"
+  "start
+3
+"
+  :error "h is defined both as a variable and as a generic function")
 )

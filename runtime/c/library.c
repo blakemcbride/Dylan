@@ -548,50 +548,54 @@ static bool reads_back(const char *text, double x, bool single) {
 }
 
 static int shortest_digits(double x, bool single, char *digits, int *n) {
-    char text[40];
-    int p;
-    for (p = 1; p < 17; p++) {
-        snprintf(text, sizeof text, "%.*e", p - 1, x);
-        if (reads_back(text, x, single)) break;
-    }
-    snprintf(text, sizeof text, "%.*e", p - 1, x);
-    char *e = strchr(text, 'e');
-    int exponent = atoi(e + 1);
-    int count = 0;
-    for (char *c = text; c < e; c++)
-        if (*c >= '0' && *c <= '9') digits[count++] = *c;
-    /* X halfway between two numbers of P digits: printf takes the even
-     * one, but the interactive implementation (SBCL's flonum-to-digits)
-     * the one above, and so does this, when it reads back too. */
+    /* X's decimal digits, ALL, X being ALL[0].ALL[1...] times 10^E */
     char exact[160];
     snprintf(exact, sizeof exact, "%.130e", x);
     char *exact_e = strchr(exact, 'e');
+    int e = atoi(exact_e + 1);
     char all[140];
     int m = 0;
     for (char *c = exact; c < exact_e; c++)
         if (*c >= '0' && *c <= '9') all[m++] = *c;
-    bool tie = m > p && all[p] == '5';
-    for (int i = p + 1; tie && i < m; i++) tie = all[i] == '0';
-    if (tie) {
-        char up[24];
-        int up_exponent = atoi(exact_e + 1);
-        memcpy(up, all, (size_t)p);
+    /* The fewest digits P for which one of the two numbers of P digits
+     * nearest X, below and above, reads back as X: the nearer if both do,
+     * and the one above if X is halfway, as the interactive implementation
+     * (SBCL's flonum-to-digits) chooses. */
+    for (int p = 1;; p++) {
+        char below[24], above[24];
+        int above_e = e;
+        memcpy(below, all, (size_t)p);
+        memcpy(above, all, (size_t)p);
         int i = p - 1;
-        while (i >= 0 && up[i] == '9') up[i--] = '0';
-        if (i >= 0) up[i]++;
-        else { memmove(up + 1, up, (size_t)p); up[0] = '1'; up_exponent++; }
-        char candidate[48];
-        snprintf(candidate, sizeof candidate, "%c.%.*se%d", up[0], p - 1, up + 1, up_exponent);
-        if (reads_back(candidate, x, single)) {
-            memcpy(digits, up, (size_t)p);
-            count = p;
-            exponent = up_exponent;
+        while (i >= 0 && above[i] == '9') above[i--] = '0';
+        if (i >= 0) above[i]++;
+        else { memmove(above + 1, above, (size_t)p - 1); above[0] = '1'; above_e++; }
+        /* How the rest of X's digits compare with one half */
+        int half = 0;
+        if (all[p] != '5') half = all[p] > '5' ? 1 : -1;
+        for (int j = p + 1; half == 0 && j < m; j++) if (all[j] != '0') half = 1;
+        bool exact_below = all[p] == '0';
+        for (int j = p + 1; exact_below && j < m; j++) exact_below = all[j] == '0';
+        const char *order[2] = { below, above };
+        int exponents[2] = { e, above_e };
+        if (!exact_below && half >= 0) {
+            order[0] = above; order[1] = below;
+            exponents[0] = above_e; exponents[1] = e;
+        }
+        for (int k = 0; k < (exact_below ? 1 : 2); k++) {
+            char candidate[48];
+            snprintf(candidate, sizeof candidate, "%c.%.*se%d", order[k][0], p - 1,
+                     order[k] + 1, exponents[k]);
+            if (p >= 17 || reads_back(candidate, x, single)) {
+                int count = p;
+                memcpy(digits, order[k], (size_t)p);
+                while (count > 1 && digits[count - 1] == '0') count--;
+                digits[count] = '\0';
+                *n = count;
+                return exponents[k] + 1;
+            }
         }
     }
-    while (count > 1 && digits[count - 1] == '0') count--;
-    digits[count] = '\0';
-    *n = count;
-    return exponent + 1;
 }
 
 D dy_number_string(D a0) {

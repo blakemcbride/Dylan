@@ -681,6 +681,17 @@ found
 1125899906842624.3
 1228074218604401.3
 ")
+ ;; The fewest digits that read back may round the wrong way: of the two
+ ;; numbers with that many digits nearest the float, only the farther may
+ ;; read back as it.
+ (float-printing-farther-neighbor
+  "(print (for ((d 1.0s0 (* d 2)) (i 0 (+ i 1))) ((= i 87) d)))
+(print 1.5474251s26)
+(print (= 1.5474251s26 (for ((d 1.0s0 (* d 2)) (i 0 (+ i 1))) ((= i 87) d))))"
+  "1.5474251s26
+1.5474251s26
+#t
+")
 
  ;; Chapter 14: rationalize, as Common Lisp's: the simplest rational
  ;; within the float's precision.

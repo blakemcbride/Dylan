@@ -67,7 +67,12 @@ reflection, and call it?  If not, methods need no direct entries.")
   (node nil)                            ; for a define-slot on a class, its
                                         ; node: the slot is the class's only
                                         ; once that has run
-  (once nil))                           ; that node runs at most once
+  (once nil)                            ; that node surely runs, once
+  (form-end nil)                        ; else the top-level IR-FN whose
+                                        ; own code it is in, if any: it
+                                        ; can run no more after that
+  (definer nil))                        ; its define-class or define-slot
+                                        ; node
 
 (defstruct gfun var c-name required variable-p methods declared-keys
   (declared-rest nil)                   ; a define-generic-function's #rest
@@ -608,8 +613,10 @@ slot features the superior definition specified."
          (let ((g (gethash (ir-define-class-var d) *gclasses*)))
            (setf (gethash d *sdef-of-node*)
                  (mapcar (lambda (spec)
-                           (make-slot-definition (gclass-info g) spec
-                                                 (or (slot-spec-location spec) *location*)))
+                           (let ((sd (make-slot-definition (gclass-info g) spec
+                                                           (or (slot-spec-location spec) *location*))))
+                             (setf (sdef-definer sd) d)
+                             sd))
                          (ir-define-class-slots d)))
            (setf (gclass-sdefs g) (gethash d *sdef-of-node*)))))
       (ir-define-slot
@@ -624,7 +631,15 @@ slot features the superior definition specified."
                  (let ((sd (make-slot-definition class (ir-define-slot-slot d) *location*))
                        (in (gethash d *definition-fns*)))
                    (setf (sdef-node sd) d
-                         (sdef-once sd) (and in (eq (ir-fn-kind in) :toplevel) t))
+                         (sdef-definer sd) d
+                         ;; Surely run once, where it is (TOPLEVEL-ORDER),
+                         ;; or at most once, by the end of its top-level
+                         ;; form; or, in a method or a loop, any number of
+                         ;; times, any time.
+                         (sdef-once sd) (and (gethash d *toplevel-order*) t)
+                         (sdef-form-end sd) (and (not (gethash d *toplevel-order*))
+                                                 in (eq (ir-fn-kind in) :toplevel)
+                                                 in))
                    (setf (gethash d *sdef-of-node*) (list sd))
                    (setf (gclass-sdefs g) (append (gclass-sdefs g) (list sd)))))
                ;; Any other owner must be a singleton when the define-slot
@@ -637,6 +652,7 @@ slot features the superior definition specified."
                  (when (or (slot-spec-init-keyword spec) (slot-spec-required-init-keyword spec))
                    (compile-error "slot ~a: the slot of a singleton takes no init-keyword" name))
                  (let ((sd (make-slot-definition nil spec *location*)))
+                   (setf (sdef-definer sd) d)
                    (setf (gethash d *sdef-of-node*) (list sd))
                    (push sd *singleton-sdefs*)))))))))
   ;; Chapter 6: a slot redefined in a subclass must respecify what the
@@ -941,10 +957,25 @@ superclass's gives it: what a virtual slot keeps."
       (emit "~a = 1;" (sdef-c sd "ran"))
       (emit "dy_define_class_slot(&~a, ~a);" (program-class-c (sdef-class sd))
             (address (sdef-descriptor-c sd)))
-      (when (and (sdef-once sd) (eq (sdef-allocation sd) :instance))
-        (dolist (c *classes*)
-          (when (and (slot-changing-class-p c) (subclass-info-p c (sdef-class sd)))
-            (emit "if (--~a == 0) ~a = DY_EMPTY;" (pending-c c) (early-c c))))))))
+      (when (sdef-once sd)
+        (dolist (line (define-slot-done-c sd)) (emit "~a" line))))))
+
+(defun define-slot-done-c (sd)
+  "The C statements that tell each class whose instances the define-slot
+of SD, an instance slot, may give a slot that it can run no more: they
+need not be kept for it (dy_define_slot_done)."
+  (and (eq (sdef-allocation sd) :instance)
+       (loop for c in *classes*
+             when (and (slot-changing-class-p c) (subclass-info-p c (sdef-class sd)))
+               collect (format nil "dy_define_slot_done(&~a);" (program-class-c c)))))
+
+(defun toplevel-end-c (top)
+  "The C statements to run after the top-level form TOP, whose own code
+has a define-slot that may not run (in an arm of an if, say): it can run
+no more."
+  (loop for sd in (class-define-slots)
+        when (eq (sdef-form-end sd) top)
+          append (define-slot-done-c sd)))
 
 (defun emit-class-slots (g node)
   "Code giving the program's class G, whose define-class NODE runs, its
@@ -1089,9 +1120,9 @@ slot SD in the object VAR."
                      :keys (let ((k (ir-fn-keys fn)))
                              (if (listp k) (mapcar #'ir-key-keyword k) k))
                      :location *location* :order (incf *definition-order*)
-                     :toplevel (let ((in (gethash d *definition-fns*)))
-                                 (and in (eq (ir-fn-kind in) :toplevel)
-                                      (gethash in *toplevel-order*))))))
+                     ;; The place of its top-level form if it surely
+                     ;; runs when that form does (TOPLEVEL-ORDER)
+                     :toplevel (gethash d *toplevel-order*))))
              (setf (gethash fn *method-of-fn*) m)
              (push m (gethash var *generic-declarations*))
              (push m (gfun-methods (gfun-for var)))))))))
@@ -1102,6 +1133,9 @@ slot SD in the object VAR."
              (declare-slot-storage sd)
              (unless (eq (sdef-allocation sd) :virtual)
                (dolist (m (gen-accessors sd))
+                 ;; The place of the top-level form its definition is in,
+                 ;; if it surely runs when that does (TOPLEVEL-ORDER)
+                 (setf (gmethod-toplevel m) (gethash (sdef-definer sd) *toplevel-order*))
                  (push m (gfun-methods (gfun-for (if (eq (gmethod-kind m) :getter)
                                                      (sdef-getter sd)
                                                      (sdef-setter sd)))))))
@@ -1404,13 +1438,28 @@ congruent with that one, the error then."
 ;;; When methods are attached (chapter 6)
 
 (defun flagged-method-p (m)
-  "Has M a flag set while it is attached: a program's define-method's, or
-a copy of a method in another generic function (ADD-FOREIGN-COPIES)?"
-  (or (program-method-p m) (and (gmethod-original m) t)))
+  "Has M a flag set while it is attached: a program's define-method's, the
+getter or setter of a program's define-slot, or a copy of a method in
+another generic function (ADD-FOREIGN-COPIES)?  A define-slot's may be
+called on instances made before it runs, which must not find it until
+then (chapter 6); a define-class's need no flag unless another method
+has its specializers, since no instance of the class is made before it
+runs."
+  (or (program-method-p m) (define-slot-accessor-p m) (and (gmethod-original m) t)))
 
 (defun program-method-p (m)
   "Is M a method a program's define-method makes?"
   (and (eq (gmethod-kind m) :ir) (not (ir-fn-library-p (gmethod-fn m)))))
+
+(defun program-accessor-p (m)
+  "Is M the getter or setter of a slot a program's define-class or
+define-slot defines, attached when that runs?"
+  (and (member (gmethod-kind m) '(:getter :setter))
+       (added-when-run-p m)))
+
+(defun define-slot-accessor-p (m)
+  (and (program-accessor-p m)
+       (ir-define-slot-p (sdef-definer (gmethod-sdef m)))))
 
 (defun library-location-p (location)
   (and location (location-p location) (library-source-file-p (location-file location))))
@@ -1428,26 +1477,33 @@ slot it reads or writes -- not from the start?"
 closure its define-method made last."
   (or (gmethod-closure-c m) (address (gmethod-object-c m))))
 
-(defun method-attachment-c (m &optional previous (define t))
+(defun method-attachment-c (m &optional closure (define t))
   "The C statements that attach M, as its definition does when it runs:
-the methods with its specializers are detached, and PREVIOUS, the
-closure of M made before, if any.  With DEFINE, the definition gives the
-generic function's variable its value too."
+the methods with its specializers are detached.  CLOSURE, if not NIL, is
+the C of the closure of M the definition made now, which replaces the one
+made before (GMETHOD-CLOSURE-C).  With DEFINE, the definition gives the
+generic function's variable its value too, first, since that may be an
+error.  The change itself is made with the methods' lock held, so that
+definitions running at once in several threads attach each method once
+(dy_lock_methods)."
   (let ((g (gethash (gmethod-var m) *gfuns*))
         (replaced (gmethod-siblings m)))
     (append
+     (and define (generic-definition-c g))
+     (list "dy_lock_methods();")
      (loop for s in replaced
            when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
      (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
-     (and define (generic-definition-c g))
-     (let ((dropped (append (mapcar #'method-object-c-expr replaced)
-                            (and previous (list previous)))))
+     (let ((object (or closure (method-object-c-expr m)))
+           (dropped (append (mapcar #'method-object-c-expr replaced)
+                            (and closure (list (gmethod-closure-c m))))))
        (list (if dropped
                  (format nil "dy_add_method(~a, ~a, (const D[]){ ~{~a~^, ~} }, ~d);"
-                         (address (gfun-c-name g)) (method-object-c-expr m)
-                         dropped (length dropped))
+                         (address (gfun-c-name g)) object dropped (length dropped))
                  (format nil "dy_add_method(~a, ~a, NULL, 0);"
-                         (address (gfun-c-name g)) (method-object-c-expr m))))))))
+                         (address (gfun-c-name g)) object))))
+     (and closure (list (format nil "~a = ~a;" (gmethod-closure-c m) closure)))
+     (list "dy_unlock_methods();"))))
 
 (defun defined-flag-c (var)
   "The C name of the flag that says whether VAR, the variable of a
@@ -1510,17 +1566,23 @@ the value and of the name, its C statement for any other value."
 (defun method-certain-p (m site)
   "Is M surely attached whenever the code of the fn SITE runs, so that a
 call there may go straight to it (or have its code inline)?  So it is if
-it is always attached; or if its define-method, a top-level form of its
-own that nothing replaces, ran before SITE's top-level form, or SITE's
-code is M's own."
-  (or (null (gmethod-flag-c m))
-      (and site
-           (program-method-p m)
-           (null (gmethod-siblings m))
-           (gmethod-toplevel m)
-           (or (fn-within-p site (gmethod-fn m))
-               (let ((here (gethash (fn-toplevel site) *toplevel-order*)))
-                 (and here (< (gmethod-toplevel m) here)))))))
+it is always attached; or if its define-method (or, for a slot's getter
+or setter, its define-class or define-slot), a top-level form of its own
+that surely runs and that nothing replaces, ran before SITE's top-level
+form, or SITE's code is M's own.  Never a method that refers to local
+variables: it is a
+closure its define-method makes when it runs, which only the generic
+function's dispatch has (GMETHOD-CLOSURE-C), not the static object a
+direct call would pass."
+  (and (not (and (eq (gmethod-kind m) :ir) (ir-fn-free-vars (gmethod-fn m))))
+       (or (null (gmethod-flag-c m))
+           (and site
+                (or (program-method-p m) (program-accessor-p m))
+                (null (gmethod-siblings m))
+                (gmethod-toplevel m)
+                (or (and (program-method-p m) (fn-within-p site (gmethod-fn m)))
+                    (let ((here (gethash (fn-toplevel site) *toplevel-order*)))
+                      (and here (< (gmethod-toplevel m) here))))))))
 
 ;;; Method objects and direct entries
 

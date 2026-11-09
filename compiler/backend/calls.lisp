@@ -480,9 +480,13 @@ class of the type, if any."
 (defun gen-slot-call (g args dest tail)
   "Generate the call of G, a slot getter or setter, inline if it can be;
 answer whether it was."
-  (let ((n (length args)))
+  (let ((n (length args))
+        (site (cfun-fn *cfun*)))
     (multiple-value-bind (k type)
         (and (notany #'heap-constant-p (if (= n 2) (butlast args) args))
+             ;; Each method surely attached here: else dispatch decides
+             ;; (a define-slot's getter, before the define-slot runs)
+             (every (lambda (m) (method-certain-p m site)) (gfun-methods g))
              (instance-slot-number g (case n (1 :getter) (2 :setter))))
       (when k
         (gen-inline-slot-call g args dest tail k type)

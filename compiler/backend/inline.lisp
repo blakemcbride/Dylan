@@ -82,6 +82,12 @@ types again before each round; leave IR analyzed afresh."
       (walk (ir-fn-body fn)))))
 
 (defun toplevel-order (ir)
+  "Each top-level IR-FN -> its place in the program; and each definition
+node that surely runs when its top-level form does, and the module
+variable it defines, -> the place of that form.  A definition in an arm
+of an if, or within a bind-exit, an unwind-protect or a local function,
+may not run (chapter 6: a definition takes effect when it runs), so
+neither it nor its variable is noted for it."
   (let ((order (make-hash-table :test #'eq)))
     (loop for top in (ir-program-toplevels ir)
           for i from 0
@@ -93,19 +99,27 @@ types again before each round; leave IR analyzed afresh."
                         (note (slot-spec-getter slot))
                         (note (slot-spec-setter slot)))
                       (walk (e)
+                        ;; Only what surely runs once the code before it
+                        ;; has: nothing in a top-level form can leave it
+                        ;; early but an exit to a bind-exit within it,
+                        ;; whose body is not walked, or an error, which
+                        ;; ends the program.
                         (typecase e
                           (ir-define-variable (note (ir-define-variable-var e)))
                           ;; A class's and a generic function's variable has
                           ;; its value once its definition runs (chapter 6)
-                          (ir-define-class (note (ir-define-class-var e))
+                          (ir-define-class (setf (gethash e order) i)
+                                           (note (ir-define-class-var e))
                                            (mapc #'note-slot (ir-define-class-slots e)))
-                          (ir-define-slot (note-slot (ir-define-slot-slot e)))
-                          (ir-define-generic (note (ir-define-generic-var e)))
-                          (ir-define-method (note (ir-define-method-var e)))
+                          (ir-define-slot (setf (gethash e order) i)
+                                          (note-slot (ir-define-slot-slot e)))
+                          (ir-define-generic (setf (gethash e order) i)
+                                             (note (ir-define-generic-var e)))
+                          (ir-define-method (setf (gethash e order) i)
+                                            (note (ir-define-method-var e)))
                           (ir-let (walk (ir-let-value e)) (walk (ir-let-body e)))
                           (ir-mv-let (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e)))
-                          (ir-seq (mapc #'walk (ir-seq-forms e)))
-                          (ir-if (walk (ir-if-then e)) (walk (ir-if-else e))))))
+                          (ir-seq (mapc #'walk (ir-seq-forms e))))))
                (walk (ir-fn-body top))))
     order))
 
@@ -178,8 +192,42 @@ anything."
                                (null (ir-fn-rest fn))
                                (not (uses-next-method-p fn))
                                (null (ir-fn-free-vars fn))
+                               (not (refers-to-assigned-library-var-p fn))
                                (code-size fn)))))))
     (and size (<= size limit))))
+
+(defun refers-to-assigned-library-var-p (fn)
+  "Is FN the library's, and does its code, or a function it makes, refer
+to a library variable the program assigns?  The library's own C keeps
+the library's functions whatever the program stores in their variables
+(VARIABLE-GLOBAL-P); a copy of the code in the program's would read the
+variable instead, so the library's code must be called, not copied."
+  (and (ir-fn-library-p fn)
+       (labels ((assigned-p (a)
+                  (and (ir-global-ref-p a)
+                       (library-var-p (ir-global-ref-var a))
+                       (gethash (ir-global-ref-var a) *assigned-globals*)))
+                (walk-fn (f)
+                  (or (and (listp (ir-fn-keys f))
+                           (some (lambda (k) (walk (ir-key-default k))) (ir-fn-keys f)))
+                      (walk (ir-fn-body f))))
+                (walk (e)
+                  (typecase e
+                    (ir-global-ref (assigned-p e))
+                    (ir-call (or (assigned-p (ir-call-function e))
+                                 (some #'assigned-p (ir-call-arguments e))))
+                    (ir-prim (some #'assigned-p (ir-prim-arguments e)))
+                    (ir-global-set (walk (ir-global-set-value e)))
+                    (ir-set (walk (ir-set-value e)))
+                    (ir-let (or (walk (ir-let-value e)) (walk (ir-let-body e))))
+                    (ir-mv-let (or (walk (ir-mv-let-value e)) (walk (ir-mv-let-body e))))
+                    (ir-seq (some #'walk (ir-seq-forms e)))
+                    (ir-if (or (walk (ir-if-test e)) (walk (ir-if-then e)) (walk (ir-if-else e))))
+                    (ir-letrec (or (some #'walk-fn (ir-letrec-fns e)) (walk (ir-letrec-body e))))
+                    (ir-lambda (walk-fn (ir-lambda-fn e)))
+                    (ir-bind-exit (walk (ir-bind-exit-body e)))
+                    (ir-unwind (or (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e)))))))
+         (walk-fn fn))))
 
 (defun known-function-atom-p (a)
   "Is A known when compiling to be a particular function: a closure made

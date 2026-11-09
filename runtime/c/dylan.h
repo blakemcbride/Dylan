@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 16
+#define DY_ABI_VERSION 17
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -575,6 +575,19 @@ static inline void dy_free_root(void *p) { GC_FREE(p); }
 
 #endif
 
+/* Weak lists (gc-mps.c; object.c with the Boehm collector): objects in
+ * the heap, held without keeping them alive -- each is dropped when it
+ * dies.  A weak list is DY_EMPTY or what dy_weak_add answers; whoever
+ * uses one serializes the calls on it.
+ *
+ * dy_weak_add       LIST with X added: LIST, or a new list that replaces
+ *                   it (X must be an object in the heap, not on a stack)
+ * dy_weak_members   a <list> of LIST's objects alive now, newest first
+ * dy_weak_drop      LIST is no longer used (before it is let go) */
+D dy_weak_add(D list, D x);
+D dy_weak_members(D list);
+void dy_weak_drop(D list);
+
 /* ------------------------------------------------- Classes of objects */
 
 static inline DyWrapper *dy_wrapper_of(D x) {
@@ -837,13 +850,13 @@ typedef struct DySlotDescriptor {
  * define-slot puts its slot in the place of the one with the same getter,
  * or after the rest, in the class and in each subclass defined so far
  * that lacks one.  The instances made while one may still run (PENDING of
- * them) are kept in EARLY, newest first, to be given the slot's initial
- * value then. */
+ * them) are kept in EARLY, a weak list (an instance no longer used has no
+ * slot to give a value), to be given the slot's initial value then. */
 typedef struct DyProgramClass {
     D class;
     int *ready;
     D *slots;                      /* a <simple-object-vector>           */
-    D *early;                      /* a list                             */
+    D *early;                      /* a weak list                        */
     int *pending;
     const struct DyProgramClass *const *subclasses;  /* direct ones      */
     intptr_t subclass_count;
@@ -865,6 +878,9 @@ D dy_reported_slots(D slots);
 D dy_find_slot_descriptor(D slots, D getter);
 /* A define-slot of the slot DESCRIPTOR on the class OWNER runs. */
 void dy_define_class_slot(const DyProgramClass *owner, D descriptor);
+/* A define-slot that gives K's instances a slot can run no more: one
+ * fewer is pending, and with none, the early instances are let go. */
+void dy_define_slot_done(const DyProgramClass *k);
 /* Initialize the slots of X, an instance of K, from the keyword arguments
  * A0... (from index 1) as make does; answer them, as a list. */
 D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
@@ -1220,10 +1236,18 @@ _Noreturn void dy_no_applicable_method(D generic);
 
 /* A program's define-method has run: METHOD is attached to GENERIC, the
  * N methods REPLACED (those with its specializers) detached; what the
- * reflective functions find (chapter 10). */
+ * reflective functions find (chapter 10).  The methods' lock is held
+ * (dy_lock_methods), across the method flags' changes too, so that
+ * definitions running at once in several threads attach each method
+ * once. */
 void dy_add_method(D generic, D method, const D *replaced, intptr_t n);
+void dy_lock_methods(void);
+void dy_unlock_methods(void);
 void dy_check_generic_variable(D value, D generic, const char *name);
-void dy_add_method_when_run(D generic, D method, const char *name);
+/* A define-method of the variable NAME, which holds GENERIC, a generic
+ * function the program made: METHOD is attached to it, and if KEEP is not
+ * NULL, stored there, with the methods' lock held. */
+void dy_add_method_when_run(D generic, D method, const char *name, D *keep);
 void dy_redeclare_generic(D value, const char *name, intptr_t required, bool rest, D keys);
 _Noreturn void dy_unbound_slot(const char *getter);
 _Noreturn void dy_not_a_slot(const char *getter, D instance);

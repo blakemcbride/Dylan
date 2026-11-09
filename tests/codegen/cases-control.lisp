@@ -769,4 +769,22 @@ after
 (37 \"a1b\")
 (38 \"not a stream: y\")
 ")
+ ;; Two loops in a function with a specialized entry, one in an argument
+ ;; of a call: each label once in each of the function's C functions.
+ (loop-labels-in-each-entry
+  "(define-method f (a)
+  (list 0) (list 1) (list 2) (list 3) (list 4) (list 5) (list 6) (list 7)
+  (if a
+      (list (for ((i 0 (+ i 1))) ((= i 3) i)))
+      (for ((j 0 (+ j 1))) ((= j 4) j))))
+(print (list (f #t) (f #f)))
+(define-method g ((x <double-float>))
+  (list 0) (list 1) (list 2) (list 3) (list 4) (list 5) (list 6) (list 7)
+  (if (> x 0.0)
+      (list (for ((i 0 (+ i 1))) ((= i 3) (* x i))))
+      (for ((j 0 (+ j 1))) ((= j 4) (* x j)))))
+(print (list (g 1.5) (g -1.5)))"
+  "((3) 4)
+((4.5) -6.0)
+")
 )

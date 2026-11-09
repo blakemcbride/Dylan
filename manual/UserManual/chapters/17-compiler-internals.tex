@@ -452,7 +452,8 @@ floats, ratios), which the collector never scans; AMS, which does not
 move, for \code{<thread>} objects, since a thread's state points to its
 own; LO, which is neither moved nor protected, for objects holding a
 mutex or condition variable the kernel uses; and AWL, weak, for the
-table of identity hashes. Each thread has its own \emph{allocation
+table of identity hashes and for the list of a class's instances made
+while a \code{define-slot} on it may still run. Each thread has its own \emph{allocation
 points} in AMC and AMCZ, from which it allocates by bumping a pointer;
 the slow path, when the point's buffer is empty, enters the collector.
 An object's fields are filled in before it is committed to the

@@ -2297,4 +2297,21 @@ none
 \"stream-contents: not a string stream: {stream}\"
 \"stream-contents: not a string stream: 5\"
 ")
+ ;; A set! of a library variable changes what the program's calls find,
+ ;; not the library's own code, inlined or not.
+ (library-keeps-its-functions
+  "(define old-car car)
+(set! car (method (x) 'my-car))
+(print '(1 2))
+(print (cons 3 4))
+(print (reverse '(a b c)))
+(print (car '(1 2)))
+(set! car old-car)
+(print (car '(1 2)))"
+  "(1 2)
+(3 . 4)
+(c b a)
+my-car
+1
+")
 )

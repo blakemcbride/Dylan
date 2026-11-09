@@ -51,6 +51,12 @@ static bool dropped(D x, D method, const D *replaced, intptr_t n) {
     return false;
 }
 
+/* Held while a method is attached (dylan.h) */
+static pthread_mutex_t methods_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void dy_lock_methods(void) { pthread_mutex_lock(&methods_lock); }
+void dy_unlock_methods(void) { pthread_mutex_unlock(&methods_lock); }
+
 void dy_add_method(D generic, D method, const D *replaced, intptr_t n) {
     DyGeneric *g = DY_PTR(generic);
     DyVector *old = DY_PTR(g->methods);
@@ -274,13 +280,15 @@ static D put_slot(D slots, D d) {
     return v;
 }
 
-/* The early instances, with what makes them added by other threads */
+/* The early instances (weak lists), and the counts of the define-slots
+ * that may still run, with what changes them in other threads */
 static pthread_mutex_t early_lock = PTHREAD_MUTEX_INITIALIZER;
 
-/* Give each instance in EARLY the initial value of the slot D */
+/* Give each instance of K made early, and alive, the initial value of the
+ * slot D */
 static void initialize_early(const DyProgramClass *k, D d) {
     pthread_mutex_lock(&early_lock);
-    D early = *k->early;
+    D early = dy_weak_members(*k->early);
     pthread_mutex_unlock(&early_lock);
     for (; early != DY_EMPTY; early = dy_tail(early)) {
         DySlotDescriptor *s = descriptor(d);
@@ -345,6 +353,15 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
     free(seen);
 }
 
+void dy_define_slot_done(const DyProgramClass *k) {
+    pthread_mutex_lock(&early_lock);
+    if (--*k->pending == 0) {
+        dy_weak_drop(*k->early);
+        *k->early = DY_EMPTY;
+    }
+    pthread_mutex_unlock(&early_lock);
+}
+
 /* The slot whose storage D, one of K's slots, initializes: D, or for a
  * virtual slot the one it keeps; NULL if none */
 static DySlotDescriptor *storage_of(const DyProgramClass *k, D d) {
@@ -392,11 +409,9 @@ D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
         for (intptr_t i = 0; i < k->init_key_count; i++) names[count++] = k->init_keys[i];
         dy_check_keywords(self, argc, 1, a0, a1, a2, a3, names, (size_t)count);
     }
-    if (*k->pending > 0) {
-        D pair = dy_pair(x, DY_EMPTY);
+    if (__atomic_load_n(k->pending, __ATOMIC_RELAXED) > 0) {
         pthread_mutex_lock(&early_lock);
-        ((DyPair *)DY_PTR(pair))->tail = *k->early;
-        *k->early = pair;
+        if (*k->pending > 0) *k->early = dy_weak_add(*k->early, x);
         pthread_mutex_unlock(&early_lock);
     }
     return keys;

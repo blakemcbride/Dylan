@@ -152,4 +152,28 @@ alive
 "
   :error "holds the lock already"
   :compiler-only t)
+ ;; Threads that run define-methods at once: each method is attached
+ ;; once, the last made.
+ (define-method-in-threads
+  "(define mg (make <generic-function> required: 1))
+(define-method defs-int (n) (define-method mg ((x <integer>)) (list 'int n)))
+(define-method defs-str (n) (define-method mg ((x <string>)) (list 'str n)))
+(define-method defs-sym (n) (define-method mg ((x <symbol>)) (list 'sym n)))
+(define-method loop-it (f) (method () (for ((i 0 (+ i 1))) ((= i 20000) 'ok) (f i))))
+(define t1 (make-thread (loop-it defs-int)))
+(define t2 (make-thread (loop-it defs-str)))
+(define t3 (make-thread (loop-it defs-sym)))
+(join-thread t1) (join-thread t2) (join-thread t3)
+(print (list (mg 1) (mg \"a\") (mg 'a) (size (generic-function-methods mg))))
+(define-method sg ((x <character>)) 'char)
+(define-method sdefs-int (n) (define-method sg ((x <integer>)) (list 'int n)))
+(define-method sdefs-str (n) (define-method sg ((x <string>)) (list 'str n)))
+(define t4 (make-thread (loop-it sdefs-int)))
+(define t5 (make-thread (loop-it sdefs-str)))
+(join-thread t4) (join-thread t5)
+(print (list (sg 1) (sg \"a\") (sg #\\a) (size (generic-function-methods sg))))"
+  "((int 19999) (str 19999) (sym 19999) 3)
+((int 19999) (str 19999) char 3)
+"
+  :compiler-only t)
 )

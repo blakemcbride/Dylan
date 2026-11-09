@@ -114,7 +114,7 @@ hand, a branch of an if that tested it (types.lisp).")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 16 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 17 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -468,9 +468,11 @@ other one, a copy of M there (ADD-FOREIGN-COPIES)."
             first value value (address (gfun-c-name (gethash var *gfuns*))) value)
       (setf first nil)
       (indented
-        (when (gmethod-closure-c m) (make-method-closure m))
-        (emit "dy_add_method_when_run(~a, ~a, ~a);" value (method-object-c-expr m)
-              (c-utf8-literal (name-string (module-var-name var))))))
+        (let ((closure (and (gmethod-closure-c m) (make-method-closure m))))
+          (emit "dy_add_method_when_run(~a, ~a, ~a, ~:[NULL~;&~:*~a~]);" value
+                (or closure (method-object-c-expr m))
+                (c-utf8-literal (name-string (module-var-name var)))
+                (and closure (gmethod-closure-c m))))))
     (emit "} else {")
     (indented (funcall own))
     (emit "}")))
@@ -792,14 +794,12 @@ STACK, with its environment yet to fill."
 
 (defun make-method-closure (m)
   "Make a closure of M, a method that refers to local variables, of them
-as they are now, and keep it in M's variable: answer the C variable that
-holds the closure made before."
+as they are now: answer the C variable that holds it.  Its attachment
+keeps it in M's variable (METHOD-ATTACHMENT-C)."
   (let* ((fn (gmethod-fn m))
          (cfun (gethash fn *cfuns*))
          (g (gethash (gmethod-var m) *gfuns*))
-         (previous (new-temp))
          (closure (new-temp)))
-    (emit "~a = ~a;" previous (gmethod-closure-c m))
     ;; As its static object would be (EMIT-METHOD-OBJECTS)
     (emit "~a = dy_make_closure_env(~a, ~a, ~d, (const D[]){~{~a~^, ~}});"
           closure
@@ -812,8 +812,7 @@ holds the closure made before."
       (emit "((DyFunction *)DY_PTR(~a))->specializers = ~a;" closure
             (spec-vector-c (gmethod-specs m))))
     (emit "((DyFunction *)DY_PTR(~a))->owner = ~a;" closure (address (gfun-c-name g)))
-    (emit "~a = ~a;" (gmethod-closure-c m) closure)
-    previous))
+    closure))
 
 (defun record-specializers (closure fn)
   "Give the closure CLOSURE of FN, a method made by method, the
@@ -1045,10 +1044,20 @@ specialized entry."
                        :only)
                       ((or (ir-fn-keys fn) (some #'unboxed-p (ir-fn-required fn)))
                        :copy)))
-          ;; The probe may have left its contified groups' destinations.
-          (loop for f being the hash-keys of *groups* using (hash-value group)
-                when (eq (host-fn f) fn)
-                  do (setf (group-dest group) nil)))))))
+          ;; The probe may have left its contified groups' destinations
+          ;; and labels.
+          (reset-hosted-groups fn))))))
+
+(defun reset-hosted-groups (fn)
+  "Forget what generating FN's code left in the contified groups whose
+code goes in FN's C function: their destinations and labels.  Each entry
+of FN generated (a probe, the uniform entry, the specialized one) numbers
+its labels from 0, so a label kept from another would be made again for
+another loop: a duplicate label."
+  (loop for f being the hash-keys of *groups* using (hash-value group)
+        when (eq (host-fn f) fn)
+          do (setf (group-dest group) nil)
+             (clrhash (group-labels group))))
 
 (defun direct-next-p (var fn)
   "Can the next method VAR of the method FN be called with no arguments
@@ -1077,6 +1086,7 @@ specialized entry, made with *SPEC* SPEC."
          (required (ir-fn-required fn))
          (r (length required))
          (keys (ir-fn-keys fn)))
+    (reset-hosted-groups fn)
     (setf (cfun-needs-mv-reset cfun) (makes-calls-p fn)
           (cfun-extra-locals cfun) '())
     ;; A function that may call one other than in tail position may be
@@ -1445,7 +1455,9 @@ each of its Dylan functions -> the name of the module it was written in."
                   (format stream "    dy_symbols_through(~d);~%" form)
                   (setf made form)))
               (format stream "    DY_CALL(DY_OBJ(&~a_closure), 0, 0, 0, 0, 0);~%"
-                      (cfun-c-name (gethash top *cfuns*))))))
+                      (cfun-c-name (gethash top *cfuns*)))
+              (dolist (line (toplevel-end-c top))
+                (format stream "    ~a~%" line)))))
         (format stream "    return 0;~%}~%")
         (let ((modules (make-hash-table :test #'equal))
               (units (program-units (ir-program-source ir))))

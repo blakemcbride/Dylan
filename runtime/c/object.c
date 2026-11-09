@@ -37,6 +37,87 @@ void dy_gc_stress(void) {
     if (__atomic_add_fetch(&gc_stress_count, 1, __ATOMIC_RELAXED) % gc_stress_interval == 0)
         GC_gcollect();
 }
+
+/* Weak lists (dylan.h): memory the collector does not scan, each object
+ * in it registered as a disappearing link, which the collector clears to
+ * 0 when the object dies (and then forgets).  A list let go must have its
+ * links unregistered first, or the collector would clear them in memory
+ * reused since. */
+typedef struct {
+    intptr_t size;                 /* room for objects                    */
+    intptr_t used;                 /* how many of OBJECTS are used, one   */
+    void *objects[];               /*   0 once its object has died        */
+} WeakList;
+
+static WeakList *make_weak_list(intptr_t size) {
+    WeakList *l = GC_MALLOC_ATOMIC(sizeof(WeakList) + (size_t)size * sizeof(void *));
+    if (!l) dy_error("out of memory", 0);
+    memset(l, 0, sizeof(WeakList) + (size_t)size * sizeof(void *));
+    l->size = size;
+    return l;
+}
+
+/* Put X, the object at FROM (read into a variable, so alive), at TO, its
+ * link with it */
+static void move_weak(void *x, void **from, void **to) {
+    if (from == to) return;
+    GC_unregister_disappearing_link(from);
+    *from = 0;
+    *to = x;
+    if (GC_general_register_disappearing_link(to, x) == GC_NO_MEMORY)
+        dy_error("out of memory", 0);
+}
+
+D dy_weak_add(D list, D x) {
+    WeakList *l = list == DY_EMPTY ? NULL : DY_PTR(list);
+    intptr_t size = l ? l->size : 0;
+    intptr_t used = l ? l->used : 0;
+    if (used == size) {
+        /* Full: the dead dropped, and if more than half is still alive, a
+         * list twice the size, the links moved to it.  (An object read
+         * here is on the stack, so it does not die while it moves.) */
+        intptr_t alive = 0;
+        for (intptr_t i = 0; i < used; i++) {
+            void *y = l->objects[i];
+            if (y) move_weak(y, &l->objects[i], &l->objects[alive++]);
+        }
+        if (!l || alive * 2 > size) {
+            WeakList *bigger = make_weak_list(size ? size * 2 : 16);
+            intptr_t moved = 0;
+            for (intptr_t i = 0; i < alive; i++) {
+                void *y = l->objects[i];
+                if (y) move_weak(y, &l->objects[i], &bigger->objects[moved++]);
+            }
+            alive = moved;
+            l = bigger;
+        }
+        used = alive;
+    }
+    l->objects[used] = DY_PTR(x);
+    if (GC_general_register_disappearing_link(&l->objects[used], DY_PTR(x)) == GC_NO_MEMORY)
+        dy_error("out of memory", 0);
+    l->used = used + 1;
+    return DY_OBJ(l);
+}
+
+D dy_weak_members(D list) {
+    if (list == DY_EMPTY) return DY_EMPTY;
+    WeakList *l = DY_PTR(list);
+    D members = DY_EMPTY;
+    for (intptr_t i = 0; i < l->used; i++) {
+        D y = DY_OBJ(l->objects[i]);
+        if (y) members = dy_pair(y, members);
+    }
+    return members;
+}
+
+void dy_weak_drop(D list) {
+    if (list == DY_EMPTY) return;
+    WeakList *l = DY_PTR(list);
+    for (intptr_t i = 0; i < l->used; i++)
+        GC_unregister_disappearing_link(&l->objects[i]);   /* if still there */
+    l->used = 0;
+}
 #endif
 
 void dy_init(void) {

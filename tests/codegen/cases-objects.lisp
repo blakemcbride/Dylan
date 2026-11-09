@@ -2129,4 +2129,97 @@ new
 7
 (1 1 1 1)
 ")
+ ;; A define-method that refers to local variables, at top level and in a
+ ;; method, called directly after it ran and from its own code: the call
+ ;; finds the closure its definition made.
+ (closure-method-calls
+  "(bind ((count 0)) (define-method bump () (set! count (+ count 1)) count))
+(bump)
+(print (bump))
+(define-method mk (n) (define-method h (x) (if (= x 0) n (h (- x 1)))))
+(mk 7)
+(print (h 3))
+(mk 9)
+(print (h 2))"
+  "2
+7
+9
+")
+ ;; A definition in an arm of an if, a when, an and, a case, or after a
+ ;; bind-exit's exit, takes effect only if it runs (chapter 6).
+ (definitions-that-may-not-run
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define flag #f)
+(define-method g ((x <string>)) 'str)
+(when flag (define-method g ((x <integer>)) (* x 2)))
+(print (try (method () (g 21))))
+(if flag (define-class <x> (<object>)) #f)
+(define-method f () <x>)
+(print (try f))
+(and flag (define-generic-function k (x)))
+(print (try (method () k)))
+(bind-exit (done) (done 1) (define-method g ((x <symbol>)) 'sym))
+(print (try (method () (g 'a))))
+(case 2 ((1) (define v 1)) (else: #f))
+(print (try (method () v)))
+(define flag2 #t)
+(when flag2 (define-method g ((x <character>)) 'char))
+(print (g #\\a))"
+  "\"ERR: no applicable method for g\"
+\"ERR: the variable <x>@dylan-user has no value\"
+\"ERR: the variable k@dylan-user has no value\"
+\"ERR: no applicable method for g\"
+\"ERR: the variable v@dylan-user has no value\"
+char
+")
+ ;; A define-slot's getter and setter are methods of their generic
+ ;; functions only once it runs: the define-class's slot is read until
+ ;; then, and a declared generic function has no method.
+ (define-slot-accessors-when-run
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (y init-value: 10))
+(define a (make <a>))
+(print (try (method () (y a))))
+(define-slot <a> y allocation: constant init-value: 33)
+(print (try (method () (y a))))
+(define-generic-function extra (x))
+(define-generic-function (setter extra) (x v))
+(define-method get-extra ((p <a>)) (extra p))
+(define-method set-extra ((p <a>) v) (set! (extra p) v))
+(print (try (method () (get-extra a))))
+(print (try (method () (set-extra a 3))))
+(define-slot <a> extra init-value: 5)
+(print (list (get-extra a) (set-extra a 3) (get-extra a)))"
+  "10
+33
+\"ERR: no applicable method for extra\"
+\"ERR: no applicable method for (setter extra)\"
+(5 3 3)
+")
+ ;; The instances made before a define-slot, in a method, that may run
+ ;; any time, are given its initial value each time it runs; those of a
+ ;; define-slot in a top-level when that does not run are not kept.
+ (define-slot-early-instances
+  "(define-class <p> (<object>) (a init-value: 0))
+(define-class <q> (<p>) (c init-value: 3))
+(define keep (make <stretchy-vector>))
+(for ((i 0 (+ i 1))) ((= i 20000))
+  (bind ((p (if (even? i) (make <p>) (make <q>))))
+    (when (= 0 (modulo i 100)) (add! keep p))))
+(define-method add-it (v) (define-slot <p> extra init-value: v))
+(add-it 7)
+(print (list (size keep) (every? (method (p) (= (extra p) 7)) keep)))
+(for ((i 0 (+ i 1))) ((= i 20000)) (make <q>))
+(define late (make <q>))
+(add-it 9)
+(print (list (extra late) (extra (first keep)) (extra (last keep))))
+(define flag #f)
+(define p1 (make <p>))
+(when flag (define-slot <p> other init-value: 1))
+(when (not flag) (define-slot <p> another init-value: 2))
+(print (list (another p1) (another (make <q>))))"
+  "(200 #t)
+(7 9 9)
+(2 2)
+")
 )

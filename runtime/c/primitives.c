@@ -440,8 +440,10 @@ static D made_dispatch(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 }
 
 /* A define-method of the variable NAME, which holds GENERIC, another
- * generic function than its own: METHOD is added to it (chapter 6). */
-void dy_add_method_when_run(D generic, D method, const char *name) {
+ * generic function than its own: METHOD is added to it (chapter 6), and
+ * kept in KEEP, if not NULL.  The errors first, then the change, with the
+ * methods' lock held. */
+void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     if (!dy_kind_p(generic, DY_KIND_GENERIC))
         dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
     DyGeneric *g = DY_PTR(generic);
@@ -474,6 +476,7 @@ void dy_add_method_when_run(D generic, D method, const char *name) {
         }
     }
     /* It replaces the one with the same specializers (chapter 6). */
+    dy_lock_methods();
     DyVector *methods = DY_PTR(g->methods);
     D specs = ((DyFunction *)DY_PTR(method))->specializers;
     D replaced[1] = { 0 };
@@ -493,6 +496,8 @@ void dy_add_method_when_run(D generic, D method, const char *name) {
     ((DyFunction *)DY_PTR(method))->owner = generic;
     dy_add_method(generic, method, replaced, n);
     g->entry = made_dispatch;
+    if (keep) *keep = method;
+    dy_unlock_methods();
 }
 
 PRIMITIVE(find_method) {

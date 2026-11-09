@@ -18,7 +18,7 @@
  *          its own)
  *   LO     objects holding a mutex or condition variable, which may not
  *          move, nor be protected while the kernel uses them
- *   AWL    the weak table of identity hashes
+ *   AWL    the weak table of identity hashes, and the weak lists
  *
  * An object's identity hash cannot be its address, since that changes.
  * %object-hash instead gives each object a number the first time it is
@@ -60,6 +60,7 @@ enum {
     KIND_CELL = 64,                /* DyCell                              */
     KIND_THREAD_SYNC,              /* DyThreadSync                        */
     KIND_WEAK_KEYS,                /* the identity hash table's keys      */
+    KIND_WEAK_LIST,                /* a weak list (dy_weak_add)           */
     KIND_FWD2,                     /* forwarded, two words                */
     KIND_FWD,                      /* forwarded: new address and size     */
     KIND_PAD1,                     /* padding, one word                   */
@@ -70,6 +71,7 @@ enum {
 DyWrapper dy_wrapper_cell = WRAPPER_OF_KIND(KIND_CELL);
 static DyWrapper wrapper_thread_sync = WRAPPER_OF_KIND(KIND_THREAD_SYNC);
 static DyWrapper wrapper_weak_keys = WRAPPER_OF_KIND(KIND_WEAK_KEYS);
+static DyWrapper wrapper_weak_list = WRAPPER_OF_KIND(KIND_WEAK_LIST);
 static DyWrapper wrapper_fwd2 = WRAPPER_OF_KIND(KIND_FWD2);
 static DyWrapper wrapper_fwd = WRAPPER_OF_KIND(KIND_FWD);
 static DyWrapper wrapper_pad1 = WRAPPER_OF_KIND(KIND_PAD1);
@@ -91,6 +93,13 @@ typedef struct {                   /* KIND_WEAK_KEYS                      */
     D size;                        /* an <integer>                        */
     D keys[];
 } WeakKeys;
+
+typedef struct {                   /* KIND_WEAK_LIST                      */
+    DyWrapper *wrapper;
+    D size;                        /* room for objects, an <integer>      */
+    D used;                        /* how many of OBJECTS are used, one   */
+    D objects[];                   /*   0 once its object has died        */
+} WeakList;
 
 /* ------------------------------------------------------ The format */
 
@@ -137,6 +146,9 @@ FORMAT_FUNCTION size_t object_size(mps_addr_t base) {
     case KIND_WEAK_KEYS:
         return DY_ALIGN(sizeof(WeakKeys)
                         + (size_t)DY_INT_VALUE(((WeakKeys *)base)->size) * sizeof(D));
+    case KIND_WEAK_LIST:
+        return DY_ALIGN(sizeof(WeakList)
+                        + (size_t)DY_INT_VALUE(((WeakList *)base)->size) * sizeof(D));
     case KIND_FWD2: return DY_ALIGN(2 * sizeof(D));
     case KIND_FWD: return ((Forward *)base)->size;
     case KIND_PAD1: return sizeof(D);
@@ -229,6 +241,19 @@ FORMAT_FUNCTION mps_res_t format_scan(mps_ss_t ss, mps_addr_t base, mps_addr_t l
                         mps_res_t r = MPS_FIX2(ss, &a);
                         if (r != MPS_RES_OK) return r;
                         k->keys[i] = a ? (D)a : DY_OBJ(&dead_key);
+                    }
+                }
+                break;
+            }
+            case KIND_WEAK_LIST: {
+                WeakList *l = base;
+                intptr_t n = DY_INT_VALUE(l->used);
+                for (intptr_t i = 0; i < n; i++) {
+                    mps_addr_t a = (mps_addr_t)l->objects[i];
+                    if (DY_IS_POINTER((D)a) && MPS_FIX1(ss, a)) {
+                        mps_res_t r = MPS_FIX2(ss, &a);
+                        if (r != MPS_RES_OK) return r;
+                        l->objects[i] = (D)a;   /* 0 if it has died */
                     }
                 }
                 break;
@@ -550,6 +575,61 @@ D dy_object_hash(D x) {
                      : (uint64_t)x;
     h *= 0x9E3779B97F4A7C15u;
     return DY_INT((intptr_t)(h >> 4) & DY_INT_MAX);
+}
+
+/* ---------------------------------------------------------- Weak lists */
+
+/* A weak list with room for SIZE objects, none used, in AWL */
+static WeakList *make_weak_list(intptr_t size) {
+    pthread_mutex_lock(&shared_lock);
+    WeakList *l = reserve_commit(weak_ap, &wrapper_weak_list,
+                                 sizeof(WeakList) + (size_t)size * sizeof(D),
+                                 DY_INT(size), true);
+    l->used = DY_INT(0);
+    pthread_mutex_unlock(&shared_lock);
+    return l;
+}
+
+D dy_weak_add(D list, D x) {
+    WeakList *l = list == DY_EMPTY ? NULL : DY_PTR(list);
+    intptr_t size = l ? DY_INT_VALUE(l->size) : 0;
+    intptr_t used = l ? DY_INT_VALUE(l->used) : 0;
+    if (used == size) {
+        /* Full: the dead dropped, and if more than half is still alive, a
+         * list twice the size.  (An object read here is on the stack, so
+         * it neither dies nor moves while it is copied.) */
+        intptr_t alive = 0;
+        for (intptr_t i = 0; i < used; i++) {
+            D y = l->objects[i];
+            if (y) l->objects[alive++] = y;
+        }
+        for (intptr_t i = alive; i < used; i++) l->objects[i] = 0;
+        if (alive * 2 > size || !l) {
+            WeakList *bigger = make_weak_list(size ? size * 2 : 16);
+            for (intptr_t i = 0; i < alive; i++) bigger->objects[i] = l->objects[i];
+            l = bigger;
+        }
+        used = alive;
+    }
+    l->objects[used] = x;
+    l->used = DY_INT(used + 1);
+    return DY_OBJ(l);
+}
+
+D dy_weak_members(D list) {
+    if (list == DY_EMPTY) return DY_EMPTY;
+    WeakList *l = DY_PTR(list);
+    D members = DY_EMPTY;
+    intptr_t used = DY_INT_VALUE(l->used);
+    for (intptr_t i = 0; i < used; i++) {
+        D y = l->objects[i];
+        if (y) members = dy_pair(y, members);
+    }
+    return members;
+}
+
+void dy_weak_drop(D list) {
+    (void)list;                    /* the collector frees it */
 }
 
 /* ------------------------------------------------------------- Start */

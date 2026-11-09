@@ -1147,7 +1147,7 @@ slot SD in the object VAR."
                (let ((setter (gfun-for (sdef-setter sd))))
                  (unless (gfun-required setter) (setf (gfun-required setter) 2))))))
   (loop for g being the hash-values of *gfuns*
-        do (settle-generic g (reverse (gethash (gfun-var g) *generic-declarations*))))
+        do (settle-generic-in-run-order g (reverse (gethash (gfun-var g) *generic-declarations*))))
   (add-foreign-copies)
   ;; initialize has its method on <object>.
   (let ((init (gethash (dylan-var "initialize") *gfuns*)))
@@ -1183,7 +1183,7 @@ declares the keys DECLARED (chapter 6); or NIL."
         ((or (atom a) (atom b)) (and (atom a) (atom b)))
         (t (and (subsetp a b) (subsetp b a)))))
 
-(defun settle-generic (g events)
+(defun settle-generic (g events &optional dry)
   "Settle the parameter list of the generic function G from EVENTS, in
 the order they run, as the interpreter does when they run (chapter 6):
 its define-generic-functions, the methods of its define-methods, and
@@ -1193,20 +1193,29 @@ define-generic-function or a slot a fixed one.  A method not congruent
 with it is an error when its definition runs, and is never added.  A
 define-generic-function then takes over a provisional one, unless the
 methods so far are not congruent with it, an error when it runs; with a
-fixed one it must be consistent, or it is an error when it runs."
+fixed one it must be consistent, or it is an error when it runs.  Answer
+the events that are errors, and the parameter list as (required
+variable-p declared-keys declared-rest).  With DRY, G and the tables are
+left as they are."
   (let ((state nil)                     ; NIL, :PROVISIONAL or :FIXED
-        required rest keys declared-p (attached '()))
+        required rest keys declared-p (attached '()) (errors '()))
     (labels ((variable-p () (or rest (and keys t)))
              (declared () (and declared-p (or keys :none)))
              (fix (r rs ks dgf)
                (setf state :fixed required r rest rs keys ks declared-p dgf))
+             (fail (e table err)
+               (push e errors)
+               (unless dry (setf (gethash e table) err)))
              (add (m)
                (let ((err (method-congruence-error m required (variable-p) (declared))))
                  (cond ((null err) (push m attached))
+                       (dry (push m errors))
                        ((eq (gmethod-kind m) :ir)
+                        (push m errors)
                         (setf (gethash (gmethod-fn m) *incongruent*) err
                               (gfun-methods g) (remove m (gfun-methods g))))
                        (t
+                        (push m errors)
                         (setf (gethash m *incongruent*) err
                               (gfun-methods g) (remove m (gfun-methods g)))
                         (push m (gfun-incongruent g)))))))
@@ -1223,12 +1232,12 @@ fixed one it must be consistent, or it is an error when it runs."
                         (some (lambda (m)
                                 (method-congruence-error m r (or rs (and ks t)) (or ks :none)))
                               attached))
-                    (setf (gethash e *incongruent*) +not-congruent+)
+                    (fail e *incongruent* +not-congruent+)
                     (fix r rs ks t)))
                (:fixed
                 (if (and (= r required) (eq rs rest) (same-declared-keys-p ks keys))
                     (setf declared-p t)
-                    (setf (gethash e *inconsistent-declarations*) t))))))
+                    (fail e *inconsistent-declarations* t))))))
           ((consp e)
            (destructuring-bind (sd kind) (cdr e)
              ;; The slot makes the generic function if there is none.
@@ -1241,11 +1250,96 @@ fixed one it must be consistent, or it is an error when it runs."
              (setf state :provisional required r rest (and v t) keys nil declared-p nil)
              (push e attached)))
           (t (add e))))
-      (when state
+      (when (and state (not dry))
         (setf (gfun-required g) required
               (gfun-variable-p g) (variable-p)
               (gfun-declared-keys g) (declared)
-              (gfun-declared-rest g) (and declared-p rest))))))
+              (gfun-declared-rest g) (and declared-p rest)))
+      (values errors
+              (and state (list required (variable-p) (declared) (and declared-p rest)))))))
+
+(defun declaration-place (e)
+  "The place in the order the program runs of the generic function event
+E (SETTLE-GENERIC), as (place . surely): the place is -1 for the
+library's, which it has from the start, and otherwise the index of the
+top-level form E is in (TOPLEVEL-ORDER); SURELY is true if E runs when
+that form does, not maybe later, or maybe not at all, from code within it
+-- a method, a branch -- which cannot run before the form does."
+  (flet ((in-form (node)
+           (let ((fn (gethash node *definition-fns*)))
+             (cons (or (and fn (gethash (fn-toplevel fn) *toplevel-order*)) 0)
+                   (and (gethash node *toplevel-order*) t)))))
+    (cond ((ir-define-generic-p e)
+           (if (library-location-p (ir-node-location e)) (cons -1 t) (in-form e)))
+          ((consp e)
+           (let ((sd (second e)))
+             (if (library-location-p (sdef-location sd))
+                 (cons -1 t)
+                 (in-form (sdef-definer sd)))))
+          ((program-method-p e)
+           (if (gmethod-toplevel e)
+               (cons (gmethod-toplevel e) t)
+               (cons (or (gethash (fn-toplevel (gmethod-fn e)) *toplevel-order*) 0) nil)))
+          (t (cons -1 t)))))
+
+(defun declaration-location (e)
+  (cond ((ir-define-generic-p e) (ir-node-location e))
+        ((consp e) (sdef-location (second e)))
+        (t (gmethod-location e))))
+
+(defparameter +run-orders-limit+ 5000
+  "The most orders of a generic function's definitions compared.")
+
+(defun possible-run-orders (events places)
+  "The orders EVENTS may run in, their PLACES given (DECLARATION-PLACE):
+those that surely run, in the order of their top-level forms; each other
+at any point after the definitions of the forms before its own.  NIL if
+there are more than +RUN-ORDERS-LIMIT+."
+  (let* ((pairs (mapcar #'cons events places))
+         (sure (stable-sort (remove-if-not #'cddr pairs) #'< :key #'cadr))
+         (maybe (remove-if #'cddr pairs))
+         (orders (list sure)))
+    (dolist (u maybe)
+      (let ((next '()))
+        (dolist (order orders)
+          ;; After every sure definition of an earlier form
+          (let ((from (or (position-if (lambda (p) (and (cddr p) (>= (cadr p) (cadr u)))) order)
+                          (length order))))
+            (loop for k from from to (length order)
+                  do (push (append (subseq order 0 k) (list u) (subseq order k)) next))))
+        (when (> (length next) +run-orders-limit+) (return-from possible-run-orders nil))
+        (setf orders next)))
+    (mapcar (lambda (order) (mapcar #'car order)) orders)))
+
+(defun settle-generic-in-run-order (g events)
+  "SETTLE-GENERIC, the events of G in the order they run.  Where that
+order is known only when the program runs (DECLARATION-PLACE), every
+order they may run in must settle G alike, the same definitions errors
+and the same parameter list, or the definitions are refused: a compiled
+program's generic function has its parameter list when compiled, and the
+interpreter settles it as its definitions run.  Definitions with no error
+in one order have none in any."
+  (let* ((places (mapcar #'declaration-place events))
+         (order (mapcar #'car (stable-sort (mapcar #'cons events places) #'<
+                                           :key (lambda (p) (if (cddr p) (cadr p) most-positive-fixnum))))))
+    (when (and (notevery #'cdr places) (settle-generic g order t))
+      (let* ((orders (possible-run-orders events places))
+             (outcomes (mapcar (lambda (order)
+                                 (multiple-value-bind (errors shape) (settle-generic g order t)
+                                   (cons errors shape)))
+                               orders)))
+        (when (or (null orders)
+                  (notevery (lambda (o)
+                              (and (null (set-exclusive-or (car o) (car (first outcomes))))
+                                   (equal (cdr o) (cdr (first outcomes)))))
+                            outcomes))
+          (let ((*location* (or (some (lambda (e place) (and (not (cdr place)) (declaration-location e)))
+                                      events places)
+                                *location*)))
+            (compile-error "the definitions of ~a are not congruent, and which of them runs first is known only when the program runs"
+                           (name-string (module-var-name (gfun-var g))))))
+        (setf order (first orders))))
+    (settle-generic g order)))
 
 (defun made-generic-p (atom)
   "Is ATOM bound to what (make <generic-function> ...) makes?"

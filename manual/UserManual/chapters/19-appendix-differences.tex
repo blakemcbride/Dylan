@@ -118,6 +118,11 @@ to change them; a compiled program cannot:
   \code{define-slot} owner may be any singleton, but a class owner must
   be known when compiling.
 \item A class cannot be defined twice.
+\item A generic function's parameter list is that of its first
+  definition to run. Definitions that are not congruent with each other
+  are refused when compiling if which of them runs first is known only
+  when the program runs: one in a method, or in a branch, may run
+  before or after another top-level definition, or not at all.
 \item \code{(make <class> ...)} is an error when it runs. A
   \code{<generic-function>} made by \code{make} is given methods only by
   \code{define-method} of a variable that holds it.

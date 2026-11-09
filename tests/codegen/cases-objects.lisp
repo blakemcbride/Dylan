@@ -2222,4 +2222,34 @@ char
 (7 9 9)
 (2 2)
 ")
+ ;; A generic function's parameter list is its first definition's to run
+ ;; (chapter 6).  Definitions in a method or a branch run later than the
+ ;; form they are in, if at all: where their order still decides which are
+ ;; errors, a compiled program, whose generic function has its parameter
+ ;; list when compiled, refuses them.
+ (congruence-in-known-order
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(define-method setup () (define-method k ((a <integer>)) 'int))
+(define-method k (a) 'one)
+(setup)
+(print (list (k 1) (k \"s\")))
+(when (k 1) (define-method h (a) 'h1))
+(define-method h ((a <string>)) 'hs)
+(print (list (h 1) (h \"s\")))
+(define-method j (a) 'j1)
+(define-method late () (define-method j (a b) 'j2))
+(print (try late))
+(print (j 1))"
+  "(int one)
+(h1 hs)
+\"the parameter list of a method of j is not congruent with its generic function\"
+j1
+")
+ (congruence-in-unknown-order
+  "(define-method setup () (define-method k (a b) 'two))
+(define-method k (a) 'one)
+(print (k 1))"
+  ""
+  :compile-error "the definitions of k are not congruent, and which of them runs first is known only when the program runs"
+  :compiler-only t)
 )

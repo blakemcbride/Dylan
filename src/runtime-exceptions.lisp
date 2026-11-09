@@ -55,19 +55,13 @@
   (dylan%generic-fn
    'condition-format-string
    (make-param-list `((condition ,<condition>)) nil nil nil)
-   (lambda (condition)
-     (declare (ignore condition))
-     ;; As for any generic function with no applicable method
-     (dylan-call dylan/error "no applicable method for condition-format-string"))))
+   nil))
 
 (defparameter dylan/condition-format-arguments
   (dylan%generic-fn
    'condition-format-arguments
    (make-param-list `((condition ,<condition>)) nil nil nil)
-   (lambda (condition)
-     (declare (ignore condition))
-     ;; As for any generic function with no applicable method
-     (dylan-call dylan/error "no applicable method for condition-format-arguments"))))
+   nil))
 
 ;;; A format string not given is empty, as in the compiled library, so
 ;;; that such a condition still has a message.
@@ -82,19 +76,13 @@
   (dylan%generic-fn
    'type-error-value
    (make-param-list `((condition ,<condition>)) nil nil nil)
-   (lambda (condition)
-     (declare (ignore condition))
-     ;; As for any generic function with no applicable method
-     (dylan-call dylan/error "no applicable method for type-error-value"))))
+   nil))
 
 (defparameter dylan/type-error-expected-type
   (dylan%generic-fn
    'type-error-expected-type
    (make-param-list `((condition ,<condition>)) nil nil nil)
-   (lambda (condition)
-     (declare (ignore condition))
-     ;; As for any generic function with no applicable method
-     (dylan-call dylan/error "no applicable method for type-error-expected-type"))))
+   nil))
 
 (dylan%add-slot <type-error>
                 nil 'instance nil dylan/type-error-value 'type-error-value

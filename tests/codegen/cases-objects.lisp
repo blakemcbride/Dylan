@@ -2356,4 +2356,17 @@ added
 (int int)
 (1 int)
 ")
+ ;; The condition accessors have only the slot methods of the classes
+ ;; that define those slots (chapter 13).
+ (condition-accessor-methods
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (map (method (g) (size (generic-function-methods g)))
+            (list condition-format-string condition-format-arguments
+                  type-error-value type-error-expected-type)))
+(print (applicable-method? type-error-value (make <simple-error>)))
+(print (try (method () (type-error-value (make <simple-error>)))))"
+  "(2 2 1 1)
+#f
+\"ERR: no applicable method for type-error-value\"
+")
 )

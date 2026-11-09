@@ -46,21 +46,93 @@
 
 (in-package #:dylan)
 
-(declaim (special dylan/get-deque-front dylan/get-deque-last
-                  dylan/set-deque-front! dylan/set-deque-last!))
+;;;; A <deque> is held, as in the compiled library (10-deques.dyl), in a
+;;;; circular buffer: element i is at (first + i) modulo the buffer's
+;;;; length, and the iteration state is the index.  SIZE and ELEMENT take
+;;;; constant time.
+
+(declaim (special dylan/get-deque-data dylan/get-deque-first
+                  dylan/get-deque-count dylan/set-deque-data!
+                  dylan/set-deque-first! dylan/set-deque-count!))
+
+(defparameter dylan/get-deque-data nil)
+(defparameter dylan/get-deque-first nil)
+(defparameter dylan/get-deque-count nil)
+(defparameter dylan/set-deque-data! nil)
+(defparameter dylan/set-deque-first! nil)
+(defparameter dylan/set-deque-count! nil)
+
+(create-private-slot <deque> <object> "internal-deque-data"
+                     (lambda (set get)
+                       (setf dylan/set-deque-data! set)
+                       (setf dylan/get-deque-data get))
+                     :init (lambda () (make-array 8 :initial-element dylan%false)))
+(create-private-slot <deque> <object> "internal-deque-first"
+                     (lambda (set get)
+                       (setf dylan/set-deque-first! set)
+                       (setf dylan/get-deque-first get))
+                     :init (lambda () 0))
+(create-private-slot <deque> <object> "internal-deque-count"
+                     (lambda (set get)
+                       (setf dylan/set-deque-count! set)
+                       (setf dylan/get-deque-count get))
+                     :init (lambda () 0))
+
+(define-direct-slot deque-data set-deque-data! <deque>
+  dylan/get-deque-data dylan/set-deque-data!)
+(define-direct-slot deque-first set-deque-first! <deque>
+  dylan/get-deque-first dylan/set-deque-first!)
+(define-direct-slot deque-count set-deque-count! <deque>
+  dylan/get-deque-count dylan/set-deque-count!)
+
+(defun deque-slot (deque i)
+  "The buffer index of DEQUE's element I."
+  (let ((n (length (deque-data deque)))
+        (k (+ (deque-first deque) i)))
+    (if (< k n) k (- k n))))
+
+(defun deque-grow (deque)
+  "Room for one more element: a buffer twice as long when DEQUE's is full."
+  (let* ((old (deque-data deque))
+         (n (length old))
+         (count (deque-count deque)))
+    (when (= count n)
+      (let ((new (make-array (* 2 n) :initial-element dylan%false)))
+        (dotimes (i count)
+          (setf (svref new i) (svref old (deque-slot deque i))))
+        (set-deque-data! deque new)
+        (set-deque-first! deque 0)))))
+
+(defun deque-index (deque key)
+  "The index KEY denotes among DEQUE's elements, or NIL."
+  (let ((i (index-key key)))
+    (and i (< -1 i (deque-count deque)) i)))
+
+(defun deque-check (deque key)
+  (or (deque-index deque key)
+      (dylan-call dylan/error "element: there is no element at the index ~s" key)))
+
+(defun deque-ref (deque i)
+  (svref (deque-data deque) (deque-slot deque i)))
+
+(defun deque-set (deque i value)
+  (setf (svref (deque-data deque) (deque-slot deque i)) value))
+
+(defun deque-refill (deque elements)
+  "Make ELEMENTS, a list, DEQUE's elements."
+  (let ((data (make-array (max 8 (length elements)) :initial-element dylan%false)))
+    (loop for e in elements for i from 0 do (setf (svref data i) e))
+    (set-deque-data! deque data)
+    (set-deque-first! deque 0)
+    (set-deque-count! deque (length elements))
+    deque))
+
+(defun deque-elements (deque)
+  (loop for i from 0 below (deque-count deque) collect (deque-ref deque i)))
 
 ;;;;
 ;;;; OPERATIONS ON DEQUES (page 114)
 ;;;;
-
-(defstruct (deque-entry
-            (:conc-name deque-entry.)
-            (:predicate deque-entry?)
-            (:print-object print-opaque-object)
-            (:constructor make-deque-entry (previous next value)))
-  previous                              ; Pointer to previous entry
-  next                                  ; Pointer to next entry
-  value)                                ; Value of this entry
 
 (add-method
  dylan/as
@@ -79,27 +151,6 @@
         (dylan-call dylan/push-last new-deque
                     (current-element object state)))))))
 
-;;;
-;;; DEQUE SPECIALIZED MAKE
-;;; Two slots: front and end of deque
-;;;
-
-(defparameter dylan/get-deque-front nil)
-(defparameter dylan/get-deque-last nil)
-(defparameter dylan/set-deque-front! nil)
-(defparameter dylan/set-deque-last! nil)
-
-(create-private-slot <deque> <object> "internal-deque-front"
-                     (lambda (set get)
-                       (setf dylan/set-deque-front! set)
-                       (setf dylan/get-deque-front get))
-                     :init (lambda () '()))
-(create-private-slot <deque> <object> "internal-deque-last"
-                     (lambda (set get)
-                       (setf dylan/set-deque-last! set)
-                       (setf dylan/get-deque-last get))
-                     :init (lambda () '()))
-
 (add-method
  dylan/make
  (dylan%dylan-callable->method
@@ -112,13 +163,45 @@
           (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
       (when (or (not (integerp size)) (minusp size))
         (dylan-call dylan/error "make: size: must be a non-negative integer: ~s" size))
-      (check-room size 16)
+      (check-room size 8)
       (let ((instance (dylan%make-<object> <deque>)))
-        (dylan-call dylan/set-deque-front! instance '())
-        (dylan-call dylan/set-deque-last! instance '())
-        (do ((n 0 (+ n 1)))
-            ((= n size) instance)
-          (dylan-call dylan/push instance fill)))))))
+        (set-deque-data! instance (make-array (max size 8) :initial-element fill))
+        (set-deque-first! instance 0)
+        (set-deque-count! instance size)
+        instance)))))
+
+;;;;
+;;;; Functions for Collections
+;;;;
+
+(add-method
+ dylan/size
+ (one-arg 'deque <deque> #'deque-count))
+
+(add-method
+ dylan/element
+ (dylan%dylan-callable->method
+  (make-param-list `((deque ,<deque>) (key ,<object>)) nil nil '(:default))
+  (lambda (multiple-values next-method deque key &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:default))
+    (let ((i (deque-index deque key)))
+      (if i
+          (deque-ref deque i)
+          (dylan%find-keyword rest :default
+                              (lambda ()
+                                (dylan-call dylan/error
+                                            "element: there is no element at the index ~s"
+                                            key))))))))
+
+(add-method
+ dylan/setter/element/
+ (dylan%function->method
+  (make-param-list `((deque ,<deque>) (key ,<object>) (new-value ,<object>))
+                   nil nil nil)
+  (lambda (deque key new-value)
+    (deque-set deque (deque-check deque key) new-value)
+    new-value)))
 
 ;;;;
 ;;;; Functions for Sequences (page 104)
@@ -135,17 +218,19 @@
                                        new-element))))
 
 (defun dylan%push (deque new-value)
-  (let* ((old-deque-front (dylan-call dylan/get-deque-front deque))
-         (new-entry (make-deque-entry nil old-deque-front new-value)))
-    (if old-deque-front
-        (setf (deque-entry.previous old-deque-front) new-entry)
-        (dylan-call dylan/set-deque-last! deque new-entry))
-    (dylan-call dylan/set-deque-front! deque new-entry)
+  (deque-grow deque)
+  (let ((n (length (deque-data deque)))
+        (first (deque-first deque)))
+    (set-deque-first! deque (if (zerop first) (- n 1) (- first 1)))
+    (setf (svref (deque-data deque) (deque-first deque)) new-value)
+    (set-deque-count! deque (+ (deque-count deque) 1))
     deque))
 
 (add-method dylan/add!
             (dylan%function->method one-deque-and-a-value #'dylan%push))
 
+;;; Up to COUNT elements that TEST finds the same as VALUE are removed,
+;;; the rest kept in order.
 (add-method
  dylan/remove!
  (dylan%dylan-callable->method
@@ -155,59 +240,15 @@
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-          (count (or (false->nil (dylan%find-keyword rest :count (lambda () nil)))
-                     (collection-size deque)))
-          (num-changed 0)
-          (front-entry (dylan-call dylan/get-deque-front deque)))
-      (cond ((null front-entry) deque)
-            ((null (deque-entry.next front-entry))
-             (when (and (> count 0)
-                        (true? (dylan-call test? (deque-entry.value front-entry) value)))
-               (dylan-call dylan/set-deque-front! deque nil)
-               (dylan-call dylan/set-deque-last! deque nil))
-             deque)
-            (t
-             (loop
-               (if (and (> count num-changed)
-                        (true? (dylan-call test? (deque-entry.value front-entry) value)))
-                   (let ((next-entry (deque-entry.next front-entry)))
-                     (incf num-changed)
-                     (dylan-call dylan/set-deque-front! deque next-entry)
-                     (if next-entry
-                         (progn
-                           (setf (deque-entry.previous next-entry) nil)
-                           (setf front-entry next-entry))
-                         ;; Every element removed: the deque is empty.
-                         (progn
-                           (dylan-call dylan/set-deque-last! deque nil)
-                           (return deque))))
-                   (return nil)))
-             (loop with current-entry = (let ((front (dylan-call
-                                                     dylan/get-deque-front
-                                                     deque)))
-                                          (and front (deque-entry.next front)))
-                   do (if (or (null current-entry) (>= num-changed count))
-                          (return deque)
-                          (if (true? (dylan-call test?
-                                          (deque-entry.value current-entry)
-                                          value))
-                              (let ((prev (deque-entry.previous current-entry))
-                                    (next (deque-entry.next current-entry)))
-                                (if prev
-                                    (setf (deque-entry.next prev) next)
-                                    (dylan-call dylan/set-deque-front!
-                                                deque next))
-                                (if next
-                                    (progn
-                                      (setf (deque-entry.previous next) prev)
-                                      (setf current-entry next)
-                                      (incf num-changed))
-                                    (progn
-                                      (dylan-call dylan/set-deque-last!
-                                                  deque prev)
-                                      (return deque))))
-                              (setf current-entry
-                                    (deque-entry.next current-entry)))))))))))
+          (left (false->nil (dylan%find-keyword rest :count (lambda () nil))))
+          (kept '()))
+      (dotimes (i (deque-count deque))
+        (let ((element (deque-ref deque i)))
+          (if (and (or (null left) (> left 0))
+                   (true? (dylan-call test? element value)))
+              (when left (decf left))
+              (push element kept))))
+      (deque-refill deque (nreverse kept))))))
 
 (add-method
  dylan/remove-duplicates!
@@ -219,13 +260,7 @@
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
            (new-deque (dylan-call dylan/remove-duplicates old-deque
                                   :test test?)))
-      (do ((count (collection-size old-deque) (- count 1)))
-          ((<= count 0) 'done)
-        (dylan-call dylan/pop old-deque))
-      (do ((count (collection-size new-deque) (- count 1)))
-          ((<= count 0) old-deque)
-        (dylan-call dylan/push-last old-deque
-                    (dylan-call dylan/pop new-deque)))))))
+      (deque-refill old-deque (iterate->list #'identity new-deque))))))
 
 (add-method
  dylan/concatenate
@@ -254,19 +289,8 @@
  dylan/reverse!
  (dylan%function->method
   one-deque
-  (lambda (deque-1)
-    (let ((tmp-deque (dylan-call dylan/make <deque>))
-          (size (collection-size deque-1)))
-      (if (<= size 0)
-          deque-1
-          (progn
-            (do ((i 1 (+ i 1)))
-                ((= i size) 'continue)
-              (dylan-call dylan/push tmp-deque (dylan-call dylan/pop deque-1)))
-            (do ((i 1 (+ i 1)))
-                ((= i size) deque-1)
-              (dylan-call dylan/push-last deque-1
-                          (dylan-call dylan/pop tmp-deque)))))))))
+  (lambda (deque)
+    (deque-refill deque (nreverse (deque-elements deque))))))
 
 (add-method
  dylan/sort!
@@ -279,15 +303,7 @@
            (deque-list (scheme-sort (iterate->list #'identity deque)
                                     (lambda (x y) (true? (dylan-call test? x y))))))
       (dylan%find-keyword rest :stable (lambda () nil)) ; Ignored
-      (dylan%empty-deque! deque)
-      (dolist (x deque-list) (dylan-call dylan/push-last deque x))
-      deque))))
-
-(defun dylan%empty-deque! (deque)
-  (let ((size (collection-size deque)))
-    (do ((i 0 (+ i 1)))
-        ((= i size) deque)
-      (dylan-call dylan/pop deque))))
+      (deque-refill deque deque-list)))))
 
 (defparameter dylan/push
   (dylan%generic-fn 'push one-deque-and-a-value #'dylan%push))
@@ -296,49 +312,36 @@
   (dylan%generic-fn
    'pop one-deque
    (lambda (deque)
-     (let ((old-front-entry (dylan-call dylan/get-deque-front deque)))
-       (if old-front-entry
-           (let ((old-front-value (deque-entry.value old-front-entry))
-                 (second-entry (deque-entry.next old-front-entry)))
-             (if second-entry
-                 (progn
-                   (dylan-call dylan/set-deque-front! deque second-entry)
-                   (setf (deque-entry.previous second-entry) nil))
-                 (progn
-                   (dylan-call dylan/set-deque-front! deque nil)
-                   (dylan-call dylan/set-deque-last! deque nil)))
-             old-front-value)
-           (dylan-call dylan/error "pop: the deque is empty"))))))
+     (when (zerop (deque-count deque))
+       (dylan-call dylan/error "pop: the deque is empty"))
+     (let* ((data (deque-data deque))
+            (first (deque-first deque))
+            (value (svref data first)))
+       (setf (svref data first) dylan%false)
+       (set-deque-first! deque (if (= (+ first 1) (length data)) 0 (+ first 1)))
+       (set-deque-count! deque (- (deque-count deque) 1))
+       value))))
 
 (defparameter dylan/push-last
   (dylan%generic-fn
    'push-last one-deque-and-a-value
    (lambda (deque new-value)
-     (let* ((old-deque-last (dylan-call dylan/get-deque-last deque))
-            (new-entry (make-deque-entry old-deque-last nil new-value)))
-       (if old-deque-last
-           (setf (deque-entry.next old-deque-last) new-entry)
-           (dylan-call dylan/set-deque-front! deque new-entry))
-       (dylan-call dylan/set-deque-last! deque new-entry)
-       deque))))
+     (deque-grow deque)
+     (deque-set deque (deque-count deque) new-value)
+     (set-deque-count! deque (+ (deque-count deque) 1))
+     deque)))
 
 (defparameter dylan/pop-last
   (dylan%generic-fn
    'pop-last one-deque
    (lambda (deque)
-     (let ((old-last-entry (dylan-call dylan/get-deque-last deque)))
-       (if old-last-entry
-           (let ((old-last-value (deque-entry.value old-last-entry))
-                 (previous-entry (deque-entry.previous old-last-entry)))
-             (if previous-entry
-                 (progn
-                   (dylan-call dylan/set-deque-last! deque previous-entry)
-                   (setf (deque-entry.next previous-entry) nil))
-                 (progn
-                   (dylan-call dylan/set-deque-last! deque nil)
-                   (dylan-call dylan/set-deque-front! deque nil)))
-             old-last-value)
-           (dylan-call dylan/error "pop-last: the deque is empty"))))))
+     (when (zerop (deque-count deque))
+       (dylan-call dylan/error "pop-last: the deque is empty"))
+     (let* ((k (deque-slot deque (- (deque-count deque) 1)))
+            (value (svref (deque-data deque) k)))
+       (setf (svref (deque-data deque) k) dylan%false)
+       (set-deque-count! deque (- (deque-count deque) 1))
+       value))))
 
 ;;;
 ;;; Mutable Collection
@@ -347,11 +350,10 @@
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((deque ,<deque>) (state ,<object>) (new-value ,<object>))
+  (make-param-list `((deque ,<deque>) (state ,<integer>) (new-value ,<object>))
                    nil nil nil)
   (lambda (deque state new-value)
-    (declare (ignore deque))
-    (setf (deque-entry.value state) new-value)
+    (deque-set deque (deque-check deque state) new-value)
     new-value)))
 
 ;;; Design note 12.
@@ -361,8 +363,8 @@
   (make-param-list `((deque ,<deque>) (n ,<object>)) nil nil nil)
   (lambda (deque n)
     (check-new-size deque n)
-    (loop while (> (collection-size deque) n)
+    (loop while (> (deque-count deque) n)
           do (dylan-call dylan/pop-last deque))
-    (loop while (< (collection-size deque) n)
+    (loop while (< (deque-count deque) n)
           do (dylan-call dylan/push-last deque dylan%false))
     n)))

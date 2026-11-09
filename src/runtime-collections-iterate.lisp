@@ -60,7 +60,7 @@
 ;;;; <BYTE-STRING>: inherits from <array>
 ;;;; <STRING>: not handled, any user-specified subclass must supply
 ;;;;           operations
-;;;; <DEQUE>: pointer to current entry
+;;;; <DEQUE>: the index of the element
 ;;;; <RANGE>: current value
 
 (in-package #:dylan)
@@ -104,7 +104,8 @@
 ;;; index for a simple vector, and the index for a range.  A range is read
 ;;; afresh each time, as the methods do, since ADD! and REVERSE! change it.
 
-(declaim (ftype function range-size range-start range-step range-element-at))
+(declaim (ftype function range-size range-start range-step range-element-at
+                         deque-count deque-ref deque-check))
 
 (defun initial-state (collection)
   (cond ((and (listp collection) *fast-iterate-list*)
@@ -115,6 +116,9 @@
               (eq (instance.class collection) <range>))
          (let ((size (range-size collection)))
            (if (or (null size) (plusp size)) 0 nil)))
+        ((and *fast-iterate-deque* (instance? collection)
+              (eq (instance.class collection) <deque>))
+         (if (plusp (deque-count collection)) 0 nil))
         (t (lisp-state (dylan-call dylan/initial-state collection)))))
 (defun final-state (collection)
   (lisp-state (dylan-call dylan/final-state collection)))
@@ -131,6 +135,10 @@
               (eq (instance.class collection) <range>))
          (let ((size (range-size collection)))
            (if (or (null size) (< (+ state 1) size)) (+ state 1) nil)))
+        ((and *fast-iterate-deque* (integerp state) (instance? collection)
+              (eq (instance.class collection) <deque>))
+         (let ((next (+ state 1)))
+           (and (< next (deque-count collection)) next)))
         (t (lisp-state (dylan-call dylan/next-state collection
                                    (dylan-state state))))))
 (defun previous-state (collection state)
@@ -148,6 +156,9 @@
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
          (range-element-at (range-start collection) (range-step collection) state))
+        ((and *fast-iterate-deque* (integerp state) (instance? collection)
+              (eq (instance.class collection) <deque>))
+         (deque-ref collection (deque-check collection state)))
         (t (dylan-call dylan/current-element collection
                        (dylan-state state)))))
 (defun current-key (collection state)
@@ -246,7 +257,7 @@ answers #f (an unbounded collection)."
 (add-method dylan/initial-state
             (state-method-1 'deque <deque>
                      (lambda (deque)
-                       (dylan-call dylan/get-deque-front deque))))
+                       (if (zerop (deque-count deque)) nil 0))))
 ;;; A range's state is the index of its element, which is FROM + k*BY.
 ;;; Computing each element from its index, rather than adding BY to the
 ;;; last, keeps a range with a float step in agreement with its own SIZE,
@@ -302,7 +313,8 @@ answers #f (an unbounded collection)."
 (add-method dylan/final-state
             (state-method-1 'deque <deque>
                      (lambda (deque)
-                       (dylan-call dylan/get-deque-last deque))))
+                       (let ((count (deque-count deque)))
+                         (if (zerop count) nil (- count 1))))))
 
 ;;
 ;; NEXT-STATE
@@ -352,10 +364,10 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/next-state
  (state-method
-  (make-param-list `((deque ,<deque>) (state ,<object>)) nil nil nil)
+  (make-param-list `((deque ,<deque>) (state ,<integer>)) nil nil nil)
   (lambda (deque state)
-    (declare (ignore deque))
-    (deque-entry.next state))))
+    (let ((next (+ state 1)))
+      (and (< next (deque-count deque)) next)))))
 
 (add-method
  dylan/next-state
@@ -413,10 +425,10 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/previous-state
  (state-method
-  (make-param-list `((deque ,<deque>) (state ,<object>)) nil nil nil)
+  (make-param-list `((deque ,<deque>) (state ,<integer>)) nil nil nil)
   (lambda (deque state)
     (declare (ignore deque))
-    (deque-entry.previous state))))
+    (and (plusp state) (- state 1)))))
 
 (add-method                             ; Not defined in the manual
  dylan/previous-state
@@ -477,10 +489,9 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((deque ,<deque>) (state ,<object>)) nil nil nil)
+  (make-param-list `((deque ,<deque>) (state ,<integer>)) nil nil nil)
   (lambda (deque state)
-    (declare (ignore deque))
-    (deque-entry.value state))))
+    (deque-ref deque (deque-check deque state)))))
 (add-method
  dylan/current-element
  (dylan%function->method

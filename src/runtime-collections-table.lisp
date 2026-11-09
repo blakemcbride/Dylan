@@ -46,7 +46,8 @@
 
 (in-package #:dylan)
 
-(declaim (special dylan/get-hash-table dylan/set-hash-table!))
+(declaim (special dylan/get-hash-table dylan/set-hash-table!
+                  dylan/get-table-count dylan/set-table-count!))
 
 (add-method
  dylan/shallow-copy
@@ -99,6 +100,23 @@
                        (setf dylan/get-hash-table get))
                      :init (lambda ()
                              (make-array *hash-table-size* :initial-element '())))
+
+;;; The number of entries, which SIZE answers without counting them
+(defparameter dylan/get-table-count nil)
+(defparameter dylan/set-table-count! nil)
+
+(create-private-slot <table> <object> "internal-table-count"
+                     (lambda (set get)
+                       (setf dylan/set-table-count! set)
+                       (setf dylan/get-table-count get))
+                     :init (lambda () 0))
+
+(define-direct-slot table-count set-table-count! <table>
+  dylan/get-table-count dylan/set-table-count!)
+
+(add-method
+ dylan/size
+ (one-arg 'table <table> #'table-count))
 
 (add-method
  dylan/make
@@ -161,7 +179,8 @@ REMAINDER, never answers a negative index."
             (match (dylan-assoc key hash-entry)))
        (when match
          (setf (aref hash-table hash-index)
-               (dylan-call dylan/remove hash-entry match)))
+               (dylan-call dylan/remove hash-entry match))
+         (set-table-count! table (- (table-count table) 1)))
        table))))                        ; Chapter 12: answers the table
 
 (add-method
@@ -184,6 +203,7 @@ REMAINDER, never answers a negative index."
                 (progn
                   (setf (aref hash-table hash-index)
                         (cons (list key new-value) hash-entry))
+                  (set-table-count! table (+ (table-count table) 1))
                   (when (> (length hash-entry) 8)
                     (maybe-grow-table table hash-table))))
             new-value))))))
@@ -192,8 +212,7 @@ REMAINDER, never answers a negative index."
   "Double TABLE's bucket vector once it holds more entries than buckets, so
 that buckets stay short.  Not done when one bucket is long only because
 many keys share a hash code; growing would not help them."
-  (when (> (loop for bucket across hash-table sum (length bucket))
-           (length hash-table))
+  (when (> (table-count table) (length hash-table))
     (let ((new-table (make-array (* 2 (length hash-table))
                                  :initial-element '())))
       (loop for bucket across hash-table

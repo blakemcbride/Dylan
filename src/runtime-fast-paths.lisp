@@ -28,7 +28,8 @@
        (string-index (list (list <byte-string> <unicode-string>) (list <integer>)))
        (one-vector (list (list <simple-object-vector>)))
        (one-list (list (list <pair> <empty-list>)))
-       (one-range (list (list <range>))))
+       (one-range (list (list <range>)))
+       (one-deque (list (list <deque>))))
   ;; GUARD is given the module variable holding the generic function, which
   ;; assigning turns the guards off as adding a method may.
   (flet ((guard (variable &rest guards-and-classes)
@@ -63,7 +64,10 @@
              '*fast-iterate-vector* one-vector '*fast-iterate-list* one-list))
     (dolist (variable '(dylan/initial-state dylan/next-state
                         dylan/current-element dylan/size))
-      (guard variable '*fast-iterate-range* one-range))))
+      (guard variable '*fast-iterate-range* one-range))
+    (dolist (variable '(dylan/initial-state dylan/next-state
+                        dylan/current-element))
+      (guard variable '*fast-iterate-deque* one-deque))))
 
 ;;; The operators the fast paths inline: assigning one turns its own off.
 (dolist (entry *fast-paths*)

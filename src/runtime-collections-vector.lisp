@@ -466,11 +466,28 @@
  dylan/setter/size/
  (dylan%function->method
   one-stretchy-vector-and-an-object
+  ;; In place, as ADD! grows the vector: made adjustable, with a fill
+  ;; pointer, the first time; its storage doubles when it must grow.
   (lambda (s-vector n)
     (check-new-size s-vector n)
-    (let ((old (dylan-call dylan/get-array-value s-vector))
-          (new (make-array n :initial-element dylan%false)))
-      (replace new old)
-      (dylan-call dylan/set-array-value! s-vector new)
-      (dylan-call dylan/set-array-dimensions! s-vector (list n))
+    (let ((vector (stretchy-value s-vector))
+          (size (car (stretchy-dimensions s-vector))))
+      (unless (= n size)
+        (unless (and (adjustable-array-p vector)
+                     (array-has-fill-pointer-p vector)
+                     (= (fill-pointer vector) size))
+          (setf vector (make-array size :adjustable t :fill-pointer size
+                                        :initial-contents (subseq vector 0 size)))
+          (set-stretchy-value! s-vector vector))
+        (if (< n size)
+            ;; The dropped elements are not kept alive
+            (progn (fill vector dylan%false :start n)
+                   (setf (fill-pointer vector) n))
+            (progn (when (> n (array-dimension vector 0))
+                     (setf vector (adjust-array vector
+                                                (max n (* 2 (array-dimension vector 0)))))
+                     (set-stretchy-value! s-vector vector))
+                   (setf (fill-pointer vector) n)
+                   (fill vector dylan%false :start size)))
+        (set-stretchy-dimensions! s-vector (list n)))
       n))))

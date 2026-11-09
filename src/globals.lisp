@@ -243,8 +243,9 @@
           dylan/generic-function-methods
           dylan/get-array-dimensions
           dylan/get-array-value
-          dylan/get-deque-front
-          dylan/get-deque-last
+          dylan/get-deque-count
+          dylan/get-deque-data
+          dylan/get-deque-first
           dylan/get-hash-table
           dylan/get-range-count
           dylan/get-range-end
@@ -339,8 +340,9 @@
           dylan/second
           dylan/set-array-dimensions!
           dylan/set-array-value!
-          dylan/set-deque-front!
-          dylan/set-deque-last!
+          dylan/set-deque-count!
+          dylan/set-deque-data!
+          dylan/set-deque-first!
           dylan/set-hash-table!
           dylan/set-range-count!
           dylan/set-range-end!

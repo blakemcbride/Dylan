@@ -258,6 +258,14 @@ in a compiled program."
 (defun general-array-p (object)
   (and (instance? object) (eq (instance.class object) <%general-array>)))
 
+;;; The number of elements, as the compiled library answers it, without
+;;; walking them
+(add-method
+ dylan/size
+ (one-arg 'array <%general-array>
+          (lambda (array)
+            (cl:reduce #'* (dylan-call dylan/get-array-dimensions array)))))
+
 (defun aref-error (array kind index)
   (if (eq kind :count)
       (dylan-call dylan/error "aref: the wrong number of indices for ~s" array)

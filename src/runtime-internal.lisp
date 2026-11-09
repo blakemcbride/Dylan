@@ -387,6 +387,7 @@ first, and adds an initial NIL next-method argument."
 (defvar *fast-iterate-vector* nil)
 (defvar *fast-iterate-list* nil)
 (defvar *fast-iterate-range* nil)
+(defvar *fast-iterate-deque* nil)
 (defvar *fast-key=* nil)                ; See runtime-collections-table.lisp
 
 (defun dylan%for-each (fn &rest collections)

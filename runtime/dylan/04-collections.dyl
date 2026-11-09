@@ -178,6 +178,22 @@ module: dylan
                   ()
           (function (%list-map (method (c) (%library-element c key %no-default)) collections))))))
 
+;;; Whether each of COLLECTIONS is a sequence, which for-each walks with
+;;; the others in step (compiler/front/macros.lisp)
+(define %sequences?
+  (method (#rest collections)
+    (%list-every? (method (c) (%instance? c <sequence>)) collections)))
+
+;;; The keys at which for-each visits COLLECTIONS, not all sequences, as a
+;;; list: those they share, in increasing order if the first is a
+;;; sequence, as the interpreter visits them.
+(define %aligned-keys
+  (method (collections)
+    (bind ((keys (as <list> (%common-keys collections))))
+      (if (%instance? (car collections) <sequence>)
+          (sort keys test: binary<)
+          keys))))
+
 ;;; Keys are matched with =: a key-sequence is made afresh, and the keys
 ;;; of an array, or of a table keyed by lists or strings, are not id? to
 ;;; another's.  A key sequence of known size goes first, since the

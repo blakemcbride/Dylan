@@ -817,4 +817,28 @@ after
 \"not a function: list\"
 \"not a function: cons\"
 ")
+ ;; for-each over collections that are not all sequences aligns them by
+ ;; key, as do does (chapter 12, "Collection Alignment"); sequences alone
+ ;; are walked in step.
+ (for-each-aligns-by-key
+  "(define t2 (make <table>)) (set! (element t2 'a) 1) (set! (element t2 'b) 2)
+(define t3 (make <table>)) (set! (element t3 'b) 20) (set! (element t3 'c) 30)
+(for-each ((x t2) (y t3)) () (print (list x y)))
+(define t4 (make <table>))
+(set! (element t4 2) 'two) (set! (element t4 0) 'zero) (set! (element t4 7) 'seven)
+(for-each ((x '(a b c)) (y t4)) () (print (list x y)))
+(for-each ((x (range from: 0)) (y t4)) () (print (list x y)))
+(for-each ((x (make <array> dimensions: '(2 2) fill: 'e)) (y '(1 2 3))) () (print 'never))
+(print (for-each ((x t2) (y t3)) ((= x 2) (list 'stop x y)) (print 'no)))
+(print (for-each ((x '(1 2 3)) (y #(4 5 6))) ((= x 2) 'stop) (print (list x y))))"
+  "(2 20)
+(a zero)
+(c two)
+(0 zero)
+(2 two)
+(7 seven)
+(stop 2 20)
+(1 4)
+stop
+")
 )

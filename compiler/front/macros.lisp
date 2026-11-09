@@ -231,6 +231,9 @@ clause's body (or :NONE)."
 ;;; (for-each ((var collection) ...) (end-test result ...) body ...)
 ;;; The collections are walked together with the iteration protocol
 ;;; (chapter 12); the loop ends, answering #f, when any is exhausted.
+;;; Several that are not all sequences are aligned by their keys instead
+;;; (chapter 12, "Collection Alignment"), as do aligns them: the body sees
+;;; the elements at each key they share (%ALIGNED-KEYS).
 
 (define-dylan-macro dylan::for-each (form)
   (require-list form 3 "for-each")
@@ -260,14 +263,37 @@ clause's body (or :NONE)."
                          `(if ,(car end)
                               ,(body-form (cdr end))
                               (dylan::begin ,@(cdddr form) ,again))))))
-      `(dylan::bind ,(mapcar (lambda (c clause) `(,c ,(second clause)))
-                             collections clauses)
-         (dylan::bind-methods
-             ((,loop ,states
-                ,(reduce (lambda (s rest) `(if ,s ,rest ,+false+))
-                         states :from-end t :initial-value pass)))
-           (,loop ,@(mapcar (lambda (c) `(,(g "initial-state") ,c))
-                            collections)))))))
+      (let ((walk `(dylan::bind-methods
+                        ((,loop ,states
+                           ,(reduce (lambda (s rest) `(if ,s ,rest ,+false+))
+                                    states :from-end t :initial-value pass)))
+                      (,loop ,@(mapcar (lambda (c) `(,(g "initial-state") ,c))
+                                       collections)))))
+        `(dylan::bind ,(mapcar (lambda (c clause) `(,c ,(second clause)))
+                               collections clauses)
+           ,(if (null (cdr clauses))
+                walk
+                (let* ((keys (temp "keys"))
+                       (by-key (temp "for-each-key"))
+                       (again `(,by-key (,(g "cdr") ,keys))))
+                  `(if (,(g "%sequences?") ,@collections)
+                       ,walk
+                       (dylan::bind-methods
+                           ((,by-key (,keys)
+                              (if (,(g "id?") ,keys '())
+                                  ,+false+
+                                  (dylan::bind
+                                      ,(mapcar (lambda (clause c)
+                                                 `(,(first clause)
+                                                   (,(g "%library-element") ,c (,(g "car") ,keys)
+                                                    ,(g "%no-default"))))
+                                               clauses collections)
+                                    ,(if (null end)
+                                         `(dylan::begin ,@(cdddr form) ,again)
+                                         `(if ,(car end)
+                                              ,(body-form (cdr end))
+                                              (dylan::begin ,@(cdddr form) ,again)))))))
+                         (,by-key (,(g "%aligned-keys") (,(g "list") ,@collections))))))))))))
 
 ;;; Conditions (chapter 13)
 ;;;

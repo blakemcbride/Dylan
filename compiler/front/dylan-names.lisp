@@ -113,6 +113,8 @@
     "%slot-value" "%slot-initialized?" "%slot-descriptor"
     "%slot-descriptors"
     ;; A define-generic-function of a variable imported from DYLAN
-    "%redeclare-generic")
+    "%redeclare-generic"
+    ;; Library functions that for-each's expansion calls (macros.lisp)
+    "%sequences?" "%aligned-keys" "%library-element" "%no-default")
   "Variables the DYLAN module owns, with values in the runtime, but does not
 export: for the library's own use.")

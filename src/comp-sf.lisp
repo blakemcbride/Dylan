@@ -75,7 +75,7 @@
                  `(let ((!saved-value ,value-code))
                     ;; Chapter 7: an error if there is no such variable.
                     (dylan%free-variable-ref ,(name->module-variable name)
-                                             ',place)
+                                             ',name)
                     (dylan%check-assignable ',(name->module-variable name)
                                             ',place)
                     (setq ,(name->module-variable name) !saved-value)

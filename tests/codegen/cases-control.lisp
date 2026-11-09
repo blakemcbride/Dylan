@@ -307,6 +307,10 @@ caught
   "(set! (VV 1) 2)"
   ""
   :error "the variable (setter VV)@dylan-user has no value")
+ (unassigned-setter-variable-message
+  "(set! (setter undefined-thing) 5)"
+  ""
+  :error "the variable (setter undefined-thing)@dylan-user has no value")
 
  ;; Chapter 3 lets the function of a call be evaluated before, during or
  ;; after the arguments; both evaluate it first.

@@ -231,12 +231,6 @@ path."
                                  (lambda ,lambda-list ,expansion)))))
        ',operator)))
 
-(declaim (inline dylan%function))
-(defun dylan%function (f)
-  "F, which a call calls: an error unless it is a function.  (FUNCALL
-would call a symbol's Lisp function.)"
-  (if (functionp f) f (dylan%error "not a function: ~s" f)))
-
 (defmacro dylan%call (multiple-values? operator &rest operands)
   ;; Chapter 3 lets the function be evaluated before, during or after the
   ;; arguments; it is evaluated first, as in a compiled program, and then

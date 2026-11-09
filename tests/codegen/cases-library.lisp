@@ -2314,4 +2314,27 @@ none
 my-car
 1
 ")
+ ;; Printing a list nested more deeply than the interpreter's stack of
+ ;; dynamic bindings would allow a binding at each level, through the
+ ;; default print-object and a program's that changes escape? each level:
+ ;; it is printed, or, past the stack (256 KB here), "the stack is
+ ;; exhausted" is signalled and caught, in both implementations.
+ (print-deeply-nested
+  "(define-method printed-size (x)
+  (handler-case (size (format #f \"~a\" x))
+    ((<error> condition: c) (condition-format-string c))))
+(define-method fits? (n x)
+  (if (instance? x <integer>) (= x n) (= x \"the stack is exhausted\")))
+(define deep (bind ((x '())) (dotimes (i 60000) (set! x (list x))) x))
+(print (fits? 120002 (printed-size deep)))
+(define-class <box> (<object>) (v init-keyword: v:))
+(define-method print-object ((b <box>) stream escape?)
+  (format stream \"[\") (print-object (list (v b)) stream (not escape?)) (format stream \"]\"))
+(define boxes (bind ((x 0)) (dotimes (i 60000) (set! x (make <box> v: x))) x))
+(print (fits? 240001 (printed-size boxes)))
+(print 'after)"
+  "#t
+#t
+after
+")
 )

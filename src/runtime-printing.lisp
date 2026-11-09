@@ -64,9 +64,8 @@
                                        (escape? ,<object>))
                                      nil nil nil)
                     (lambda (object stream escape?)
-                      (let ((*dylan-print-escape* (true? escape?))
-                            (*dylan-print-target* stream))
-                        (dylan-print object (dylan-stream-lisp stream))))))
+                      (dylan-print object (dylan-stream-lisp stream)
+                                   (true? escape?) stream))))
 
 (defun print-to (object stream escape?)
   "Print OBJECT on the Dylan STREAM through PRINT-OBJECT."

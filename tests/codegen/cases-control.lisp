@@ -787,4 +787,34 @@ after
   "((3) 4)
 ((4.5) -6.0)
 ")
+ ;; A symbol is not a function, though the library calls it: not the
+ ;; Lisp function of its name in the interpreter.
+ (library-calls-only-functions
+  "(define-method msg (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(print (msg (method () (sort '(3 1 2) test: 'list))))
+(print (msg (method () ((curry 'list 1) 2))))
+(print (msg (method () ((rcurry 'list 1) 2))))
+(print (msg (method () ((compose 'list 'list) 2))))
+(print (msg (method () ((complement 'list) 2))))
+(print (msg (method () (member? 1 '(1 2) test: 'list))))
+(print (msg (method () (remove '(1 2) 1 test: 'list))))
+(print (msg (method () (do-handlers 'list))))
+(print (msg (method () (remove-duplicates '(1 2) test: 'list))))
+(print (msg (method () (intersection '(1 2) '(2) test: 'list))))
+(print (msg (method () (subsequence-position \"abc\" \"b\" test: 'list))))
+(define-class <q> (<object>) (a init-function: 'cons))
+(print (msg (method () (a (make <q>)))))"
+  "\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: list\"
+\"not a function: cons\"
+")
 )

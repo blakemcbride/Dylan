@@ -465,3 +465,8 @@ error, which a Dylan handler would see, but the end of the run."))
 (defmacro dylan%check-stack ()
   `(when (< (implementation-specific/stack-pointer) *stack-guard*)
      (dylan%stack-exhausted)))
+
+(defun dylan%check-print-stack ()
+  "DYLAN%CHECK-STACK, for DYLAN-PRINT (compat.lisp), which recurses through
+the elements of what it prints."
+  (dylan%check-stack))

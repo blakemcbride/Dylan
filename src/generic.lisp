@@ -773,20 +773,26 @@ standard Lisp procedure can be called from Dylan."
                (declare (ignore multi next))
                (funcall lisp-operation a b c))))))
 
+(declaim (inline dylan%function))
+(defun dylan%function (f)
+  "F, which a call calls: an error unless it is a function.  (FUNCALL
+or APPLY would call a symbol's Lisp function.)"
+  (if (functionp f) f (dylan%error "not a function: ~s" f)))
+
 (defun dylan-call (dylan-fn &rest args)
   "Fill in the missing multiple-values and next-method parameters.  Useful
 if you do NOT want multiple values back."
-  (apply dylan-fn nil next-method/not-generic args))
+  (apply (dylan%function dylan-fn) nil next-method/not-generic args))
 
 (defun dylan-full-call (dylan-fn multi-value next-method &rest args)
   "Use this ONLY if you must specify multi-value or next-method when
 calling from Lisp to Dylan."
-  (apply dylan-fn multi-value next-method args))
+  (apply (dylan%function dylan-fn) multi-value next-method args))
 
 (defun dylan-mv-call (dylan-fn multi-value &rest args)
   "Use this ONLY if you must specify multi-value when calling from Lisp to
 Dylan."
-  (apply dylan-fn multi-value next-method/not-generic args))
+  (apply (dylan%function dylan-fn) multi-value next-method/not-generic args))
 
 (defun reformat-apply-args (args)
   (split-last args
@@ -794,13 +800,15 @@ Dylan."
                 (append early (if (null end) '() (car end))))))
 
 (defun dylan-apply (dylan-fn &rest args)
-  (apply dylan-fn nil next-method/not-generic (reformat-apply-args args)))
+  (apply (dylan%function dylan-fn) nil next-method/not-generic
+         (reformat-apply-args args)))
 
 (defun dylan-full-apply (dylan-fn multi-value next-method &rest args)
-  (apply dylan-fn multi-value next-method (reformat-apply-args args)))
+  (apply (dylan%function dylan-fn) multi-value next-method
+         (reformat-apply-args args)))
 
 (defun dylan-mv-apply (dylan-fn multi-value &rest args)
-  (apply dylan-fn multi-value next-method/not-generic
+  (apply (dylan%function dylan-fn) multi-value next-method/not-generic
          (reformat-apply-args args)))
 
 (defun dylan%function->method (param-list lisp-function)

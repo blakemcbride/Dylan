@@ -352,13 +352,6 @@ writes (compiler/front/front-end.lisp).")
           (type-of object)
           (logand (sxhash object) #xffffff)))
 
-(defvar *dylan-print-escape* t
-  "True for WRITE-style output, false for DISPLAY-style output.")
-
-(defvar *dylan-print-target* nil
-  "The Dylan stream DYLAN-PRINT is writing to on behalf of PRINT-OBJECT,
-whose elements go through PRINT-OBJECT too; NIL when it is printing on its
-own.")
 
 ;;;; Streams
 ;;;
@@ -456,14 +449,22 @@ it."
 (defun dylan-class-name (class)
   (dylan-symbol->string (class.debug-name class)))
 
-(defun dylan-print (object &optional (stream *standard-output*))
+(defun dylan-print (object &optional (stream *standard-output*) (escape t)
+                                     target)
+  "Write OBJECT on the Lisp STREAM: as WRITE does if ESCAPE, as DISPLAY
+does if not.  TARGET is the Dylan stream PRINT-OBJECT prints on, whose
+elements go through PRINT-OBJECT too, or NIL.  They are arguments, not
+special variables, whose bindings at each level of a deeply nested list
+would exhaust SBCL's binding stack."
   (labels ((out (x) (write-string x stream))
-           (rec (x)
-             ;; An element, through PRINT-OBJECT when printing for it
-             (if *dylan-print-target*
-                 (dylan-call dylan/print-object x *dylan-print-target*
-                             (bool *dylan-print-escape*))
-                 (dylan-print x stream)))
+           (rec (x &optional (escape escape))
+             ;; An element, through PRINT-OBJECT when printing for it.  A
+             ;; collection nested too deep for the stack is the error a
+             ;; method nested too deep is (DYLAN%CHECK-STACK).
+             (dylan%check-print-stack)
+             (if target
+                 (dylan-call dylan/print-object x target (bool escape))
+                 (dylan-print x stream escape)))
            (elements (collection)
              ;; The elements of a collection, separated by spaces
              (loop for state = (dylan-call dylan/initial-state collection)
@@ -480,7 +481,7 @@ it."
       ((keywordp object) (format stream "~a:" (dylan-symbol->string object)))
       ((symbolp object) (out (dylan-symbol->string object)))
       ((stringp object)
-       (cond ((not *dylan-print-escape*) (out object))
+       (cond ((not escape) (out object))
              (t
               (write-char #\" stream)
               (loop for ch across object
@@ -489,7 +490,7 @@ it."
                        (write-char ch stream))
               (write-char #\" stream))))
       ((characterp object)
-       (cond ((not *dylan-print-escape*) (write-char object stream))
+       (cond ((not escape) (write-char object stream))
              (t (out "#\\") (out (char-name-or-self object)))))
       ((consp object)
        (write-char #\( stream)
@@ -574,7 +575,7 @@ it."
                        (t n)))))
       ((singleton? object)
        (out "{singleton ")
-       (let ((*dylan-print-escape* t)) (rec (singleton.object object)))
+       (rec (singleton.object object) t)
        (write-char #\} stream))
       ;; Generic functions and methods as the manual's examples show them
       ;; (chapters 3, 8, 10 and 11)
@@ -734,7 +735,7 @@ PRINT-OBJECT, as the Dylan printing functions do."
   (if (and (boundp 'dylan/print-object) dylan/print-object)
       (dylan-call dylan/print-object object (%make-dylan-stream stream)
                   (bool escape))
-      (let ((*dylan-print-escape* escape)) (dylan-print object stream)))
+      (dylan-print object stream escape))
   object)
 
 (defun dylan-write (object &optional (stream *standard-output*))
@@ -1129,31 +1130,30 @@ itself."
   "CONTROL with ARGUMENTS as a condition's message: ~a and ~d an argument
 as display writes it, ~s as write does, through PRINT-OBJECT, as the
 compiler's %message-text does."
-  (let ((*dylan-print-target* nil))
-    (flet ((put (object escape out)
-             (dylan-print-object object out escape)))
-      (with-output-to-string (out)
-        (let ((args arguments))
-          (if (not (stringp control))
-              (put control nil out)
-              (let ((n (length control))
-                    (i 0))
-                (loop while (< i n)
-                      do (let ((ch (char control i)))
-                           (if (and (char= ch #\~) (< (1+ i) n))
-                               (let ((directive (char-downcase (char control (1+ i)))))
-                                 (case directive
-                                   ((#\a #\d) (when args (put (pop args) nil out)))
-                                   ((#\s) (when args (put (pop args) t out)))
-                                   ((#\% #\&) (terpri out))
-                                   ((#\~) (write-char #\~ out))
-                                   (t (write-char ch out)
-                                    (write-char (char control (1+ i)) out)))
-                                 (incf i 2))
-                               (progn (write-char ch out) (incf i)))))))
-          (dolist (arg args)
-            (write-char #\Space out)
-            (put arg nil out)))))))
+  (flet ((put (object escape out)
+           (dylan-print-object object out escape)))
+    (with-output-to-string (out)
+      (let ((args arguments))
+        (if (not (stringp control))
+            (put control nil out)
+            (let ((n (length control))
+                  (i 0))
+              (loop while (< i n)
+                    do (let ((ch (char control i)))
+                         (if (and (char= ch #\~) (< (1+ i) n))
+                             (let ((directive (char-downcase (char control (1+ i)))))
+                               (case directive
+                                 ((#\a #\d) (when args (put (pop args) nil out)))
+                                 ((#\s) (when args (put (pop args) t out)))
+                                 ((#\% #\&) (terpri out))
+                                 ((#\~) (write-char #\~ out))
+                                 (t (write-char ch out)
+                                  (write-char (char control (1+ i)) out)))
+                               (incf i 2))
+                             (progn (write-char ch out) (incf i)))))))
+        (dolist (arg args)
+          (write-char #\Space out)
+          (put arg nil out))))))
 
 (define-condition dylan-condition (error)
   ((offered :initarg :offered :initform nil :reader offered-to-dylan-p)

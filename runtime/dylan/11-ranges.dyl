@@ -133,7 +133,10 @@ module: dylan
         ((zero? (%by r))
          (and (%range-index? r 0) (test value (%from r)) #t))
         (else:
-         (bind ((k (binary/ (binary- (%exact value) (%exact (%from r))) (%exact (%by r)))))
+         (bind ((from (%from r)) (by (%by r))
+                (k (if (and (%exact? value) (%exact? from) (%exact? by))
+                       (binary/ (binary- (%exact value) (%exact from)) (%exact by))
+                       (%float-range-key value r test))))
            (and (%instance? k <integer>)
                 (%range-index? r k)
                 (test value (%range-element r k))
@@ -142,6 +145,37 @@ module: dylan
 ;;; A real, exactly: a float as the rational it holds
 (define %exact
   (method (x) (if (%instance? x <float>) (as <rational> x) x)))
+
+;;; Whether X's exact value is a rational of 63 bits: a float M * 2^E is
+;;; if its denominator 2^-E, or M * 2^E, fits.
+(define %exact?
+  (method (x)
+    (or (not (%instance? x <float>))
+        (bind ((m e (%float-parts x)))
+          (if (%number< e 0)
+              (not (%number< e -61))
+              (and (%number< e 62)
+                   (bind ((limit (%ash 4611686018427387903 (%number-sub 0 e))))
+                     (and (not (%number< limit m)) (not (%number< m (%number-sub 0 limit)))))))))))
+
+;;; The index of the range R at which VALUE might be, when a float among
+;;; VALUE and R's from and by is not a 63-bit rational: (VALUE - FROM) / BY
+;;; in floats, if integral and an index of R; the element there is then
+;;; tested.  An index beyond 63 bits, of an unbounded range, is an integer
+;;; overflow.  A float is never id? to the rational elements of a range of
+;;; rationals, nor a rational to a float range's.
+(define %float-range-key
+  (method (value r test)
+    (bind ((from (%from r)) (by (%by r)))
+      (if (and (id? test id?)
+               (not (id? (%instance? value <float>)
+                         (or (%instance? from <float>) (%instance? by <float>)))))
+          #f
+          (bind ((q (binary/ (binary- value from) by)))
+            (and (integral? q)
+                 (not (%number< q 0))
+                 (or (not (%size r)) (%number< q (%size r)))
+                 (as <integer> q)))))))
 
 (define-method copy-sequence ((r <range>) #key (start 0) end)
   ;; START and END are indexes of R, END exclusive, as for any sequence

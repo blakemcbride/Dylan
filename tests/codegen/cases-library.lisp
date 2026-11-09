@@ -2387,4 +2387,20 @@ after
 \"as: 1.0e-300 cannot be converted to {the class <integer>}\"
 (4000000000000000000 -2 -3/8 1/2305843009213693952 5/2)
 ")
+ ;; A float key or member that is not a 63-bit rational, very small or
+ ;; very large, is looked for without forming that rational.
+ (float-keys-beyond-rationals
+  "(print (list (element #(a b c) 1.0e-20 default: 'none) (element \"abc\" 1.0e-300 default: 'none)
+             (element (as <stretchy-vector> '(a b c)) 1.0e-300 default: 'none)
+             (element (as <deque> '(a b c)) 1.0e-300 default: 'none)
+             (element #(a b c) 2.0) (element #(a b c) -0.0) (element #(a b c) 1.5 default: 'none)))
+(print (list (member? 1.0e30 (range from: 0)) (member? 1.0e-20 (range from: 0 size: 3) test: =)
+             (intersection (list 1.0e-20 2 1.0e30) (range from: 0))
+             (member? -1.0e30 (range from: 0) test: =) (member? 1.0e30 (range from: 0 size: 5) test: =)))
+(print (list (member? 1.0e30 (range from: 0 by: 1.0e29) test: =) (member? 1.0e-20 (range from: 0 by: 1.0e-20))
+             (member? 1.0e-5 (range from: 0 by: 1/100000) test: =) (member? 0.5 (range from: 0 by: 1/4) test: =)))"
+  "(none none none none c a none)
+(#f #f (2) #f #f)
+(#f #t #f #t)
+")
 )

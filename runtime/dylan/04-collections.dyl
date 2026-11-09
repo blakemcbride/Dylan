@@ -71,7 +71,10 @@ module: dylan
   (method (key)
     (cond ((%instance? key <integer>) key)
           ((and (%instance? key <float>) (binary< -1.0 key) (binary< key 1.0e15))
-           (bind ((r (%float->rational key))) (and (%instance? r <integer>) r)))
+           ;; Integral only if M * 2^E has no fraction: a tiny float's
+           ;; denominator is not formed, which would overflow.
+           (bind ((m e (%float-decode key)))
+             (and (not (%number< e 0)) (%ash m e))))
           (else: #f))))
 
 (define-generic-function element (collection key #key default))

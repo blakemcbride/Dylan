@@ -2369,4 +2369,18 @@ added
 #f
 \"ERR: no applicable method for type-error-value\"
 ")
+ ;; Chapter 6: a slot's type is enforced by its storage, a constant
+ ;; slot's value too.
+ (constant-slot-type-checked
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <t8> (<object>))
+(print (try (method () (define-slot <t8> s8 type: <string> allocation: constant init-value: 3) 'defined)))
+(define-slot <t8> s9 type: <string> allocation: constant init-value: \"ok\")
+(print (s9 (make <t8>)))
+(define-class <t6> (<object>) (s6 type: <integer> allocation: constant init-value: \"c\"))
+(print 'not-reached)"
+  "\"ERR: 3 is not an instance of {the class <string>}\"
+\"ok\"
+"
+  :error "\"c\" is not an instance of {the class <integer>}")
 )

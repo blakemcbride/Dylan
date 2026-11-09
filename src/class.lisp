@@ -839,6 +839,11 @@ slots.")
                                has-init-value? init-function init-keyword
                                required-init-keyword allocation nil
                                (figure-data-location owner allocation))))
+      ;; Chapter 6: the type is enforced by the slot storage, which a
+      ;; constant slot's value is (class slots are checked as they are
+      ;; stored).
+      (when (eq allocation 'constant)
+        (check-slot-value new-slot init-value))
       (setf (slot.owner new-slot) owner)
       (if (class? owner)
           (progn

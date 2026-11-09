@@ -2403,4 +2403,17 @@ after
 (#f #f (2) #f #f)
 (#f #t #f #t)
 ")
+ ;; A program's method on as-lowercase does not change how format reads its
+ ;; directives (switched off at the end, for the interpreter's later cases).
+ (format-directives-not-the-programs
+  "(define on #t)
+(define-method as-lowercase ((c (singleton #\\S))) (if on #\\a (next-method)))
+(print (list (as-lowercase #\\S) (format #f \"x~Sy~A\" \"q\" 'r)))
+(print (handler-case (error \"bad ~S\" \"z\") ((<error> condition: c) (format #f \"~a\" c))))
+(set! on #f)
+(print (list (as-lowercase #\\S) (format #f \"x~Sy\" \"q\")))"
+  "(#\\a \"x\\\"q\\\"yr\")
+\"bad \\\"z\\\"\"
+(#\\s \"x\\\"q\\\"y\")
+")
 )

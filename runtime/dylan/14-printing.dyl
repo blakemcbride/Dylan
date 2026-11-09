@@ -247,7 +247,7 @@ module: dylan
                        (when (binary< i n)
                          (bind ((c (%library-element control i %no-default)))
                            (if (and (id? c #\~) (binary< (binary+ i 1) n))
-                               (bind ((d (as-lowercase (%library-element control (binary+ i 1) %no-default))))
+                               (bind ((d (%char-downcase (%library-element control (binary+ i 1) %no-default))))
                                  (cond ((or (id? d #\a) (id? d #\d)) (put #f))
                                        ((id? d #\s) (put #t))
                                        ((or (id? d #\%) (id? d #\&)) (%put s #\newline))
@@ -390,7 +390,7 @@ module: dylan
                          (bind ((c (%library-element control i %no-default)))
                            (if (and (id? c #\~) (binary< (binary+ i 1) n))
                                (begin
-                                 (bind ((d (as-lowercase (%library-element control (binary+ i 1) %no-default))))
+                                 (bind ((d (%char-downcase (%library-element control (binary+ i 1) %no-default))))
                                    (cond ((or (id? d #\a) (id? d #\d))
                                           (print-object (next-argument) s #f))
                                          ((id? d #\s) (print-object (next-argument) s #t))

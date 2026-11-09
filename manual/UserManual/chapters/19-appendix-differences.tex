@@ -116,7 +116,8 @@ to change them; a compiled program cannot:
   constant variable holding one, \code{(singleton \meta{x})}, or
   \code{(make <singleton> object: \meta{x})} of a constant. A
   \code{define-slot} owner may be any singleton, but a class owner must
-  be known when compiling.
+  be known when compiling, and a \code{define-slot} on a singleton that
+  runs again must be for the same object.
 \item A class cannot be defined twice.
 \item A generic function's parameter list is that of its first
   definition to run. Definitions that are not congruent with each other

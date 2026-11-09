@@ -915,6 +915,14 @@ is set, a method takes any."
       (let ((owner (atom-c (ir-define-slot-owner node))))
         (emit "if (!dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error(\"define-slot: the owner must be a singleton, or a class known when compiling\", ~a);"
               owner owner)
+        ;; One object owns the slot: run again, the define-slot must be
+        ;; for the same one.
+        (emit "if (~a.object != DY_UNBOUND && !dy_identical(~a.object, ((DySingleton *)DY_PTR(~a))->object)) dy_error(~a, ((DySingleton *)DY_PTR(~a))->object);"
+              (owner-c sd) (owner-c sd) owner
+              (c-utf8-literal
+               (format nil "define-slot: a compiled program gives the slot ~a to one object only, not also to"
+                       (name-string (module-var-name (sdef-getter sd)))))
+              owner)
         (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)
         (emit "~a.owner = ~a.object;" (sdef-descriptor-c sd) (owner-c sd))))
     (gen-slot-initialization sd))

@@ -739,7 +739,10 @@ error:
 \end{dylan}
 
 The owner of a slot added with \code{define-slot} may be any singleton,
-but a class owner must be known when compiling.
+but a class owner must be known when compiling. A \code{define-slot} on
+a singleton gives its slot to one object: run again for another, it is
+an error (``define-slot: a compiled program gives the slot \meta{name}
+to one object only'').
 
 \paragraph{Making classes and generic functions when running.}
 \code{(make <class> ...)} is an error when it runs (``cannot make an

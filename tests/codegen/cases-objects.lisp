@@ -2314,4 +2314,23 @@ added
 4
 5
 ")
+ ;; A compiled define-slot on a singleton gives its slot to one object:
+ ;; run again for that object it works, for another it is an error.
+ (define-slot-singleton-one-object
+  "(define-class <a> (<object>))
+(define o (make <a>))
+(define o2 (make <a>))
+(define-method mk (obj v) (define-slot (singleton obj) tagy init-value: v))
+(mk o 1)
+(print (tagy o))
+(mk o 1)
+(print (tagy o))
+(print (handler-case (begin (mk o2 2) 'ran) ((<error> condition: c) (format #f \"~a\" c))))
+(print (tagy o))"
+  "1
+1
+\"define-slot: a compiled program gives the slot tagy to one object only, not also to: {instance of <a>}\"
+1
+"
+  :compiler-only t)
 )

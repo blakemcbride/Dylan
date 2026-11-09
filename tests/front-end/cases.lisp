@@ -392,4 +392,10 @@ x@dylan-user
  (read-error
   "(f 1"
   (:diagnostics "error: End of file inside a Dylan list"))
+
+ ;; So are those in a comment after the last form.
+ (unterminated-comment
+  "(f 1)
+(f 2) #| unterminated"
+  (:diagnostics "2:21: error: End of file inside a #| comment."))
 )

@@ -205,18 +205,20 @@ reader had reached."
             (forms '()))
         (let ((dylan::*dylan-source-positions* (source-file-positions file)))
           (loop
-            (let* ((start (progn (dylan::skip-dylan-whitespace stream)
-                                 (file-position stream)))
-                   (form
-                    (handler-case (dylan::dylan-read stream nil eof)
-                      (error (e)
-                        (error 'compile-error
-                               :location (make-location
-                                          file
-                                          (min (file-position stream)
-                                               (max 0 (1- (length text)))))
-                               ;; Worded as bin/dylan reports it
-                               :message (dylan::batch-error-message e))))))
+            (let ((start 0) (form eof))
+              ;; Whitespace and comments too, an unterminated #| among them
+              (handler-case
+                  (progn (dylan::skip-dylan-whitespace stream)
+                         (setf start (file-position stream)
+                               form (dylan::dylan-read stream nil eof)))
+                (error (e)
+                  (error 'compile-error
+                         :location (make-location
+                                    file
+                                    (min (file-position stream)
+                                         (max 0 (1- (length text)))))
+                         ;; Worded as bin/dylan reports it
+                         :message (dylan::batch-error-message e))))
               (when (eq form eof) (return))
               (push (cons form (make-location file start)) forms))))
         (values file module (nreverse forms))))))

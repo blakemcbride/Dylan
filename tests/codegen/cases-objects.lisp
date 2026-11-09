@@ -2252,4 +2252,43 @@ j1
   ""
   :compile-error "the definitions of k are not congruent, and which of them runs first is known only when the program runs"
   :compiler-only t)
+ ;; make takes the keywords of the initialize methods its class has when
+ ;; it runs (chapter 6): not those of one not yet added, or replaced.
+ (make-keywords-when-run
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <b> (<object>))
+(print (try (method () (make <b> bar: 1) 'made)))
+(define-method initialize ((a <b>) #key bar) (next-method))
+(print (try (method () (make <b> bar: 1) 'made)))
+(define-method initialize ((a <b>) #key baz) (next-method))
+(print (try (method () (make <b> bar: 1) 'made)))
+(print (try (method () (make <b> baz: 1) 'made)))
+(define-class <c> (<object>) (s init-keyword: s:))
+(print (try (method () (make <c> s: 1 r: 2) 'made)))
+(define-method setup () (define-method initialize ((a <c>) #rest r) (next-method)))
+(print (try (method () (make <c> s: 1 r: 2) 'made)))
+(setup)
+(print (try (method () (make <c> s: 1 r: 2) 'made)))
+(define-class <d> (<object>) (p init-value: 0))
+(define-method add-it () (define-slot <d> extra init-value: 0))
+(print (try (method () (make <d> q: 1) 'made)))
+(define-method initialize ((a <d>) #key q) (next-method))
+(print (try (method () (make <d> q: 1) 'made)))
+(add-it)
+(print (try (method () (make <d> q: 1 w: 2) 'made)))
+(define-method more () (define-method initialize ((a <d>) #rest r) (next-method)))
+(more)
+(print (try (method () (make <d> q: 1 w: 2) 'made)))"
+  "\"ERR: keyword argument not accepted: bar:\"
+made
+\"ERR: keyword argument not accepted: bar:\"
+made
+\"ERR: keyword argument not accepted: r:\"
+\"ERR: keyword argument not accepted: r:\"
+made
+\"ERR: keyword argument not accepted: q:\"
+made
+\"ERR: keyword argument not accepted: w:\"
+made
+")
 )

@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 17
+#define DY_ABI_VERSION 18
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -868,6 +868,11 @@ typedef struct DyProgramClass {
     bool any_keys;
     const D *storage;              /* for a virtual slot, the slot it    */
     intptr_t storage_count;        /*   keeps, by getter                 */
+    const unsigned char *const *init_key_flags;  /* for each init key,
+                                      its method's flag, or NULL if it
+                                      is always attached; NULL if all are */
+    const unsigned char *const *any_flags;  /* methods that take any key, */
+    intptr_t any_flag_count;       /*   while their flag is set          */
 } DyProgramClass;
 
 /* The slot descriptors of a class whose define-class runs: those of each

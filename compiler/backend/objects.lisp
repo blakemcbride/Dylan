@@ -809,15 +809,21 @@ superclass's gives it: what a virtual slot keeps."
                                         :key #'sdef-allocation))
                  (declare-object "static DyProgramClass ~a;" (program-class-c info))))))
 
-(defun emit-program-class (info init-keywords any)
-  "The DyProgramClass of INFO, a class SLOT-CHANGING-CLASS-P."
+(defun emit-program-class (info init-keywords any any-flags)
+  "The DyProgramClass of INFO, a class SLOT-CHANGING-CLASS-P.
+INIT-KEYWORDS are the keywords initialize's methods take, each as
+(keyword . flag), the flag the C name of the one that says its method is
+attached, or NIL if it always is; with ANY, or while one of the ANY-FLAGS
+is set, a method takes any."
   (let* ((g (class-gclass info))
          (subclasses (loop for c in *classes*
                            when (and (member info (class-info-supers c))
                                      (slot-changing-class-p c))
                              collect c))
          (subs (and subclasses (cdata-name *cdata* "dy_subclasses_")))
-         (keys (and init-keywords (not any) (keyword-array init-keywords)))
+         (keys (and init-keywords (not any) (keyword-array (mapcar #'car init-keywords))))
+         (key-flags (and keys (some #'cdr init-keywords) (cdata-name *cdata* "dy_key_flags_")))
+         (anys (and any-flags (not any) (cdata-name *cdata* "dy_any_flags_")))
          (storage (base-storage-sdefs info))
          (stores (and storage (cdata-name *cdata* "dy_storage_"))))
     (when subs
@@ -826,12 +832,18 @@ superclass's gives it: what a virtual slot keeps."
     (when stores
       (emit-object "static const D ~a[] = { ~{~a~^, ~} };"
                    stores (mapcar (lambda (sd) (address (sdef-descriptor-c sd))) storage)))
-    (emit-object "static DyProgramClass ~a = { ~a, &~a, &~a, &~a, &~a, ~a, ~d, ~a, ~d, ~:[false~;true~], ~a, ~d };"
+    (when key-flags
+      (emit-object "static const unsigned char *const ~a[] = { ~{~a~^, ~} };"
+                   key-flags (mapcar (lambda (k) (if (cdr k) (format nil "&~a" (cdr k)) "NULL")) init-keywords)))
+    (when anys
+      (emit-object "static const unsigned char *const ~a[] = { ~{&~a~^, ~} };" anys any-flags))
+    (emit-object "static DyProgramClass ~a = { ~a, &~a, &~a, &~a, &~a, ~a, ~d, ~a, ~d, ~:[false~;true~], ~a, ~d, ~a, ~a, ~d };"
                  (program-class-c info) (address (class-c-name info)) (gclass-ready-c g)
                  (class-slots-c info) (early-c info) (pending-c info)
                  (or subs "NULL") (length subclasses)
                  (or keys "NULL") (if keys (length init-keywords) 0) any
-                 (or stores "NULL") (length storage))))
+                 (or stores "NULL") (length storage)
+                 (or key-flags "NULL") (or anys "NULL") (if anys (length any-flags) 0))))
 
 ;;; Static storage of a slot definition: its type, init-value and
 ;;; init-function as evaluated, and the storage of shared slots.
@@ -2064,14 +2076,25 @@ by code that the compiler has found does not let it escape."
          (slots (effective-slots info))
          (init (gethash (dylan-var "initialize") *gfuns*))
          (init-methods (initialize-methods info))
-         (any (some #'gmethod-rest-p init-methods))
+         ;; Chapter 6: make takes the keywords of the initialize methods
+         ;; the class has when it runs.  A method with a flag has them
+         ;; only while the flag says it is attached.
+         (always (remove-if #'gmethod-flag-c init-methods))
+         (any (some #'gmethod-rest-p always))
+         (any-flags (mapcar #'gmethod-flag-c
+                            (remove-if-not (lambda (m) (and (gmethod-flag-c m) (gmethod-rest-p m)))
+                                           init-methods)))
+         (flagged-keys (loop for m in init-methods
+                             for k = (gmethod-keys m)
+                             when (and (gmethod-flag-c m) (consp k))
+                               collect (cons (gmethod-flag-c m) k)))
          (keywords (remove-duplicates
                     (append (loop for sd in slots
                                   for spec = (sdef-spec sd)
                                   for k = (or (slot-spec-init-keyword spec)
                                               (slot-spec-required-init-keyword spec))
                                   when k collect k)
-                            (loop for m in init-methods
+                            (loop for m in always
                                   for k = (gmethod-keys m)
                                   when (consp k) append k)))))
     (setf (class-info-maker info) name)
@@ -2080,10 +2103,13 @@ by code that the compiler has found does not let it escape."
                  filler (wrapper-c-name info))
     (when (slot-changing-class-p info)
       ;; Its slots are what define-slots have made them so far
-      (emit-program-class info (loop for m in init-methods
-                                     for k = (gmethod-keys m)
-                                     when (consp k) append k)
-                          any)
+      (emit-program-class info
+                          (append (loop for m in always
+                                        for k = (gmethod-keys m)
+                                        when (consp k) append (mapcar (lambda (key) (cons key nil)) k))
+                                  (loop for (flag . keys) in flagged-keys
+                                        append (mapcar (lambda (key) (cons key flag)) keys)))
+                          any any-flags)
       (emit-object "D ~a(D x, D self, D a0, D a1, D a2, D a3, intptr_t argc) {" filler)
       (let ((readies (loop for c in (class-info-cpl info)
                            for cg = (class-gclass c)
@@ -2137,9 +2163,20 @@ by code that the compiler has found does not let it escape."
             (emit-object "        if (~a != DY_UNBOUND) dy_check_type(v, ~a);"
                          (sdef-c sd "type") (sdef-c sd "type")))
           (emit-object "        object->slots[~d] = v;~%    }" offset))))
-    (unless any
-      (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, ~a, ~d);"
-                   (keyword-array keywords) (length keywords)))
+    (cond (any)
+          ((and (null flagged-keys) (null any-flags))
+           (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, ~a, ~d);"
+                        (keyword-array keywords) (length keywords)))
+          (t
+           (emit-object "    if (!(0~{ || ~a~})) {" any-flags)
+           (emit-object "        D accepted[~d];~%        size_t n = 0;"
+                        (max 1 (+ (length keywords) (loop for (nil . keys) in flagged-keys sum (length keys)))))
+           (dolist (k keywords)
+             (emit-object "        accepted[n++] = ~a;" (c-constant *cdata* k)))
+           (loop for (flag . keys) in flagged-keys
+                 do (emit-object "        if (~a) {~{ accepted[n++] = ~a;~} }"
+                                 flag (mapcar (lambda (k) (c-constant *cdata* k)) keys)))
+           (emit-object "        dy_check_keywords(self, argc, 1, a0, a1, a2, a3, accepted, n);~%    }")))
     (when (and init init-methods)
       (emit-object "    dy_call_list(~a, x, keys);" (address (gfun-c-name init))))
     (emit-object "    dy_thread->mv_count = 1;~%    return x;~%}")))

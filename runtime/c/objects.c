@@ -398,7 +398,9 @@ D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
         D *place = dy_instance_slot(x, (int32_t)s->number);
         if (place) *place = v;
     }
-    if (!k->any_keys) {
+    bool any = k->any_keys;
+    for (intptr_t i = 0; !any && i < k->any_flag_count; i++) any = *k->any_flags[i];
+    if (!any) {
         D accepted = dy_make_vector((size_t)(n + k->init_key_count), DY_FALSE);
         D *names = DY_VECTOR_DATA(accepted);
         intptr_t count = 0;
@@ -406,7 +408,9 @@ D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
             DySlotDescriptor *s = storage_of(k, DY_VECTOR_DATA(slots)[i]);
             if (s && s->init_keyword != DY_FALSE) names[count++] = s->init_keyword;
         }
-        for (intptr_t i = 0; i < k->init_key_count; i++) names[count++] = k->init_keys[i];
+        for (intptr_t i = 0; i < k->init_key_count; i++)
+            if (!k->init_key_flags || !k->init_key_flags[i] || *k->init_key_flags[i])
+                names[count++] = k->init_keys[i];
         dy_check_keywords(self, argc, 1, a0, a1, a2, a3, names, (size_t)count);
     }
     if (__atomic_load_n(k->pending, __ATOMIC_RELAXED) > 0) {

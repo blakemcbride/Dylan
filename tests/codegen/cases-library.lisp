@@ -2356,4 +2356,20 @@ after
 (1/2 -1/2 0 1/15 -1/3)
 ((-2 -1/2) (-4 -1/3))
 ")
+ ;; append and list* build a long list without exhausting the stack, and
+ ;; append shares its last list.
+ (append-long-list
+  "(define l (make <list> size: 300000 fill: 1))
+(print (list (size (append l '(2))) (size (append l l '(2)))))
+(print (list (append '()) (append '() '()) (append '(1) 2) (append '(1 2) '(3) '() '(4 . 5))))
+(print (bind ((t '(3)) (y (append '(1 2) t))) (id? (cddr y) t)))
+(print (list (list*) (list* 1) (list* '(1)) (list* 1 2) (list* 1 2 '(3 4))))
+(print (handler-case (append (append l 3) '(2))
+         ((<error> condition: c) (format #f \"~a\" c))))"
+  "(300001 600001)
+(() () (1 . 2) (1 2 3 4 . 5))
+#t
+(() 1 (1) (1 . 2) (1 2 3 4))
+\"3 is not an instance of {the class <list>}\"
+")
 )

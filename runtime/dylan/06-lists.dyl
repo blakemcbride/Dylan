@@ -115,16 +115,25 @@ module: dylan
 (define (setter cddar) (method (l v) (%set-cdr! (cdr (car l)) v)))
 (define (setter cdddr) (method (l v) (%set-cdr! (cdr (cdr l)) v)))
 
-;;; list* : the last argument is the tail.
+;;; list* : the last argument is the tail.  The list is built from its
+;;; front, each pair's cdr set as the next is made, so that a long one does
+;;; not exhaust the stack.
 (define list*
   (method (#rest arguments)
-    (bind-methods ((build (l)
-                     (if (id? (cdr l) '())
-                         (car l)
-                         (cons (car l) (build (cdr l))))))
-      (if (id? arguments '()) '() (build arguments)))))
+    (if (id? arguments '())
+        '()
+        (bind ((head (cons '() '())))
+          (bind-methods ((build (last l)
+                           (if (id? (cdr l) '())
+                               (%set-cdr! last (car l))
+                               (bind ((next (cons (car l) '())))
+                                 (%set-cdr! last next)
+                                 (build next (cdr l))))))
+            (build head arguments)
+            (cdr head))))))
 
-;;; append: copies every list but the last, which the result shares.
+;;; append: copies every list but the last, which the result shares, from
+;;; its front, as list* is built.
 (define-generic-function append (list #rest more-lists))
 (define-method append ((l <list>) #rest more)
   (bind-methods ((join (lists)
@@ -132,8 +141,15 @@ module: dylan
                          ((id? (cdr lists) '()) (car lists))
                          (else: (copy-onto (car lists) (join (cdr lists))))))
                  (copy-onto (l tail)
-                   (cond ((%pair? l) (cons (car l) (copy-onto (cdr l) tail)))
-                         ((id? l '()) tail)
+                   (bind ((head (cons '() '())))
+                     (copy-into head l tail)
+                     (cdr head)))
+                 (copy-into (last l tail)
+                   (cond ((%pair? l)
+                          (bind ((next (cons (car l) '())))
+                            (%set-cdr! last next)
+                            (copy-into next (cdr l) tail)))
+                         ((id? l '()) (%set-cdr! last tail))
                          (else: (%improper-list-tail l)))))
     (join (cons l more))))
 

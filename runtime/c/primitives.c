@@ -221,21 +221,23 @@ PRIMITIVE(make_generic_function) {
     return DY_OBJ(g);
 }
 
-/* (seal class), and (make-read-only generic-function), which in a
- * static program has nothing left to forbid. */
+/* (seal class), and (seal generic-function), which in a static program
+ * has nothing left to forbid.  A sealed class is read-only too. */
 PRIMITIVE(seal) {
     need(self, argc, 1, 1);
     if (dy_kind_p(a0, DY_KIND_GENERIC)) return a0;
-    as_class(a0)->sealed = 1;
+    DyClass *c = as_class(a0);
+    c->sealed = 1;
+    c->read_only = 1;
     return a0;
 }
 
-/* (make-read-only class-or-generic-function) only forbids changes, which
- * a static program cannot make anyway; unlike seal, it hides nothing
- * (chapter 11). */
+/* (make-read-only class-or-generic-function): no slot can be added to a
+ * read-only class (chapter 11), the one change a static program can make
+ * to it; unlike seal, it hides nothing. */
 PRIMITIVE(make_read_only) {
     need(self, argc, 1, 1);
-    if (!dy_kind_p(a0, DY_KIND_GENERIC)) as_class(a0);
+    if (!dy_kind_p(a0, DY_KIND_GENERIC)) as_class(a0)->read_only = 1;
     return a0;
 }
 

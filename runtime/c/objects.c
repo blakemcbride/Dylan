@@ -321,6 +321,8 @@ static const DyProgramClass **queue_subclasses(const DyProgramClass **queue, int
 }
 
 void dy_define_class_slot(const DyProgramClass *owner, D d) {
+    if (((DyClass *)DY_PTR(owner->class))->read_only)
+        dy_error("define-slot: the class is read-only", owner->class);
     D getter = descriptor(d)->getter;
     bool instance = descriptor(d)->kind == 0;
     *owner->slots = put_slot(*owner->slots, d);

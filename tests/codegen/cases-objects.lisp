@@ -2291,4 +2291,27 @@ made
 \"ERR: keyword argument not accepted: w:\"
 made
 ")
+ ;; No slot can be added to a read-only class, nor so to a sealed one
+ ;; (chapter 11); to a superclass of one, or to a singleton, it can.
+ (define-slot-read-only
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(define-class <q> (<object>) (y init-value: 1))
+(make-read-only <q>)
+(print (try (method () (define-slot <q> extra init-value: 2) 'added)))
+(define-class <r> (<object>) (y init-value: 1))
+(seal <r>)
+(print (try (method () (define-slot <r> extra2 init-value: 2) 'added)))
+(define-class <t> (<object>))
+(define-class <u> (<t>))
+(make-read-only <u>)
+(print (try (method () (define-slot <t> extra4 init-value: 4) 'added)))
+(print (extra4 (make <u>)))
+(define o (make <r>))
+(print (try (method () (define-slot (singleton o) extra5 init-value: 5) (extra5 o))))"
+  "\"define-slot: the class is read-only: {the class <q>}\"
+\"define-slot: the class is read-only: {the class <r>}\"
+added
+4
+5
+")
 )

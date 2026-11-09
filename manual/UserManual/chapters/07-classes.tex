@@ -551,7 +551,9 @@ any more, and \code{all-superclasses}, \code{direct-superclasses} and
 \code{slot-descriptors} return empty sequences for it. Sealing changes
 nothing about existing instances or methods. \code{(make-read-only
 \meta{class})} forbids changing the class's slots and superclasses without
-forbidding subclasses. Both return the class.
+forbidding subclasses; a sealed class is read-only too. Both return the
+class. A \code{define-slot} on a read-only class is an error when it runs
+(``define-slot: the class is read-only'').
 
 \begin{dylan}
 (define-class <a> (<object>) (a-slot init-value: 1))

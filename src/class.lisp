@@ -792,7 +792,7 @@ slots.")
                          "the slot of a singleton takes no init-keyword"
                          debug-name (or init-keyword required-init-keyword))))
           ((and (class? owner) (class.read-only? owner))
-           (dylan-call dylan/error "add-slot -- class is read-only" owner))
+           (dylan-call dylan/error "define-slot: the class is read-only: ~s" owner))
           ((not (class? owner))
            (dylan-call dylan/error
                        "dylan%add-slot -- owner not a singleton or class"

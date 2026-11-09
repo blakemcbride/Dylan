@@ -199,6 +199,21 @@ static unsigned __int128 convergent_term(unsigned __int128 c, unsigned __int128 
     return r;
 }
 
+/* (%float-decode x): the finite float X as M * 2^E exactly, M an integer,
+ * odd unless X is zero, when both are 0: two values. */
+PRIMITIVE(float_decode) {
+    need(self, argc, 1, 1);
+    if (!float_p(a0)) dy_error("not a float", a0);
+    double x = dy_float_value(a0);
+    if (!isfinite(x)) dy_error("not a finite number", a0);
+    if (x == 0) return two_values(DY_INT(0), DY_INT(0));
+    int ex;
+    int64_t m = (int64_t)ldexp(frexp(x, &ex), 53);   /* |M| < 2^53, exact */
+    intptr_t e = ex - 53;
+    while (m % 2 == 0) { m /= 2; e++; }
+    return two_values(DY_INT(m), DY_INT(e));
+}
+
 /* (%rationalize x): the simplest rational within X's precision -- the
  * rational with the smallest denominator strictly between X less and X
  * plus half the distance to the next float -- as Common Lisp's

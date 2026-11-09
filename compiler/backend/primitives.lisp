@@ -53,6 +53,7 @@
     ("%divide" . "divide") ("%math" . "math") ("%float?" . "float_p")
     ("%float" . "to_float") ("%numerator" . "numerator")
     ("%denominator" . "denominator") ("%rationalize" . "rationalize")
+    ("%float-decode" . "float_decode")
     ("%logand" . "logand") ("%logior" . "logior") ("%logxor" . "logxor")
     ("%lognot" . "lognot") ("%logbit?" . "logbit_p") ("%ash" . "ash")
     ("%gcd" . "gcd")

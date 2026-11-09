@@ -92,7 +92,7 @@
     "%break" "%make-thread" "%join-thread" "%thread-condition" "%unhandled"
     "%number-add" "%number-sub" "%number-mul" "%number-div" "%number-negate"
     "%number=" "%number<" "%number?" "%divide" "%math" "%float?" "%float"
-    "%numerator" "%denominator" "%rationalize" "%logand" "%logior" "%logxor"
+    "%numerator" "%denominator" "%rationalize" "%float-decode" "%logand" "%logior" "%logxor"
     "%lognot" "%logbit?" "%ash" "%gcd" "%character->integer"
     "%integer->character" "%character?" "%char-upcase" "%char-downcase"
     "%vector-size" "%vector-element" "%vector-element-setter" "%make-vector"

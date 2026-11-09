@@ -244,25 +244,31 @@ module: dylan
 
 (define-generic-function numerator (number))
 (define-method numerator ((x <rational>)) (%numerator x))
-(define-method numerator ((x <float>)) (bind ((n d (%float-fraction x))) n))
+(define-method numerator ((x <float>))
+  (bind ((m e (%float-parts x)))
+    (if (or (%number< e 0) (id? m 0)) (%number-mul m (%float-one x)) x)))
 
 (define-generic-function denominator (number))
 (define-method denominator ((x <rational>)) (%denominator x))
-(define-method denominator ((x <float>)) (bind ((n d (%float-fraction x))) d))
+;;; 2^-E, doubled up to in X's format: past its largest float the float
+;;; overflow is signalled, as in Common Lisp.
+(define-method denominator ((x <float>))
+  (bind ((m e (%float-parts x)))
+    (for ((d (%float-one x) (%number-mul d 2))
+          (i e (%number-add i 1)))
+         ((not (%number< i 0)) d))))
 
 ;;; A float's numerator and denominator are those of the fraction it holds
-;;; exactly, as floats of its class: (denominator 1.5) is 2.0.
-(define %float-fraction
+;;; exactly, as floats of its class: (denominator 1.5) is 2.0.  The finite
+;;; float X is M * 2^E, M an integer, odd unless X is zero (%float-decode).
+(define %float-parts
   (method (x)
     (when (or (not (= x x)) (and (not (zero? x)) (= x (* x 2))))
       (error "numerator, denominator: ~s is not a finite number" x))
-    (for ((n x (* n 2))
-          (d (+ (- x x) 1) (* d 2)))
-         ((integral? n)
-          ;; A subnormal's denominator is beyond the floats of its format
-          (when (= d (* d 2))
-            (error "numerator, denominator: the denominator of ~s is too large for a float" x))
-          (values n d)))))
+    (%float-decode x)))
+
+;;; 1 in the format of the finite float X
+(define %float-one (method (x) (%number-add (%number-sub x x) 1)))
 
 (define-generic-function rationalize (number))
 (define-method rationalize ((x <real>)) (%rationalize x))
@@ -347,18 +353,18 @@ module: dylan
 
 (define %float->rational
   (method (x)
-    (bind ((n d (%float-fraction x)))
-      (bind ((n-integer r1 (truncate n))
-             (d-integer r2 (truncate d)))
-        (/ n-integer d-integer)))))
+    (bind ((m e (%float-parts x)))
+      (if (%number< e 0)
+          (%number-div m (%ash 1 (%number-sub 0 e)))
+          (%ash m e)))))
 
 (define-method as ((class (singleton <rational>)) (x <float>)) (%float->rational x))
 
 (define-method as ((class (singleton <integer>)) (x <float>))
-  (bind ((r (%float->rational x)))
-    (if (%instance? r <integer>)
-        r
-        (error "as: ~s cannot be converted to ~s" x class))))
+  (bind ((m e (%float-parts x)))
+    (if (%number< e 0)
+        (error "as: ~s cannot be converted to ~s" x class)
+        (%ash m e))))
 
 (define-method as ((class (singleton <ratio>)) (x <float>))
   (bind ((r (%float->rational x)))

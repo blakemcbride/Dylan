@@ -2372,4 +2372,19 @@ after
 (() 1 (1) (1 . 2) (1 2 3 4))
 \"3 is not an instance of {the class <list>}\"
 ")
+ ;; A tiny float's numerator, and as of it, need not form its denominator,
+ ;; which is beyond the floats (Revised^4 Report on Scheme, chapter 14).
+ (tiny-float-parts
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(print (list (numerator 1.0e-300) (numerator 1.0s-35) (numerator -0.75s0)
+             (denominator 0.75) (numerator 0.0) (numerator -0.0) (numerator 1.0e19)))
+(print (try (method () (denominator 1.0e-300))))
+(print (try (method () (as <integer> 1.0e-300))))
+(print (list (as <integer> 4.0e18) (as <integer> -2.0s0) (as <rational> -0.375s0)
+             (as <rational> 4.336808689942018e-19) (as <ratio> 2.5)))"
+  "(6032057205060441.0 6968983.0s0 -3.0s0 4.0 0.0 0.0 1.0e19)
+\"arithmetic error: floating-point-overflow\"
+\"as: 1.0e-300 cannot be converted to {the class <integer>}\"
+(4000000000000000000 -2 -3/8 1/2305843009213693952 5/2)
+")
 )

@@ -441,10 +441,31 @@ static D made_dispatch(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     DY_TAIL_CALL_DIRECT(run_methods, dy_list_of(found, 0, k), a0, a1, a2, a3, argc);
 }
 
+/* Whether METHOD may be made a method of GENERIC: it is a method of no
+ * generic function yet, or of GENERIC */
+static bool free_or_of(D method, D generic) {
+    D owner = ((DyFunction *)DY_PTR(method))->owner;
+    return owner == 0 || owner == DY_FALSE || owner == generic;
+}
+
+/* A copy of METHOD, a method without free variables, of no generic
+ * function */
+static D method_copy(D method) {
+    DyFunction *m = DY_PTR(method);
+    D copy = dy_make_closure(m->entry, 0);
+    DyFunction *c = DY_PTR(copy);
+    c->specializers = m->specializers;
+    c->info = m->info;
+    c->name = m->name;
+    return copy;
+}
+
 /* A define-method of the variable NAME, which holds GENERIC, another
  * generic function than its own: METHOD is added to it (chapter 6), and
  * kept in KEEP, if not NULL.  The errors first, then the change, with the
- * methods' lock held. */
+ * methods' lock held.  A method without free variables is one object
+ * each time its define-method runs: run for a second generic function, it
+ * gives that one a copy, so that each has a method of its own. */
 void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     if (!dy_kind_p(generic, DY_KIND_GENERIC))
         dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
@@ -478,7 +499,14 @@ void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
         }
     }
     /* It replaces the one with the same specializers (chapter 6). */
+    D copy = 0;
     dy_lock_methods();
+    while (!free_or_of(method, generic) && !copy) {
+        dy_unlock_methods();
+        copy = method_copy(method);
+        dy_lock_methods();
+    }
+    if (!free_or_of(method, generic)) method = copy;
     DyVector *methods = DY_PTR(g->methods);
     D specs = ((DyFunction *)DY_PTR(method))->specializers;
     D replaced[1] = { 0 };

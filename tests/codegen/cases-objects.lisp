@@ -2333,4 +2333,27 @@ added
 1
 "
   :compiler-only t)
+ ;; One define-method run for two generic functions made by make gives
+ ;; each a method of its own (chapter 6).
+ (made-generics-own-methods
+  "(define h1 (make <generic-function> required: 1 debug-name: 'hone))
+(define h2 (make <generic-function> required: 1 debug-name: 'htwo))
+(define f h1)
+(define-method mk () (define-method f ((x <integer>)) 'int))
+(mk)
+(set! f h2)
+(mk)
+(print (first (generic-function-methods h1)))
+(print (first (generic-function-methods h2)))
+(print (id? (first (generic-function-methods h1)) (first (generic-function-methods h2))))
+(print (list (h1 1) (h2 2)))
+(set! f h1)
+(mk)
+(print (list (size (generic-function-methods h1)) (h1 3)))"
+  "{a method on hone}
+{a method on htwo}
+#f
+(int int)
+(1 int)
+")
 )

@@ -2429,4 +2429,16 @@ after
 \"bad \\\"z\\\"\"
 (#\\s \"x\\\"q\\\"y\")
 ")
+ ;; Chapter 12: strings compare lexicographically by binary< on their
+ ;; characters, the program's method too.
+ (string-compare-by-characters
+  "(print (list (< \"B\" \"a\") (< \"ab\" \"abc\") (< \"abc\" \"ab\") (< \"\" \"a\") (> \"b\" \"a\")))
+(define-method binary< ((a <character>) (b <character>))
+  (< (as <integer> (as-lowercase a)) (as <integer> (as-lowercase b))))
+(print (list (< \"B\" \"a\") (< \"ab\" \"abc\") (< \"abc\" \"ab\") (< \"aB\" \"Ab\") (< \"Ab\" \"aB\")))
+(print (sort '(\"b\" \"A\" \"a\" \"B\")))"
+  "(#t #t #f #t #t)
+(#f #t #f #f #f)
+(\"A\" \"a\" \"b\" \"B\")
+")
 )

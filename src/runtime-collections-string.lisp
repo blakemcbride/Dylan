@@ -272,9 +272,26 @@ the keyword arguments REST."
 
 ;;;; Operations on Strings (page 119)
 
+;;; Chapter 12: strings compare "lexicographically, using binary< on
+;;; corresponding elements", as the compiled library does: by CL's STRING<
+;;; while binary< has only its predefined methods on characters.
+(defun string-binary< (a b)
+  (if (and *fast-character-compare* (stringp a) (stringp b))
+      (bool (string< a b))
+      (let ((m (library-size a))
+            (n (library-size b)))
+        (loop for i from 0
+              do (cond ((= i m) (return (bool (< i n))))
+                       ((= i n) (return (bool nil)))
+                       (t (let ((x (library-element a i))
+                                (y (library-element b i)))
+                            (cond ((true? (dylan-call dylan/binary< x y))
+                                   (return (bool t)))
+                                  ((true? (dylan-call dylan/binary< y x))
+                                   (return (bool nil)))))))))))
+
 (add-method dylan/binary<
-            (dylan%function->method two-strings
-                                    (lambda (a b) (bool (string< a b)))))
+            (dylan%function->method two-strings #'string-binary<))
 
 ;;; The generic function DYLAN/AS-LOWERCASE is defined in
 ;;; runtime-methods.lisp.

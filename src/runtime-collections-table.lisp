@@ -133,8 +133,12 @@
                         (return (car rest-alist)))
                       (return nil))))
         ((realp key)
+         ;; An <extended-float> key is a structure, not a CL number
          (loop for entry in alist
-               when (let ((other (car entry))) (and (numberp other) (= key other)))
+               when (let ((other (car entry)))
+                      (cond ((numberp other) (= key other))
+                            ((extended-float? other)
+                             (= key (extended-float-value other)))))
                  return entry))
         (t (assoc key alist :test #'eq))))
 

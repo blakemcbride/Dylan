@@ -2458,4 +2458,22 @@ after
 \"ERR: a <byte-string> holds only 8-bit characters: 7\"
 \"xyz\"
 ")
+ ;; A table's keys are compared with = (chapter 12): an <extended-float>
+ ;; key is the same key as an integer or another float = to it.
+ (table-extended-float-keys
+  "(define e (as <extended-float> 2))
+(define t (make <table>))
+(set! (element t e) 1)
+(print (list (element t 2 default: 'absent) (element t 2.0s0 default: 'absent) (element t 3 default: 'absent)))
+(set! (element t 2) 9)
+(print (list (size t) (element t e)))
+(remove-key! t 2.0)
+(print (size t))
+(set! (element t 1/2) 'half)
+(print (element t (as <extended-float> 0.5) default: 'absent))"
+  "(1 1 absent)
+(1 9)
+0
+half
+")
 )

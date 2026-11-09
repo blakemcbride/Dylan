@@ -270,6 +270,9 @@ writes): immediate values, whether each class is a subclass of each
 other, how constants print, integer arithmetic at the edges of the
 63-bit range and its errors, other numbers, strings and symbols, the
 collector, and threads. It runs in moments once built.
+\cmd{make -C runtime VDIR=build/no-int128 VFLAGS=-DDY\_NO\_INT128 test}
+tests the runtime as a C compiler without \code{\_\_int128} builds it,
+its 128-bit arithmetic in two 64-bit words.
 
 \section{The interactive implementation}\label{sec:test-interactive}
 

@@ -261,10 +261,7 @@ static D make_float(int kind, double value) {
     }
 }
 
-static int log2_floor(unsigned __int128 x) {
-    uint64_t high = (uint64_t)(x >> 64);
-    return high ? 127 - __builtin_clzll(high) : 63 - __builtin_clzll((uint64_t)x);
-}
+static int log2_floor(uint64_t x) { return 63 - __builtin_clzll(x); }
 
 /* N/D, D positive and both within 63 bits, rounded once -- to nearest,
  * ties to even -- to BITS bits of precision (24 for a single-float, 53
@@ -272,24 +269,81 @@ static int log2_floor(unsigned __int128 x) {
  * would round twice.  The magnitude is between 2^-62 and 2^62, so neither
  * format's exponent is ever out of range. */
 static double ratio_rounded(intptr_t n, intptr_t d, int bits) {
-    typedef unsigned __int128 u128;
     if (n == 0) return 0;
     bool negative = n < 0;
-    u128 un = negative ? (u128)(-(i128)n) : (u128)n, ud = (u128)d;
-    /* Q = floor(N * 2^S / D), with BITS + 1 bits: one to round by */
+    uint64_t un = negative ? -(uint64_t)n : (uint64_t)n, ud = (uint64_t)d;
+    /* Q = floor(N * 2^S / D), with BITS + 1 bits: one to round by.  N *
+     * 2^S is below 2^116, and Q below 2^(BITS + 1). */
     int s = bits - (log2_floor(un) - log2_floor(ud));
-    u128 q, r;
+    i128 q, r;
     for (;;) {
-        u128 num = s >= 0 ? un << s : un, den = s >= 0 ? ud : ud << -s;
-        q = num / den;
-        r = num % den;
-        if (q >> bits) break;
+        i128 num = w_of((int64_t)un), den = w_of((int64_t)ud);
+        if (s >= 0) num = w_shl(num, s); else den = w_shl(den, -s);
+        q = w_div(num, den);
+        r = w_mod(num, den);
+        if (w_sign(w_sar(q, bits)) != 0) break;
         s++;
     }
-    u128 mantissa = q >> 1;
-    if ((q & 1) && (r != 0 || (mantissa & 1))) mantissa++;
-    double magnitude = ldexp((double)(uint64_t)mantissa, 1 - s);
+    uint64_t whole = (uint64_t)w_int(q), mantissa = whole >> 1;
+    if ((whole & 1) && (w_sign(r) != 0 || (mantissa & 1))) mantissa++;
+    double magnitude = ldexp((double)mantissa, 1 - s);
     return negative ? -magnitude : magnitude;
+}
+
+/* C * P + Q, which must not pass DY_INT_MAX; none is negative */
+static i128 convergent_term(i128 c, i128 p, i128 q) {
+    i128 most = w_of(DY_INT_MAX);
+    if (w_sign(p) != 0 && w_cmp(c, w_div(most, p)) > 0) dy_integer_overflow();
+    i128 r = w_add(w_mul(c, p), q);
+    if (w_cmp(r, most) > 0) dy_integer_overflow();
+    return r;
+}
+
+/* (rationalize x) of the float X: the simplest rational within X's
+ * precision -- the rational with the smallest denominator strictly between
+ * X less and X plus half the distance to the next float -- as Common
+ * Lisp's rationalize, and SBCL's in particular, gives it: X's integer and
+ * exponent as integer-decode-float gives them, and the interval narrowed
+ * by its continued fraction, exactly.  The interval's ends have a power of
+ * two below 2^127 for a denominator, so fit in 128 bits whenever the
+ * answer can fit in 63. */
+D dy_rationalize(D x) {
+    double v = dy_float_value(x);
+    if (!isfinite(v)) dy_error("rationalize: not a finite number", x);
+    if (v == 0) return DY_INT(0);
+    bool single = dy_kind_p(x, DY_KIND_SINGLE_FLOAT);
+    int bits = single ? 24 : 53, least = single ? -149 : -1074;
+    int e;
+    frexp(fabs(v), &e);
+    int expo = e - bits < least ? least : e - bits;
+    uint64_t frac = (uint64_t)ldexp(fabs(v), -expo);
+    if (expo >= 0) {
+        /* an integer: up to 2^62 - 1, or 2^62 when negative */
+        uint64_t most = (uint64_t)DY_INT_MAX + (v < 0);
+        if (expo >= 62 || frac > most >> expo) dy_integer_overflow();
+        intptr_t n = (intptr_t)(frac << expo);
+        return DY_INT(v < 0 ? -n : n);
+    }
+    if (1 - expo > 126) dy_integer_overflow();     /* below 2^-73: 1/n, n past 2^62 */
+    i128 zero = w_of(0), one = w_of(1), twice = w_of((int64_t)(2 * frac));
+    i128 an = w_sub(twice, one), ad = w_shl(one, 1 - expo);
+    i128 bn = w_add(twice, one), bd = ad;
+    i128 p0 = zero, q0 = one, p1 = one, q1 = zero;
+    for (;;) {
+        i128 c = w_div(w_sub(w_add(an, ad), one), ad);     /* the ceiling of A */
+        if (w_cmp(w_mul(c, bd), bn) < 0) {                 /* C < B */
+            intptr_t n = (intptr_t)w_int(convergent_term(c, p1, p0));
+            intptr_t d = (intptr_t)w_int(convergent_term(c, q1, q0));
+            return dy_make_ratio(DY_INT(v < 0 ? -n : n), DY_INT(d));
+        }
+        i128 k = w_sub(c, one);
+        i128 p2 = convergent_term(k, p1, p0), q2 = convergent_term(k, q1, q0);
+        /* A, B := 1 / (B - K), 1 / (A - K) */
+        i128 next_an = bd, next_ad = w_sub(bn, w_mul(k, bd));
+        i128 next_bn = ad, next_bd = w_sub(an, w_mul(k, ad));
+        an = next_an; ad = next_ad; bn = next_bn; bd = next_bd;
+        p0 = p1; q0 = q1; p1 = p2; q1 = q2;
+    }
 }
 
 /* X, any real, rounded once to the precision of a float of KIND

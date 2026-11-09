@@ -190,15 +190,6 @@ PRIMITIVE(denominator) {
     dy_error("not a rational", a0);
 }
 
-/* C * P + Q, which must not pass DY_INT_MAX */
-static unsigned __int128 convergent_term(unsigned __int128 c, unsigned __int128 p,
-                                         unsigned __int128 q) {
-    if (p != 0 && c > (unsigned __int128)DY_INT_MAX / p) dy_integer_overflow();
-    unsigned __int128 r = c * p + q;
-    if (r > (unsigned __int128)DY_INT_MAX) dy_integer_overflow();
-    return r;
-}
-
 /* (%float-decode x): the finite float X as M * 2^E exactly, M an integer,
  * odd unless X is zero, when both are 0: two values. */
 PRIMITIVE(float_decode) {
@@ -214,53 +205,11 @@ PRIMITIVE(float_decode) {
     return two_values(DY_INT(m), DY_INT(e));
 }
 
-/* (%rationalize x): the simplest rational within X's precision -- the
- * rational with the smallest denominator strictly between X less and X
- * plus half the distance to the next float -- as Common Lisp's
- * rationalize, and SBCL's in particular, gives it: X's integer and
- * exponent as integer-decode-float gives them, and the interval narrowed
- * by its continued fraction, exactly.  The interval's ends have a power of
- * two below for a denominator, so fit in 128 bits whenever the answer can
- * fit in 63. */
+/* (%rationalize x): the simplest rational within X's precision, if X
+ * is a float (dy_rationalize); otherwise X */
 PRIMITIVE(rationalize) {
     need(self, argc, 1, 1);
-    if (!float_p(a0)) return a0;
-    double x = dy_float_value(a0);
-    if (!isfinite(x)) dy_error("rationalize: not a finite number", a0);
-    if (x == 0) return DY_INT(0);
-    bool single = dy_kind_p(a0, DY_KIND_SINGLE_FLOAT);
-    int bits = single ? 24 : 53, least = single ? -149 : -1074;
-    int e;
-    frexp(fabs(x), &e);
-    int expo = e - bits < least ? least : e - bits;
-    uint64_t frac = (uint64_t)ldexp(fabs(x), -expo);
-    typedef unsigned __int128 u128;
-    if (expo >= 0) {
-        /* an integer: up to 2^62 - 1, or 2^62 when negative */
-        uint64_t most = (uint64_t)DY_INT_MAX + (x < 0);
-        if (expo >= 62 || frac > most >> expo) dy_integer_overflow();
-        intptr_t n = (intptr_t)(frac << expo);
-        return DY_INT(x < 0 ? -n : n);
-    }
-    if (1 - expo > 126) dy_integer_overflow();     /* below 2^-73: 1/n, n past 2^62 */
-    u128 an = 2 * (u128)frac - 1, ad = (u128)1 << (1 - expo);
-    u128 bn = 2 * (u128)frac + 1, bd = ad;
-    u128 p0 = 0, q0 = 1, p1 = 1, q1 = 0;
-    for (;;) {
-        u128 c = (an + ad - 1) / ad;            /* the ceiling of A */
-        if (c * bd < bn) {                      /* C < B */
-            u128 top = convergent_term(c, p1, p0), bottom = convergent_term(c, q1, q0);
-            intptr_t n = (intptr_t)top;
-            return dy_make_ratio(DY_INT(x < 0 ? -n : n), DY_INT((intptr_t)bottom));
-        }
-        u128 k = c - 1;
-        u128 p2 = convergent_term(k, p1, p0), q2 = convergent_term(k, q1, q0);
-        /* A, B := 1 / (B - K), 1 / (A - K) */
-        u128 next_an = bd, next_ad = bn - k * bd;
-        u128 next_bn = ad, next_bd = an - k * ad;
-        an = next_an; ad = next_ad; bn = next_bn; bd = next_bd;
-        p0 = p1; q0 = q1; p1 = p2; q1 = q2;
-    }
+    return float_p(a0) ? dy_rationalize(a0) : a0;
 }
 
 /* Integers as bits (two's complement, as Common Lisp) */

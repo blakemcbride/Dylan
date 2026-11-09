@@ -2441,4 +2441,21 @@ after
 (#f #t #f #f #f)
 (\"A\" \"a\" \"b\" \"B\")
 ")
+ ;; Chapter 12: as-lowercase of a string is (map as-lowercase string), and
+ ;; as-lowercase! (map-into string as-lowercase string); so for upper case.
+ (string-case-by-characters
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (list (as-lowercase \"ABC\") (as-uppercase! (copy-sequence \"abc\"))))
+(define-method as-lowercase ((c <character>)) (if (= c #\\A) #\\* (as <character> (+ 32 (as <integer> c)))))
+(define-method as-uppercase ((c <character>)) (if (= c #\\a) 7 c))
+(print (list (as-lowercase \"ABC\") (as-lowercase! (copy-sequence \"ABC\"))))
+(print (try (method () (as-uppercase \"abc\"))))
+(print (try (method () (as-uppercase! (copy-sequence \"abc\")))))
+(print (as-uppercase (as <unicode-string> \"xyz\")))"
+  "(\"abc\" \"ABC\")
+(\"*bc\" \"*bc\")
+\"ERR: a <byte-string> holds only 8-bit characters: 7\"
+\"ERR: a <byte-string> holds only 8-bit characters: 7\"
+\"xyz\"
+")
 )

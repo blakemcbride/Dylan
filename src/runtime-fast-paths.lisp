@@ -45,6 +45,8 @@
     (guard 'dylan/binary= '*fast-binary=* two-reals '*fast-binary<=* two-reals)
     (guard 'dylan/binary< '*fast-character-compare* two-characters)
     (guard 'dylan/binary= '*fast-character-compare* two-characters)
+    (guard 'dylan/as-lowercase '*fast-character-case* (list (list <character>)))
+    (guard 'dylan/as-uppercase '*fast-character-case* (list (list <character>)))
     ;; Only the first argument's class is known: a table's own key.
     (guard 'dylan/binary= '*fast-key=* simple-key)
     (guard 'dylan/=hash '*fast-key=* simple-key)

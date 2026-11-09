@@ -296,12 +296,22 @@ the keyword arguments REST."
 ;;; The generic function DYLAN/AS-LOWERCASE is defined in
 ;;; runtime-methods.lisp.
 
+;;; Chapter 12: as-lowercase of a string "is equivalent to (map
+;;; as-lowercase string)", and as-lowercase! to (map-into string
+;;; as-lowercase string); so for as-uppercase.  CL's CHAR-DOWNCASE and
+;;; CHAR-UPCASE do it while the two have only their predefined methods on
+;;; characters (runtime-fast-paths.lisp).
+(defvar *fast-character-case* nil)
+
 (dolist (class (list <byte-string> <unicode-string>))
   (add-method
    dylan/as-lowercase
    (dylan%function->method
     (make-param-list `((byte-string ,class)) nil nil nil)
-    (lambda (string) (string-like string (map 'string #'char-downcase string))))))
+    (lambda (string)
+      (if *fast-character-case*
+          (string-like string (map 'string #'char-downcase string))
+          (dylan-call dylan/map dylan/as-lowercase string))))))
 
 (defparameter dylan/as-lowercase!
   (dylan%generic-fn 'as-lowercase! one-string nil))
@@ -312,9 +322,11 @@ the keyword arguments REST."
    (dylan%function->method
     (make-param-list `((byte-string ,class)) nil nil nil)
     (lambda (string)
-      (do ((index 0 (+ index 1)))
-          ((>= index (length string)) string)
-        (setf (char string index) (char-downcase (char string index))))))))
+      (if *fast-character-case*
+          (do ((index 0 (+ index 1)))
+              ((>= index (length string)) string)
+            (setf (char string index) (char-downcase (char string index))))
+          (dylan-call dylan/map-into string dylan/as-lowercase string))))))
 
 ;;; The generic function DYLAN/AS-UPPERCASE is defined in
 ;;; runtime-methods.lisp.
@@ -328,13 +340,15 @@ the keyword arguments REST."
       ;; A <byte-string> holds only 8-bit characters, and the upper case of
       ;; y with diaeresis (code 255) is not one: an error, as in a compiled
       ;; program.
-      (string-like string
-                   (map 'string
-                        (lambda (c)
-                          (let ((upper (char-upcase c)))
-                            (check-byte-character string upper)
-                            upper))
-                        string))))))
+      (if *fast-character-case*
+          (string-like string
+                       (map 'string
+                            (lambda (c)
+                              (let ((upper (char-upcase c)))
+                                (check-byte-character string upper)
+                                upper))
+                            string))
+          (dylan-call dylan/map dylan/as-uppercase string))))))
 
 (defparameter dylan/as-uppercase!
   (dylan%generic-fn 'as-uppercase! one-string nil))
@@ -345,11 +359,13 @@ the keyword arguments REST."
    (dylan%function->method
     (make-param-list `((byte-string ,class)) nil nil nil)
     (lambda (string)
-      (do ((index 0 (+ index 1)))
-          ((>= index (length string)) string)
-        (let ((upper (char-upcase (char string index))))
-          (check-byte-character string upper)
-          (setf (char string index) upper)))))))
+      (if *fast-character-case*
+          (do ((index 0 (+ index 1)))
+              ((>= index (length string)) string)
+            (let ((upper (char-upcase (char string index))))
+              (check-byte-character string upper)
+              (setf (char string index) upper)))
+          (dylan-call dylan/map-into string dylan/as-uppercase string))))))
 
 ;;; PREVIOUS-STATE for strings is the array method: string states are
 ;;; index vectors.  (The Scheme had a method here specialized on integer

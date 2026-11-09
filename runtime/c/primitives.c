@@ -463,9 +463,10 @@ static D method_copy(D method) {
 /* A define-method of the variable NAME, which holds GENERIC, another
  * generic function than its own: METHOD is added to it (chapter 6), and
  * kept in KEEP, if not NULL.  The errors first, then the change, with the
- * methods' lock held.  A method without free variables is one object
- * each time its define-method runs: run for a second generic function, it
- * gives that one a copy, so that each has a method of its own. */
+ * methods' lock held.  A method without free variables, which has no
+ * KEEP, is one object each time its define-method runs: run for a second
+ * generic function, it gives that one a copy, so that each has a method of
+ * its own.  A closure is made afresh each time. */
 void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     if (!dy_kind_p(generic, DY_KIND_GENERIC))
         dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
@@ -501,12 +502,12 @@ void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     /* It replaces the one with the same specializers (chapter 6). */
     D copy = 0;
     dy_lock_methods();
-    while (!free_or_of(method, generic) && !copy) {
+    while (!keep && !free_or_of(method, generic) && !copy) {
         dy_unlock_methods();
         copy = method_copy(method);
         dy_lock_methods();
     }
-    if (!free_or_of(method, generic)) method = copy;
+    if (!keep && !free_or_of(method, generic)) method = copy;
     DyVector *methods = DY_PTR(g->methods);
     D specs = ((DyFunction *)DY_PTR(method))->specializers;
     D replaced[1] = { 0 };

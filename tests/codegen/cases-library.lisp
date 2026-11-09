@@ -2375,12 +2375,14 @@ after
 (print (list (append '()) (append '() '()) (append '(1) 2) (append '(1 2) '(3) '() '(4 . 5))))
 (print (bind ((t '(3)) (y (append '(1 2) t))) (id? (cddr y) t)))
 (print (list (list*) (list* 1) (list* '(1)) (list* 1 2) (list* 1 2 '(3 4))))
+(print (size (apply list* (concatenate l '((2))))))
 (print (handler-case (append (append l 3) '(2))
          ((<error> condition: c) (format #f \"~a\" c))))"
   "(300001 600001)
 (() () (1 . 2) (1 2 3 4 . 5))
 #t
 (() 1 (1) (1 . 2) (1 2 3 4))
+300001
 \"3 is not an instance of {the class <list>}\"
 ")
  ;; A tiny float's numerator, and as of it, need not form its denominator,

@@ -305,14 +305,14 @@
 (defparameter dylan/list*
   (dylan%function->method
    only-rest-args
-   (labels ((list-star (arg &rest args)
-              (if (null args)
-                  arg
-                  (cons arg (apply #'list-star args)))))
-     (lambda (&rest args)
-       (if (null args)
-           '()                          ; Very peculiar ?
-           (apply #'list-star args))))))
+   (lambda (&rest args)
+     ;; Each argument but the last, consed in a loop onto the last.
+     (let* ((head (list nil)) (end head))
+       (loop for (arg . more) on args
+             do (if more
+                    (setf end (setf (cdr end) (list arg)))
+                    (setf (cdr end) arg)))
+       (cdr head)))))
 
 (defun dylan-append (&rest lists)
   "Each of LISTS but the last copied, onto the last, which the result shares."

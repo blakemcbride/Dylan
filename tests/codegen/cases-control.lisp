@@ -312,6 +312,78 @@ caught
   ""
   :error "the variable (setter undefined-thing)@dylan-user has no value")
 
+ ;; A handler may make an error from a trap -- a call with the wrong
+ ;; number of arguments, a floating-point overflow, division by zero, a
+ ;; value of the wrong type -- whose handler makes another, more deeply
+ ;; than the host's signal handling nests.
+ (trap-errors-nest-deeply
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+   (define big 1.0e300)
+   (define-method nest (n k thunk)
+     (if (= n 0)
+         (k 'bottom)
+         (handler-bind (<error> (method (c next) (print (format #f \"~a: ~a\" n c)) (nest (- n 1) k thunk)))
+           (thunk))))
+   (print (try (method () (bind-exit (k) (nest 12 k (method () ((method (a) a))))))))
+   (print (try (method () (bind-exit (k) (nest 12 k (method () (* big big)))))))
+   (print (try (method () (bind-exit (k) (nest 12 k (method () (/ 1 0)))))))
+   (print (try (method () (bind-exit (k) (nest 12 k (method () (car 5)))))))
+   (print 'after)"
+  "\"12: wrong number of arguments (0)\"
+\"11: wrong number of arguments (0)\"
+\"10: wrong number of arguments (0)\"
+\"9: wrong number of arguments (0)\"
+\"8: wrong number of arguments (0)\"
+\"7: wrong number of arguments (0)\"
+\"6: wrong number of arguments (0)\"
+\"5: wrong number of arguments (0)\"
+\"4: wrong number of arguments (0)\"
+\"3: wrong number of arguments (0)\"
+\"2: wrong number of arguments (0)\"
+\"1: wrong number of arguments (0)\"
+bottom
+\"12: arithmetic error: floating-point-overflow\"
+\"11: arithmetic error: floating-point-overflow\"
+\"10: arithmetic error: floating-point-overflow\"
+\"9: arithmetic error: floating-point-overflow\"
+\"8: arithmetic error: floating-point-overflow\"
+\"7: arithmetic error: floating-point-overflow\"
+\"6: arithmetic error: floating-point-overflow\"
+\"5: arithmetic error: floating-point-overflow\"
+\"4: arithmetic error: floating-point-overflow\"
+\"3: arithmetic error: floating-point-overflow\"
+\"2: arithmetic error: floating-point-overflow\"
+\"1: arithmetic error: floating-point-overflow\"
+bottom
+\"12: division by zero\"
+\"11: division by zero\"
+\"10: division by zero\"
+\"9: division by zero\"
+\"8: division by zero\"
+\"7: division by zero\"
+\"6: division by zero\"
+\"5: division by zero\"
+\"4: division by zero\"
+\"3: division by zero\"
+\"2: division by zero\"
+\"1: division by zero\"
+bottom
+\"12: not a list: 5\"
+\"11: not a list: 5\"
+\"10: not a list: 5\"
+\"9: not a list: 5\"
+\"8: not a list: 5\"
+\"7: not a list: 5\"
+\"6: not a list: 5\"
+\"5: not a list: 5\"
+\"4: not a list: 5\"
+\"3: not a list: 5\"
+\"2: not a list: 5\"
+\"1: not a list: 5\"
+bottom
+after
+")
+
  ;; Chapter 3 lets the function of a call be evaluated before, during or
  ;; after the arguments; both evaluate it first.
  (call-operator-first

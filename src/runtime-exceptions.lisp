@@ -424,14 +424,25 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 ;;; A recursion too deep is an error a handler can catch, as in a compiled
 ;;; program (runtime/c/control.c): each method checks, on entry, that the
 ;;; stack is above *STACK-GUARD*, the soft limit.  While the error is
-;;; handled the guard is the hard limit, below which the stack is reported
-;;; exhausted, not signalled (FIND-STACK, in compat.lisp, sets them for the
+;;; handled the guard is the floor, half way through the hard reserve,
+;;; where the stack is reported exhausted, not signalled; an error from
+;;; Lisp below the hard limit is reported too, so that one a handler makes
+;;; on each round of a recursion that never ends is reached first, as in a
+;;; compiled program (FIND-STACK, in compat.lisp, sets the limits for the
 ;;; loop, or the first form evaluated).  Handlers are dynamic bindings,
 ;;; whose stack is apart: one is established only with 128 KB of it left,
-;;; or 32 KB while the error is handled.
+;;; or 16 KB while the error is handled; below 32 KB, its hard limit, an
+;;; error from Lisp is reported.
 
 (defvar *binding-guard* (* 128 1024) "The room a handler needs.")
 (defconstant +binding-hard+ (* 32 1024))
+(defconstant +binding-floor+ (* 16 1024))
+
+(defun dylan%below-hard-limit-p ()
+  "Whether either stack is past its hard limit, where errors are reported,
+not signalled."
+  (or (< (implementation-specific/stack-pointer) *stack-hard*)
+      (< (implementation-specific/binding-stack-room) +binding-hard+)))
 
 (define-condition stack-exhausted (storage-condition) ()
   (:report "the stack is exhausted")
@@ -439,11 +450,10 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 error, which a Dylan handler would see, but the end of the run."))
 
 (defun dylan%stack-exhausted ()
-  (if (or (< (implementation-specific/stack-pointer) *stack-hard*)
-          (< (implementation-specific/binding-stack-room) +binding-hard+))
+  (if (dylan%below-hard-limit-p)
       (error 'stack-exhausted)
-      (let ((*stack-guard* *stack-hard*)
-            (*binding-guard* +binding-hard+))
+      (let ((*stack-guard* *stack-floor*)
+            (*binding-guard* +binding-floor+))
         (dylan-call dylan/error "the stack is exhausted"))))
 
 (defun dylan%check-binding-stack ()

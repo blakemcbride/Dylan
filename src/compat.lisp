@@ -1264,10 +1264,15 @@ Choosing one signals an instance of the handler's restart class."
   (sb-ext:gc :full t)
   (- (sb-ext:dynamic-space-size) (sb-kernel:dynamic-usage)))
 
-(declaim (type fixnum *stack-guard* *stack-hard*))
+(declaim (type fixnum *stack-guard* *stack-hard* *stack-floor*))
 (defvar *stack-guard* 0
   "The soft limit of the stack (DYLAN%CHECK-STACK), or 0 if not found yet.")
-(defvar *stack-hard* 0 "The hard limit.")
+(defvar *stack-hard* 0
+  "The hard limit, below which an error from Lisp is reported, not
+signalled (IMPLEMENTATION-SPECIFIC/CATCH-ALL-ERRORS).")
+(defvar *stack-floor* 0
+  "Half way through the hard reserve: the guard while the stack's
+exhaustion is handled (DYLAN%STACK-EXHAUSTED).")
 
 (defun find-stack ()
   "Set the limits from the calling thread's stack: two reserves at its
@@ -1277,6 +1282,7 @@ larger than a compiled one), above the host's guard pages."
     (let* ((eighth (floor size 8))
            (hard (+ low (min eighth (* 1024 1024)))))
       (setf *stack-hard* hard
+            *stack-floor* (+ low (floor (- hard low) 2))
             *stack-guard* (+ hard (min eighth (* 4 1024 1024)))))))
 
 (defun implementation-specific/binding-stack-room ()
@@ -1337,11 +1343,106 @@ below its stack's hard limit.")
 
 (defvar *nesting-exhausted* nil
   "True while the error that says the nesting is exhausted is handled.")
+;;;; Errors from traps, out of the signal context
+;;;;
+;;;; SBCL runs the handlers of an error a trap raises -- a call with the
+;;;; wrong number of arguments, a value of the wrong type, a floating-point
+;;;; overflow -- inside the trap's signal context, and its runtime dies at
+;;;; the ninth such context one inside another ("maximum interrupt nesting
+;;;; depth").  A Dylan handler may make an error of that kind itself, its
+;;;; handler another, and so on, as deep as the stack allows in a compiled
+;;;; program.  So, where Dylan's handlers catch Lisp errors
+;;;; (*ESCAPE-TRAPS*), the trap is made to return into a function that
+;;;; signals its error again, out of the signal context: as if the trapped
+;;;; code had called ERROR, in its dynamic environment.  This is done on
+;;;; x86-64 Linux, where the trap's context is the kernel's signal frame;
+;;;; elsewhere the nesting limits above end such errors.
+;;;;
+;;;; SBCL's own arrange_return_to_lisp_function writes 144 bytes below the
+;;;; trapped stack pointer, past the 128-byte red zone, into the signal
+;;;; frame -- harmless only on the alternate signal stack, where SBCL uses
+;;;; it.  The function here never returns, so a return address, in the red
+;;;; zone, is all the frame it needs.
 
-;;; SBCL counts an error from a trap twice, and stops at 10 (ERROR-ERROR):
-;;; the limits above, and the binding stack's (DYLAN/SIGNAL), end nested
-;;; errors first.
-(setf sb-kernel:*maximum-error-depth* 1000000)
+(defvar *escape-traps* nil
+  "True where Dylan's handlers catch Lisp errors (IMPLEMENTATION-SPECIFIC/
+CATCH-ALL-ERRORS), and so an error from a trap is signalled out of it.")
+
+(defun trap-escape-available-p ()
+  #+(and x86-64 linux)
+  (and (sb-sys:find-foreign-symbol-address "call_into_lisp")
+       (sb-sys:find-foreign-symbol-address "os_context_pc_addr")
+       t)
+  #-(and x86-64 linux)
+  nil)
+
+#+(and x86-64 linux)
+(defun escape-trap (context function)
+  "Make the trap whose signal context is CONTEXT, a SAP, return into
+FUNCTION, of no arguments, which must not return; then return from the
+trap."
+  (let* ((alien-context (sb-alien:sap-alien context (* sb-vm::os-context-t)))
+         (sp (sb-vm:context-register alien-context sb-vm::rsp-offset))
+         ;; A return address, 8 mod 16 as a call leaves the stack, within
+         ;; the red zone: the trapped code, as if it had made the call.
+         (new-sp (- (logandc2 (- sp 64) 15) 8)))
+    (setf (sb-sys:sap-ref-64 (sb-sys:int-sap new-sp) 0)
+          (sb-sys:sap-int (sb-vm:context-pc alien-context)))
+    (sb-vm::%set-context-register alien-context sb-vm::rsp-offset new-sp)
+    ;; call_into_lisp (FUNCTION, no argument vector, no arguments)
+    (sb-vm::%set-context-register alien-context sb-vm::rdi-offset
+                                  (sb-kernel:get-lisp-obj-address function))
+    (sb-vm::%set-context-register alien-context sb-vm::rsi-offset 0)
+    (sb-vm::%set-context-register alien-context sb-vm::rdx-offset 0)
+    (setf (sb-sys:sap-ref-64
+           (sb-alien:alien-funcall
+            (sb-alien:extern-alien "os_context_pc_addr"
+                                   (function sb-sys:system-area-pointer
+                                             sb-sys:system-area-pointer))
+            context)
+           0)
+          (sb-sys:find-foreign-symbol-address "call_into_lisp"))
+    ;; The floating-point exceptions accrued, as SIGFPE-HANDLER clears them
+    (sb-vm::context-set-floating-point-modes
+     alien-context
+     (dpb 0 sb-vm::float-sticky-bits
+          (sb-vm::context-floating-point-modes alien-context)))
+    (throw 'escape-trap nil)))
+
+(defun call-escaping-trap (context thunk)
+  "Call THUNK, which signals the error of the trap whose signal context is
+CONTEXT, a SAP: out of the context, where that is done."
+  (catch 'escape-trap
+    (if (and *escape-traps* (trap-escape-available-p))
+        (handler-bind ((error (lambda (condition)
+                                #+(and x86-64 linux)
+                                (escape-trap context (lambda () (error condition)))
+                                #-(and x86-64 linux)
+                                condition)))
+          (funcall thunk))
+        (funcall thunk))))
+
+;;; SBCL calls INTERNAL-ERROR for each trap, and SIGFPE-HANDLER for each
+;;; floating-point one, in the signal context.  A trap that execution may
+;;; continue past is left alone.  The SIGFPE handler is installed again,
+;;; to be the one encapsulated, as SBCL installs it when it starts.
+(sb-ext:without-package-locks
+  (unless (sb-int:encapsulated-p 'sb-kernel:internal-error 'dylan-escape-trap)
+    (sb-int:encapsulate
+     'sb-kernel:internal-error 'dylan-escape-trap
+     (lambda (internal-error context continuable)
+       (if continuable
+           (funcall internal-error context continuable)
+           (call-escaping-trap context
+                               (lambda () (funcall internal-error context continuable)))))))
+  #+(and x86-64 linux)
+  (unless (sb-int:encapsulated-p 'sb-vm:sigfpe-handler 'dylan-escape-trap)
+    (sb-int:encapsulate
+     'sb-vm:sigfpe-handler 'dylan-escape-trap
+     (lambda (sigfpe-handler signal info context)
+       (call-escaping-trap context
+                           (lambda () (funcall sigfpe-handler signal info context)))))
+    (sb-sys:enable-interrupt sb-unix:sigfpe #'sb-vm:sigfpe-handler)))
 
 (defun implementation-specific/catch-all-errors (handler thunk)
   ;; A handler that returns normally declines, and the condition goes on to
@@ -1366,6 +1467,10 @@ below its stack's hard limit.")
                                        (offered-to-dylan-p condition))
                             (let ((depth sb-kernel:*free-interrupt-context-index*))
                               (cond ((>= depth +nested-traps-hard+))
+                                    ;; Below the hard limit the error is
+                                    ;; reported, as a compiled program
+                                    ;; reports its runtime's errors there
+                                    ((dylan%below-hard-limit-p))
                                     ((and (>= depth +nested-traps-soft+)
                                           (not *nesting-exhausted*))
                                      (let ((*nesting-exhausted* t))
@@ -1377,7 +1482,12 @@ below its stack's hard limit.")
                                      (implementation-specific/catch-all-errors
                                       handler
                                       (lambda () (funcall handler condition))))))))))
-    (funcall thunk)))
+    ;; Each error signalled out of a trap is signalled with ERROR, which
+    ;; counts one inside another; the stack limits, not SBCL's ten, end
+    ;; them, as in a compiled program.
+    (let ((*escape-traps* t)
+          (sb-kernel:*maximum-error-depth* most-positive-fixnum))
+      (funcall thunk))))
 
 
 (defun implementation-specific/reflect-condition (condition)

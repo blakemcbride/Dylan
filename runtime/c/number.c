@@ -196,6 +196,43 @@ static void rational_parts(D x, i128 *n, i128 *d) {
     *d = w_of(DY_INT_VALUE(r->denominator));
 }
 
+/* Chapter 14's floor/, ceiling/, round/ and truncate/ (KIND 0 to 3) of the
+ * rationals A and B, B not zero: the integer quotient, with the remainder
+ * A - Q * B stored, both exact in 128 bits.  A / B is N / D, with N =
+ * AN * BD and D = AD * BN, and the remainder is (N - Q * D) / (AD * BD).
+ * Only a quotient (if WANT_QUOTIENT) or a remainder that does not fit is
+ * an error; without WANT_QUOTIENT the answer is the remainder. */
+D dy_rational_divide(int kind, D a, D b, D *remainder, bool want_quotient) {
+    i128 an, ad, bn, bd;
+    rational_parts(a, &an, &ad);
+    rational_parts(b, &bn, &bd);
+    i128 n = w_mul(an, bd), d = w_mul(ad, bn);
+    bool flipped = w_sign(d) < 0;
+    if (flipped) { n = w_neg(n); d = w_neg(d); }
+    i128 q = w_div(n, d), r = w_mod(n, d);       /* truncated; |R| < D */
+    int down = 0;                                 /* -1: Q - 1, +1: Q + 1 */
+    if (w_sign(r) != 0) {
+        switch (kind) {
+        case 0: if (w_sign(r) < 0) down = -1; break;
+        case 1: if (w_sign(r) > 0) down = 1; break;
+        case 2: {
+            /* To the nearest integer; a tie goes to the even one */
+            int c = w_cmp(w_shl(w_sign(r) < 0 ? w_neg(r) : r, 1), d);
+            if (c > 0 || (c == 0 && (w_int(q) & 1))) down = w_sign(r);
+            break;
+        }
+        default: break;
+        }
+    }
+    if (down < 0) { q = w_sub(q, w_of(1)); r = w_add(r, d); }
+    else if (down > 0) { q = w_add(q, w_of(1)); r = w_sub(r, d); }
+    D rest = make_rational(flipped ? w_neg(r) : r, w_mul(ad, bd));
+    if (!want_quotient) return rest;
+    if (!w_fits(q, DY_INT_MIN, DY_INT_MAX)) dy_integer_overflow();
+    *remainder = rest;
+    return DY_INT((intptr_t)w_int(q));
+}
+
 /* ------------------------------------------------------------- Floats */
 
 D dy_make_single_float(float value) {

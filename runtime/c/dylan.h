@@ -713,6 +713,9 @@ D dy_int_truncate(D a, D b, D *remainder);
 D dy_int_floor(D a, D b, D *remainder);
 D dy_int_ceiling(D a, D b, D *remainder);
 D dy_int_round(D a, D b, D *remainder);
+/* The same of two rationals, exactly (number.c); without WANT_QUOTIENT
+ * the remainder alone is answered, and the quotient may be any size. */
+D dy_rational_divide(int kind, D a, D b, D *remainder, bool want_quotient);
 
 /* ------------------------------------------------------------- Numbers
  *

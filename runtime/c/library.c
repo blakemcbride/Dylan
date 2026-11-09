@@ -71,13 +71,16 @@ static D integer_of_double(double q) {
     return DY_INT((intptr_t)q);
 }
 
-enum { FLOOR, CEILING, ROUND, TRUNCATE };
+enum { FLOOR, CEILING, ROUND, TRUNCATE, MODULO, REMAINDER };
 
 /* (%divide kind a b): chapter 14's floor/, ceiling/, round/ and truncate/:
- * an integer quotient and the remainder a - q * b. */
+ * an integer quotient and the remainder a - q * b; or, for modulo and
+ * remainder, that of floor/ or truncate/ alone. */
 PRIMITIVE(divide) {
     need(self, argc, 3, 3);
     int kind = (int)int_arg(a0);
+    bool only_remainder = kind == MODULO || kind == REMAINDER;
+    if (only_remainder) kind = kind == MODULO ? FLOOR : TRUNCATE;
     D a = a1, b = a2, r;
     if (DY_IS_INT(a) && DY_IS_INT(b)) {
         D q;
@@ -87,27 +90,17 @@ PRIMITIVE(divide) {
         case ROUND: q = dy_int_round(a, b, &r); break;
         default: q = dy_int_truncate(a, b, &r); break;
         }
-        return two_values(q, r);
+        return only_remainder ? r : two_values(q, r);
     }
     if (!dy_number_p(a)) dy_error("not a real number", a);
     if (!dy_number_p(b)) dy_error("not a real number", b);
     if (dy_number_equal(b, DY_INT(0))) dy_division_by_zero();
     if (!float_p(a) && !float_p(b)) {
-        /* Rationals: the quotient a / b exactly, then rounded. */
-        D quotient = dy_div(a, b);
-        D n = quotient, d = DY_INT(1);
-        if (dy_kind_p(quotient, DY_KIND_RATIO)) {
-            n = ((DyRatio *)DY_PTR(quotient))->numerator;
-            d = ((DyRatio *)DY_PTR(quotient))->denominator;
-        }
-        D q;
-        switch (kind) {
-        case FLOOR: q = dy_int_floor(n, d, &r); break;
-        case CEILING: q = dy_int_ceiling(n, d, &r); break;
-        case ROUND: q = dy_int_round(n, d, &r); break;
-        default: q = dy_int_truncate(n, d, &r); break;
-        }
-        return two_values(q, dy_sub(a, dy_mul(q, b)));
+        /* Rationals, exactly: only a result that does not fit is an
+         * error (the user manual, chapter 8). */
+        if (only_remainder) return dy_rational_divide(kind, a, b, &r, false);
+        D q = dy_rational_divide(kind, a, b, &r, true);
+        return two_values(q, r);
     }
     /* As the interactive implementation does it, by Common Lisp: the
      * quotient a / b in the arguments' float format, made an integer;
@@ -120,7 +113,8 @@ PRIMITIVE(divide) {
     default: q = trunc(q); break;
     }
     D quotient = integer_of_double(q);
-    return two_values(quotient, dy_sub(a, dy_mul(b, quotient)));
+    r = dy_sub(a, dy_mul(b, quotient));
+    return only_remainder ? r : two_values(quotient, r);
 }
 
 /* (%math op x [y]): the irrational functions, on floats.  A rational

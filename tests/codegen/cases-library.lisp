@@ -2337,4 +2337,23 @@ my-car
 #t
 after
 ")
+ ;; floor/ and the rest of rationals are exact: only a quotient or a
+ ;; remainder that does not fit is an error, and modulo and remainder need
+ ;; no quotient (the user manual, chapter 8).
+ (rational-division-exact
+  "(define big 4611686018427387903)
+(define-method qr (f) (bind ((q r (f))) (list q r)))
+(print (list (qr (method () (floor/ big 5/2)))
+             (qr (method () (ceiling/ big 5/2)))
+             (qr (method () (round/ (- big) 5/2)))
+             (qr (method () (truncate/ (- big) 5/2)))))
+(print (qr (method () (floor/ 2305843009213693951/3 -5/7))))
+(print (list (modulo big 5/2) (remainder (- big) 5/2) (modulo big 1/1000000)
+             (modulo -7/3 2/5) (remainder -7/3 2/5)))
+(print (list (qr (method () (round/ -5/2 1))) (qr (method () (round/ 7/3 -2/3)))))"
+  "((1844674407370955161 1/2) (1844674407370955162 -2) (-1844674407370955161 -1/2) (-1844674407370955161 -1/2))
+(-1076060070966390511 -8/21)
+(1/2 -1/2 0 1/15 -1/3)
+((-2 -1/2) (-4 -1/3))
+")
 )

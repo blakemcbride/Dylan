@@ -98,7 +98,9 @@ module: dylan
         (else: (bind ((q r (%divide 3 x 1))) (zero? r)))))
 
 ;;; Division (chapter 14: as Common Lisp's floor, ceiling, round and
-;;; truncate).  %divide answers the quotient and the remainder.
+;;; truncate).  %divide answers the quotient and the remainder; given 4 or
+;;; 5, the remainder of floor/ or truncate/ alone, for modulo and
+;;; remainder, whose quotient may be too large for an integer.
 
 (define-generic-function floor/ (real1 real2))
 (define-method floor/ ((x <real>) (y <real>)) (%divide 0 x y))
@@ -125,12 +127,10 @@ module: dylan
 (define-method truncate ((x <real>)) (%divide 3 x 1))
 
 (define-generic-function modulo (real1 real2))
-(define-method modulo ((x <real>) (y <real>))
-  (bind ((q r (floor/ x y))) r))
+(define-method modulo ((x <real>) (y <real>)) (%divide 4 x y))
 
 (define-generic-function remainder (real1 real2))
-(define-method remainder ((x <real>) (y <real>))
-  (bind ((q r (truncate/ x y))) r))
+(define-method remainder ((x <real>) (y <real>)) (%divide 5 x y))
 
 (define-generic-function magnitude (number))
 (define-method magnitude ((x <real>)) (abs x))

@@ -104,7 +104,7 @@
 ;;; index for a simple vector, and the index for a range.  A range is read
 ;;; afresh each time, as the methods do, since ADD! and REVERSE! change it.
 
-(declaim (ftype function range-size range-start range-step))
+(declaim (ftype function range-size range-start range-step range-element-at))
 
 (defun initial-state (collection)
   (cond ((and (listp collection) *fast-iterate-list*)
@@ -147,7 +147,7 @@
          (svref collection (svref state 0)))
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
-         (+ (range-start collection) (* state (range-step collection))))
+         (range-element-at (range-start collection) (range-step collection) state))
         (t (dylan-call dylan/current-element collection
                        (dylan-state state)))))
 (defun current-key (collection state)
@@ -487,8 +487,9 @@ answers #f (an unbounded collection)."
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
     ;; FROM + k*BY, the first element too, as element answers.
-    (+ (dylan-call dylan/get-range-start range)
-       (* state (dylan-call dylan/get-range-step range))))))
+    (range-element-at (dylan-call dylan/get-range-start range)
+                      (dylan-call dylan/get-range-step range)
+                      state))))
 (add-method
  dylan/current-element
  (dylan%function->method
@@ -619,6 +620,7 @@ integer, whatever the sequence, as in a compiled program."
   (cond ((integerp key) key)
         ((and (floatp key) (< -1 key 1d15))
          (let ((r (rational key))) (and (integerp r) r)))
+        ((extended-float? key) (index-key (extended-float-value key)))
         (t nil)))
 
 (defparameter dylan/element

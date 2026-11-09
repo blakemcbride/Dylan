@@ -396,7 +396,9 @@ compiled library's %from-list does."
     (dylan%keyword-validate next-method rest '(:start))
     (let* ((size (collection-size mutable))
            (inserted (sequence->list insert))
-           (start (dylan%find-keyword rest :start (lambda () 0))))
+           (start (let ((start (dylan%find-keyword rest :start (lambda () 0))))
+                    ;; A float = to an index is that index, as = finds it
+                    (or (index-key start) start))))
       (when (and inserted
                  (not (and (integerp start) size (<= 0 start)
                            (<= (+ start (length inserted)) size))))

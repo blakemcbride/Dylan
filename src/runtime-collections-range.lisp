@@ -153,8 +153,32 @@
                        (setf dylan/get-range-count get))
                      :init (lambda () nil))
 
+;;; A range's bounds and step are the reals given, an <extended-float>
+;;; among them: a structure (compat.lisp), not a CL number.  The range's
+;;; arithmetic is done on the double-float it holds, and an element or
+;;; bound computed from it is an <extended-float> again, as the generic
+;;; arithmetic of a compiled program's library makes it (chapter 14).
+
+(defun range-number (x)
+  "X, a range's bound or step, as a CL real (NIL stays NIL)."
+  (if (extended-float? x) (extended-float-value x) x))
+
+(defun range-result (value &rest operands)
+  "VALUE, computed from the CL reals of OPERANDS: an <extended-float> if
+any of them is one."
+  (if (some #'extended-float? operands)
+      (make-extended-float (coerce value 'double-float))
+      value))
+
+(defun range-element-at (start step k)
+  "START + K*STEP, the element at the index K."
+  (range-result (+ (range-number start) (* k (range-number step))) start step))
+
+(defun range-negate (step)
+  (range-result (- (range-number step)) step))
+
 (defun zero-step? (range)
-  (zerop (dylan-call dylan/get-range-step range)))
+  (zerop (range-number (dylan-call dylan/get-range-step range))))
 
 (add-method
  dylan/make
@@ -178,9 +202,9 @@
 
 (defun range-size (range)
   "The size of RANGE, or NIL if it is unbounded."
-  (let ((start (range-start range))
-        (end (range-end range))
-        (step (range-step range)))
+  (let ((start (range-number (range-start range)))
+        (end (range-number (range-end range)))
+        (step (range-number (range-step range))))
     ;; END is on the range's grid (see RANGE), so (END - START)/STEP is an
     ;; integer -- up to float rounding, which ROUND undoes.
     (cond
@@ -207,8 +231,9 @@
     (dylan%keyword-validate next-method rest '(:default))
     (let ((size (collection-size range)))
       (if (and (>= key 0) (or (null size) (< key size)))
-          (+ (dylan-call dylan/get-range-start range)
-             (* key (dylan-call dylan/get-range-step range)))
+          (range-element-at (dylan-call dylan/get-range-start range)
+                            (dylan-call dylan/get-range-step range)
+                            key)
           (let* ((default-marker (cons 1 2))
                  (default (dylan%find-keyword rest :default
                                               (lambda () default-marker))))
@@ -243,12 +268,22 @@
               dylan/error
               "(member? <object> <range>) -- test: on an unbounded range"
               test)))
-        ((not (realp val)) dylan%false)
+        ((not (or (realp val) (extended-float? val))) dylan%false)
         (t
-         (let ((start (dylan-call dylan/get-range-start range))
-               (end (dylan-call dylan/get-range-end range))
-               (step (dylan-call dylan/get-range-step range))
-               (same? (if (eq test dylan/=) #'= #'eql)))
+         (let* ((start (dylan-call dylan/get-range-start range))
+                (step (dylan-call dylan/get-range-step range))
+                ;; The elements are <extended-float>s if START or STEP is
+                ;; one, and only such a VAL is id? to one of them.
+                (class-matches (eq (extended-float? val)
+                                   (or (extended-float? start)
+                                       (extended-float? step))))
+                (val (range-number val))
+                (start (range-number start))
+                (step (range-number step))
+                (end (range-number (dylan-call dylan/get-range-end range)))
+                (same? (if (eq test dylan/=)
+                           #'=
+                           (lambda (a b) (and class-matches (eql a b))))))
            (bool
             (if (zerop step)
                 (and (not (eql 0 (dylan-call dylan/get-range-count range)))
@@ -316,7 +351,8 @@
                                  (dylan%find-keyword rest :end
                                                      (lambda () dylan%false))))
            (step (dylan-call dylan/get-range-step range))
-           (from (+ (dylan-call dylan/get-range-start range) (* start step))))
+           (from (range-element-at (dylan-call dylan/get-range-start range)
+                                   step start)))
       (if end
           (dylan-call dylan/range :from from :size (- end start) :by step)
           (dylan-call dylan/range :from from :by step))))))
@@ -345,7 +381,7 @@
              (dylan-call dylan/error "reverse: the range is unbounded"))
             ((zerop (collection-size range))
              (dylan-call dylan/range :from start :by step :size 0))
-            (t (dylan-call dylan/range :from end :by (- step)
+            (t (dylan-call dylan/range :from end :by (range-negate step)
                            :size (collection-size range))))))))
 
 (add-method
@@ -360,7 +396,7 @@
           (progn
             (dylan-call dylan/set-range-start! range end)
             (dylan-call dylan/set-range-end! range start)
-            (dylan-call dylan/set-range-step! range (- step))
+            (dylan-call dylan/set-range-step! range (range-negate step))
             range)
           (dylan-call dylan/error "reverse: the range is unbounded"))))))
 
@@ -411,19 +447,24 @@
                   size))))
 
 (defun make-zero-step-range (rest)
-  (let* ((from (dylan%find-keyword rest :from (lambda () 0)))
-         (up-to (false->nil (dylan%find-keyword rest :up-to (lambda () nil))))
-         (through (false->nil (dylan%find-keyword rest :through (lambda () nil))))
+  (let* ((given-from (dylan%find-keyword rest :from (lambda () 0)))
+         (given-by (dylan%find-keyword rest :by (lambda () 0)))
+         (from (range-number given-from))
+         (up-to (range-number
+                 (false->nil (dylan%find-keyword rest :up-to (lambda () nil)))))
+         (through (range-number
+                   (false->nil (dylan%find-keyword rest :through (lambda () nil)))))
          (size (false->nil (dylan%find-keyword rest :size (lambda () nil))))
-         (by (dylan%find-keyword rest :by (lambda () 0)))
+         (by (range-number given-by))
          (count (if (or (and up-to (not (< from up-to)))
                         (and through (not (<= from through))))
                     0
                     size))
          (range (dylan%make-<object> <range>)))
-    (dylan-call dylan/set-range-start! range from)
-    (dylan-call dylan/set-range-step! range by)
-    (dylan-call dylan/set-range-end! range (and count (+ from by)))
+    (dylan-call dylan/set-range-start! range given-from)
+    (dylan-call dylan/set-range-step! range given-by)
+    (dylan-call dylan/set-range-end! range
+                (and count (range-result (+ from by) given-from given-by)))
     (dylan-call dylan/set-range-count! range count)
     range))
 
@@ -436,13 +477,17 @@
     (dylan%keyword-validate next-method rest '(:by :through :from :up-to :size))
     (check-range-arguments rest)
    (block range-zero-step
-    (when (zerop (dylan%find-keyword rest :by (lambda () 1)))
+    (when (zerop (range-number (dylan%find-keyword rest :by (lambda () 1))))
       (return-from range-zero-step (make-zero-step-range rest)))
-    (let* ((from (dylan%find-keyword rest :from (lambda () 0)))
-           (up-to (false->nil (dylan%find-keyword rest :up-to (lambda () nil))))
-           (through (false->nil
-                     (dylan%find-keyword rest :through (lambda () nil))))
-           (by (dylan%find-keyword rest :by (lambda () 1)))
+    (let* ((given-from (dylan%find-keyword rest :from (lambda () 0)))
+           (given-by (dylan%find-keyword rest :by (lambda () 1)))
+           (from (range-number given-from))
+           (up-to (range-number
+                   (false->nil (dylan%find-keyword rest :up-to (lambda () nil)))))
+           (through (range-number
+                     (false->nil
+                      (dylan%find-keyword rest :through (lambda () nil)))))
+           (by (range-number given-by))
            (size (false->nil (dylan%find-keyword rest :size (lambda () nil))))
            (by-negative? (minusp by))
            ;; The last element each given bound allows.  Chapter 12: the
@@ -459,12 +504,13 @@
            (max-through (and bounds
                              (apply (if by-negative? #'max #'min) bounds))))
       (let ((range (dylan%make-<object> <range>)))
-        (dylan-call dylan/set-range-start! range from)
-        (dylan-call dylan/set-range-step! range by)
+        (dylan-call dylan/set-range-start! range given-from)
+        (dylan-call dylan/set-range-step! range given-by)
         (dylan-call dylan/set-range-count! range nil)
         (if (not (or up-to through size))
             (dylan-call dylan/set-range-end! range nil)
-            (dylan-call dylan/set-range-end! range max-through))
+            (dylan-call dylan/set-range-end! range
+                        (range-result max-through given-from given-by)))
         range))))))
 
 (add-method
@@ -472,12 +518,12 @@
  (dylan%function->method
   two-ranges
   (lambda (range-1 range-2)
-    (let ((start-1 (dylan-call dylan/get-range-start range-1))
-          (end-1 (dylan-call dylan/get-range-end range-1))
-          (step-1 (dylan-call dylan/get-range-step range-1))
-          (start-2 (dylan-call dylan/get-range-start range-2))
-          (end-2 (dylan-call dylan/get-range-end range-2))
-          (step-2 (dylan-call dylan/get-range-step range-2))
+    (let ((start-1 (range-number (dylan-call dylan/get-range-start range-1)))
+          (end-1 (range-number (dylan-call dylan/get-range-end range-1)))
+          (step-1 (range-number (dylan-call dylan/get-range-step range-1)))
+          (start-2 (range-number (dylan-call dylan/get-range-start range-2)))
+          (end-2 (range-number (dylan-call dylan/get-range-end range-2)))
+          (step-2 (range-number (dylan-call dylan/get-range-step range-2)))
           (size-1 (collection-size range-1))
           (size-2 (collection-size range-2)))
       ;; Equal when their elements are: a range of one element has no

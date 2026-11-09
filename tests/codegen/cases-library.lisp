@@ -2476,4 +2476,24 @@ after
 0
 half
 ")
+ ;; An <extended-float> serves as a range's bound or step, its elements
+ ;; then <extended-float>s, and as an index, as a <double-float> does.
+ (extended-float-ranges-and-indices
+  "(define x1 (as <extended-float> 1))
+(define x2 (as <extended-float> 2))
+(define r (range from: x2 up-to: 5))
+(print (list r (size r) (as <list> r) (element r 1) (last r) (reverse r)))
+(print (list (as <list> (range from: 0 by: x1 through: 3)) (as <list> (range from: 0 through: x2))
+             (as <list> (range from: x2 by: 0 size: 2)) (copy-sequence r start: 1)))
+(print (list (member? x2 r) (member? 2.0 r) (member? 2 r test: =) (member? x2 (range from: 0 through: 5) test: =)
+             (= r (range from: 2 up-to: 5))))
+(print (list (element #(a b c) x1) (element '(a b c) x1) (element \"abc\" x1)
+             (element (range from: 0 through: 5) x2)
+             (bind ((v (vector 1 2 3))) (set! (element v x1) 'z) v)
+             (replace-subsequence! (vector 1 2 3) #(9) start: x1)))"
+  "({range 2.0l0 by 1 size 3} 3 (2.0l0 3.0l0 4.0l0) 3.0l0 4.0l0 {range 4.0l0 by -1 size 3})
+((0.0l0 1.0l0 2.0l0 3.0l0) (0 1 2) (2.0l0 2.0l0) {range 3.0l0 by 1 size 2})
+(#t #f #t #t #t)
+(b b #\\b 2 #(1 z 3) #(1 9 3))
+")
 )

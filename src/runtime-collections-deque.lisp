@@ -144,12 +144,15 @@
       (dylan-call dylan/error
                   "as -- cannot convert a non-collection to a collection"
                   class object (dylan-call dylan/object-class object)))
-    (let ((new-deque (dylan-call dylan/make <deque>)))
-      (do ((state (initial-state object)
-                  (next-state object state)))
-          ((not state) new-deque)
-        (dylan-call dylan/push-last new-deque
-                    (current-element object state)))))))
+    ;; Chapter 11: an object already a deque is returned unchanged.
+    (if (subclass? (dylan-call dylan/object-class object) <deque>)
+        object
+        (let ((new-deque (dylan-call dylan/make <deque>)))
+          (do ((state (initial-state object)
+                      (next-state object state)))
+              ((not state) new-deque)
+            (dylan-call dylan/push-last new-deque
+                        (current-element object state))))))))
 
 (add-method
  dylan/make

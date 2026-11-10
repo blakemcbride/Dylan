@@ -3023,4 +3023,21 @@ eq
 (second second 2)
 (other other other)
 ")
+ ;; as returns an object already an instance of the class unchanged (chapter
+ ;; 11): a deque, or an instance of a program's subclass of <deque>.
+ (as-deque-of-a-deque
+  "(define d (make <deque>))
+(push d 1)
+(print (id? (as <deque> d) d))
+(define-class <my-dq> (<deque>))
+(define m (make <my-dq>))
+(push m 2)
+(print (id? (as <deque> m) m))
+(print (as <deque> '(1 2 3)))
+(print (id? (as <deque> '(1 2)) '(1 2)))"
+  "#t
+#t
+{<deque> 1 2 3}
+#f
+")
 )

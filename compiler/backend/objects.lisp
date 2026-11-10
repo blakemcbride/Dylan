@@ -2107,7 +2107,14 @@ are known only then."
                                          (and (consp k) k)))
                      (and declared (not (eq declared :none))
                           (list (list (gfun-declared-c g) t nil
-                                      (and (consp declared) declared))))))
+                                      (and (consp declared) declared))))
+                     ;; Chapter 6 gives make and initialize #key, so their
+                     ;; arguments after the first are keyword/value pairs
+                     ;; whatever the methods take, as the interpreter
+                     ;; checks them; the library declares them #rest, as
+                     ;; function-arguments tells of them.
+                     (and (member (gfun-var g) (list (dylan-var "make") (dylan-var "initialize")))
+                          (list (list nil t nil nil)))))
            (check (format nil "dy_check_keywords(self, argc, ~d, a0, a1, a2, a3, " r)))
       (labels ((condition (test)
                  ;; T if a source passing TEST always counts, else the

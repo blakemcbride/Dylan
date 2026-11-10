@@ -3280,4 +3280,27 @@ defined
 (#t)
 wg
 ")
+ ;; Chapter 6: make and initialize take #key, so a call's arguments after the
+ ;; first are keyword/value pairs whatever the applicable methods take --
+ ;; here a program's methods that take #rest alone.
+ (own-rest-make-takes-pairs
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <foo> (<object>))
+(define-method make ((c (singleton <foo>)) #rest r) r)
+(define-class <bar> (<object>))
+(define-method initialize ((x <bar>) #rest r) r)
+(print (try (method () (make <foo> 7))))
+(print (try (method () (make <foo> a: 7))))
+(print (try (method () (initialize (make <bar>) 7))))
+(print (try (method () (initialize (make <bar>) b: 7))))
+(define-generic-function g (x #rest r))
+(define-method g ((x <integer>) #rest r) r)
+(print (g 1 2))"
+  "\"ERR: the arguments after the required ones are not keyword/value pairs\"
+(a: 7)
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+(b: 7)
+(2)
+")
 )

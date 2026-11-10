@@ -253,9 +253,11 @@
                       ((not keys) (generate mod-vars body-forms))
                       ((eq keys t)
                        ;; Chapter 6: #key with no keywords accepts none,
-                       ;; but the arguments must still be keyword/value pairs.
+                       ;; unless #rest is given, which accepts any; the
+                       ;; arguments must still be keyword/value pairs.
                        (generate mod-vars
-                                 `((dylan%keyword-validate !raw-next ,key-name '())
+                                 `((dylan%keyword-validate !raw-next ,key-name
+                                                           ,(if rest t ''()))
                                    ,@body-forms)))
                       (t
                        (compile-let*-forms

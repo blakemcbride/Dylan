@@ -590,6 +590,28 @@ ok
 \"ERR: the arguments after the required ones are not keyword/value pairs\"
 (1 (z: 3) #f)
 ")
+ ;; #rest with an empty #key accepts any keyword (chapter 6), still in
+ ;; keyword/value pairs
+ (rest-with-empty-key
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print ((method (#rest r #key) r) a: 1))
+(print (try (method () ((method (#rest r #key) r) a:))))
+(print (try (method () ((method (#rest r #key) r) 5 6))))
+(print (try (method () ((method (#key) 'ok) a: 1))))
+(print ((method (#key) 'ok)))
+(define-method m7 (x #rest r #key) (list x r))
+(print (m7 1 b: 2 c: 3))
+(define-generic-function g7 (x #rest r #key))
+(define-method g7 (x #rest r #key) r)
+(print (g7 1 z: 2))"
+  "(a: 1)
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: a:\"
+ok
+(1 (b: 2 c: 3))
+(z: 2)
+")
  ;; A recursion too deep for the stack is an error a handler can catch,
  ;; again and again
  (stack-exhausted

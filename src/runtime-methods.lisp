@@ -938,7 +938,10 @@ slot-descriptors leaves them out, as a compiled program does.")
   (dylan%generic-fn 'angle one-number (inexact-function #'phase)))
 (defparameter dylan/magnitude
   (dylan%generic-fn 'magnitude one-number #'complex-magnitude))
-(defparameter dylan/imag-part (dylan%generic-fn 'imag-part one-number #'imagpart))
+;;; There are no complex numbers: the imaginary part of a real is the
+;;; integer 0, whatever the real's format, as the compiled library has it.
+(defparameter dylan/imag-part
+  (dylan%generic-fn 'imag-part one-number (lambda (x) (declare (ignore x)) 0)))
 (defparameter dylan/real-part (dylan%generic-fn 'real-part one-number #'realpart))
 (defparameter dylan/rationalize
   (dylan%generic-fn 'rationalize one-number #'rationalize))

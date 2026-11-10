@@ -2667,6 +2667,11 @@ half
 {range 0.0 by 0.30000000000000004 size 3}
 #t
 ")
+ ;; imag-part of any real is the integer 0 (chapter 14).
+ (imag-part-of-a-real
+  "(print (list (imag-part 2.5) (imag-part 1.5s0) (imag-part 3)))"
+  "(0 0 0)
+")
  ;; A float too small to represent reads as zero (chapter 14).
  (tiny-float-reads-as-zero
   "(print (list 1e-400 (object-class 1e-400) (object-class 1.0l0) 1.5s38))"

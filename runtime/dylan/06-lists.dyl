@@ -84,7 +84,7 @@ module: dylan
         (l '() (cons fill l)))
        ((not (binary< i size)) l)))
 
-(define-method make ((class (singleton <empty-list>)) #rest arguments) '())
+(define-method make ((class (singleton <empty-list>)) #rest arguments #key) '())
 
 (define (setter car) (method (pair object) (%set-car! pair object)))
 (define (setter cdr) (method (pair object) (%set-cdr! pair object)))

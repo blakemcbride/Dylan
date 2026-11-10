@@ -11,7 +11,7 @@ module: dylan
   (%buckets type: <simple-object-vector> init-function: (method () (%make-vector 16 '())))
   (%count type: <integer> init-value: 0))
 
-(define-method make ((class (singleton <table>)) #rest arguments) (%make <table>))
+(define-method make ((class (singleton <table>)) #rest arguments #key) (%make <table>))
 
 (define %bucket-index
   (method (t key) (modulo (=hash key) (%vector-size (%buckets t)))))

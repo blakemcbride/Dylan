@@ -29,7 +29,7 @@ module: dylan
 ;;; Streams
 
 (define-class <stream> (<object>))
-(define-method make ((class (singleton <stream>)) #rest arguments) (%abstract class))
+(define-method make ((class (singleton <stream>)) #rest arguments #key) (%abstract class))
 
 (define-class <%fd-stream> (<stream>)
   (%fd init-keyword: fd:))

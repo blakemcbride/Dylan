@@ -45,11 +45,11 @@ module: dylan
 ;;; argument to make (chapter 2); their subclasses can.
 (define %abstract
   (method (class) (error "cannot make an instance of this class: ~s" class)))
-(define-method make ((class (singleton <condition>)) #rest arguments) (%abstract class))
-(define-method make ((class (singleton <serious-condition>)) #rest arguments) (%abstract class))
-(define-method make ((class (singleton <error>)) #rest arguments) (%abstract class))
-(define-method make ((class (singleton <warning>)) #rest arguments) (%abstract class))
-(define-method make ((class (singleton <restart>)) #rest arguments) (%abstract class))
+(define-method make ((class (singleton <condition>)) #rest arguments #key) (%abstract class))
+(define-method make ((class (singleton <serious-condition>)) #rest arguments #key) (%abstract class))
+(define-method make ((class (singleton <error>)) #rest arguments #key) (%abstract class))
+(define-method make ((class (singleton <warning>)) #rest arguments #key) (%abstract class))
+(define-method make ((class (singleton <restart>)) #rest arguments #key) (%abstract class))
 
 ;;; Messages: how a condition prints unless its class has a print-object
 ;;; method of its own, which the debugger of last resort uses too.  The

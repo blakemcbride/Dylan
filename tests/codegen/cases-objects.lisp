@@ -3145,4 +3145,26 @@ object
 0
 \"ERR: no applicable method for slot-descriptors\"
 ")
+ ;; make takes keyword/value pairs after the class (chapter 6), for <table>,
+ ;; <empty-list> and the abstract classes too.
+ (make-of-library-classes-takes-pairs
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (make <table> 1))))
+(print (try (method () (make <table> 1 2 3))))
+(print (try (method () (make <empty-list> 1))))
+(print (try (method () (make <condition> 1))))
+(print (try (method () (make <stream> 1))))
+(print (try (method () (make <table> foo: 1))))
+(print (try (method () (make <empty-list> a: 1))))
+(print (try (method () (make <condition>))))"
+  "\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+{table}
+()
+\"ERR: cannot make an instance of this class: {the class <condition>}\"
+")
 )

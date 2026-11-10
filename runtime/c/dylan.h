@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 21
+#define DY_ABI_VERSION 22
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -363,6 +363,12 @@ static inline double dy_finite(double result) {
     if (__builtin_expect(!__builtin_isfinite(result), 0)) dy_float_trap(result);
     return result;
 }
+
+/* An integer's double, for the inline arithmetic: a function, so that a
+ * literal 0.0 minus it is not folded when parsed.  GCC 16 folds
+ * 0.0 - (double)i into -(double)i, which is -0.0 for i = 0, where
+ * 0.0 - 0.0 is +0.0. */
+static inline double dy_int_double(D x) { return (double)DY_INT_VALUE(x); }
 
 /* ---------------------------------------------------------- Allocation */
 

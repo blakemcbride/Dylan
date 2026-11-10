@@ -373,6 +373,17 @@ made-specially
 \"ERR: division by zero\"
 (7.0 4.5)
 ")
+ (float-minus-integer-signed-zero
+  ;; 0.0 minus the integer 0 is +0.0, and -0.0 minus it -0.0, inline as
+  ;; well (a C compiler may not fold 0.0 - (double)i into -(double)i).
+  "(define-method k (n) (- 0.0 (modulo n 100)))
+   (define-method k3 (n) (- -0.0 (modulo n 100)))
+   (define-method k4 (n) (- 1.5 (modulo n 100)))
+   (print (list (k 0) (k 5) (k3 0) (k3 5) (k4 0) (k4 5)))
+   (print (list (- 0.0 0) (- -0.0 0) (- 0 0.0) (- 0 -0.0)))"
+  "(0.0 -5.0 -0.0 -5.0 1.5 -3.5)
+(0.0 -0.0 0.0 0.0)
+")
  (next-method-arguments
   ;; (next-method) with the method's own arguments, captured or not
   "(define-class <a> (<object>))

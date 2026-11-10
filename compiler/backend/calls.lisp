@@ -57,7 +57,8 @@
      (("<integer>" "<integer>") "<integer>" "dy_int_sub({0}, {1})" :fold ,#'-)
      (("<double-float>" "<double-float>") "<double-float>" "dy_finite({d0} - {d1})")
      (("<integer>" "<double-float>") "<double-float>" "dy_finite((double)DY_INT_VALUE({0}) - {d1})")
-     (("<double-float>" "<integer>") "<double-float>" "dy_finite({d0} - (double)DY_INT_VALUE({1}))"))
+     ;; Not (double)DY_INT_VALUE({1}): see dy_int_double
+     (("<double-float>" "<integer>") "<double-float>" "dy_finite({d0} - dy_int_double({1}))"))
     ("binary*" 2
      (("<integer>" "<integer>") "<integer>" "dy_int_mul({0}, {1})" :fold ,#'*)
      (("<double-float>" "<double-float>") "<double-float>" "dy_finite({d0} * {d1})")

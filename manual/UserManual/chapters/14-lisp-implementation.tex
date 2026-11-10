@@ -319,8 +319,8 @@ prompt; nothing is lost: type \code{(dylan:rep)} to go back in.
 \subsection{Running a file at the loop}\label{sec:lisp-test-file}
 
 \index{test@\code{dylan:test}}
-The loop reads from standard input, so \cmd{bin/dylan < fact.dyl} runs
-a file, printing each value as if it had been typed; at the end of the
+The loop reads from standard input, so \cmd{bin/dylan < fact.dyl}, or
+\cmd{bin/dylan fact.dyl}, runs a file, printing each value as if it had been typed; at the end of the
 file the program exits. An unhandled error ends it there, with
 \code{Dylan error:} and its message on the standard error and status~1,
 and \code{break} prints its message and carries on, as in a compiled

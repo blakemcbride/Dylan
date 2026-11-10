@@ -235,12 +235,17 @@ the loop for the Lisp \code{*} prompt; nothing you defined is lost; type
 \end{notebox}
 
 \paragraph{Running a file at the loop.} The loop reads from standard
-input, so you can feed it a whole file of Dylan from the shell. This runs
-every form in \file{program.dyl} and then leaves:
+input, so you can feed it a whole file of Dylan from the shell. Either of
+these runs every form in \file{program.dyl} and then leaves:
 
 \begin{shell}
+$ bin/dylan program.dyl
 $ bin/dylan < program.dyl
 \end{shell}
+
+\noindent \file{bin/dylan} takes no other arguments: given more than one,
+an option, or a file it cannot read, it prints its usage on the standard
+error and stops with status~2.
 
 Each form's value is printed after \code{;Value:}, as if you had typed it.
 Since no one is there to use the debugger, an unhandled error ends the run

@@ -174,6 +174,17 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# bin/dylan FILE reads the file as it reads the standard input
+"$dylan" batch.dyl > batch.out 2> batch.err < /dev/null; status=$?
+check "bin/dylan file: an error's status is 1" test "$status" = 1
+check "bin/dylan file: stops at the error" sh -c 'grep -q "^2" batch.out && ! grep -q "^3" batch.out'
+check "bin/dylan file: the error reported" grep -q "^Dylan error: " batch.err
+echo '(print 4)' > four.dyl
+check "bin/dylan file: status 0 without an error" sh -c '"$0" four.dyl < /dev/null | grep -q "^4"' "$dylan"
+"$dylan" no-such-file.dyl > usage.out 2> usage.err < /dev/null; status=$?
+check "bin/dylan: a file it cannot read" sh -c 'test "$0" = 2 && grep -q "^dylan: cannot read no-such-file.dyl" usage.err && grep -q "^usage: dylan" usage.err' "$status"
+"$dylan" four.dyl four.dyl > usage.out 2> usage.err < /dev/null; status=$?
+check "bin/dylan: two arguments refused" sh -c 'test "$0" = 2 && grep -q "^usage: dylan" usage.err' "$status"
 # Read from a file, a program has no read-eval-print loop's restart:
 # abort ends it as an unhandled error, and it sees no handlers of its own
 cat > abort.dyl <<'EOF'

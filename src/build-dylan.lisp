@@ -36,8 +36,32 @@
   "The executable's entry: a read-eval-print loop, then exit.  The
 debugger's ABORT, or an interrupt while reading, starts the loop again.
 Reading a file, not a terminal, there is no debugger: an unhandled error
-ends the run with status 1 (DYLAN::*BATCH*)."
-  (unless (eql 1 (sb-unix:unix-isatty 0))
+ends the run with status 1 (DYLAN::*BATCH*).  The one argument
+bin/dylan takes, a file, is read as if it were the standard input; any
+other arguments are refused with a usage message."
+  (let* ((arguments (rest sb-ext:*posix-argv*))
+         (file (and arguments (null (rest arguments))
+                    (plusp (length (first arguments)))
+                    (not (eql (char (first arguments) 0) #\-))
+                    (first arguments))))
+    (cond ((null arguments)
+           (run-loop (not (eql 1 (sb-unix:unix-isatty 0)))))
+          ((and file (let ((found (probe-file file))) (and found (pathname-name found))))
+           (with-open-file (in file :external-format :utf-8)
+             (let ((*standard-input* in))
+               (run-loop t))))
+          (t
+           (when file
+             (format *error-output* "dylan: cannot read ~a~%" file))
+           (format *error-output* "usage: dylan [file.dyl]~%~:
+  With no file, the read-eval-print loop reads the standard input.~%")
+           (finish-output *error-output*)
+           (sb-ext:exit :code 2 :abort t)))))
+
+(defun run-loop (batch)
+  "The read-eval-print loop on the standard input; BATCH: there is no one
+at a terminal to use the debugger."
+  (when batch
     (setf dylan::*batch* t
           sb-ext:*invoke-debugger-hook* #'dylan::end-batch-run))
   (loop

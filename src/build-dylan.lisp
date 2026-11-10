@@ -46,11 +46,12 @@ other arguments are refused with a usage message."
          (file (and arguments (null (rest arguments))
                     (plusp (length (first arguments)))
                     (not (eql (char (first arguments) 0) #\-))
-                    (first arguments))))
+                    (first arguments)))
+         (in (and file (open-source-file file))))
     (cond ((null arguments)
            (run-loop (not (eql 1 (sb-unix:unix-isatty 0)))))
-          ((and file (let ((found (probe-file file))) (and found (pathname-name found))))
-           (with-open-file (in file :external-format :utf-8)
+          (in
+           (with-open-stream (in in)
              (let ((*standard-input* in))
                (run-loop t))))
           (t
@@ -60,6 +61,18 @@ other arguments are refused with a usage message."
   With no file, the read-eval-print loop reads the standard input.~%")
            (finish-output *error-output*)
            (sb-ext:exit :code 2 :abort t)))))
+
+(defun open-source-file (file)
+  "A stream on FILE, the name the system knows it by (a *, ? or [ in it is
+no wildcard), read as UTF-8 with a byte that cannot be read so read as
+U+FFFD, as the standard input and dylanc read it; or NIL if FILE is no
+file this process can read."
+  (let* ((path (sb-ext:parse-native-namestring file))
+         (found (ignore-errors (probe-file path))))
+    (and found
+         (pathname-name found)
+         (handler-case (open path :external-format '(:utf-8 :replacement #\ufffd))
+           (file-error () nil)))))
 
 (defun run-loop (batch)
   "The read-eval-print loop on the standard input; BATCH: there is no one

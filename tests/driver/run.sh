@@ -202,6 +202,22 @@ check "bin/dylan: a closed standard output is an error" sh -c 'test "$0" = 1 && 
 check "bin/dylan: a file it cannot read" sh -c 'test "$0" = 2 && grep -q "^dylan: cannot read no-such-file.dyl" usage.err && grep -q "^usage: dylan" usage.err' "$status"
 "$dylan" four.dyl four.dyl > usage.out 2> usage.err < /dev/null; status=$?
 check "bin/dylan: two arguments refused" sh -c 'test "$0" = 2 && grep -q "^usage: dylan" usage.err' "$status"
+# A file's name is the system's: a *, ?, [ or \ in it is no wildcard nor
+# escape.  A file it may not open is one it cannot read; a byte that is not
+# UTF-8 is read as U+FFFD, as from the standard input.
+echo '(print 6)' > 'odd*[1]?.dyl'
+check "bin/dylan: a file named with * [ ?" sh -c '"$0" "$1" < /dev/null 2>&1 | grep -q "^6"' "$dylan" 'odd*[1]?.dyl'
+echo '(print 7)' > 'back\slash.dyl'
+check "bin/dylan: a file named with \\" sh -c '"$0" "$1" < /dev/null 2>&1 | grep -q "^7"' "$dylan" 'back\slash.dyl'
+if [ "$(id -u)" != 0 ]; then
+    echo '(print 8)' > unreadable.dyl
+    chmod 000 unreadable.dyl
+    "$dylan" unreadable.dyl > usage.out 2> usage.err < /dev/null; status=$?
+    check "bin/dylan: a file it may not read" sh -c 'test "$0" = 2 && grep -q "^dylan: cannot read unreadable.dyl" usage.err' "$status"
+    chmod 644 unreadable.dyl
+fi
+printf '(print (size "a\377b"))\n' > latin.dyl
+check "bin/dylan: a byte not UTF-8 read as U+FFFD" sh -c '"$0" latin.dyl < /dev/null 2>&1 | grep -q "^3"' "$dylan"
 # Read from a file, a program has no read-eval-print loop's restart:
 # abort ends it as an unhandled error, and it sees no handlers of its own
 cat > abort.dyl <<'EOF'

@@ -405,6 +405,10 @@ Its faults are worded as the compiler to C words them."
            (unless (member allocation '(instance class each-subclass constant virtual))
              (dylan%error "slot ~a: allocation: must be one of the symbols instance, class, each-subclass, constant and virtual, not ~a"
                           getter allocation))
+           ;; Chapter 6: a constant slot has no setter method, and so
+           ;; defines no setter variable
+           (when (eq allocation 'constant)
+             (setf setter nil))
            (make-slot getter            ; debug-name
                       getter setter type init-value has-initial-value?
                       init-function init-keyword required-init-keyword

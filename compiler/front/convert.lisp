@@ -529,7 +529,10 @@ does."
                            getter (dylan-form-string allocation)))
           (%make-slot-spec
            :getter (reference-module-var getter)
-           :setter (and setter (reference-module-var setter))
+           ;; Chapter 6: a constant slot has no setter method, and so
+           ;; defines no setter variable
+           :setter (and setter (not (eq allocation-keyword :constant))
+                        (reference-module-var setter))
            :type (and (assoc :type alist) (convert (cdr (assoc :type alist)) env))
            :init-value (and init-value (convert (cdr init-value) env))
            :init-function (and init-function (convert (cdr init-function) env))

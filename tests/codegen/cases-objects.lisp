@@ -2383,4 +2383,20 @@ added
 \"ok\"
 "
   :error "\"c\" is not an instance of {the class <integer>}")
+ ;; A constant slot has no setter, even when one is named (chapter 6).
+ (constant-slot-has-no-setter
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (k allocation: constant init-value: 'konst) (k2 allocation: constant init-value: 2 setter: set-k2))
+(define a (make <a>))
+(print (try (method () (instance? (setter k) <generic-function>))))
+(print (try (method () (instance? set-k2 <generic-function>))))
+(print (slot-setter (slot-descriptor a k)))
+(print (slot-setter (slot-descriptor a k2)))
+(print (k a))"
+  "\"ERR: the variable (setter k)@dylan-user has no value\"
+\"ERR: the variable set-k2@dylan-user has no value\"
+#f
+#f
+konst
+")
 )

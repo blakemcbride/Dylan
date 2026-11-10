@@ -85,10 +85,21 @@ module: dylan
   (%put stream #\}))
 
 (define-method print-object ((x <number>) stream escape?) (%put stream (%number->string x)))
-(define-method print-object ((x <symbol>) stream escape?) (%put stream (%symbol-name x)))
+;;; An instance of a program's subclass of one of the classes whose
+;;; instances the runtime makes itself -- <symbol>, <keyword>,
+;;; <character>, <class>, <generic-function>, <method>, <singleton> and
+;;; <slot-descriptor> -- has none of their contents: it prints as any
+;;; other instance does, unless its class has a method of its own.
+(define-method print-object ((x <symbol>) stream escape?)
+  (if (id? (%object-class x) <symbol>)
+      (%put stream (%symbol-name x))
+      (next-method)))
 (define-method print-object ((x <keyword>) stream escape?)
-  (%put stream (%symbol-name x))
-  (%put stream #\:))
+  (if (id? (%object-class x) <keyword>)
+      (begin
+        (%put stream (%symbol-name x))
+        (%put stream #\:))
+      (next-method)))
 (define-method print-object ((x <boolean>) stream escape?) (%put stream (if x "#t" "#f")))
 (define-method print-object ((x <empty-list>) stream escape?) (%put stream "()"))
 
@@ -99,12 +110,12 @@ module: dylan
         (cons (as <character> 8) "backspace") (cons (as <character> 27) "escape")))
 
 (define-method print-object ((x <character>) stream escape?)
-  (if escape?
-      (begin
-        (%put stream "#\\")
-        (bind ((name (find-pair x %character-names)))
-          (%put stream (if name (cdr name) x))))
-      (%put stream x)))
+  (cond ((not (id? (%object-class x) <character>)) (next-method))
+        (escape?
+         (%put stream "#\\")
+         (bind ((name (find-pair x %character-names)))
+           (%put stream (if name (cdr name) x))))
+        (else: (%put stream x))))
 
 (define-method print-object ((x <string>) stream escape?)
   (if escape?
@@ -174,48 +185,61 @@ module: dylan
   (%put stream #\}))
 
 (define-method print-object ((x <class>) stream escape?)
-  (%put stream "{the class ")
-  (print-object (%class-name x) stream #f)
-  (%put stream #\}))
+  (if (id? (%object-class x) <class>)
+      (begin
+        (%put stream "{the class ")
+        (print-object (%class-name x) stream #f)
+        (%put stream #\}))
+      (next-method)))
 
 ;;; Generic functions and methods print as the manual's examples show them
 ;;; (chapters 3, 8, 10 and 11).
 (define-method print-object ((x <generic-function>) stream escape?)
-  (bind ((name (%generic-name x)))
-    (if name
-        (begin
-          (%put stream "{the generic function ")
-          (print-object name stream #f)
-          (%put stream #\}))
-        (%put stream "{an anonymous generic function}"))))
+  (if (id? (%object-class x) <generic-function>)
+      (bind ((name (%generic-name x)))
+        (if name
+            (begin
+              (%put stream "{the generic function ")
+              (print-object name stream #f)
+              (%put stream #\}))
+            (%put stream "{an anonymous generic function}")))
+      (next-method)))
 
 (define-method print-object ((x <method>) stream escape?)
-  (bind ((owner (%method-owner x))
-         (name (%method-name x)))
-    (cond (owner
-           (%put stream "{a method on ")
-           (bind ((g (%generic-name owner)))
-             (if g
-                 (print-object g stream #f)
-                 (%put stream "an anonymous generic function")))
-           (%put stream #\}))
-          (name
-           (%put stream "{method ")
-           (print-object name stream #f)
-           (%put stream #\}))
-          (else: (%put stream "{an anonymous method}")))))
+  (if (id? (%object-class x) <method>)
+      (bind ((owner (%method-owner x))
+             (name (%method-name x)))
+        (cond (owner
+               (%put stream "{a method on ")
+               (bind ((g (%generic-name owner)))
+                 (if g
+                     (print-object g stream #f)
+                     (%put stream "an anonymous generic function")))
+               (%put stream #\}))
+              (name
+               (%put stream "{method ")
+               (print-object name stream #f)
+               (%put stream #\}))
+              (else: (%put stream "{an anonymous method}"))))
+      (next-method)))
 
 (define-method print-object ((x <singleton>) stream escape?)
-  (%put stream "{singleton ")
-  (print-object (%singleton-object x) stream #t)
-  (%put stream #\}))
+  (if (id? (%object-class x) <singleton>)
+      (begin
+        (%put stream "{singleton ")
+        (print-object (%singleton-object x) stream #t)
+        (%put stream #\}))
+      (next-method)))
 
 (define-method print-object ((x <thread>) stream escape?) (%put stream "{thread}"))
 
 (define-method print-object ((x <slot-descriptor>) stream escape?)
-  (%put stream "{slot ")
-  (print-object (%generic-name (%slot-raw-getter x)) stream #f)
-  (%put stream #\}))
+  (if (id? (%object-class x) <slot-descriptor>)
+      (begin
+        (%put stream "{slot ")
+        (print-object (%generic-name (%slot-raw-getter x)) stream #f)
+        (%put stream #\}))
+      (next-method)))
 
 (define-method print-object ((x <stream>) stream escape?) (%put stream "{stream}"))
 

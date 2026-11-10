@@ -440,10 +440,7 @@ variable's value (chapter 6's slot types and initial values may name it)."
                  (dolist (s supers)
                    ;; A sealed class "cannot be subclassed" (chapter 2).
                    (when (class-info-sealed-p s)
-                     (compile-error "~a is sealed: it cannot be subclassed" (class-info-name s)))
-                   (unless (member (class-info-kind s) '(:none :instance))
-                     (compile-error "~a cannot be a superclass of a class defined in the program"
-                                    (class-info-name s))))
+                     (compile-error "~a is sealed: it cannot be subclassed" (class-info-name s))))
                  (setf (class-info-supers (gclass-info g)) supers))))
     (let ((all (append (built-in-class-infos-of *classes*)
                        (mapcar (lambda (u) (gclass-info (cdr u))) user))))
@@ -2540,8 +2537,12 @@ objects, makers."
                                 (address (class-c-name (gclass-info g)))
                                 (address (c-vector *cdata* (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
                                                                    effective)))))))
-    ;; Chapter 11 takes a class
-    (emit-object "    if (!dy_kind_p(a0, DY_KIND_CLASS)) dy_error_naming(\"no applicable method for \", \"slot-descriptors\", \"\", 0);")
+    ;; Chapter 11 takes a class; an instance of a program's subclass of
+    ;; <class> is not one.
+    (emit-object "    if (!dy_kind_p(a0, DY_KIND_CLASS)) {")
+    (emit-object "        if (dy_instance_p(a0, &dy_wrapper_class)) dy_error(\"not a class\", a0);")
+    (emit-object "        dy_error_naming(\"no applicable method for \", \"slot-descriptors\", \"\", 0);")
+    (emit-object "    }")
     (emit-object "    return ~a;~%}" (address (c-vector *cdata* '())))
     (declare-object "DyFunction dy_prim_slot_descriptors;")
     (emit-object "DyFunction dy_prim_slot_descriptors = { &dy_wrapper_method, dy_slot_descriptors_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };")))

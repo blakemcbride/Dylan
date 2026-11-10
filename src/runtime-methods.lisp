@@ -277,8 +277,33 @@ generic functions and methods."
 
 ;;; Generic functions
 
+(defun representation-checked (param-list operation)
+  "OPERATION, or, when PARAM-LIST is ONE-CLASS or ONE-SLOT, OPERATION
+after a check that its argument is a class or slot descriptor itself: an
+instance of a program's subclass of <class> or <slot-descriptor> has none
+of their contents, so is not one, as in the compiled library."
+  (cond ((null operation) nil)
+        ((eq param-list one-class)
+         (lambda (class)
+           (unless (class? class)
+             (dylan-call dylan/error "not a class: ~s" class))
+           (funcall operation class)))
+        ((eq param-list one-slot)
+         (lambda (slot)
+           (unless (slot? slot)
+             (dylan-call dylan/error "not a slot descriptor: ~s" slot))
+           (funcall operation slot)))
+        (t operation)))
+
+(defun check-symbol-representation (name)
+  "Signal an error unless NAME is a symbol or keyword itself, not an
+instance of a program's subclass of <symbol> or <keyword>."
+  (unless (symbolp name)
+    (dylan-call dylan/error "not a symbol or keyword: ~s" name)))
+
 (defun dylan%generic-fn (name param-list lisp-operation)
   "LISP-OPERATION can be NIL, meaning \"no methods initially available\"."
+  (setf lisp-operation (representation-checked param-list lisp-operation))
   (let ((generic-function
           (dylan%create-generic-function name
                                          (param-list.nrequired param-list)
@@ -311,6 +336,8 @@ same."
           keywords))))
 
 (defun dylan%make-<object> (class &rest rest)
+  (unless (class? class)
+    (dylan-call dylan/error "not a class: ~s" class))
   (dylan%keyword-validate nil rest t)
   (when (class.abstract? class)
     (dylan-call dylan/error "cannot make an instance of this class: ~s" class))
@@ -968,6 +995,8 @@ slot-descriptors leaves them out, as a compiled program does.")
   one-slot
   (lambda (multiple-values next-method slot)
     (declare (ignore next-method))
+    (unless (slot? slot)
+      (dylan-call dylan/error "not a slot descriptor: ~s" slot))
     (if (slot.has-initial-value? slot)
         (dylan-mv-call dylan/values multiple-values (slot.init-value slot) t)
         (dylan-mv-call dylan/values multiple-values dylan%false dylan%false)))))
@@ -1133,6 +1162,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                                   (symbol ,<symbol>)) nil nil nil)
                (lambda (class symbol)
                  (declare (ignore class))
+                 (check-symbol-representation symbol)
                  ;; A copy: changing it must not rename the symbol.
                  (new-dylan-string (dylan-symbol->string symbol)))))
   (add-method dylan/as
@@ -1141,6 +1171,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                                   (keyword ,<keyword>)) nil nil nil)
                (lambda (class keyword)
                  (declare (ignore class))
+                 (check-symbol-representation keyword)
                  ;; A Dylan keyword is a Common Lisp keyword here, so
                  ;; unlike the Scheme there is no trailing colon to strip.
                  (new-dylan-string (dylan-symbol->string keyword)))))
@@ -1152,6 +1183,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                                     (name ,class)) nil nil nil)
                  (lambda (class name)
                    (declare (ignore class))
+                   (check-symbol-representation name)
                    (dylan-call dylan/as <byte-string>
                                (new-dylan-string (dylan-symbol->string name)))))))
   (add-method dylan/as

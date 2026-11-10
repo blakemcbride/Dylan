@@ -240,6 +240,7 @@ PRIMITIVE(seal) {
 PRIMITIVE(make_read_only) {
     need(self, argc, 1, 1);
     if (dy_kind_p(a0, DY_KIND_GENERIC)) ((DyGeneric *)DY_PTR(a0))->read_only = 1;
+    else if (dy_instance_p(a0, &dy_wrapper_generic_function)) as_generic(a0);
     else as_class(a0)->read_only = 1;
     return a0;
 }

@@ -1207,7 +1207,9 @@ superclasses."
 
 (defun dylan%set-direct-superclasses (class new-superclasses)
   (let ((supers (dylan-call dylan/as <list> new-superclasses)))
-    (cond ((class.read-only? class)
+    (cond ((not (class? class))
+           (dylan-call dylan/error "not a class: ~s" class))
+          ((class.read-only? class)
            (dylan-call dylan/error
                        "(setter direct-superclasses) -- class is read-only"
                        class))

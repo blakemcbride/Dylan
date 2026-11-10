@@ -245,6 +245,8 @@ own functions such as make take any keyword arguments, is #rest without
    (dylan%dylan-callable->method
     (make-param-list `((method ,<method>)) nil nil nil)
     (lambda (multiple-values next-method method)
+      (unless (functionp method)          ; a program's subclass's instance
+        (dylan-call dylan/error "function-arguments: not a function: ~s" method))
       (dylan-full-call dylan/values multiple-values next-method
                        (method.nrequired method)
                        (bool (or (method.rest? method) (eq (method.keys method) :any)))
@@ -254,6 +256,8 @@ own functions such as make take any keyword arguments, is #rest without
    (dylan%dylan-callable->method
     (make-param-list `((generic-function ,<generic-function>)) nil nil nil)
     (lambda (multiple-values next-method generic-function)
+      (unless (functionp generic-function)
+        (dylan-call dylan/error "function-arguments: not a function: ~s" generic-function))
       (dylan-full-call dylan/values multiple-values next-method
                        (generic-function.nrequired generic-function)
                        (bool (or (generic-function.rest? generic-function)

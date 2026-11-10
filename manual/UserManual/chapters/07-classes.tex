@@ -695,8 +695,26 @@ the list classes \code{<list>}, \code{<pair>} and \code{<empty-list>}; and
 the concrete vector and string classes \code{<simple-object-vector>},
 \code{<byte-string>} and \code{<unicode-string>}.
 
-The compiler to C also refuses, when compiling, to use as a superclass the
-classes whose instances its runtime makes itself: \code{<method>},
-\code{<generic-function>}, \code{<class>}, \code{<singleton>},
-\code{<symbol>}, \code{<keyword>} and \code{<character>}. The Common Lisp
-implementation accepts these.
+The other built-in classes may be subclassed too: \code{<symbol>},
+\code{<keyword>}, \code{<character>}, \code{<class>},
+\code{<singleton>}, \code{<slot-descriptor>}, \code{<method>},
+\code{<generic-function>} and \code{<lock>}. An instance of such a
+subclass is an ordinary instance: it has the slots of its class, it is an
+instance of the built-in class for \code{instance?} and for choosing
+methods, and \code{next-method} reaches the methods on the built-in
+class. It has none of the built-in class's own contents, though. An
+instance of a subclass of \code{<symbol>} has no name, and one of a
+subclass of \code{<method>} cannot be called, so the library functions
+that need a real symbol, character, function, class, singleton, slot
+descriptor or lock signal an error when given one
+(\code{not a class: \{instance of <my-class>\}}, for example). It prints
+as \code{\{instance of \meta{class}\}} unless its class has a
+\code{print-object} method of its own.
+
+\begin{dylan}
+(define-class <tagged> (<symbol>) (tag init-keyword: tag:))
+(define t1 (make <tagged> tag: 'x))
+(instance? t1 <symbol>)        ; => #t
+(tag t1)                       ; => x
+(instance? 'abc <tagged>)      ; => #f
+\end{dylan}

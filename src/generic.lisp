@@ -112,7 +112,7 @@ such functions are methods of.")
   (or (oned-table/get *method-data* method nil)
       (if (and (functionp method) (not (dylan%generic-function? method)))
           *rest-param-list*
-          (dylan-call dylan/error "not a method" method))))
+          (dylan-call dylan/error "not a method: ~s" method))))
 
 (defun method.param-list (method) (method-data method))
 (defun method.specializers (method) (param-list.specializers (method-data method)))
@@ -186,7 +186,7 @@ checked them; a direct call (next-method #f) is checked here."
 (defun generic-function-data (fn)
   (let ((data (oned-table/get *generic-function-data* fn nil)))
     (if (not data)
-        (dylan-call dylan/error "not a generic function" fn)
+        (dylan-call dylan/error "not a generic function: ~s" fn)
         data)))
 
 (defun generic-function.name (generic-function)

@@ -161,6 +161,27 @@
         (dylan-call dylan/set-array-dimensions! instance (list size))
         instance)))))
 
+;;; A program's subclass is made by make's method on <class>, which calls
+;;; initialize: it takes size: and fill: too (chapter 12).
+(add-method
+ dylan/initialize
+ (dylan%dylan-callable->method
+  (make-param-list `((sv ,<stretchy-vector>)) nil nil '(:size :fill))
+  (lambda (multiple-values next-method sv &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:size :fill))
+    (let ((size (dylan%find-keyword rest :size (lambda () 0)))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
+      (when (or (not (integerp size)) (minusp size))
+        (dylan-call dylan/error
+                    "make: size: must be a non-negative integer: ~s" size))
+      (check-room size 8)
+      (dylan-call dylan/set-array-value! sv (make-array size :initial-element fill))
+      (dylan-call dylan/set-array-dimensions! sv (list size))
+      (if (functionp next-method)
+          (apply next-method nil nil sv rest)
+          sv)))))
+
 ;;;
 ;;; Functions for collections
 ;;;
@@ -196,18 +217,22 @@
  dylan/add
  (dylan%function->method
   one-stretchy-vector-and-an-object
-  ;; At the end, where add! adds, as in a compiled program.
+  ;; At the end, where add! adds, as in a compiled program; of another
+  ;; class-for-copy, add! of a copy (chapter 12).
   (lambda (s-vector new-element)
-    (let ((new-vector (dylan-call dylan/make <stretchy-vector>))
-          (size (car (dylan-call dylan/get-array-dimensions s-vector))))
-      (dylan-call dylan/set-array-value! new-vector
-                  (concatenate 'simple-vector
-                               (subseq (dylan-call dylan/get-array-value
-                                                   s-vector)
-                                       0 size)
-                               (list new-element)))
-      (dylan-call dylan/set-array-dimensions! new-vector (list (+ size 1)))
-      new-vector))))
+    (if (eq (dylan-call dylan/class-for-copy s-vector) <stretchy-vector>)
+        (let ((new-vector (dylan-call dylan/make <stretchy-vector>))
+              (size (car (dylan-call dylan/get-array-dimensions s-vector))))
+          (dylan-call dylan/set-array-value! new-vector
+                      (concatenate 'simple-vector
+                                   (subseq (dylan-call dylan/get-array-value
+                                                       s-vector)
+                                           0 size)
+                                   (list new-element)))
+          (dylan-call dylan/set-array-dimensions! new-vector (list (+ size 1)))
+          new-vector)
+        (dylan-call dylan/add! (dylan-call dylan/copy-sequence s-vector)
+                    new-element)))))
 
 (add-method
  dylan/add!
@@ -310,17 +335,20 @@
  (dylan%function->method
   one-stretchy-vector
   (lambda (s-vector)
-    (let* ((vector-1 (dylan-call dylan/get-array-value s-vector))
-           (result (make-array (length vector-1)))
-           (result-s-vector (dylan-call dylan/make <stretchy-vector>)))
-      (do ((from (- (length vector-1) 1) (- from 1))
-           (to 0 (+ to 1)))
-          ((< from 0) result)
-        (setf (aref result to) (aref vector-1 from)))
-      (dylan-call dylan/set-array-value! result-s-vector result)
-      (dylan-call dylan/set-array-dimensions! result-s-vector
-                  (list (length result)))
-      result-s-vector))))
+    ;; An instance of the class-for-copy (chapter 12)
+    (if (eq (dylan-call dylan/class-for-copy s-vector) <stretchy-vector>)
+        (let* ((vector-1 (dylan-call dylan/get-array-value s-vector))
+               (result (make-array (length vector-1)))
+               (result-s-vector (dylan-call dylan/make <stretchy-vector>)))
+          (do ((from (- (length vector-1) 1) (- from 1))
+               (to 0 (+ to 1)))
+              ((< from 0) result)
+            (setf (aref result to) (aref vector-1 from)))
+          (dylan-call dylan/set-array-value! result-s-vector result)
+          (dylan-call dylan/set-array-dimensions! result-s-vector
+                      (list (length result)))
+          result-s-vector)
+        (copy-like s-vector (reverse (sequence->list s-vector)))))))
 
 (add-method
  dylan/reverse!

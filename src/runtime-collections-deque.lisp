@@ -170,6 +170,27 @@
         (set-deque-count! instance size)
         instance)))))
 
+;;; A program's subclass is made by make's method on <class>, which calls
+;;; initialize: it takes size: and fill: too (chapter 12).
+(add-method
+ dylan/initialize
+ (dylan%dylan-callable->method
+  (make-param-list `((deque ,<deque>)) nil nil '(:size :fill))
+  (lambda (multiple-values next-method deque &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:size :fill))
+    (let ((size (dylan%find-keyword rest :size (lambda () 0)))
+          (fill (dylan%find-keyword rest :fill (lambda () dylan%false))))
+      (when (or (not (integerp size)) (minusp size))
+        (dylan-call dylan/error "make: size: must be a non-negative integer: ~s" size))
+      (check-room size 8)
+      (set-deque-data! deque (make-array (max size 8) :initial-element fill))
+      (set-deque-first! deque 0)
+      (set-deque-count! deque size)
+      (if (functionp next-method)
+          (apply next-method nil nil deque rest)
+          deque)))))
+
 ;;;;
 ;;;; Functions for Collections
 ;;;;
@@ -268,23 +289,29 @@
   (make-param-list `((deque ,<deque>)) nil t nil)
   (lambda (deque-1 &rest rest)
     (check-bounded "concatenate" rest)
-    (let ((result-deque (dylan-call dylan/make <deque>)))
-      (dolist (collection (cons deque-1 rest) result-deque)
-        (iterate! (lambda (element)
-                    (dylan-call dylan/push-last result-deque element))
-                  collection))))))
+    ;; An instance of the class-for-copy (chapter 12)
+    (if (eq (dylan-call dylan/class-for-copy deque-1) <deque>)
+        (let ((result-deque (dylan-call dylan/make <deque>)))
+          (dolist (collection (cons deque-1 rest) result-deque)
+            (iterate! (lambda (element)
+                        (dylan-call dylan/push-last result-deque element))
+                      collection)))
+        (copy-like deque-1 (mapcan #'sequence->list (cons deque-1 rest)))))))
 
 (add-method
  dylan/reverse
  (dylan%function->method
   one-deque
   (lambda (deque-1)
-    (let ((result (dylan-call dylan/make <deque>)))
-      (do ((state (initial-state deque-1)
-                  (next-state deque-1 state)))
-          ((not state) result)
-        (dylan-call dylan/push result
-                    (current-element deque-1 state)))))))
+    ;; An instance of the class-for-copy (chapter 12)
+    (if (eq (dylan-call dylan/class-for-copy deque-1) <deque>)
+        (let ((result (dylan-call dylan/make <deque>)))
+          (do ((state (initial-state deque-1)
+                      (next-state deque-1 state)))
+              ((not state) result)
+            (dylan-call dylan/push result
+                        (current-element deque-1 state))))
+        (copy-like deque-1 (reverse (sequence->list deque-1)))))))
 
 (add-method
  dylan/reverse!

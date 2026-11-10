@@ -18,6 +18,15 @@ module: dylan
     (set! (%count v) size)
     v))
 
+;;; A program's subclass is made by make's method on <class>, which calls
+;;; initialize: it takes size: and fill: too (chapter 12).
+(define-method initialize ((v <stretchy-vector>) #key (size 0) (fill #f))
+  (unless (and (%instance? size <integer>) (not (negative? size)))
+    (error "make: size: must be a non-negative integer: ~s" size))
+  (set! (%data v) (%make-vector (max size 8) fill))
+  (set! (%count v) size)
+  (next-method))
+
 (define %stretchy-ensure
   (method (v n)
     (bind ((data (%data v)))

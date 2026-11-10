@@ -139,7 +139,11 @@ module: dylan
 ;;; add! on a deque is push; remove! changes the deque itself.
 (define-method add! ((d <deque>) new-value) (push d new-value))
 
-(define-method add ((d <deque>) new-value) (push (copy-sequence d) new-value))
+;;; A new instance of the class-for-copy (chapter 12): a deque is pushed
+;;; on, as add! does; another class adds as it does.
+(define-method add ((d <deque>) new-value)
+  (bind ((copy (copy-sequence d)))
+    (if (%instance? copy <deque>) (push copy new-value) (add copy new-value))))
 
 (define-method remove! ((d <deque>) value #key (test id?) count)
   (bind ((kept (%remove-elements (%elements d) value test count)))

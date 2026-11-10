@@ -232,11 +232,13 @@
  dylan/add
  (dylan%function->method one-deque-and-an-object
                          ;; A new deque: ADD! is the one that may change
-                         ;; its argument (chapter 12).
+                         ;; its argument (chapter 12).  A copy of another
+                         ;; class-for-copy is added to as that class adds.
                          (lambda (deque new-element)
-                           (dylan-call dylan/push
-                                       (dylan-call dylan/copy-sequence deque)
-                                       new-element))))
+                           (let ((copy (dylan-call dylan/copy-sequence deque)))
+                             (if (true? (dylan-call dylan/instance? copy <deque>))
+                                 (dylan-call dylan/push copy new-element)
+                                 (dylan-call dylan/add copy new-element))))))
 
 (defun dylan%push (deque new-value)
   (deque-grow deque)

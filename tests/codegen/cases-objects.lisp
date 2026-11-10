@@ -3067,4 +3067,34 @@ object
 \"ERR: make: size: must be a non-negative integer: -1\"
 \"ERR: keyword argument not accepted: bogus:\"
 ")
+ ;; add of a deque answers a new instance of its class-for-copy (chapter
+ ;; 12), which need not be a deque; add-new too.
+ (deque-add-other-class-for-copy
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method show (x) (if (instance? x <collection>) (list (object-class x) (as <list> x)) x))
+(define-class <my-dq2> (<deque>))
+(define-method class-for-copy ((d <my-dq2>)) <list>)
+(define d (make <my-dq2>))
+(push d 'a)
+(print (try (method () (show (add d 'z)))))
+(print (try (method () (show (add-new d 'z)))))
+(print (try (method () (show (add-new d 'a)))))
+(print (show d))
+(define-class <vdq> (<deque>))
+(define-method class-for-copy ((d <vdq>)) <stretchy-vector>)
+(define v (make <vdq>))
+(push-last v 1) (push-last v 2)
+(print (try (method () (show (add v 0)))))
+(define e (make <deque>))
+(push e 'b)
+(print (show (add e 'c)))
+(print (show (add (make <my-dq2>) 'q)))"
+  "({the class <pair>} (z a))
+({the class <pair>} (z a))
+({the class <my-dq2>} (a))
+({the class <my-dq2>} (a))
+({the class <stretchy-vector>} (1 2 0))
+({the class <deque>} (c b))
+({the class <pair>} (q))
+")
 )

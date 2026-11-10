@@ -222,9 +222,11 @@ D dy_call_list(D f, D first, D list) {
     return DY_CALL(f, a[0], a[1], a[2], a[3], n);
 }
 
+/* initialize's method on <object> (chapter 6: instance #key...): the
+ * init arguments must be keyword/value pairs, of any keywords. */
 static D default_initialize_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
-    (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;
-    return DY_FALSE;
+    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, NULL, 0);
+    return a0;
 }
 
 DyFunction dy_default_initialize = { &dy_wrapper_method, default_initialize_entry,

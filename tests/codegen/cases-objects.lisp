@@ -3167,4 +3167,26 @@ object
 ()
 \"ERR: cannot make an instance of this class: {the class <condition>}\"
 ")
+ ;; initialize's method on <object> (chapter 6: instance #key...) takes
+ ;; keyword/value pairs, of any keywords, and answers the instance.
+ (default-initialize-takes-pairs
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <thing> (<object>) (a init-keyword: a: init-value: 0))
+(define-method initialize ((x <thing>) #rest r)
+  (next-method)
+  x)
+(print (try (method () (initialize '(1 2) 5))))
+(print (try (method () (initialize 5 a: 1 2))))
+(print (try (method () (initialize 5))))
+(print (try (method () (initialize 5 a: 1))))
+(print (try (method () (a (initialize (make <thing>) 7)))))
+(print (try (method () (a (initialize (make <thing>) b: 7)))))"
+  "\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+5
+5
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+0
+")
 )

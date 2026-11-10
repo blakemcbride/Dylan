@@ -103,6 +103,11 @@ current module: see comp-module.lisp."
 (defun variable->lexical (dylan-variable)
   (name->lexical (variable->name dylan-variable)))
 
+(defvar *unfilled-lexicals* '()
+  "The lexical names of a bind-methods form whose methods are being
+compiled: a reference to one checks that its method has been made
+(DYLAN%FILLED), since a specializer may name a method made after it.")
+
 ;;; Module (that is, global) variables get a name of their own, so that a
 ;;; Dylan module variable can never be captured by -- or capture -- a Dylan
 ;;; lexical variable of the same name.  In the Scheme both were simply the

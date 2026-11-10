@@ -394,6 +394,15 @@ first, and adds an initial NIL next-method argument."
   ;; Should signal a <type-error>!
   (dylan-call dylan/check-type value class))
 
+(defvar dylan%unfilled (make-symbol "UNFILLED")
+  "The value of a bind-methods name until its method is made.")
+
+(defun dylan%filled (value name)        ; BIND-METHODS
+  (if (eq value dylan%unfilled)
+      (dylan-call dylan/error "the variable ~a has no value"
+                  (dylan-symbol->string name))
+      value))
+
 (defun dylan%list (&rest args) args)                    ; BIND
 (defun dylan%cons (a b) (cons a b))                     ; BIND
 (defun dylan%car (pair) (car pair))                     ; BIND

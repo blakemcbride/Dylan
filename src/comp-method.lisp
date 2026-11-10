@@ -375,19 +375,23 @@
           (methods (mapcar (lambda (binding)
                              `(method ,(cadr binding) ,@(cddr binding)))
                            bindings)))
-      (let ((new-bvs (append names bound-vars)))
+      (let ((new-bvs (append names bound-vars))
+            (outer-unfilled *unfilled-lexicals*)
+            (*unfilled-lexicals* (append names *unfilled-lexicals*)))
         (compile-forms
          methods mod-vars new-bvs compiler nil
          (lambda (method-bodies mod-vars)
-           (compile-forms
-            forms mod-vars new-bvs compiler multiple-values?
-            (lambda (body-codes mod-vars)
-              ;; Scheme's LETREC; in Common Lisp these are variables, not
-              ;; functions, so the bindings are made first and filled in
-              ;; afterwards.
-              (funcall continue
-                       `(let ,(mapcar (lambda (name) (list name nil)) names)
-                          ,@(mapcar (lambda (name body) `(setq ,name ,body))
-                                    names method-bodies)
-                          ,@body-codes)
-                       mod-vars)))))))))
+           (let ((*unfilled-lexicals* outer-unfilled))
+             (compile-forms
+              forms mod-vars new-bvs compiler multiple-values?
+              (lambda (body-codes mod-vars)
+                ;; Scheme's LETREC; in Common Lisp these are variables, not
+                ;; functions, so the bindings are made first and filled in
+                ;; afterwards, in order: until its method is made, a name
+                ;; has no value (a specializer may name a later method).
+                (funcall continue
+                         `(let ,(mapcar (lambda (name) (list name 'dylan%unfilled)) names)
+                            ,@(mapcar (lambda (name body) `(setq ,name ,body))
+                                      names method-bodies)
+                            ,@body-codes)
+                         mod-vars))))))))))

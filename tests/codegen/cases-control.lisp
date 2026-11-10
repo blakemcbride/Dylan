@@ -1003,4 +1003,18 @@ stop
   "before
 "
   :error "not a list: 5")
+ ;; A bind-methods specializer naming a method made after its own: the name
+ ;; has no value yet when the specializer is evaluated.
+ (bind-methods-later-name-unbound
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (bind-methods ((f ((x (singleton g))) 'is-g) (g () 'gee)) (f '())))))
+(print (try (method () (bind-methods ((f ((x (singleton g))) 'is-g) (g () 'gee)) (f g)))))
+(print (try (method () (bind-methods ((f () (g)) (g () 'gee)) (f)))))
+(print (try (method () (bind-methods ((g () 'gee) (f ((x (singleton g))) 'is-g)) (f g)))))"
+  "\"ERR: the variable g has no value\"
+\"ERR: the variable g has no value\"
+gee
+is-g
+")
 )

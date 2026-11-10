@@ -562,7 +562,10 @@ it; the last result form delivers MULTIPLE-VALUES?."
            (dylan%error (format nil "~a is a macro, not a variable"
                                 (dylan-symbol->string e))))
          (funcall continue
-                  (cond ((member lexical bound-vars) lexical)
+                  (cond ((member lexical bound-vars)
+                         (if (member lexical *unfilled-lexicals*)
+                             `(dylan%filled ,lexical ',name)
+                             lexical))
                         ((member name new-mod-vars)
                          `(dylan%free-variable-ref
                            ,(name->module-variable name) ',name))

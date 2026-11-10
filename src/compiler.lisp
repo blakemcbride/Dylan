@@ -563,7 +563,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
                         ((member name new-mod-vars)
                          `(dylan%free-variable-ref
                            ,(name->module-variable name) ',name))
-                        (t name))
+                        (t (name->module-variable name)))
                   new-mod-vars)))
       ((symbolp e) (dylan%error "illegal Dylan variable" e))
       (binding

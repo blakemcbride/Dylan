@@ -164,7 +164,10 @@ keywords (NIL, :ANY, or a list)."
   name arguments)
 
 (defstruct (ir-global-ref (:include ir-node) (:constructor make-ir-global-ref (var)))
-  var)
+  var
+  ;; From a macro's expansion (GLOBAL-NAME): a library variable reads the
+  ;; library's own value, whatever the program assigns it.
+  (library nil))
 
 (defstruct (ir-global-set (:include ir-node)
                           (:constructor make-ir-global-set (var value)))

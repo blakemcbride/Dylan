@@ -196,7 +196,8 @@ gfun), (values :primitive c-name), or NIL."
       (let ((var (second v)) (swap nil))
         ;; A variable the program assigns holds what it will when the
         ;; call runs.
-        (when (variable-global-p var (ir-call-site e))
+        (when (and (variable-global-p var (ir-call-site e))
+                   (not (library-ref-atom-p (ir-call-function e))))
           (return-from call-callee nil))
         (when (and (eq (module-var-module var) (dylan-module)) (> n 2))
           (loop for (name target) in *variadic-folds*

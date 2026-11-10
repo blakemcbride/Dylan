@@ -71,7 +71,8 @@
   value)
 
 (defstruct (ref (:include node) (:constructor make-ref (var)))
-  var)                                  ; LEXICAL-VAR or MODULE-VAR
+  var                                   ; LEXICAL-VAR or MODULE-VAR
+  (library nil))                        ; a macro's GLOBAL-NAME: the library's
 
 (defstruct (assign (:include node) (:constructor make-assign (var value)))
   var

@@ -76,3 +76,6 @@
 ;;; The library is loaded: its own size and element, which the library's
 ;;; functions use (runtime-collections-iterate.lisp)
 (snapshot-library-collection-methods)
+
+;;; ... and the program's copies of its variables (runtime-internal.lisp)
+(make-program-variables)

@@ -66,6 +66,7 @@ program's; the system defines none.)"
         (makunbound variable)
         (remhash variable *read-only-variables*))))
   (clrhash *dylan-macros*)
+  (reset-program-variables)
   (setf rep-module-variables '()))
 
 (defun batch-error-message (condition)

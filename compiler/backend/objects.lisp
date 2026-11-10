@@ -32,6 +32,10 @@
 (defvar *global-definitions* nil
   "MODULE-VAR -> the atoms define gives it, for the variables define defines.")
 (defvar *assigned-globals* nil "MODULE-VAR -> T, for those set! assigns.")
+(defvar *program-assigned-library-vars* nil
+  "MODULE-VAR -> T, for the library's variables the program's own set!
+assigns: the program's code keeps them in cells of its own (PROGRAM-CELL-
+C-NAME, codegen.lisp), and the library's in its.")
 (defvar *global-set-values* nil "MODULE-VAR -> the atoms its set!s store.")
 (defvar *made-generic-dispatch* nil
   "Can a define-method add its method to a generic function made when the
@@ -183,6 +187,11 @@ order variables are met (CONTENT-NAME)."
                  (ir-define-variable (push (ir-define-variable-value e)
                                            (gethash (ir-define-variable-var e) *global-definitions*)))
                  (ir-global-set (setf (gethash (ir-global-set-var e) *assigned-globals*) t)
+                                (when (and (library-var-p (ir-global-set-var e))
+                                           (not (ir-fn-library-p fn)))
+                                  (setf (gethash (ir-global-set-var e)
+                                                 *program-assigned-library-vars*)
+                                        t))
                                 (push (ir-global-set-value e)
                                       (gethash (ir-global-set-var e) *global-set-values*)))
                  (ir-seq (mapc #'walk (ir-seq-forms e)))
@@ -1641,6 +1650,17 @@ program assigns VAR, and FN is not the library reading a variable of its
 own: the library's C is the same for every program."
   (and (gethash var *assigned-globals*)
        (not (and fn (ir-fn-library-p fn) (library-var-p var)))))
+
+(defun library-ref-p (ref)
+  "Is REF, an IR-GLOBAL-REF, a macro's reference to a library variable,
+which reads the library's own value whatever the program assigns it?"
+  (and (ir-global-ref-library ref) (library-var-p (ir-global-ref-var ref))))
+
+(defun library-ref-atom-p (atom)
+  "Is ATOM bound to a macro's reference to a library variable?"
+  (and (ivar-p atom) (not (ivar-assigned-p atom))
+       (let ((value (gethash atom *let-values*)))
+         (and (ir-global-ref-p value) (library-ref-p value)))))
 
 (defun generic-definition-c (g &optional other)
   "The C statements a definition of the generic function G does when it

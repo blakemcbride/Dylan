@@ -75,6 +75,11 @@ inline operation tests its arguments when run.")
 (defvar *cfuns* nil "IR-FN -> CFUN, for every fn that is a C function.")
 (defvar *cfun* nil "The CFUN being generated.")
 (defvar *globals* nil "MODULE-VAR -> C name, for the program's own.")
+(defvar *program-cell-copies* nil
+  "The C statements that give the program's cells their library values.")
+(defvar *program-cells* nil
+  "MODULE-VAR -> the C name of the program's cell for a library variable
+it assigns.")
 (defvar *global-values* nil
   "MODULE-VAR -> the C expression the program's cell for a library variable
 it assigns starts with: the library's value, when that is a constant.")
@@ -212,12 +217,18 @@ by a real closure, not just by a contified fn.")
 
 (defun global-c-name (var)
   "The C lvalue holding the module variable VAR: a static variable, or,
-for a thread variable, the thread's slot for it."
-  (if (module-var-thread-local-p var)
+for a thread variable, the thread's slot for it -- or, in the program's
+code, the program's cell for a library variable it assigns."
+  (cond
+    ((module-var-thread-local-p var)
       (format nil "dy_thread->thread_variables[~d]"
               (or (gethash var *thread-variables*)
                   (setf (gethash var *thread-variables*)
-                        (hash-table-count *thread-variables*))))
+                        (hash-table-count *thread-variables*)))))
+    ((and (gethash var *program-assigned-library-vars*)
+          (not (and *cfun* (ir-fn-library-p (cfun-fn *cfun*)))))
+     (program-cell-c-name var))
+    (t
       (or (gethash var *globals*)
           (progn
             ;; The program's cell for a library variable it assigns
@@ -225,7 +236,27 @@ for a thread variable, the thread's slot for it."
             (when (library-var-p var)
               (let ((value (library-value-c var)))
                 (when value (setf (gethash var *global-values*) value))))
-            (setf (gethash var *globals*) (var-c-name "dyg_" var))))))
+            (setf (gethash var *globals*) (var-c-name "dyg_" var)))))))
+
+;;; A library variable the program assigns (chapter 7) changes for the
+;;; program only: the library's own functions go on using the library's
+;;; value, whatever the program stores, as they would if the library were
+;;; not compiled with it.  The program's cell starts with the library's
+;;; value: a constant, or, for a variable the library defines, what that
+;;; definition stored, copied before the program's first top-level form
+;;; runs.
+
+(defun program-cell-c-name (var)
+  (or (gethash var *program-cells*)
+      (progn
+        (let ((value (library-value-c var)))
+          (when value (setf (gethash var *global-values*) value)))
+        (setf (gethash var *program-cells*) (var-c-name "dyp_" var)))))
+
+(defun library-global-c-name (var)
+  "The C name of the library's own cell for its variable VAR."
+  (or (gethash var *globals*)
+      (setf (gethash var *globals*) (var-c-name "dyg_" var))))
 
 (defun note-used-primitive (c)
   "C, the C expression of a predefined value: if it is a function written
@@ -514,9 +545,10 @@ every use of VAR has instead, or something without effect no one uses?"
   (c-constant *cdata* (module-var-name var)))
 
 (defun global-ref-c (e &optional dest)
-  (let ((var (ir-global-ref-var e)))
+  (let* ((var (ir-global-ref-var e))
+         (library (library-ref-p e)))
     (cond
-      ((variable-global-p var (and *cfun* (cfun-fn *cfun*)))
+      ((and (not library) (variable-global-p var (and *cfun* (cfun-fn *cfun*))))
        ;; The program assigns VAR: its code reads it when it runs.
        (let ((cell (global-c-name var)))
          (if (gethash var *global-values*)
@@ -547,7 +579,8 @@ every use of VAR has instead, or something without effect no one uses?"
                                        (module-var-string var)))))
           (note-used-primitive c)))
       (t
-       (format nil "dy_check_bound(~a, ~a)" (global-c-name var)
+       (format nil "dy_check_bound(~a, ~a)"
+               (if library (library-global-c-name var) (global-c-name var))
                (c-utf8-literal (module-var-string var)))))))
 
 (defun deliver-call (dest expr)
@@ -1313,6 +1346,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*cdata* (make-cdata))
         (*classes* (prepare-classes (built-in-class-infos)))
         (*globals* (make-hash-table :test #'eq))
+        (*program-cells* (make-hash-table :test #'eq))
         (*global-values* (make-hash-table :test #'eq))
         (*closed-over* (make-hash-table :test #'eq))
         (*local-exits* (make-hash-table :test #'eq))
@@ -1331,6 +1365,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*let-values* (make-hash-table :test #'eq))
         (*global-definitions* (make-hash-table :test #'eq))
         (*assigned-globals* (make-hash-table :test #'eq))
+        (*program-assigned-library-vars* (make-hash-table :test #'eq))
         (*global-set-values* (make-hash-table :test #'eq))
         (*made-generic-dispatch* nil)
         (*gclasses* (make-hash-table :test #'eq))
@@ -1428,10 +1463,21 @@ each of its Dylan functions -> the name of the module it was written in."
         (terpri stream)
         (dolist (line closure-lines) (format stream "~a~%" line))
         (terpri stream)
-        (loop for var being the hash-keys of *globals* using (hash-value name)
-              do (format stream "static D ~a = ~a;   /* ~a */~%"
-                         name (or (gethash var *global-values*) "DY_UNBOUND")
-                         (c-comment-text (module-var-string var))))
+        ;; The program's cells for the library variables it assigns that
+        ;; start with what the library's definition stores
+        (let ((copies (loop for var being the hash-keys of *program-cells*
+                              using (hash-value name)
+                            unless (gethash var *global-values*)
+                              collect (format nil "~a = ~a;" name (library-global-c-name var)))))
+          (loop for var being the hash-keys of *globals* using (hash-value name)
+                do (format stream "static D ~a = ~a;   /* ~a */~%"
+                           name (or (gethash var *global-values*) "DY_UNBOUND")
+                           (c-comment-text (module-var-string var))))
+          (loop for var being the hash-keys of *program-cells* using (hash-value name)
+                do (format stream "static D ~a = ~a;   /* the program's ~a */~%"
+                           name (or (gethash var *global-values*) "DY_UNBOUND")
+                           (c-comment-text (module-var-string var))))
+          (setf *program-cell-copies* copies))
         (terpri stream)
         (dolist (text texts) (format stream "~a~%" text))
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))
@@ -1449,6 +1495,12 @@ each of its Dylan functions -> the name of the module it was written in."
         ;; spell are made (front-end.lisp)
         (let ((made 0))
           (dolist (top (ir-program-toplevels ir))
+            ;; Before the program's first top-level form, once the
+            ;; library's have run
+            (when (and *program-cell-copies* (not (ir-fn-library-p top)))
+              (dolist (line *program-cell-copies*)
+                (format stream "    ~a~%" line))
+              (setf *program-cell-copies* nil))
             (unless (inert-toplevel-p top)
               (let ((form (location-form-number (ir-program-source ir) (ir-fn-location top))))
                 (when (and form (> form made))

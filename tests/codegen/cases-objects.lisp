@@ -1326,6 +1326,51 @@ signal-ok
 (3 -4)
 ((2) 1)
 ")
+ ;; Chapter 7: a predefined function's variable may be assigned, (setter
+ ;; element) among them, and the program's calls see the new value -- the
+ ;; inline fast paths as well -- while the library's own functions, >, map
+ ;; and for-each's iteration among them, keep the library's.
+ (assign-predefined
+  "(define old+ +) (define old< <) (define old-element element)
+   (define old-modulo modulo) (define old-binary< binary<)
+   (define old-initial-state initial-state)
+   (define v (vector 1 2 3))
+   (define calls '())
+   (define old-element-setter (setter element))
+   (set! (setter element)
+         (method (coll key val) (set! calls (cons key calls)) (old-element-setter coll key val)))
+   (set! (element v 0) 'x)
+   (print (list v calls))
+   (set! + -)
+   (print (+ 5 3))
+   (set! < (method (a b) 'less))
+   (print (< 1 2))
+   (set! element (method (c k #key default) (list 'element k)))
+   (print (element v 1))
+   (set! modulo (method (a b) 'mod))
+   (print (modulo 7 2))
+   (set! binary< (method (a b) #t))
+   (print (> 1 2))
+   (set! initial-state (method (c) #f))
+   (print (map (method (x) x) '(1 2 3)))
+   (for-each ((x v)) () (print x))
+   ;; Put them back, for the programs after this one
+   (set! + old+) (set! < old<) (set! element old-element)
+   (set! (setter element) old-element-setter) (set! modulo old-modulo)
+   (set! binary< old-binary<) (set! initial-state old-initial-state)
+   (print (list (+ 5 3) (< 2 1) (element v 1) (modulo 7 2) (> 1 2) (map (method (x) x) '(1 2))))"
+  "(#(x 2 3) (0))
+2
+less
+(element 1)
+mod
+#f
+(1 2 3)
+x
+2
+3
+(8 #f 2 1 #f (1 2))
+")
  ;; A call inside a method reads the variable too, so an assignment changes
  ;; the calls that follow it, even recursive ones; the old function still
  ;; works through another variable.
@@ -2383,6 +2428,153 @@ added
 \"ok\"
 "
   :error "\"c\" is not an instance of {the class <integer>}")
+ ;; A program's assignment to a library variable changes the program's
+ ;; calls; the library's own functions keep the library's (chapter 7).
+ (library-keeps-its-functions
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define old binary+)
+(define-method g (a b) (binary+ a b))
+(set! binary+ (method (a b) 'fake+))
+(print (+ 1 2))
+(print (binary+ 1 2))
+(print (g 1 2))
+(print (reduce + 0 '(1 2 3)))
+(set! binary+ old)
+(print (binary+ 1 2))
+(define old-inst instance?)
+(set! instance? (method (a b) 'my-inst))
+(print (instance? 5 <string>))
+(print (try (method () (bind (((x <string>) 5)) x))))
+(define-class <c> (<object>) (s type: <integer> init-value: 0 init-keyword: s:))
+(print (try (method () (s (make <c> s: \"str\")))))
+(print (try (method () (check-type 5 <string>))))
+(set! instance? old-inst)
+(define old= binary=)
+(set! binary= (method (a b) #t))
+(print (= 1 2))
+(print (member? 3 '(1 2)))
+(print (binary= 1 2))
+(set! binary= old=)
+(define oldcar car)
+(set! car (method (x) 'my-car))
+(print (car '(1 2)))
+(print (first '(1 2)))
+(print (map car '((1) (2))))
+(set! car oldcar)
+(define old-size size)
+(set! size (method (x) 99))
+(print (size '(1 2)))
+(print (empty? '(1 2)))
+(print (as <vector> '(1 2)))
+(set! size old-size)"
+  "3
+fake+
+fake+
+6
+3
+my-inst
+\"ERR: 5 is not an instance of {the class <string>}\"
+\"ERR: \\\"str\\\" is not an instance of {the class <integer>}\"
+\"ERR: 5 is not an instance of {the class <string>}\"
+#f
+#f
+#t
+my-car
+1
+(my-car my-car)
+99
+#f
+#(1 2)
+")
+ ;; ... (setter element), print-object, error, as and make among them.
+ (library-keeps-its-functions-2
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <pt> (<object>) (x init-value: 1 init-keyword: x:))
+(define-method binary+ ((a <pt>) (b <pt>)) (make <pt> x: (+ (x a) (x b))))
+(print (x (+ (make <pt>) (make <pt> x: 5))))
+(define old-se (setter element))
+(define trail '())
+(set! (setter element) (method (c k v) (set! trail (cons k trail)) (old-se c k v)))
+(define v (vector 1 2 3))
+(set! (element v 1) 'b)
+(print v)
+(print trail)
+(print (map-into (vector 0 0) (method (x) x) '(7 8)))
+(print trail)
+(set! (setter element) old-se)
+(define old-print-object print-object)
+(set! print-object (method (x s) (format s \"XX\")))
+(print (list 1 2))
+(set! print-object old-print-object)
+(define gf binary-)
+(set! binary- (method (a b) 'minus))
+(print (try (method () (define-method binary- ((a <pt>) b) 'pt-minus) 1)))
+(print (- 5 3))
+(set! binary- gf)
+(print (- 5 3))
+(define old-error error)
+(set! error (method (#rest a) 'not-an-error))
+(print (error \"x\"))
+(print (try (method () (car 5))))
+(set! error old-error)
+(define old-as as)
+(set! as (method (c x) 'as!))
+(print (as <list> #(1 2)))
+(print (map identity #(1 2)))
+(print (concatenate '(1) #(2)))
+(set! as old-as)
+(define old-make make)
+(set! make (method (c #rest r) 'made))
+(print (make <pt>))
+(print (vector 1 2))
+(print (try (method () (x (instance? (old-make <pt>) <pt>)))))
+(set! make old-make)"
+  "6
+#(1 b 3)
+(1)
+#(7 8)
+(1)
+(1 2)
+\"ERR: binary- is defined both as a variable and as a generic function\"
+2
+2
+not-an-error
+\"ERR: not a list: 5\"
+as!
+#(1 2)
+(1 2)
+made
+#(1 2)
+\"ERR: no applicable method for x\"
+")
+ ;; ... and so do the expansions of dotimes, case, bind and for.
+ (macros-keep-library-functions
+  "(define old< <) (define old+ +) (define old-id? id?) (define old-error error)
+(define old-car car) (define old-as as) (define old-apply apply)
+(set! < (method (a b) #f))
+(set! + (method (a b) 'plus))
+(dotimes (i 3) (print i))
+(set! id? (method (a b) #t))
+(print (case 3 ((1) 'one) ((3) 'three) (else: 'other)))
+(set! error (method (#rest a) 'not-an-error))
+(print (handler-case (case 9 ((1) 'one)) ((<error> condition: c) 'caught)))
+(set! car (method (x) 'car))
+(set! as (method (c x) 'as))
+(print (bind ((#rest r (values 1 2))) r))
+(set! apply (method (#rest a) 'apply))
+(print (for ((i 0 (old+ i 1))) ((old< 2 i) 'done)))
+(set! < old<) (set! + old+) (set! id? old-id?) (set! error old-error)
+(set! car old-car) (set! as old-as) (set! apply old-apply)
+(print 'end)"
+  "0
+1
+2
+three
+caught
+(1 2)
+done
+end
+")
  ;; A subclass's slot of the name of an inherited one, by define-class
  ;; or define-slot, respecifies its type, a subclass of the inherited
  ;; type (chapter 6).

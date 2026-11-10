@@ -109,11 +109,12 @@ current module: see comp-module.lisp."
 ;;; Dylan name; in Common Lisp the module variable has to be proclaimed
 ;;; special, which would have made every like-named lexical binding dynamic.
 ;;; Predefined runtime variables keep their own names, since the runtime
-;;; already defines them.
+;;; already defines them -- but for the program's copy of a library
+;;; variable it may assign (PROGRAM-VARIABLE, runtime-internal.lisp).
 
 (defun name->module-variable (name)
   (if (member name dylan%predefined-variables)
-      name
+      (or (get name 'program-variable) name)
       (new-name "!module/" name "/")))
 
 (defun variable-name? (x)

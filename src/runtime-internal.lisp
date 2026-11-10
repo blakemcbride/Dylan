@@ -210,8 +210,38 @@ a variable may be assigned, and SET! of it turns those fast paths off.")
 
 (defun fast-path-guards (variable)
   "The guards of the fast paths that assigning the module variable
-VARIABLE turns off."
-  (gethash variable *fast-path-variables*))
+VARIABLE (or the program's copy of it) turns off."
+  (gethash (or (get variable 'library-variable) variable) *fast-path-variables*))
+
+;;; A program's copies of the library's variables.  Chapter 7 lets a
+;;; program assign one of the library's functions' variables; that changes
+;;; what the program finds there, and not the library's own functions,
+;;; which go on calling the functions they were made with, as in a compiled
+;;; program, whose library is compiled apart.  So the program's code reads
+;;; and assigns a copy of each such variable (NAME->MODULE-VARIABLE,
+;;; comp-util.lisp): a special variable of its own, made once the library
+;;; is loaded (runtime-fast-paths.lisp), and given the library's value
+;;; again for each new program.  A class's variable, which nothing may
+;;; assign, is not copied.
+
+(defun make-program-variables ()
+  (dolist (variable dylan%predefined-variables)
+    (when (and (boundp variable)
+               (not (class? (symbol-value variable)))
+               (not (get variable 'program-variable)))
+      (let ((copy (new-name "!program/" variable "/")))
+        (proclaim `(special ,copy))
+        (setf (get variable 'program-variable) copy
+              (get copy 'library-variable) variable))))
+  (reset-program-variables))
+
+(defun reset-program-variables ()
+  "Give each of the program's copies of the library's variables the
+library's value."
+  (dolist (variable dylan%predefined-variables)
+    (let ((copy (get variable 'program-variable)))
+      (when copy
+        (setf (symbol-value copy) (symbol-value variable))))))
 
 (defmacro define-fast-path (operator guard args test expansion)
   "ARGS is a list of variables, or a single variable for an :N-ARY fast
@@ -238,14 +268,18 @@ path."
   (let* ((fn (gensym "FN"))
          (vars (loop repeat (length operands) collect (gensym "ARG")))
          (nargs (length operands))
-         (fast (and (symbolp operator)
+         ;; The program's copy of a library variable has the library's
+         ;; fast paths, which assigning it turns off.
+         (key (and (symbolp operator)
+                   (or (get operator 'library-variable) operator)))
+         (fast (and key
                     (or (remove-if-not (lambda (entry)
-                                         (and (eq (first entry) operator)
+                                         (and (eq (first entry) key)
                                               (eql (second entry) nargs)))
                                        *fast-paths*)
                         (and (>= nargs 2)
                              (remove-if-not (lambda (entry)
-                                              (and (eq (first entry) operator)
+                                              (and (eq (first entry) key)
                                                    (eq (second entry) :n-ary)))
                                             *fast-paths*)))))
          (general `(funcall (dylan%function ,fn) ,multiple-values?

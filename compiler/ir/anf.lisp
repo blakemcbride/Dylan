@@ -104,7 +104,9 @@ makes of the list of them."
       (ref (let ((var (ref-var node)))
              (if (lexical-var-p var)
                  (lookup-ivar var)
-                 (make-ir-global-ref var))))
+                 (let ((ref (make-ir-global-ref var)))
+                   (setf (ir-global-ref-library ref) (ref-library node))
+                   ref))))
       (assign
        (norm-atom (assign-value node)
                   (lambda (a)

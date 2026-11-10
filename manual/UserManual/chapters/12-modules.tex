@@ -440,8 +440,12 @@ read-only variables, so a class or generic function cannot be replaced by
 assignment. Variables made by \code{define} (or by \code{define-method}
 alone) are ordinary and can be assigned with \code{set!}, and so can the
 library's functions, as the 1992 manual's own example \code{(set! (setter
-element) ...)} has them. A call through such a variable finds whatever it
-holds when the call runs.
+element) ...)} has them. A call in the program through such a variable
+finds whatever it holds when the call runs. The library's own functions,
+and the code that forms such as \code{for-each} and \code{case} expand
+into, keep the library's values: after \code{(set! binary+ \ldots)},
+\code{(binary+ 1 2)} calls the new function, but \code{(+ 1 2)} does not,
+since the library's \code{+} calls the library's \code{binary+}.
 
 Assigning a read-only variable is an error when the assignment runs; a
 \code{set!} that never runs is no error. A compiled program that does not

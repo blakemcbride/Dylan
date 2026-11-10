@@ -155,6 +155,8 @@ longer, and the library's generic functions lose the methods it added."
     (let ((variable (name->module-variable name)))
       (makunbound variable)
       (remhash variable *read-only-variables*)))
+  ;; The library's variables it assigned
+  (reset-program-variables)
   (clrhash *dylan-macros*)              ; a macro's own name is not among them
   ;; Chapter 15: how a symbol was spelled, but for the implementation's
   ;; own names

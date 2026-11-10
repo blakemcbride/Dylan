@@ -367,9 +367,15 @@ Its faults are worded as the compiler to C words them."
                    (lambda ()
                      (or default-getter
                          (dylan%error "slot: no getter name in ~a" slot)))))
+                ;; Chapter 6: the default setter is (setter slot-name)
+                ;; if the slot name is given; otherwise there is none.
                 (setter
                   (let ((setter (dylan%find-keyword
-                                 pairs :setter (lambda () `(setter ,getter)))))
+                                 pairs :setter
+                                 (lambda ()
+                                   (if default-getter
+                                       `(setter ,default-getter)
+                                       dylan%false)))))
                     (if (false? setter) nil setter)))   ; setter: #f
                 (type-given? t)
                 (type (dylan%find-keyword pairs :type
@@ -571,8 +577,9 @@ Its faults are worded as the compiler to C words them."
     ;; to work because a Dylan module variable compiled to a Scheme
     ;; variable of the same name.  Module variables have names of their own
     ;; here, so the owner expression is compiled like any other.
-    ;; Chapter 6: define-slot answers the slot's name, its getter.
-    (let ((expanded (expand-slot (if (keyword? (car slot)) slot `(:getter ,@slot)))))
+    ;; Chapter 6: the slot name and options are a define-class slot's;
+    ;; define-slot answers the slot's name, its getter.
+    (let ((expanded (expand-slot slot)))
       (funcall compiler owner mod-vars bound-vars nil
                (lambda (compiled-owner mod-vars)
                  (make-add-slot-call

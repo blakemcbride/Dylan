@@ -586,7 +586,10 @@ replaced by the error that the variable has no value."
              (getter (or (cdr (assoc :getter alist)) default-getter
                          (compile-error "slot: no getter name in ~a" spec)))
              (setter-entry (assoc :setter alist))
-             (setter (cond ((null setter-entry) (list 'dylan::setter getter))
+             ;; Chapter 6: the default setter is (setter slot-name) if
+             ;; the slot name is given; otherwise there is none.
+             (setter (cond ((null setter-entry)
+                            (and default-getter (list 'dylan::setter default-getter)))
                            ((false-p (cdr setter-entry)) nil)
                            (t (cdr setter-entry))))
              (init-value (assoc :init-value alist))

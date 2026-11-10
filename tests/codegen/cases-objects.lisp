@@ -2931,4 +2931,31 @@ int
 object
 "
   :error "the generic function is read-only: {the generic function f1}")
+ ;; Chapter 6: the default setter is (setter slot-name) when the slot name
+ ;; is given, whatever the getter; with no slot name there is none.
+ (default-setter-from-slot-name
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (foo getter: bar init-value: 1) (getter: gx init-value: 3) (plain init-value: 5))
+(define a (make <a>))
+(print (try (method () ((setter foo) a 2) (bar a))))
+(print (try (method () (set! (gx a) 4) (gx a))))
+(print (try (method () (set! (plain a) 6) (plain a))))
+(print (map slot-setter (slot-descriptors <a>)))
+(define-slot <a> zap getter: zz init-value: 7)
+(print (try (method () ((setter zap) a 8) (zz a))))
+(define-slot <a> getter: qq init-value: 9)
+(print (try (method () (set! (qq a) 10) (qq a))))
+(define-slot <a> getter: rr setter: set-rr init-value: 11)
+(print (try (method () (set-rr a 12) (rr a))))
+(define-class <b> (<a>) (getter: gx init-value: 30))
+(print (gx (make <b>)))"
+  "2
+\"ERR: the variable (setter gx)@dylan-user has no value\"
+6
+#({the generic function (setter foo)} #f {the generic function (setter plain)})
+8
+\"ERR: the variable (setter qq)@dylan-user has no value\"
+12
+30
+")
 )

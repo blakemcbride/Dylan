@@ -184,7 +184,8 @@ in both -- the options' values id? -- or CLASS must define it."
                          (slot.required-init-keyword slot)
                          (slot.allocation slot) inherited? data-location)))
     (setf (slot.filtered copy) (slot.filtered slot)
-          (slot.original copy) (slot-original slot))
+          (slot.original copy) (slot-original slot)
+          (slot.type-given? copy) (slot.type-given? slot))
     copy))
 
 ;;; Filtered slots (chapter 6): a virtual slot that overrides an inherited
@@ -498,7 +499,9 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
                   keyword-list :getter
                   (lambda () (dylan-call dylan/error "no getter defined"))))
          (setter (dylan%find-keyword keyword-list :setter #'dylan%false-fn))
-         (type (dylan%find-keyword keyword-list :type (lambda () <object>)))
+         (type-given? t)
+         (type (dylan%find-keyword keyword-list :type
+                                   (lambda () (setf type-given? nil) <object>)))
          (have-init-value? t)
          (init-value (dylan%find-keyword
                       keyword-list :init-value
@@ -516,64 +519,59 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
                                  (lambda () nil))))
     (dylan%add-slot owner type allocation setter getter debug-name init-value
                      have-init-value? init-function init-keyword
-                     required-init-keyword)))
+                     required-init-keyword type-given?)))
 
 (defun same-slot-getter-in-slot-vector->slot (getter slots)
   (find-if (lambda (slot) (and slot (id? (slot.getter slot) getter))) slots))
 
 (defun conflict-test (owner new-slot)
-  (flet ((stricter-than-all? (type type-list)
-           ;; TYPE-LIST may contain NIL entries!
-           (every (lambda (other) (or (null other) (subclass? type other)))
-                  type-list)))
-    (unless (stricter-than-all?
-             (slot.type new-slot)
-             (mapcar (lambda (class)
-                       (let ((slot (same-slot-getter-in-slot-vector->slot
-                                    (slot.getter new-slot)
-                                    (class.slots class))))
-                         (and slot (slot.type slot))))
-                     (class.superclasses
-                      (if (class? owner)
-                          owner
-                          (instance.class (singleton.object owner))))))
-      (dylan-call dylan/error
-                  "conflict-test -- new slot type not a subclass of inherited type"
-                  'owner owner
-                  'new-slot new-slot
-                  'new-slot-type (slot.type new-slot)))
-    ;; Chapter 6: redefining an inherited slot respecifies every feature
-    ;; the inherited definition specified -- unless the new slot is
-    ;; virtual, a filtered slot (the manual's <displaced-view>), which
-    ;; keeps the inherited slot's storage and initialization as they were.
-    (dolist (class (if (eq (slot.allocation new-slot) 'virtual)
-                       '()
-                       (class.superclasses
-                        (if (class? owner)
-                            owner
-                            (instance.class (singleton.object owner))))))
-      (let ((old (same-slot-getter-in-slot-vector->slot (slot.getter new-slot)
-                                                        (class.slots class))))
-        (when old
-          (flet ((missing (feature)
-                   (dylan-call dylan/error
-                               (format nil "slot ~a: redefining an inherited slot must respecify its ~a"
-                                       (dylan-symbol->string (slot.debug-name new-slot))
-                                       feature))))
-            (when (and (or (slot.has-initial-value? old) (slot.init-function old))
-                       (not (or (slot.has-initial-value? new-slot)
-                                (slot.init-function new-slot))))
-              (missing "init-value: or init-function:"))
-            (when (and (or (slot.init-keyword old)
-                           (slot.required-init-keyword old))
-                       (not (or (slot.init-keyword new-slot)
-                                (slot.required-init-keyword new-slot))))
-              (missing "init-keyword:"))
-            (when (and (not (eq (slot.allocation old) 'instance))
-                       (eq (slot.allocation new-slot) 'instance))
-              (missing "allocation:"))
-            (when (and (slot.setter old) (not (slot.setter new-slot)))
-              (missing "setter:"))))))))
+  "Chapter 6: a slot redefining an inherited one respecifies every feature
+the inherited definition specified, and its type is within the inherited
+types -- unless the new slot is virtual, a filtered slot (the manual's
+<displaced-view>), which keeps the inherited slot's storage and
+initialization as they were.  Worded and ordered as the compiler to C
+checks them."
+  (unless (eq (slot.allocation new-slot) 'virtual)
+    (let ((name (dylan-symbol->string (slot.debug-name new-slot)))
+          (olds (loop for class in (class.superclasses
+                                        (if (class? owner)
+                                            owner
+                                            (instance.class (singleton.object owner))))
+                      for old = (same-slot-getter-in-slot-vector->slot
+                                 (slot.getter new-slot) (class.slots class))
+                      when old collect old)))
+      (dolist (old olds)
+        (flet ((missing (feature)
+                 (dylan-call dylan/error
+                             (format nil "slot ~a: redefining an inherited slot must respecify its ~a"
+                                     name feature))))
+          (when (and (slot.type-given? old) (not (slot.type-given? new-slot)))
+            (missing "type:"))
+          (when (and (or (slot.has-initial-value? old) (slot.init-function old))
+                     (not (or (slot.has-initial-value? new-slot)
+                              (slot.init-function new-slot))))
+            (missing "init-value: or init-function:"))
+          (when (and (or (slot.init-keyword old)
+                         (slot.required-init-keyword old))
+                     (not (or (slot.init-keyword new-slot)
+                              (slot.required-init-keyword new-slot))))
+            (missing "init-keyword:"))
+          (when (and (not (eq (slot.allocation old) 'instance))
+                     (eq (slot.allocation new-slot) 'instance))
+            (missing "allocation:"))
+          (when (and (slot.setter old) (not (slot.setter new-slot)))
+            (missing "setter:"))))
+      (let ((new (slot.type new-slot)))
+        (when (and (slot.type-given? new-slot) (class? new))
+          (dolist (old olds)
+            (let ((was (slot.type old)))
+              (when (and (slot.type-given? old) (class? was)
+                         (not (subclass? new was)))
+                (dylan-call dylan/error
+                            (format nil "slot ~a: the new slot type ~a is not a subclass of the inherited type ~a"
+                                    name
+                                    (dylan-symbol->string (class.debug-name new))
+                                    (dylan-symbol->string (class.debug-name was))))))))))))
 
 (defun remove-this-slot-only! (owner slot-vector slot)
   (incf *class-structure-epoch*)        ; See REQUIRED-INIT-KEYWORDS
@@ -760,7 +758,7 @@ slots.")
 
 (defun dylan%add-slot (owner type allocation setter getter debug-name
                         init-value has-init-value? init-function init-keyword
-                        required-init-keyword)
+                        required-init-keyword &optional (type-given? t))
   ;; #f given for any of these from Dylan means none.
   (setf setter (false->nil setter)
         init-function (false->nil init-function)
@@ -839,6 +837,7 @@ slots.")
                                has-init-value? init-function init-keyword
                                required-init-keyword allocation nil
                                (figure-data-location owner allocation))))
+      (setf (slot.type-given? new-slot) type-given?)
       ;; Chapter 6: the type is enforced by the slot storage, which a
       ;; constant slot's value is (class slots are checked as they are
       ;; stored).
@@ -871,7 +870,12 @@ slots.")
                                                class allocation)))
                                #'class.slots #'set-class-slots!
                                #'add-slot-to-class!)
-                   (conflict-test class (copy-slot new-slot t 0))))
+                   ;; A subclass's own redefinition must still respecify
+                   ;; what the new definition specifies
+                   (let ((own (same-slot-getter-in-slot-vector->slot
+                               getter (class.slots class))))
+                     (when (and own (not (slot.inherited? own)))
+                       (conflict-test class own)))))
              (class.subclasses owner)))
           (progn
             (add-a-slot owner new-slot    ; SINGLETON

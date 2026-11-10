@@ -2383,6 +2383,67 @@ added
 \"ok\"
 "
   :error "\"c\" is not an instance of {the class <integer>}")
+ ;; A subclass's slot of the name of an inherited one, by define-class
+ ;; or define-slot, respecifies its type, a subclass of the inherited
+ ;; type (chapter 6).
+ (define-slot-respecify-type
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <b> (<a>))
+(define-slot <a> x type: <string> init-value: \"s\" init-keyword: x:)
+(define-slot <b> x init-value: 'bx init-keyword: bx:)
+(print 'after)"
+  ""
+  :compile-error "slot x: redefining an inherited slot must respecify its type:")
+ (define-slot-type-subclass
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <b> (<a>))
+(define-slot <a> x type: <string> init-value: \"s\" init-keyword: x:)
+(define-slot <b> x type: <integer> init-value: 3 init-keyword: bx:)
+(print 'after)"
+  ""
+  :compile-error "slot x: the new slot type <integer> is not a subclass of the inherited type <string>")
+ (class-slot-respecify-type
+  "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
+(define-class <b> (<a>) (x init-value: 'bx))
+(print 'after)"
+  ""
+  :compile-error "slot x: redefining an inherited slot must respecify its type:")
+ (class-slot-type-subclass
+  "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
+(define-class <b> (<a>) (x type: <integer> init-value: 3))
+(print 'after)"
+  ""
+  :compile-error "slot x: the new slot type <integer> is not a subclass of the inherited type <string>")
+ ;; ... the subclass's slot being defined before the inherited one too.
+ (define-slot-checks-subclass-slots
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <b> (<a>) (x init-value: 'bx))
+(define-slot <a> x type: <string> init-value: \"s\")
+(print (x (make <b>)))
+(print 'after)"
+  ""
+  :compile-error "slot x: redefining an inherited slot must respecify its type:")
+ ;; A subclass's slot that does respecify the type is accepted, and a
+ ;; subclass without its own slot inherits the slot it had.
+ (redefined-slot-types-accepted
+  "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
+(define-class <b> (<a>) (x type: <string> init-value: \"t\"))
+(define-slot <a> x type: <string> init-value: \"u\")
+(print (x (make <b>)))
+(print (x (make <a>)))
+(define-class <p> (<object>) (x init-value: 1))
+(define-class <q> (<p>))
+(define-class <r> (<q>))
+(define-slot <p> x type: <string> init-value: \"s\")
+(print (x (make <q>)))
+(print (x (make <r>)))
+(print (slot-type (slot-descriptor (make <r>) x)))"
+  "\"t\"
+\"u\"
+1
+1
+{the class <object>}
+")
  ;; A constant slot has no setter, even when one is named (chapter 6).
  (constant-slot-has-no-setter
   "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))

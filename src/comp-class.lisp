@@ -372,7 +372,9 @@ Its faults are worded as the compiler to C words them."
                   (let ((setter (dylan%find-keyword
                                  pairs :setter (lambda () `(setter ,getter)))))
                     (if (false? setter) nil setter)))   ; setter: #f
-                (type (dylan%find-keyword pairs :type (lambda () '<object>)))
+                (type-given? t)
+                (type (dylan%find-keyword pairs :type
+                                          (lambda () (setf type-given? nil) '<object>)))
                 (has-initial-value? t)
                 (init-value
                   (dylan%find-keyword pairs :init-value
@@ -409,15 +411,19 @@ Its faults are worded as the compiler to C words them."
            ;; defines no setter variable
            (when (eq allocation 'constant)
              (setf setter nil))
-           (make-slot getter            ; debug-name
-                      getter setter type init-value has-initial-value?
-                      init-function init-keyword required-init-keyword
-                      allocation nil nil))))
+           (let ((slot (make-slot getter            ; debug-name
+                                  getter setter type init-value has-initial-value?
+                                  init-function init-keyword required-init-keyword
+                                  allocation nil nil)))
+             (setf (slot.type-given? slot) type-given?)
+             slot))))
     (cond ((and (symbolp slot) (not (null slot)))
            (unless (simple-name? slot)
              (dylan%error "slot: bad getter name ~a" slot))
-           (make-slot slot slot `(setter ,slot) '<object> nil nil nil nil nil
-                      'instance nil nil))
+           (let ((spec (make-slot slot slot `(setter ,slot) '<object> nil nil nil nil nil
+                                  'instance nil nil)))
+             (setf (slot.type-given? spec) nil)
+             spec))
           ((and (consp slot) (keyword? (car slot)))
            (build-slot slot nil))
           ((and (consp slot) (simple-name? (car slot)))
@@ -471,7 +477,8 @@ Its faults are worded as the compiler to C words them."
                                        ,(slot.has-initial-value? slot)
                                        ,(caddr compiled-forms) ; Init-Function
                                        ',(slot.init-keyword slot)
-                                       ',(slot.required-init-keyword slot))
+                                       ',(slot.required-init-keyword slot)
+                                       ',(slot.type-given? slot))
                       mv)))))))))
 
 (defun generate-define-class (name superclasses getter-code slots bound-vars

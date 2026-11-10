@@ -445,16 +445,6 @@ variable's value (chapter 6's slot types and initial values may name it)."
            (compile-error "slot ~a: a virtual slot cannot be initialized" name)))))
     sd))
 
-(defun inherited-slot-definition (class getter)
-  "The definition of the slot GETTER reads in a proper superclass of CLASS
-that the program defines, or NIL."
-  (dolist (c (class-info-cpl class) nil)
-    (unless (eq c class)
-      (let ((cg (class-gclass c)))
-        (when cg
-          (let ((sd (find getter (gclass-sdefs cg) :key #'sdef-getter)))
-            (when sd (return sd))))))))
-
 ;;; Slots inherited along two paths (chapter 6, "Redefining Slots"): the
 ;;; definitions must be exactly the same, the options' values id?, or the
 ;;; class must define the slot itself.
@@ -556,11 +546,12 @@ options whose values are compared when the class is defined."
 
 (defun inherited-slot-definitions (class getter)
   "Every definition of the slot GETTER reads in a proper superclass of
-CLASS that the program defines."
+CLASS that the program defines: a define-slot's as well as its
+define-class's, since either may be the one in force when CLASS's runs."
   (loop for c in (class-info-cpl class)
         for cg = (and (not (eq c class)) (class-gclass c))
-        for sd = (and cg (find getter (gclass-sdefs cg) :key #'sdef-getter))
-        when sd collect sd))
+        when cg
+          append (remove getter (gclass-sdefs cg) :key #'sdef-getter :test-not #'eq)))
 
 (defun slot-type-class (sd)
   "The class SD's type: names, if a class known at compile time, or NIL."
@@ -663,9 +654,10 @@ slot features the superior definition specified."
              ;; manual's <displaced-view>): the inherited slot stays as it
              ;; was, storage, initialization and all.
              (unless (eq (sdef-allocation sd) :virtual)
-               (let ((old (inherited-slot-definition (gclass-info g) (sdef-getter sd))))
-                 (when old
-                   (check-slot-redefinition sd old)
+               (let ((olds (inherited-slot-definitions (gclass-info g) (sdef-getter sd))))
+                 (when olds
+                   (dolist (old olds)
+                     (check-slot-redefinition sd old))
                    (check-slot-type-redefinition sd))))))
   ;; Chapter 6: a slot inherited from two superclasses with different
   ;; definitions must be defined in the class.  What differs when compiling

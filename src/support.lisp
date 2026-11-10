@@ -113,6 +113,8 @@ passed."
                                         ; it overrides, whose storage it
                                         ; keeps (a "filtered slot")
   (original nil)                        ; A copy: the slot it copies
+  (type-given? t)                       ; Whether its definition gave a
+                                        ; type: (chapter 6, redefining)
   (owner nil))                          ; The class or singleton the slot
                                         ; was added to
 

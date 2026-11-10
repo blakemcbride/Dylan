@@ -965,7 +965,24 @@ is set, a method takes any."
                                         methods)))
                   (if foreign
                       (emit-foreign-attachment foreign var #'own)
-                      (own))))))))))
+                      (own)))))))))
+    ;; The setter of a slot this define-slot replaces with one that has no
+    ;; setter method in its generic function is detached
+    ;; (DETACHES-SETTER-P).
+    (dolist (new (gethash node *sdef-of-node*))
+      (let ((g (and (sdef-class new) (ir-define-slot-p node)
+                    (class-gclass (sdef-class new)))))
+        (dolist (old (and g (gclass-sdefs g)))
+          (when (detaches-setter-p new old)
+            (let ((gf (gethash (sdef-setter old) *gfuns*)))
+              (dolist (m (and gf (gfun-methods gf)))
+                (when (and (eq (gmethod-kind m) :setter) (eq (gmethod-sdef m) old)
+                           (gmethod-flag-c m))
+                  (emit "dy_lock_methods();")
+                  (emit "~a = 0;" (gmethod-flag-c m))
+                  (emit "dy_remove_methods(~a, (const D[]){ ~a }, 1);"
+                        (address (gfun-c-name gf)) (method-object-c-expr m))
+                  (emit "dy_unlock_methods();")))))))))
   (when (ir-define-class-p node)
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
       (if (program-gclass-p g)
@@ -1566,7 +1583,8 @@ called on instances made before it runs, which must not find it until
 then (chapter 6); a define-class's need no flag unless another method
 has its specializers, since no instance of the class is made before it
 runs."
-  (or (program-method-p m) (define-slot-accessor-p m) (and (gmethod-original m) t)))
+  (or (program-method-p m) (define-slot-accessor-p m) (and (gmethod-original m) t)
+      (and (setter-detachers m) t)))
 
 (defun program-method-p (m)
   "Is M a method a program's define-method makes?"
@@ -1581,6 +1599,32 @@ define-slot defines, attached when that runs?"
 (defun define-slot-accessor-p (m)
   (and (program-accessor-p m)
        (ir-define-slot-p (sdef-definer (gmethod-sdef m)))))
+
+(defun detaches-setter-p (new old)
+  "Does NEW, a define-slot on OLD's class of the slot with OLD's getter,
+give the slot no setter method in OLD's setter generic function?  The
+slot it defines replaces OLD's (chapter 6), so when it runs OLD's setter
+method, which would write the old slot, is detached."
+  (and (not (eq new old))
+       (sdef-class old)
+       (eq (sdef-class new) (sdef-class old))
+       (ir-define-slot-p (sdef-definer new))
+       (eq (sdef-getter new) (sdef-getter old))
+       (not (eq (sdef-allocation new) :virtual))
+       (not (eq (sdef-allocation old) :virtual))
+       (sdef-setter old)
+       (not (eq (sdef-setter new) (sdef-setter old)))))
+
+(defun setter-detachers (m)
+  "If M is the setter method of a slot of a program's class, the
+define-slots that detach it when they run (DETACHES-SETTER-P)."
+  (let ((sd (gmethod-sdef m)))
+    (and (eq (gmethod-kind m) :setter)
+         sd (sdef-class sd)
+         (added-when-run-p m)
+         (let ((g (class-gclass (sdef-class sd))))
+           (and g (remove-if-not (lambda (new) (detaches-setter-p new sd))
+                                 (gclass-sdefs g)))))))
 
 (defun library-location-p (location)
   (and location (location-p location) (library-source-file-p (location-file location))))
@@ -1711,6 +1755,7 @@ direct call would pass."
            (and site
                 (or (program-method-p m) (program-accessor-p m))
                 (null (gmethod-siblings m))
+                (null (setter-detachers m))
                 (gmethod-toplevel m)
                 (or (and (program-method-p m) (fn-within-p site (gmethod-fn m)))
                     (let ((here (gethash (fn-toplevel site) *toplevel-order*)))

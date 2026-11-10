@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 20
+#define DY_ABI_VERSION 21
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -1252,6 +1252,11 @@ _Noreturn void dy_no_applicable_method(D generic);
  * definitions running at once in several threads attach each method
  * once. */
 void dy_add_method(D generic, D method, const D *replaced, intptr_t n);
+/* A define-slot has run that gives its slot no setter method where the
+ * slot it replaces had one: the N methods REMOVED, that setter, are
+ * detached from GENERIC.  The methods' lock is held, as for
+ * dy_add_method. */
+void dy_remove_methods(D generic, const D *removed, intptr_t n);
 void dy_lock_methods(void);
 void dy_unlock_methods(void);
 void dy_check_generic_variable(D value, D generic, const char *name);

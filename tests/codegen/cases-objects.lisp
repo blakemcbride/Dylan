@@ -2744,4 +2744,45 @@ end
 #f
 konst
 ")
+ ;; Chapter 6: a define-slot that redefines a class's slot replaces it; one
+ ;; with no setter, another setter or allocation: constant leaves the class
+ ;; and its subclasses no setter method in the old one's generic function.
+ ;; A later define-slot with the setter gives it back.
+ (define-slot-replaces-setter
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (y init-value: 10))
+(define-class <b> (<a>))
+(define a (make <a>))
+(define b (make <b>))
+(set! (y a) 11)
+(print (y a))
+(define-slot <a> y init-value: 33 setter: #f)
+(print (try (method () (set! (y a) 12) (y a))))
+(print (try (method () (set! (y b) 12) (y b))))
+(print (list (y a) (y (make <a>)) (size (generic-function-methods (setter y)))))
+(define-class <c> (<object>) (z init-value: 1))
+(define c (make <c>))
+(define-slot <c> z allocation: constant init-value: 44)
+(print (try (method () (set! (z c) 2) (z c))))
+(define-slot <c> z init-value: 20 setter: set-z)
+(print (list (try (method () (set! (z c) 1) (z c))) (try (method () (set-z c 2) (z c)))))
+(define-class <m> (<object>) (u init-value: 1))
+(define m (make <m>))
+(define-method redo (setter?)
+  (if setter? (define-slot <m> u init-value: 7) (define-slot <m> u init-value: 9 setter: #f)))
+(print (try (method () (set! (u m) 4) (u m))))
+(redo #f)
+(print (try (method () (set! (u m) 5) (u m))))
+(redo #t)
+(print (try (method () (set! (u m) 6) (u m))))"
+  "11
+\"ERR: no applicable method for (setter y)\"
+\"ERR: no applicable method for (setter y)\"
+(33 33 0)
+\"ERR: no applicable method for (setter z)\"
+(\"ERR: no applicable method for (setter z)\" 2)
+4
+\"ERR: no applicable method for (setter u)\"
+6
+")
 )

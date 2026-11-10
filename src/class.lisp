@@ -615,6 +615,21 @@ checks them."
 (defun set-singleton-extra-slot-descriptors! (singleton new-vector)
   (setf (singleton.extra-slot-descriptors singleton) new-vector))
 
+(defun remove-replaced-setter (owner old-slot new-slot)
+  "NEW-SLOT replaces OLD-SLOT in OWNER (chapter 6).  If it gives OWNER no
+setter method in OLD-SLOT's setter generic function -- it has no setter,
+another one, or is constant -- the old setter method for OWNER, which
+would write the old slot, is removed.  (A virtual slot's methods are the
+program's own.)"
+  (let ((setter (slot.setter old-slot)))
+    (when (and setter
+               (not (eq (slot.allocation new-slot) 'virtual))
+               (not (and (eq setter (slot.setter new-slot))
+                         (not (eq (slot.allocation new-slot) 'constant)))))
+      (let ((method (find-method setter (list owner <object>))))
+        (when method
+          (delete-method! setter method))))))
+
 (defun add-a-slot (owner new-slot accessor updater fixit-fn)
   "Add NEW-SLOT (a slot descriptor) to OWNER, using ACCESSOR to find the
 current vector of slot descriptors and UPDATER to store the modified vector
@@ -637,7 +652,9 @@ descriptor to update the instances as needed."
             (setf (aref current-descriptors
                         (position old-slot current-descriptors))
                   nil))
-          (remove-this-slot-only! owner current-descriptors old-slot))
+          (progn
+            (remove-this-slot-only! owner current-descriptors old-slot)
+            (remove-replaced-setter owner old-slot new-slot)))
       (setf current-descriptors (funcall accessor owner)))
     (let ((offset (find-empty-slot current-descriptors)))
       (if offset
@@ -845,10 +862,23 @@ slots.")
         (check-slot-value new-slot init-value))
       (setf (slot.owner new-slot) owner)
       (if (class? owner)
-          (progn
+          (let ((replaced (same-slot-getter-in-slot-vector->slot
+                           getter (class.slots owner))))
             (add-a-slot owner new-slot
                         #'class.slots #'set-class-slots!
                         #'add-slot-to-class!)
+            ;; The subclasses that inherit the slot replaced, each with
+            ;; accessors of its own, lose its setter as the owner does
+            (when replaced
+              (map-over-all-subclasses!
+               (lambda (class)
+                 (let ((slot (same-slot-getter-in-slot-vector->slot
+                              getter (class.slots class))))
+                   (and slot (slot.inherited? slot))))
+               (lambda (class inherits)
+                 (when inherits
+                   (remove-replaced-setter class replaced new-slot)))
+               (class.subclasses owner)))
             (map-over-all-subclasses!
              (lambda (class)
                ;; Stop showering down if we hit a class that already has a

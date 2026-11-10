@@ -72,6 +72,20 @@ void dy_add_method(D generic, D method, const D *replaced, intptr_t n) {
     g->methods = v;
 }
 
+void dy_remove_methods(D generic, const D *removed, intptr_t n) {
+    DyGeneric *g = DY_PTR(generic);
+    DyVector *old = DY_PTR(g->methods);
+    intptr_t size = DY_INT_VALUE(old->size), kept = 0;
+    for (intptr_t i = 0; i < size; i++)
+        if (!dropped(old->data[i], DY_UNBOUND, removed, n)) kept++;
+    D v = dy_make_vector((size_t)kept, DY_FALSE);
+    DyVector *new = DY_PTR(v);
+    intptr_t k = 0;
+    for (intptr_t i = 0; i < size; i++)
+        if (!dropped(old->data[i], DY_UNBOUND, removed, n)) new->data[k++] = old->data[i];
+    g->methods = v;
+}
+
 /* The variable NAME, which define-method defines, holds VALUE; it must be
    GENERIC, the generic function the compiler made for it (chapter 6). */
 void dy_check_generic_variable(D value, D generic, const char *name) {

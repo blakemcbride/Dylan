@@ -636,6 +636,11 @@ values as a Dylan function does."
     (when end (emit "~a:;" end))))
 
 (defun gen-primitive (e dest)
+  (when (eq (ir-prim-name e) :unbound-variable)
+    ;; A bind-methods name read before its method is made (convert.lisp)
+    (emit "dy_unbound_variable(~a);"
+          (c-utf8-literal (const-value (first (ir-prim-arguments e)))))
+    (return-from gen-primitive (deliver dest "DY_FALSE")))
   (let ((args (mapcar #'atom-c (ir-prim-arguments e))))
     (case (ir-prim-name e)
       (:call-with-exit (deliver-call dest (format nil "dy_call_with_exit(~a)" (first args))))

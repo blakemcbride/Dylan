@@ -364,14 +364,102 @@ does."
         (multiple-value-bind (new-env var) (bind-lexical (car b) env)
           (setf env new-env)
           (push var vars)))
-      (make-letrec-node (nreverse vars)
-                        (mapcar (lambda (b)
-                                  (with-form (b)
-                                    (convert-method (second b) (cddr b) env
-                                                    :name (car b)
-                                                    :what "bind-methods")))
-                                bindings)
-                        (convert-body (cddr form) env)))))
+      (setf vars (nreverse vars))
+      (let ((methods (mapcar (lambda (b)
+                               (with-form (b)
+                                 (convert-method (second b) (cddr b) env
+                                                 :name (car b)
+                                                 :what "bind-methods")))
+                             bindings))
+            (body (convert-body (cddr form) env)))
+        (if (notany (lambda (m) (specializers-refer-p m vars)) methods)
+            (make-letrec-node vars methods body)
+            (sequential-bind-methods vars methods body))))))
+
+;;; Chapter 10: the scope of bind-methods' names includes the parameter
+;;; lists, so a specializer may name one of the methods.  The methods are
+;;; then made in order, each name given its method once that is made: a
+;;; specializer sees the methods before its own, and a name whose method
+;;; is not made yet has no value.
+
+(defun node-children (node)
+  "The nodes NODE evaluates when it is evaluated itself, as (getter .
+setter) pairs: not the bodies and keyword defaults of the methods it
+makes, which run later."
+  (macrolet ((slot (accessor) `(cons (lambda () (,accessor node))
+                                     (lambda (new) (setf (,accessor node) new)))))
+    (flet ((params (m)
+             (loop for p in (method-node-required m)
+                   when (required-param-specializer p)
+                     collect (let ((p p))
+                               (cons (lambda () (required-param-specializer p))
+                                     (lambda (new) (setf (required-param-specializer p) new)))))))
+      (etypecase node
+        ((or constant ref) '())
+        (assign (list (slot assign-value)))
+        (if-node (list (slot if-node-test) (slot if-node-then) (slot if-node-else)))
+        (seq-node (loop for tail on (seq-node-forms node)
+                        collect (let ((tail tail))
+                                  (cons (lambda () (car tail))
+                                        (lambda (new) (setf (car tail) new))))))
+        (bind-node (list (slot bind-node-value) (slot bind-node-body)))
+        (letrec-node (append (mapcan #'params (letrec-node-methods node))
+                             (list (slot letrec-node-body))))
+        (method-node (params node))
+        (call (cons (slot call-function)
+                    (loop for tail on (call-arguments node)
+                          collect (let ((tail tail))
+                                    (cons (lambda () (car tail))
+                                          (lambda (new) (setf (car tail) new)))))))
+        (primitive (loop for tail on (primitive-arguments node)
+                         collect (let ((tail tail))
+                                   (cons (lambda () (car tail))
+                                         (lambda (new) (setf (car tail) new))))))
+        (bind-exit-node (list (slot bind-exit-node-body)))
+        (unwind-protect-node (list (slot unwind-protect-node-protected)
+                                   (slot unwind-protect-node-cleanup)))))))
+
+(defun node-refers-p (node vars)
+  "Does NODE, as it is evaluated, read one of the lexical VARS?"
+  (if (ref-p node)
+      (member (ref-var node) vars)
+      (some (lambda (child) (node-refers-p (funcall (car child)) vars))
+            (node-children node))))
+
+(defun specializers-refer-p (method vars)
+  (some (lambda (p)
+          (let ((s (required-param-specializer p)))
+            (and s (node-refers-p s vars))))
+        (method-node-required method)))
+
+(defun guard-references (node vars)
+  "NODE, with each read of one of VARS it makes as it is evaluated
+replaced by the error that the variable has no value."
+  (flet ((guard (n)
+           (let ((p (make-primitive :unbound-variable
+                                    (list (make-constant (name-string (lexical-var-name (ref-var n))))))))
+             (setf (node-location p) (node-location n))
+             p)))
+    (if (and (ref-p node) (member (ref-var node) vars))
+        (guard node)
+        (progn
+          (dolist (child (node-children node))
+            (funcall (cdr child) (guard-references (funcall (car child)) vars)))
+          node))))
+
+(defun sequential-bind-methods (vars methods body)
+  (dolist (v vars) (setf (lexical-var-assigned-p v) t))
+  (make-bind-node vars nil (make-constant dylan::dylan%false)
+                  (make-seq
+                   (append
+                    (loop for m in methods
+                          for later on vars
+                          do (dolist (p (method-node-required m))
+                               (when (required-param-specializer p)
+                                 (setf (required-param-specializer p)
+                                       (guard-references (required-param-specializer p) later))))
+                          collect (make-assign (car later) m))
+                    (list body)))))
 
 ;;; Definitions
 

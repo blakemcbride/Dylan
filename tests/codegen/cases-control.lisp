@@ -409,6 +409,26 @@ after
 (arg)
 ")
 
+ ;; Chapter 10: the scope of bind-methods' names includes the parameter
+ ;; lists, so a specializer may name a method made before its own.
+ (bind-methods-specializers-name-methods
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+   (print (bind-methods ((g () 'gee) (f ((x (singleton g))) 'is-g)) (f g)))
+   (print (try (method () (bind-methods ((g () 'gee) (f ((x (singleton g))) 'is-g)) (f 1)))))
+   (print (bind-methods ((g () <integer>) (f ((x (g))) (list 'int x))) (f 5)))
+   (define-method mk (flag)
+     (bind-methods ((even? (n) (if (= n 0) #t (odd? (- n 1))))
+                    (odd? (n) (if (= n 0) #f (even? (- n 1))))
+                    (pick ((x (if flag (singleton even?) <integer>)))
+                      (list 'pick (if (instance? x <integer>) (odd? x) (x 4)))))
+       (pick (if flag even? 7))))
+   (print (list (mk #f) (mk #t)))"
+  "is-g
+\"ERR: 1 is not an instance of {singleton {an anonymous method}}\"
+(int 5)
+((pick #t) (pick #t))
+")
+
  ;; Chapter 10, bind-methods, and chapter 7, set!: a variable bind-methods
  ;; binds can be assigned like any other lexical variable; its function
  ;; is then a value whose calls are unknown.

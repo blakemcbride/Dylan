@@ -136,6 +136,7 @@ evaluated when it is made."
      (scan (ir-unwind-cleanup e) fn))
     (ir-define-variable (scan-atom (ir-define-variable-value e) fn))
     (ir-define-generic)
+    (ir-define-class-start)
     (ir-define-method (scan-made-fn (ir-define-method-fn e) fn))
     (ir-define-class
      (dolist (a (ir-define-class-superclasses e)) (scan-atom a fn))
@@ -154,7 +155,7 @@ evaluated when it is made."
 (defun mark-tail (e tail)
   (etypecase e
     ((or const ivar ir-global-ref ir-global-set ir-set ir-prim
-         ir-define-variable ir-define-generic))
+         ir-define-variable ir-define-generic ir-define-class-start))
     (ir-let
      (mark-tail (ir-let-value e) nil)
      (mark-tail (ir-let-body e) tail))

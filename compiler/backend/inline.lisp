@@ -173,7 +173,7 @@ anything."
                  (ir-lambda (walk-fn (ir-lambda-fn e)))
                  ((or ir-bind-exit ir-unwind
                       ir-define-variable ir-define-generic ir-define-method
-                      ir-define-class ir-define-slot)
+                      ir-define-class ir-define-class-start ir-define-slot)
                   (return-from code-size nil)))))
       (walk-fn fn)
       count)))

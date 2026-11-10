@@ -911,8 +911,16 @@ is set, a method takes any."
 
 (defun sdef-descriptor-c (sd) (format nil "dy_sd~d" (sdef-id sd)))
 
-(defun gen-class-definition (node)
-  "Code for a define-class or define-slot form, run where it appears."
+(defun gen-class-definition (node &optional (part :all))
+  "Code for a define-class or define-slot form, run where it appears: PART
+:ALL of it; or :START, all but storing the slots' options, which :OPTIONS
+then does, once they are computed (IR-DEFINE-CLASS-START)."
+  (unless (eq part :start)
+    (gen-slot-options node))
+  (unless (eq part :options)
+    (gen-class-definition-rest node)))
+
+(defun gen-slot-options (node)
   (dolist (sd (gethash node *sdef-of-node*))
     (when (null (sdef-class sd))
       ;; The owner: its object is the one with the slot from now on.
@@ -929,7 +937,9 @@ is set, a method takes any."
               owner)
         (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)
         (emit "~a.owner = ~a.object;" (sdef-descriptor-c sd) (owner-c sd))))
-    (gen-slot-initialization sd))
+    (gen-slot-initialization sd)))
+
+(defun gen-class-definition-rest (node)
   (when (ir-define-class-p node)
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
       ;; A class seal has sealed since compiling cannot be subclassed

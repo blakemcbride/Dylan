@@ -469,8 +469,11 @@ signals if the result is too large (chapter 8), and nothing is allocated."
                (emit-foreign-attachment m var #'own)
                (own)))
          (deliver dest (definition-value var))))
+      (ir-define-class-start
+       (gen-class-definition (ir-define-class-start-class e) :start)
+       (deliver dest "DY_FALSE"))
       (ir-define-class
-       (gen-class-definition e)
+       (gen-class-definition e (if (ir-define-class-start e) :options :all))
        (deliver dest (definition-value (ir-define-class-var e))))
       (ir-define-slot
        (gen-class-definition e)

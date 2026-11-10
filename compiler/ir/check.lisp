@@ -113,6 +113,7 @@
               (expr (ir-unwind-cleanup e) f scope))
              (ir-define-variable (operand (ir-define-variable-value e) f scope))
              (ir-define-generic)
+             (ir-define-class-start)
              (ir-define-method (made-fn (ir-define-method-fn e) f scope))
              (ir-define-class
               (dolist (a (ir-define-class-superclasses e)) (operand a f scope))

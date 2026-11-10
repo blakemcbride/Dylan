@@ -165,18 +165,35 @@ makes of the list of them."
                     (lambda (fn)
                       (make-ir-define-method (define-method-node-var node) fn))))
       (define-class-node
-       (norm-atoms (define-class-node-superclasses node)
-                   (lambda (supers)
-                     (norm-slots (define-class-node-slots node)
-                                 (lambda (slots)
-                                   (make-ir-define-class
-                                    (define-class-node-var node) supers slots))))))
+       ;; A slot option computed by more than a constant, a variable or a
+       ;; method is computed once the class's variable has its value
+       ;; (chapter 6): after an IR-DEFINE-CLASS-START.
+       (let* ((var (define-class-node-var node))
+              (start (and (some #'computed-slot-option-p (define-class-node-slots node))
+                          (make-ir-define-class-start var))))
+         (norm-atoms (define-class-node-superclasses node)
+                     (lambda (supers)
+                       (let ((rest (norm-slots (define-class-node-slots node)
+                                               (lambda (slots)
+                                                 (let ((d (make-ir-define-class var supers slots)))
+                                                   (when start
+                                                     (setf (ir-define-class-start d) start
+                                                           (ir-define-class-start-class start) d))
+                                                   d)))))
+                         (if start (make-ir-seq (list start rest)) rest))))))
       (define-slot-node
        (norm-atom (define-slot-node-owner node)
                   (lambda (owner)
                     (norm-slots (list (define-slot-node-slot node))
                                 (lambda (slots)
                                   (make-ir-define-slot owner (first slots))))))))))
+
+(defun computed-slot-option-p (slot)
+  "Has SLOT a type, init-value or init-function that is computed by more
+than a constant, a variable or a method?"
+  (some (lambda (n) (and n (not (typep n '(or constant ref method-node)))))
+        (list (slot-spec-type slot) (slot-spec-init-value slot)
+              (slot-spec-init-function slot))))
 
 (defun norm-slots (slots k)
   "SLOTS with their type, init-value and init-function made atoms."

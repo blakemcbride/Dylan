@@ -203,8 +203,17 @@ keywords (NIL, :ANY, or a list)."
                                 (var superclasses slots)))
   var
   superclasses                          ; atoms
-  slots)                                ; SLOT-SPECs whose type, init-value
+  slots                                 ; SLOT-SPECs whose type, init-value
                                         ; and init-function are atoms
+  (start nil))                          ; its IR-DEFINE-CLASS-START, if any
+
+;;; The define-class of CLASS (an IR-DEFINE-CLASS) has run up to its slots'
+;;; options, which are computed after it: its variable has its value
+;;; (chapter 6, "after the variable containing the class is defined").
+(defstruct (ir-define-class-start (:include ir-node)
+                                  (:constructor make-ir-define-class-start (var)))
+  var
+  (class nil))
 
 (defstruct (ir-define-slot (:include ir-node)
                            (:constructor make-ir-define-slot (owner slot)))
@@ -288,6 +297,8 @@ separate compilation).")
                      ,(ir-unparse (ir-bind-exit-body x))))
     (ir-unwind `(unwind-protect ,(ir-unparse (ir-unwind-protected x))
                   ,(ir-unparse (ir-unwind-cleanup x))))
+    (ir-define-class-start `(dylan::%define-class-start
+                             ,(word (module-var-string (ir-define-class-start-var x)))))
     (ir-define-variable `(dylan::define ,(word (module-var-string (ir-define-variable-var x)))
                            ,(ir-unparse (ir-define-variable-value x))))
     (ir-define-generic `(dylan::define-generic-function

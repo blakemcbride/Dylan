@@ -1932,6 +1932,34 @@ found
 #t
 #({the generic function condition-format-string} {the generic function condition-format-arguments})
 ")
+ ;; A slot option is computed after the class's variable has its value
+ ;; (chapter 6), so it may use the class; and before the slot is added to
+ ;; an instance.
+ (slot-options-use-their-class
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <me> (<object>) (nxt init-value: (list <me>)))
+(print (nxt (make <me>)))
+(define-class <s1> (<object>) (v type: (singleton <s1>) init-keyword: v:))
+(print (try (method () (v (make <s1> v: <s1>)))))
+(print (try (method () (v (make <s1> v: 5)))))
+(define-class <b> (<object>) (k init-value: (begin (print 'computing) (list 'k <b>))))
+(print 'made)
+(print (k (make <b>)))
+(define-class <d> (<b>) (k init-value: (list <d> (size (slot-descriptors <d>)))))
+(print (k (make <d>)))
+(define-class <e> (<object>) (each allocation: class init-value: (list 'e <e>)))
+(print (each (make <e>)))
+(print (init-value (first (slot-descriptors <me>))))"
+  "({the class <me>})
+{the class <s1>}
+\"ERR: 5 is not an instance of {singleton {the class <s1>}}\"
+computing
+made
+(k {the class <b>})
+({the class <d>} 1)
+(e {the class <e>})
+({the class <me>})
+")
  ;; A slot descriptor of a sealed class prints with its slot's name, though
  ;; slot-getter answers #f for it (chapter 11).
  (sealed-slot-descriptor-prints

@@ -3232,4 +3232,15 @@ defined
 \"ERR: slot y: the new slot type <integer> is not a subtype of the inherited type (singleton 1)\"
 \"ERR: slot y: the new slot type (singleton \\\"a~b\\\") is not a subtype of the inherited type (singleton 1)\"
 ")
+ ;; A prefix: the reader maps (a name with @, or beginning ! or dylan/)
+ ;; makes the names a program spells with it (chapter 5).
+ (prefix-with-names-the-reader-maps
+  "module: p1
+
+(define-module p1 (use dylan prefix: \"x@\") (use dylan prefix: \"!\" import: (list)) (use dylan prefix: \"dylan/\" import: (print)))
+(x@print (x@list 1 2))
+(dylan/print (!list 3 4))"
+  "(1 2)
+(3 4)
+")
 )

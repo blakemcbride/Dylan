@@ -230,11 +230,12 @@ symbol) -- refers to in the current module."
                  (dylan%error "define-module -- not exported" old used-name))
                (pushnew (cons old new) pairs :test #'equal))
              (prefixed (old)
+               ;; The name the reader makes of the prefixed name, as the
+               ;; compiler to C has it.
                (if (string= prefix "")
                    old
-                   (intern (concatenate 'string (string-upcase prefix)
-                                        (symbol-name old))
-                           '#:dylan))))
+                   (dylan-user-symbol (concatenate 'string (string-upcase prefix)
+                                                   (symbol-name old))))))
         (if (eq import 'all)
             (dolist (old exports)
               (unless (or (member old exclude) (assoc old renames))

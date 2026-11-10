@@ -214,7 +214,7 @@ module: dylan
 
 (define-method print-object ((x <slot-descriptor>) stream escape?)
   (%put stream "{slot ")
-  (print-object (%generic-name (%slot-getter x)) stream #f)
+  (print-object (%generic-name (%slot-raw-getter x)) stream #f)
   (%put stream #\}))
 
 (define-method print-object ((x <stream>) stream escape?) (%put stream "{stream}"))

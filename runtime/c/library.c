@@ -830,6 +830,10 @@ PRIMITIVE(slot_getter) {
     return of_sealed_class(d) ? DY_FALSE : d->getter;
 }
 
+/* (%slot-raw-getter sd): the getter even of a sealed class's slot, which
+   print-object names the slot by */
+PRIMITIVE(slot_raw_getter) { need(self, argc, 1, 1); return as_descriptor(a0)->getter; }
+
 PRIMITIVE(slot_setter) {
     need(self, argc, 1, 1);
     DySlotDescriptor *d = as_descriptor(a0);

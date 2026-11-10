@@ -108,8 +108,9 @@
     "%generic-function-methods" "%method-specializers"
     "%applicable-method?" "%sorted-applicable-methods" "%find-method"
     "%seal" "%make-read-only"
-    "%function-arguments" "%slot-getter" "%slot-setter" "%slot-type"
-    "%slot-allocation" "%init-value" "%init-function" "%init-keyword"
+    "%function-arguments" "%slot-getter" "%slot-raw-getter" "%slot-setter"
+    "%slot-type" "%slot-allocation" "%init-value" "%init-function"
+    "%init-keyword"
     "%slot-value" "%slot-initialized?" "%slot-descriptor"
     "%slot-descriptors"
     ;; A define-generic-function of a variable imported from DYLAN

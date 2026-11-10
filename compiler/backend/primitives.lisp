@@ -82,6 +82,7 @@
     ;; Reflection (chapters 10 and 11), generic functions as above
     ("%function-arguments" . "function_arguments")
     ("%slot-getter" . "slot_getter") ("%slot-setter" . "slot_setter")
+    ("%slot-raw-getter" . "slot_raw_getter")
     ("%slot-type" . "slot_type") ("%slot-allocation" . "slot_allocation")
     ("%init-value" . "init_value") ("%init-function" . "init_function")
     ("%init-keyword" . "init_keyword") ("%slot-value" . "slot_value")

@@ -1932,6 +1932,22 @@ found
 #t
 #({the generic function condition-format-string} {the generic function condition-format-arguments})
 ")
+ ;; A slot descriptor of a sealed class prints with its slot's name, though
+ ;; slot-getter answers #f for it (chapter 11).
+ (sealed-slot-descriptor-prints
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <s> (<object>) (y getter: gy init-value: 1))
+(seal <a>)
+(seal <s>)
+(print (slot-descriptor (make <a>) x))
+(print (slot-descriptor (make <s>) gy))
+(print (slot-getter (slot-descriptor (make <a>) x)))
+(print (format #f \"~a\" (slot-descriptor (make <a>) x)))"
+  "{slot x}
+{slot gy}
+#f
+\"{slot x}\"
+")
  ;; A variable may be defined by define and by define-method, define-class or
  ;; define-slot, and assigned, in either order, until a define-generic-function
  ;; makes it read-only; each definition checks, when it runs, what it holds

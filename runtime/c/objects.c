@@ -135,6 +135,16 @@ void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
     }
 }
 
+void dy_check_keyword_list(D f, D pairs, const D *accepted, size_t n) {
+    for (D l = pairs; l != DY_EMPTY; l = dy_tail(dy_tail(l))) {
+        D key = dy_head(l);
+        if (!dy_kind_p(key, DY_KIND_KEYWORD)) dy_odd_keyword_arguments(f);
+        size_t j = 0;
+        while (j < n && accepted[j] != key) j++;
+        if (j == n) dy_unknown_keyword(f, key);
+    }
+}
+
 /* ------------------------------------------------------- Next methods */
 
 /* env[0] is the next method, env[1] the argument count, env[2..] the
@@ -413,7 +423,8 @@ D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
         for (intptr_t i = 0; i < k->init_key_count; i++)
             if (!k->init_key_flags || !k->init_key_flags[i] || *k->init_key_flags[i])
                 names[count++] = k->init_keys[i];
-        dy_check_keywords(self, argc, 1, a0, a1, a2, a3, names, (size_t)count);
+        /* From KEYS: the init functions may have reused the argument area */
+        dy_check_keyword_list(self, keys, names, (size_t)count);
     }
     if (__atomic_load_n(k->pending, __ATOMIC_RELAXED) > 0) {
         pthread_mutex_lock(&early_lock);

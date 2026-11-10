@@ -2187,9 +2187,11 @@ by code that the compiler has found does not let it escape."
             (emit-object "        if (~a != DY_UNBOUND) dy_check_type(v, ~a);"
                          (sdef-c sd "type") (sdef-c sd "type")))
           (emit-object "        object->slots[~d] = v;~%    }" offset))))
+    ;; The keywords nothing takes, from KEYS: an init function may have
+    ;; reused the thread's argument area (dylan.h)
     (cond (any)
           ((and (null flagged-keys) (null any-flags))
-           (emit-object "    dy_check_keywords(self, argc, 1, a0, a1, a2, a3, ~a, ~d);"
+           (emit-object "    dy_check_keyword_list(self, keys, ~a, ~d);"
                         (keyword-array keywords) (length keywords)))
           (t
            (emit-object "    if (!(0~{ || ~a~})) {" any-flags)
@@ -2200,7 +2202,7 @@ by code that the compiler has found does not let it escape."
            (loop for (flag . keys) in flagged-keys
                  do (emit-object "        if (~a) {~{ accepted[n++] = ~a;~} }"
                                  flag (mapcar (lambda (k) (c-constant *cdata* k)) keys)))
-           (emit-object "        dy_check_keywords(self, argc, 1, a0, a1, a2, a3, accepted, n);~%    }")))
+           (emit-object "        dy_check_keyword_list(self, keys, accepted, n);~%    }")))
     (when (and init init-methods)
       (emit-object "    dy_call_list(~a, x, keys);" (address (gfun-c-name init))))
     (emit-object "    dy_thread->mv_count = 1;~%    return x;~%}")))

@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 19
+#define DY_ABI_VERSION 20
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -1267,6 +1267,10 @@ _Noreturn void dy_not_a_slot(const char *getter, D instance);
  * keywords are among the N in ACCEPTED (any, if ACCEPTED is NULL). */
 void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
                        D a3, const D *accepted, size_t n);
+/* The same for PAIRS, a list of keyword/value pairs collected from the
+ * arguments: for a check made after calls that may have reused the
+ * thread's argument area. */
+void dy_check_keyword_list(D f, D pairs, const D *accepted, size_t n);
 
 /* A next-method object that, called with no arguments, calls NEXT with
  * the arguments the current method was given. */

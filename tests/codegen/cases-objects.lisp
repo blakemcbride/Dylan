@@ -1777,6 +1777,39 @@ error: the arguments after the required ones are not keyword/value pairs
 init
 4
 ")
+ ;; An init function that makes a call of five or more arguments reuses the
+ ;; thread's argument area; make still checks its own keywords, there
+ ;; from the fifth argument on, for a class with define-slot or without.
+ (make-keywords-after-init-functions
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <point> (<object>)
+  (x init-keyword: x: init-value: 0) (y init-keyword: y: init-value: 0)
+  (z init-keyword: z: init-value: 0))
+(define-class <body> (<object>)
+  (origin init-function: (method () (make <point> x: 0 y: 0 z: 0)))
+  (mass init-keyword: mass:) (name init-keyword: name:) (tag init-keyword: tag:))
+(print (try (method () (name (make <body> mass: 1 name: 'earth tag: 3)))))
+(print (try (method () (name (make <body> mass: 1 name: 'earth x: 3)))))
+(define-class <body2> (<object>)
+  (origin init-function: (method () (make <point> x: 0 y: 0 z: 0)))
+  (mass init-keyword: mass:) (name init-keyword: name:) (z init-keyword: z:))
+(print (try (method () (name (make <body2> mass: 1 name: 'earth bogus: 3)))))
+(define nums '(1 2 3 4 5 6 7 8))
+(define-class <body3> (<object>)
+  (origin init-function: (method () (apply list nums)))
+  (mass init-keyword: mass:) (name init-keyword: name:) (tag init-keyword: tag:))
+(print (try (method () (name (make <body3> mass: 1 name: 'earth tag: 3)))))
+(define-class <body4> (<body>))
+(define-slot <body4> extra init-function: (method () (make <point> x: 1 y: 2 z: 3)))
+(print (try (method () (name (make <body4> mass: 1 name: 'moon tag: 3)))))
+(print (try (method () (name (make <body4> mass: 1 name: 'moon x: 3)))))"
+  "earth
+\"ERR: keyword argument not accepted: x:\"
+\"ERR: keyword argument not accepted: bogus:\"
+earth
+moon
+\"ERR: keyword argument not accepted: x:\"
+")
  ;; An inherited slot has one descriptor in every class that has it; slot-getter
  ;; and slot-setter answer #f for a slot of a sealed class (chapter 11).
  (slot-descriptor-identity

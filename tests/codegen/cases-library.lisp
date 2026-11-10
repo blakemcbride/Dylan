@@ -2667,4 +2667,19 @@ half
 {range 0.0 by 0.30000000000000004 size 3}
 #t
 ")
+ ;; A float too small to represent reads as zero (chapter 14).
+ (tiny-float-reads-as-zero
+  "(print (list 1e-400 (object-class 1e-400) (object-class 1.0l0) 1.5s38))"
+  "(0.0 {the class <double-float>} {the class <double-float>} 1.5s38)
+")
+ ;; ... but one too large for its format, or a ratio over 0, is not a
+ ;; number the reader accepts.
+ (float-too-large-to-read
+  "(print (quote 1e400))"
+  ""
+  :compile-error "Bad number in Dylan input: 1e400")
+ (ratio-over-zero-not-read
+  "(print (quote -1/0))"
+  ""
+  :compile-error "Bad number in Dylan input: -1/0")
 )

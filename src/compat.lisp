@@ -913,8 +913,14 @@ consuming it, or NIL at end of file."
     (let ((*read-base* 10)
           (*read-default-float-format* 'double-float)
           (*readtable* (copy-readtable nil)))
+      ;; A token with a number's form whose number cannot be made -- a
+      ;; float out of its format's range, a ratio with a zero denominator
+      ;; -- is an error, not a symbol (chapter 3: a symbol does not
+      ;; indicate a number).
       (multiple-value-bind (value end)
-          (ignore-errors (read-from-string token nil nil))
+          (handler-case (read-from-string token nil nil)
+            (reader-error ()
+              (error "Bad number in Dylan input: ~a" token)))
         (and (numberp value) (eql end n) value)))))
 
 (defun dylan-token-object (token)

@@ -494,10 +494,10 @@ only two classes and one function, and calls the function \code{show}.
 It does not import \code{area} or \code{<shape>}.
 
 \begin{dylan}
-;;; shapes.dyl
 module: shapes
 author: A. Programmer
 
+;;; shapes.dyl
 (define-class <shape> (<object>))
 (define-class <circle> (<shape>)
   (radius init-keyword: radius:))
@@ -519,9 +519,9 @@ The slot getters \code{radius} and \code{side} are owned by \code{shapes}
 but not exported, so no other module can read the slots directly.
 
 \begin{dylan}
-;;; app.dyl
 module: app
 
+;;; app.dyl
 (show (make <circle> radius: 2))
 (show (make <square> side: 3))
 \end{dylan}

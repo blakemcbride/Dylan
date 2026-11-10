@@ -1024,6 +1024,39 @@ Zip:
 {range 4611686018427387903 by 2 size 1}
 {range 4611686018427387902 by 1 size 2}
 ")
+ ;; Intersection of ranges terminates when one is unbounded (chapter 12),
+ ;; floats among them too: an unbounded first range is searched only
+ ;; near the second's elements.
+ (range-intersection-one-unbounded
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method show (r) (if (instance? r <range>) (as <list> r) r))
+(print (try (method () (show (intersection (range from: 0 by: 1 size: 3) (range from: 0.0 by: 0.5) test: =)))))
+(print (try (method () (show (intersection (range from: 0.0 by: 0.5) (range from: 0 by: 1 size: 3) test: =)))))
+(print (try (method () (show (intersection (range from: 0.0 by: 0.5) (range from: 0.0 by: 1.0 size: 3))))))
+(print (try (method () (show (intersection (range from: 10.0 by: -0.25) (range from: 3 by: 1 size: 4) test: =)))))
+(print (try (method () (show (intersection (range from: 0) (range from: 0.0 by: 0.5 size: 7) test: =)))))
+(print (try (method () (show (intersection (range from: 0.0 by: 0.5) (range from: -5 by: 1 size: 3) test: =)))))
+(print (try (method () (show (intersection (range from: 0.0 by: 0.5) (range from: 1.0e30 by: 1.0 size: 3))))))
+(print (try (method () (show (intersection (range from: 0.1 by: 0.1) (range from: 0.3 by: 0.1 size: 3))))))
+(print (try (method () (show (intersection (range from: 0.0 by: 0.5) (range from: 0.0 by: 0.75))))))
+(print (try (method () (show (intersection (range from: 0.0 by: 0.5) (range from: 2.0 by: 0.0 size: 3))))))
+(print (as <list> (intersection (range from: 0.0l0 by: 0.5l0) (range from: 0 by: 1 size: 3) test: =)))
+(print (as <list> (intersection (range from: 0.0s0 by: 0.5s0) (range from: 0 by: 1 size: 3) test: =)))
+(print (as <list> (intersection (range from: 1/2 by: 1/2) (range from: 0.0 by: 0.5 size: 4) test: =)))"
+  "(0 1 2)
+(0.0 1.0 2.0)
+(0.0 1.0 2.0)
+(6.0 5.0 4.0 3.0)
+(0 1 2 3)
+()
+()
+(0.4 0.5)
+\"ERR: intersection: unbounded ranges of floats: {range 0.0 by 0.5} {range 0.0 by 0.75}\"
+(2.0)
+(0.0l0 1.0l0 2.0l0)
+(0.0s0 1.0s0 2.0s0)
+(1/2 1 3/2)
+")
 
  ;; A collection of numbers in steps as a range
  (as-range

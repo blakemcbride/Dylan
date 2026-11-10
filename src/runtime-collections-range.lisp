@@ -669,6 +669,23 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
                                       range-1 range-2))
                (sub-range range-1 (car ks) d (length ks)))))))
 
+(defun range-window (range-1 range-2)
+  "The elements of the unbounded RANGE-1 that may be in the bounded
+RANGE-2: those between RANGE-2's lowest and highest, with one more at each
+end.  Indexes from 4.0e18 on are of no element, as for member?."
+  (multiple-value-bind (lo hi) (range-interval range-2)
+    (let* ((from (range-number (dylan-call dylan/get-range-start range-1)))
+           (by (range-number (dylan-call dylan/get-range-step range-1)))
+           (q1 (/ (- (range-number lo) from) by))
+           (q2 (/ (- (range-number hi) from) by))
+           (qa (min q1 q2))
+           (qb (max q1 q2)))
+      (if (or (< qb -1) (not (< qa 4.0d18)))
+          (empty-range)
+          (let ((a (if (< qa 1) 0 (- (floor qa) 1)))
+                (b (+ (ceiling (if (< qb 4.0d18) qb 4.0d18)) 1)))
+            (sub-range range-1 a 1 (+ (- b a) 1)))))))
+
 (defun general-intersection (next-method range-1 range-2 rest)
   "The sequence method's intersection of the two ranges."
   (if (functionp next-method)
@@ -708,11 +725,14 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
                            (rationalp (dylan-call dylan/get-range-start r))))
                     (list range-1 range-2))
              (ranges-intersection range-1 range-2))
-            ((and (collection-size range-1)
-                  (collection-size range-2))
+            ((collection-size range-1)
              ;; Floats: the elements of the first in the second, which
              ;; must be at indexes in steps.
              (float-intersection range-1 range-2 (or test dylan/id?)))
+            ((collection-size range-2)
+             ;; The first unbounded: its elements near the second's.
+             (float-intersection (range-window range-1 range-2) range-2
+                                 (or test dylan/id?)))
             (t (dylan-call dylan/error
                            "intersection: unbounded ranges of floats: ~s ~s"
                            range-1 range-2)))))))

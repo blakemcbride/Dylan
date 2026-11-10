@@ -332,10 +332,27 @@ module: dylan
            (if (and (member? v y) (member? v x)) (range from: v size: 1) (%empty-range))))
         ((every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
          (%grid-intersection x y))
-        ((and (%size x) (%size y)) (%float-intersection x y test))
+        ((%size x) (%float-intersection x y test))
+        ((%size y) (%float-intersection (%range-window x y) y test))
         (else: (error "intersection: unbounded ranges of floats: ~s ~s" x y))))
 
 (define %empty-range (method () (range from: 0 size: 0)))
+
+;;; The elements of the unbounded range X that may be in the bounded range
+;;; Y: those between Y's lowest and highest, with one more at each end.
+;;; Indexes from 4.0e18 on are of no element, as for member?.
+(define %range-window
+  (method (x y)
+    (bind ((lo hi (%range-interval y))
+           (q1 (binary/ (binary- lo (%from x)) (%by x)))
+           (q2 (binary/ (binary- hi (%from x)) (%by x)))
+           (qa (if (binary< q1 q2) q1 q2))
+           (qb (if (binary< q1 q2) q2 q1)))
+      (if (or (binary< qb -1) (not (binary< qa 4.0e18)))
+          (%empty-range)
+          (bind ((a (if (binary< qa 1) 0 (binary- (floor qa) 1)))
+                 (b (binary+ (ceiling (if (binary< qb 4.0e18) qb 4.0e18)) 1)))
+            (%sub-range x a 1 (binary+ (binary- b a) 1)))))))
 
 (define %float-intersection
   (method (x y test)

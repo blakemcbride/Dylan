@@ -45,7 +45,9 @@
  (dylan%function->method
   (make-param-list `((class ,(dylan%make-singleton <string-stream>))) nil nil :any)
   (lambda (class &rest rest)
-    (declare (ignore class rest))
+    (declare (ignore class))
+    ;; As make of a class with no init-keywords: none is accepted.
+    (validate-keywords rest '() #'keyword-error)
     (%make-dylan-stream :string))))
 
 (defparameter dylan/stream-contents
@@ -150,10 +152,18 @@
                                      '(:stream :verbose))
                     (lambda (object &rest keys) (print-line object keys))))
 
+(defun keys-checked (nrequired keys function)
+  "FUNCTION, a function that is not a generic function's method, checking
+first that its arguments after the NREQUIRED required ones are keyword/value
+pairs of the KEYS (chapter 6)."
+  (lambda (&rest arguments)
+    (validate-keywords (nthcdr nrequired arguments) keys #'keyword-error)
+    (apply function arguments)))
+
 (flet ((printer (keys function)
          (dylan%function->method
           (make-param-list `((object ,<object>)) nil nil keys)
-          function)))
+          (keys-checked 1 keys function))))
   (defparameter dylan/write
     (printer '(:stream)
              (lambda (object &rest keys)
@@ -177,9 +187,10 @@
 (defparameter dylan/newline
   (dylan%function->method
    (make-param-list '() nil nil '(:stream))
-   (lambda (&rest keys)
-     (terpri (dylan-stream-lisp (stream-keyword keys)))
-     dylan%false)))
+   (keys-checked 0 '(:stream)
+                 (lambda (&rest keys)
+                   (terpri (dylan-stream-lisp (stream-keyword keys)))
+                   dylan%false))))
 
 ;;; format
 

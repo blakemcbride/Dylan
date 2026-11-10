@@ -3040,4 +3040,42 @@ eq
 {<deque> 1 2 3}
 #f
 ")
+ ;; write, display, write-line, newline and pp take #key stream (chapter 6:
+ ;; an argument they do not accept is an error), and make of <string-stream>
+ ;; takes no init-keyword.
+ (output-functions-check-keywords
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (display \"ab\" 'x))))
+(print (try (method () (display \"ab\" foo: 1))))
+(print (try (method () (write \"X\" 5))))
+(print (try (method () (write \"X\" bogus: 1))))
+(print (try (method () (write-line \"Z\" 5))))
+(print (try (method () (newline 5))))
+(print (try (method () (newline foo: 1))))
+(print (try (method () (pp '(1) foo: 1))))
+(print (try (method () (make <string-stream> foo: 1))))
+(print (try (method () (make <string-stream> 1))))
+(bind ((s (make <string-stream>)))
+  (display \"ok\" stream: s)
+  (write \"w\" stream: s)
+  (newline stream: s)
+  (write-line 1 stream: s)
+  (pp '(a) stream: s)
+  (print (stream-contents s)))"
+  "\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: foo:\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: bogus:\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: foo:\"
+\"ERR: keyword argument not accepted: foo:\"
+\"ERR: keyword argument not accepted: foo:\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ok\\\"w\\\"
+1
+(a)
+\"
+")
 )

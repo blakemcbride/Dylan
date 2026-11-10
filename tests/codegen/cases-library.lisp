@@ -835,6 +835,18 @@ found
 4.0s0
 error
 ")
+ ;; The largest floats too, whose doubles overflow
+ (top-binade-floats
+  "(print (list (integral? 1.0e308) (integral? 1.7976931348623157e308)
+                (integral? -1.7976931348623157e308) (integral? 3.4028235s38)))
+   (print (list (numerator 3.0s38) (numerator 1.0e308) (denominator 1.0e308)))
+   (print (member? 1.0e308 (range from: 0)))
+   (print (member? 1.0e308 (range from: 0.0)))"
+  "(#t #t #t #t)
+(3.0s38 1.0e308 1.0)
+#f
+#f
+")
 
  ;; A size whose bytes wrap around is an error, not a write past the end
  (huge-unicode-string

@@ -88,12 +88,17 @@ module: dylan
 
 (define-generic-function integral? (number))
 (define-method integral? ((n <rational>)) (%instance? n <integer>))
+;;; Whether the float X is finite: neither a NaN nor an infinity.  Compared,
+;;; not doubled: twice one of the largest floats overflows.
+(define %finite?
+  (method (x)
+    (and (= x x) (not (< x -1.7976931348623157e308)) (not (< 1.7976931348623157e308 x)))))
+
 ;;; A float is integral if it is finite and has no fraction.  Every float
 ;;; of 2^52 or more is an integer, and is not divided, since the quotient
 ;;; may be beyond 63 bits.
 (define-method integral? ((x <float>))
-  (cond ((not (= x x)) #f)                          ; NaN
-        ((= x (* x 2)) (zero? x))                   ; zero, or infinite
+  (cond ((not (%finite? x)) #f)
         ((not (< -4503599627370496.0 x 4503599627370496.0)) #t)
         (else: (bind ((q r (%divide 3 x 1))) (zero? r)))))
 
@@ -263,7 +268,7 @@ module: dylan
 ;;; float X is M * 2^E, M an integer, odd unless X is zero (%float-decode).
 (define %float-parts
   (method (x)
-    (when (or (not (= x x)) (and (not (zero? x)) (= x (* x 2))))
+    (unless (%finite? x)
       (error "numerator, denominator: ~s is not a finite number" x))
     (%float-decode x)))
 

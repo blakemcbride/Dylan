@@ -1017,4 +1017,13 @@ stop
 gee
 is-g
 ")
+ ;; Chapter 8: a key in two match lists is an error -- an extended float
+ ;; too, keys being compared as case compares them, by id?.  One list
+ ;; may repeat a key.
+ (case-extended-float-key-twice
+  "(define e 2.0l0)
+(print (list (case e ((2.0l0 2.0l0 1.0l0) 'a) (else: 'c))
+             (case e ((2.0l0) 'a) ((2.0l0) 'b) (else: 'c))))"
+  ""
+  :compile-error "case: 2.0l0 appears in more than one match list")
 )

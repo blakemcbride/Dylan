@@ -109,15 +109,16 @@ clause's body (or :NONE)."
 (define-dylan-macro case (form)
   (require-list form 2 "case")
   (multiple-value-bind (clauses else) (check-clauses (cddr form) "case")
-    ;; Chapter 8 forbids a match in two match lists; one list may repeat it.
+    ;; Chapter 8 forbids a match in two match lists; one list may repeat
+    ;; it.  They are compared as case compares them, by id?.
     (let ((seen '()))
       (dolist (clause clauses)
         (with-form (clause)
           (let ((mine '()))
             (dolist (match (car clause))
-              (when (member match seen)
+              (when (member match seen :test #'dylan::id?)
                 (compile-error "case: ~a appears in more than one match list" match))
-              (pushnew match mine))
+              (pushnew match mine :test #'dylan::id?))
             (setf seen (append mine seen))))))
     (let ((key (temp "key")))
       `(dylan::bind ((,key ,(second form)))

@@ -2493,6 +2493,8 @@ objects, makers."
                                 (address (class-c-name (gclass-info g)))
                                 (address (c-vector *cdata* (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
                                                                    effective)))))))
+    ;; Chapter 11 takes a class
+    (emit-object "    if (!dy_kind_p(a0, DY_KIND_CLASS)) dy_error_naming(\"no applicable method for \", \"slot-descriptors\", \"\", 0);")
     (emit-object "    return ~a;~%}" (address (c-vector *cdata* '())))
     (declare-object "DyFunction dy_prim_slot_descriptors;")
     (emit-object "DyFunction dy_prim_slot_descriptors = { &dy_wrapper_method, dy_slot_descriptors_entry, DY_FALSE, DY_FALSE, DY_FALSE, NULL };")))

@@ -3126,4 +3126,23 @@ object
 ({the class <table>} one #f)
 ({the class <my-tb>} b m)
 ")
+ ;; slot-descriptors takes a class (chapter 11)
+ (slot-descriptors-of-a-class-only
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <p> (<object>) (x init-value: 1))
+(print (try (method () (slot-descriptors 5))))
+(print (try (method () (slot-descriptors \"abc\"))))
+(print (try (method () (slot-descriptors (make <p>)))))
+(print (try (method () (slot-descriptors (singleton 3)))))
+(print (try (method () (size (slot-descriptors <p>)))))
+(print (try (method () (size (slot-descriptors <integer>)))))
+(print (try (method () (map slot-descriptors (list <p> 7)))))"
+  "\"ERR: no applicable method for slot-descriptors\"
+\"ERR: no applicable method for slot-descriptors\"
+\"ERR: no applicable method for slot-descriptors\"
+\"ERR: no applicable method for slot-descriptors\"
+1
+0
+\"ERR: no applicable method for slot-descriptors\"
+")
 )

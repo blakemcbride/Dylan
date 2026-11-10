@@ -241,4 +241,4 @@ module: dylan
 (define-generic-function slot-descriptor (instance getter))
 (define-method slot-descriptor (instance getter) (%slot-descriptor instance getter))
 (define-generic-function slot-descriptors (class))
-(define-method slot-descriptors (class) (%slot-descriptors class))
+(define-method slot-descriptors ((class <class>)) (%slot-descriptors class))

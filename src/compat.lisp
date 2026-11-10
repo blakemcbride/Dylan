@@ -956,6 +956,14 @@ T and NIL -- #t and #f -- so they get lower-case names of their own."
 ;;; %%; so is one already beginning with %%, which keeps the mapping one
 ;;; to one.  The symbol still prints as written (chapter 15).
 
+(defun dylan-spelled-name (symbol)
+  "The name, canonicalized, a program spells SYMBOL with: the inverse of
+DYLAN-USER-SYMBOL, for a prefix put before it."
+  (let ((name (symbol-name symbol)))
+    (cond ((and (>= (length name) 2) (string= "%%" name :end2 2)) (subseq name 2))
+          ((member name '("t" "nil") :test #'string=) (string-upcase name))
+          (t name))))
+
 (defun dylan-user-symbol (name)
   "The Dylan symbol a program means by NAME (already canonicalized)."
   (dylan-symbol

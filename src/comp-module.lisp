@@ -235,7 +235,7 @@ symbol) -- refers to in the current module."
                (if (string= prefix "")
                    old
                    (dylan-user-symbol (concatenate 'string (string-upcase prefix)
-                                                   (symbol-name old))))))
+                                                   (dylan-spelled-name old))))))
         (if (eq import 'all)
             (dolist (old exports)
               (unless (or (member old exclude) (assoc old renames))

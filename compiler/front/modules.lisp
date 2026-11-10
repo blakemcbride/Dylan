@@ -184,7 +184,7 @@ exports again."
                      old
                      (dylan::dylan-user-symbol
                       (concatenate 'string (string-upcase prefix)
-                                   (symbol-name old))))))
+                                   (dylan::dylan-spelled-name old))))))
           (if import-all
               (dolist (old exports)
                 (unless (or (member old exclude) (assoc old renames))

@@ -3243,4 +3243,17 @@ defined
   "(1 2)
 (3 4)
 ")
+ ;; A prefix: put before an imported name the reader maps (x@y, !z) makes
+ ;; the name a program spells with the prefix (chapter 5).
+ (prefix-before-names-the-reader-maps
+  "module: app
+
+(define-module lib (create x@y !z w))
+(define-module app (use dylan) (use lib) (use lib prefix: \"p\"))
+(define x@y 5)
+(define !z 6)
+(define w 7)
+(print (list px@y p!z pw))"
+  "(5 6 7)
+")
 )

@@ -159,7 +159,8 @@
 ;;; Scheme's CASE compares with EQV? and spells its default clause ELSE.
 ;;; Common Lisp's CASE would take a clause whose key list is (t) or
 ;;; (otherwise) to be the default, so the expansion here is a COND over
-;;; MEMBER instead, which compares with EQL -- Common Lisp's EQV?.
+;;; MEMBER instead, which compares with ID? -- EQL, but for an extended
+;;; float, which is the same object as another of its value.
 
 (defun check-case-keys-once (clauses)
   "Chapter 8: it is an error for a key to appear in more than one match
@@ -172,9 +173,9 @@ string literals are id?."
         ;; One match list may repeat a key
         (let ((mine '()))
           (dolist (key (car clause))
-            (when (and (not (stringp key)) (member key seen :test #'eql))
+            (when (and (not (stringp key)) (member key seen :test #'id?))
               (dylan%error "case: ~s appears in more than one match list" key))
-            (pushnew key mine :test #'eql))
+            (pushnew key mine :test #'id?))
           (setf seen (append mine seen)))))))
 
 (defun compile-case-form (e module-vars bound-vars compiler
@@ -194,7 +195,7 @@ string literals are id?."
                             t)
                            ((and (listp match-list)
                                  (null (cdr (cl:last match-list))))
-                            `(member !case-key ',match-list))
+                            `(member !case-key ',match-list :test #'id?))
                            (t (dylan%error "case: bad match list ~a" match-list)))))
                (if (null consequents)
                    (funcall continue `(,new-match ,compiled-sharp-f) mod-vars)

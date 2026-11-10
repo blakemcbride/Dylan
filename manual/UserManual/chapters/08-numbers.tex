@@ -198,15 +198,16 @@ Written & Value & Class \\
 \code{1.5}, \code{.5}, \code{-0.0} & & \code{<double-float>} \\
 \code{1e3}, \code{2d0} & \code{1000.0}, \code{2.0} & \code{<double-float>} \\
 \code{1.5s2}, \code{1.5f2} & \code{150.0s0} & \code{<single-float>} \\
-\code{1.5l0} & \code{1.5} & \code{<double-float>} \\
+\code{1.5l0}, \code{2l3} & \code{1.5l0}, \code{2000.0l0} & \code{<extended-float>} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 \noindent The exponent markers \code{e} and \code{d} make a double,
-\code{s} and \code{f} a single. The marker \code{l} also makes a double,
-in both implementations; there is no way to write an
-\code{<extended-float>} literal. A ratio is written with no spaces,
+\code{s} and \code{f} a single, and \code{l}, Common Lisp's marker for
+its longest format, an \code{<extended-float>} (of a double's precision,
+as above), so an extended float printed and read again is itself. A ratio
+is written with no spaces,
 \code{numerator/denominator}, and is reduced as it is read.
 
 \section{Arithmetic}\label{sec:numbers-arithmetic}

@@ -542,6 +542,9 @@ it; the last result form delivers MULTIPLE-VALUES?."
       ((false? e) (funcall continue 'dylan%false module-vars))
       ((or (null e) (eq e t) (stringp e) (characterp e) (numberp e))
        (funcall continue e module-vars))
+      ;; An extended float's literal, 1.5l0 (chapter 14)
+      ((extended-float? e)
+       (funcall continue `(quote ,e) module-vars))
       ((or (keyword? e) (and (vectorp e) (not (stringp e))))
        ;; Keywords self-evaluate in Dylan, but not in Lisp
        (funcall continue `(quote ,e) module-vars))

@@ -280,6 +280,7 @@ expression that evaluates to a class or singleton, chapter 6.)"
          ((typep value 'ratio) "<ratio>")
          ((typep value 'single-float) "<single-float>")
          ((floatp value) "<double-float>")
+         ((dylan::extended-float? value) "<extended-float>")
          ((characterp value) "<character>")
          ((or (eq value t) (false-p value)) "<boolean>")
          ((null value) "<empty-list>")
@@ -329,7 +330,9 @@ its C the object, which the define-slot stores."
   (and (eq (spec-kind a) (spec-kind b))
        (if (eq (spec-kind a) :class)
            (eq (spec-class a) (spec-class b))
-           (eql (spec-value a) (spec-value b)))))
+           ;; ID?: an extended float is the same object as another
+           ;; of its value
+           (dylan::id? (spec-value a) (spec-value b)))))
 
 (defun spec-object-c (spec)
   "A C expression for SPEC as a Dylan object, for reflection."
@@ -1886,7 +1889,8 @@ it does not apply."
 
 (defun singleton-test-c (spec arg)
   (let ((value (spec-value spec)))
-    (if (or (typep value '(or ratio float)) (runtime-spec-p spec))
+    (if (or (typep value '(or ratio float)) (dylan::extended-float? value)
+            (runtime-spec-p spec))
         (format nil "dy_identical(~a, ~a)" arg (spec-c spec))
         (format nil "~a == ~a" arg (spec-c spec)))))
 

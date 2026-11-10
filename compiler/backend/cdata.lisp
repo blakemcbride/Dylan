@@ -156,6 +156,14 @@ LITERAL-KEY."
              (define-c data "static DyDoubleFloat ~a = { &dy_wrapper_double_float, ~a };"
                        name (c-float-literal value)))
            (address name)))
+        ((dylan::extended-float? value)
+         (let ((d (dylan::extended-float-value value)))
+           (multiple-value-bind (name old)
+               (content-name data "dy_extended_" (c-float-literal d))
+             (unless old
+               (define-c data "static DyDoubleFloat ~a = { &dy_wrapper_extended_float, ~a };"
+                         name (c-float-literal d)))
+             (address name))))
         (t (error "No C representation for the constant ~s." value))))
 
 (defun c-string (data string &optional key)

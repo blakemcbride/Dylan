@@ -890,10 +890,13 @@ consuming it, or NIL at end of file."
         first)))
 
 (defun dylan-token-number (token)
-  "The number TOKEN denotes, or NIL if it does not denote one."
+  "The number TOKEN denotes, or NIL if it does not denote one.  The
+exponent markers are Common Lisp's: e and d make a <double-float>, s and
+f a <single-float>, and l, Common Lisp's long-float, an <extended-float>,
+so that an extended float printed and read again is itself."
   (let* ((n (length token))
          (i (if (and (plusp n) (member (char token 0) '(#\+ #\-))) 1 0))
-         (digits 0) (dots 0) (slashes 0) (exponents 0))
+         (digits 0) (dots 0) (slashes 0) (exponents 0) (extended nil))
     (when (>= i n) (return-from dylan-token-number nil))
     (loop while (< i n)
           for ch = (char token i)
@@ -904,6 +907,7 @@ consuming it, or NIL at end of file."
                          (plusp digits)
                          (< (+ i 1) n))
                     (incf exponents)
+                    (when (char-equal ch #\l) (setf extended t))
                     (incf i)
                     (when (member (char token i) '(#\+ #\-)) (incf i)))
                    (t (return-from dylan-token-number nil))))
@@ -921,7 +925,10 @@ consuming it, or NIL at end of file."
           (handler-case (read-from-string token nil nil)
             (reader-error ()
               (error "Bad number in Dylan input: ~a" token)))
-        (and (numberp value) (eql end n) value)))))
+        (and (numberp value) (eql end n)
+             (if extended
+                 (make-extended-float (coerce value 'double-float))
+                 value))))))
 
 (defun dylan-token-object (token)
   (or (dylan-token-number token)

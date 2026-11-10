@@ -579,14 +579,16 @@ answer a float when either is one (chapter 14), or signal an error.")
       (subclass-info-p (spec-class spec) class)))
 
 (defun makes-extended-floats-p (ir)
-  "Can the program make an <extended-float>: does it use the class as a
-value, or direct-subclasses, which could answer it?  No literal is one,
-and the library makes one only of that class."
+  "Can the program make an <extended-float>: does it write one (1.5l0),
+or use the class as a value, or direct-subclasses, which could answer it?
+The library makes one only of that class."
   (let ((names (mapcar #'dylan-var '("<extended-float>" "direct-subclasses"))))
-    (some (lambda (top)
-            (and (not (library-form-p top))
-                 (some (lambda (v) (member v names)) (referenced-variables top))))
-          (ir-program-toplevels ir))))
+    (or (and (ir-program-source ir)
+             (program-extended-float-literals (ir-program-source ir)))
+        (some (lambda (top)
+                (and (not (library-form-p top))
+                     (some (lambda (v) (member v names)) (referenced-variables top))))
+              (ir-program-toplevels ir)))))
 
 (defun double-contagion-p (g args)
   "Is the call of G on ARGS sure to answer a <double-float>, if it answers
@@ -657,7 +659,7 @@ TYPE (or NIL), and which is OBJECT if that is not :UNKNOWN: :YES, :NO or
     (cond ((runtime-spec-p spec) :maybe)
           ((eq (spec-kind spec) :singleton)
            (cond ((not (eq object :unknown))
-                  (if (eql object (spec-value spec)) :yes :no))
+                  (if (dylan::id? object (spec-value spec)) :yes :no))
                  ((and type (not (overlap-p type (spec-class spec)))) :no)
                  (t :maybe)))
           ((object-spec-p spec) :yes)

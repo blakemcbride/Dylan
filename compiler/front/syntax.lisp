@@ -74,12 +74,18 @@ AT-LEAST, at least N) elements."
     (compile-error "the integer ~a does not fit in 63 bits (there are no bignums)"
                    n)))
 
+(defvar *extended-float-literals* nil
+  "Set when a literal or quoted datum holds an <extended-float> (1.5l0):
+the program can make one (MAKES-EXTENDED-FLOATS-P).")
+
 (defun check-literal (x)
   "Signal an error if X, a literal or quoted datum, holds a number this
 version cannot represent."
   (let ((seen (make-hash-table :test #'eq)))
     (labels ((walk (x)
                (cond ((integerp x) (check-integer-literal x))
+                     ((dylan::extended-float? x)
+                      (setf *extended-float-literals* t))
                      ((typep x 'ratio)
                       (check-integer-literal (numerator x))
                       (check-integer-literal (denominator x)))
@@ -96,6 +102,7 @@ version cannot represent."
 
 (defun self-evaluating-p (x)
   (or (null x) (eq x t) (false-p x) (keywordp x) (numberp x) (stringp x)
+      (dylan::extended-float? x)
       (characterp x) (and (vectorp x) (not (stringp x)))))
 
 ;;; What macros put in the forms they make.

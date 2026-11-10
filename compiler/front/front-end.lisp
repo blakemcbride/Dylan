@@ -32,7 +32,8 @@
   (form-starts nil)                     ; source file -> a vector of
                                         ; (index . form) for each of its
                                         ; top-level forms
-  (macro-literal-keys nil))             ; see *MACRO-LITERAL-KEYS*
+  (macro-literal-keys nil)              ; see *MACRO-LITERAL-KEYS*
+  (extended-float-literals nil))        ; see *EXTENDED-FLOAT-LITERALS*
 
 ;;; A symbol is made, with the case it is spelled in, when the form that
 ;;; first spells it is read; in the read-eval-print loop that is after the
@@ -215,6 +216,7 @@ saying why the file could not be read."
         (*dylan-modules* nil)
         (*macro-literal-keys* (make-hash-table :test #'eq))
         (*module-forms* (make-hash-table :test #'eq))
+        (*extended-float-literals* nil)
         (*location* nil))
     (initialize-modules)
     ;; Modules first.
@@ -250,7 +252,8 @@ saying why the file could not be read."
             do (define-pending-module module))
       (check-undefined-variables)
       (let ((program (make-program units *dylan-modules* (reverse *diagnostics*))))
-        (setf (program-macro-literal-keys program) *macro-literal-keys*)
+        (setf (program-macro-literal-keys program) *macro-literal-keys*
+              (program-extended-float-literals program) *extended-float-literals*)
         program))))
 
 (defun declare-modules-in (form)

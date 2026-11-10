@@ -2735,7 +2735,7 @@ half
  ;; A float too small to represent reads as zero (chapter 14).
  (tiny-float-reads-as-zero
   "(print (list 1e-400 (object-class 1e-400) (object-class 1.0l0) 1.5s38))"
-  "(0.0 {the class <double-float>} {the class <double-float>} 1.5s38)
+  "(0.0 {the class <double-float>} {the class <extended-float>} 1.5s38)
 ")
  ;; ... but one too large for its format, or a ratio over 0, is not a
  ;; number the reader accepts.
@@ -2777,5 +2777,64 @@ half
 \"ERR: no applicable method for current-element\"
 \"w~a\"
 \"ERR: no applicable method for condition-format-string\"
+")
+ ;; The exponent marker l makes an <extended-float> (chapter 14), so
+ ;; one printed and read again is itself, in arithmetic, quoted
+ ;; data, case, tables and dispatch.
+ (extended-float-literals
+  "(define e 1.5l0)
+(print (list e (object-class e) (object-class 2l3) -0.25L0))
+(print (= e (as <extended-float> 1.5)))
+(print (id? e 1.5l0))
+(print (list (+ e 1) (* e 2.0) (object-class (+ e 1.0s0))))
+(print '(1.5l0 #(2.5l0)))
+(print (object-class (car '(1.5l0))))
+(define-method f ((x <extended-float>)) 'ext)
+(define-method f ((x <double-float>)) 'dbl)
+(print (list (f 1.5l0) (f 1.5d0) (f 1.5)))
+(print (case 1.5l0 ((1.5l0) 'same) (else: 'other)))
+(print (format #f \"~a ~s\" 1.5l0 1.0l20))
+(print (id? 1.5l0 1.5l0))
+(print (list (= 1.5l0 1.5) (< 1.0l0 2) (object-class (- 1.0l0))))
+(define t (make <table>))
+(set! (element t 2.5l0) 'x)
+(print (element t 2.5l0 default: 'none))
+(print (member? 2.5l0 (list 1 2.5l0)))
+(print (list 1.0l300 4.9406564584124654l-324 0.1l0 (as <double-float> 0.1l0)))
+(define-method g (x) (+ x 0.5l0))
+(print (g 1))"
+  "(1.5l0 {the class <extended-float>} {the class <extended-float>} -0.25l0)
+#t
+#t
+(2.5l0 3.0l0 {the class <extended-float>})
+(1.5l0 #(2.5l0))
+{the class <extended-float>}
+(ext dbl dbl)
+same
+\"1.5l0 1.0l20\"
+#t
+(#t #t {the class <extended-float>})
+x
+(2.5l0)
+(1.0l300 5.0l-324 0.1l0 0.1)
+1.5l0
+")
+ ;; ... and a singleton of one is any extended float of its value.
+ (extended-float-literal-singletons
+  "(define-method sx ((x (singleton 1.5l0))) 'single)
+(define-method sx ((x <object>)) 'other)
+(print (list (sx 1.5l0) (sx (as <extended-float> 1.5)) (sx 1.5) (sx 2.5l0)))
+(print (select 1.5l0 = ((1.5) 'eq) (else: 'ne)))
+(print (list 1.5l0 '1.5L0 -2l-3 +3.L0))
+(define-method s2 ((x (singleton 2.5l0))) 'first)
+(define-method s2 ((x (singleton 2.5l0))) 'second)
+(define-method s2 ((x <object>)) 'other)
+(print (list (s2 2.5l0) (s2 (+ 2.0l0 0.5)) (size (generic-function-methods s2))))
+(print (list (sx (- 1.5l0)) (sx -0.0l0) (sx 1.5d0)))"
+  "(single single other other)
+eq
+(1.5l0 1.5l0 -0.002l0 3.0l0)
+(second second 2)
+(other other other)
 ")
 )

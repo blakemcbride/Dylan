@@ -481,11 +481,14 @@ end to stop at."
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :stable))
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/<)))
-           (stable (dylan%find-keyword rest :stable (lambda () dylan%false)))
-           (sorted (dylan-call dylan/sort seq :test test? :stable stable)))
+           (stable (dylan%find-keyword rest :stable (lambda () dylan%false))))
+      ;; A mutable sequence is sorted in place, its elements put back in
+      ;; order, with no copy of it made (which its class may not allow).
       (if (mutable-sequence-p seq)
-          (replace-elements! seq (sequence->list sorted))
-          sorted)))))
+          (replace-elements! seq (scheme-sort (dylan-call dylan/as <list> seq)
+                                              (lambda (x y)
+                                                (true? (dylan-call test? x y)))))
+          (dylan-call dylan/sort seq :test test? :stable stable))))))
 
 ;;; First, second, third and last take default: (design note 2): the value
 ;;; when the sequence has no such element, which is otherwise an error.

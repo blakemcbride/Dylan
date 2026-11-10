@@ -3078,4 +3078,52 @@ eq
 (a)
 \"
 ")
+ ;; sort! sorts a mutable sequence in place (chapter 12), a program's own
+ ;; without class-for-copy among them, and answers it.
+ (sort!-of-a-program-sequence
+  "(define-class <box-seq> (<mutable-sequence>) (items init-keyword: items: init-value: '()))
+(define-method initial-state ((s <box-seq>)) (if (empty? (items s)) #f (items s)))
+(define-method next-state ((s <box-seq>) (st <pair>)) (if (empty? (cdr st)) #f (cdr st)))
+(define-method current-element ((s <box-seq>) (st <pair>)) (car st))
+(define-method (setter current-element) ((s <box-seq>) (st <pair>) v) (set! (car st) v))
+(define-method copy-state ((s <box-seq>) (st <pair>)) st)
+(define b (make <box-seq> items: (list 3 1 2)))
+(define r (sort! b))
+(print (list (items b) (id? r b)))
+(sort! b test: >)
+(print (items b))
+(define l (list 5 4 6))
+(print (sort! l))
+(define v (vector 2 3 1))
+(print (list (sort! v) v))"
+  "((1 2 3) #t)
+(3 2 1)
+(4 5 6)
+(#(1 2 3) #(1 2 3))
+")
+ ;; Collections are = when they have the same keys and = elements of each
+ ;; (chapter 9): a key of one is looked up in the other, as the table's own
+ ;; test finds it -- in time linear in their size.
+ (table-equality-by-lookup
+  "(define-method tbl (n)
+  (bind ((t (make <table>)))
+    (for ((i 0 (+ i 1))) ((= i n) t) (set! (element t i) (* i i)))))
+(define a (tbl 20000))
+(define b (tbl 20000))
+(print (= a b))
+(set! (element b 7) 0)
+(print (= a b))
+(define c (make <table>))
+(define d (make <table>))
+(set! (element c 1.0) 'x)
+(set! (element d 1) 'x)
+(print (= c d))
+(print (= (tbl 3) (vector 0 1 4)))
+(print (= (vector 0 1 4) (tbl 3)))"
+  "#t
+#f
+#t
+#t
+#t
+")
 )

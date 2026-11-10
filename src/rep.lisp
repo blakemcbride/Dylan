@@ -100,6 +100,36 @@ a compiled program reports an unhandled error, and exit with status 1."
   #+sbcl (sb-ext:exit :code 1 :abort t)
   #-sbcl (abort))
 
+;;; The transcript writes a value as write does, but no more than
+;;; *TRANSCRIPT-LIMIT* characters of it, then " ...": a circular list, which
+;;; the program may make and never print, would print forever.  (A compiled
+;;; program has no transcript.)
+
+(defparameter *transcript-limit* 100000)
+
+(defclass limited-output (sb-gray:fundamental-character-output-stream)
+  ((target :initarg :target :reader limited-output-target)
+   (left :initarg :left :accessor limited-output-left))
+  (:documentation "A stream that writes to TARGET until LEFT characters
+are written, then throws to LIMITED-OUTPUT."))
+
+(defmethod sb-gray:stream-write-char ((stream limited-output) char)
+  (when (<= (limited-output-left stream) 0)
+    (throw 'limited-output nil))
+  (decf (limited-output-left stream))
+  (write-char char (limited-output-target stream)))
+
+(defmethod sb-gray:stream-line-column ((stream limited-output))
+  nil)
+
+(defun write-transcript-value (value)
+  (catch 'limited-output
+    (dylan-write value (make-instance 'limited-output
+                                      :target *standard-output*
+                                      :left *transcript-limit*))
+    (return-from write-transcript-value))
+  (write-string " ..."))
+
 (defun print-rep-result (result multiple-values)
   (if (eq result multiple-values)
       (progn
@@ -107,12 +137,12 @@ a compiled program reports an unhandled error, and exit with status 1."
               for count from 1
               do (fresh-line)
                  (format t ";Value[~a]: " count)
-                 (dylan-write value))
+                 (write-transcript-value value))
         (terpri))
       (progn
         (fresh-line)
         (write-string ";Value: ")
-        (dylan-write result)
+        (write-transcript-value result)
         (terpri))))
 
 (defun make-result-form (compiled-output)

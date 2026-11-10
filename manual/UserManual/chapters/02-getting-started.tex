@@ -163,6 +163,9 @@ that returns several values shows each one on its own line, numbered:
 ;Value[2]: 2
 \end{repl}
 
+\noindent The loop prints no more than 100,000 characters of a value, then
+\code{ ...}, so that a circular list, say, does not print forever.
+
 \begin{notebox}
 In a real terminal the loop prints an extra blank line after each form you
 type. The transcripts in this book leave it out.

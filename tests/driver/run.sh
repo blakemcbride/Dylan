@@ -218,6 +218,11 @@ if [ "$(id -u)" != 0 ]; then
 fi
 printf '(print (size "a\377b"))\n' > latin.dyl
 check "bin/dylan: a byte not UTF-8 read as U+FFFD" sh -c '"$0" latin.dyl < /dev/null 2>&1 | grep -q "^3"' "$dylan"
+# The transcript writes no more of a value than 100,000 characters: a
+# circular one ends
+printf '(define x (list 1 2))\n(set! (cdr (cdr x)) x)\n(print (quote after))\n' > circular.dyl
+timeout -s KILL 60 "$dylan" circular.dyl < /dev/null > circular.out 2>&1
+check "bin/dylan: a circular value's transcript ends" sh -c 'grep -q "^;Value: (1 2 1 2 .* \.\.\.$" circular.out && grep -q "^after" circular.out'
 # Read from a file, a program has no read-eval-print loop's restart:
 # abort ends it as an unhandled error, and it sees no handlers of its own
 cat > abort.dyl <<'EOF'

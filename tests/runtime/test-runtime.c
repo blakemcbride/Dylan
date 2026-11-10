@@ -254,6 +254,20 @@ static void test_numbers(void) {
     CHECK(!dy_number_equal(dy_make_double_float(NAN), dy_make_double_float(NAN)));
     CHECK(dy_number_less(dy_make_double_float(-0.0), DY_INT(1)));
     CHECK(dy_number_equal(dy_make_double_float(-0.0), DY_INT(0)));
+
+    /* A float's remainder, a - b * q: b * q exact past 64 bits, then
+     * rounded once (as Common Lisp gives them). */
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(5.0e18), DY_INT(3), 1666666666666666752.0), "0.0");
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(1.0e25), ratio(4611686018427387901, 3), 6505213.0),
+                 "5.366930574042726e16");
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(1.2345678901234567e22), DY_INT(1234567891011),
+                                    9999999992.0), "1001111158784.0");
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(9.87654321e17), ratio(123456789, 1024),
+                                    8192000074649.0), "72448.0");
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(1.0e300), DY_INT(7), floor(1.0e300 / 7)), "0.0");
+    CHECK_PRINTS(dy_float_remainder(dy_make_single_float(1.0e19f), DY_INT(3), (double)floorf(1.0e19f / 3.0f)), "0.0s0");
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(-0.0), DY_INT(3), -0.0), "-0.0");
+    CHECK_PRINTS(dy_float_remainder(dy_make_double_float(-0.0), dy_make_double_float(3.0), -0.0), "-0.0");
 }
 
 /* ---------------------------------------------------- Strings, symbols */

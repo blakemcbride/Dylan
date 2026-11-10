@@ -263,21 +263,27 @@ static D make_float(int kind, double value) {
 
 static int log2_floor(uint64_t x) { return 63 - __builtin_clzll(x); }
 
-/* N/D, D positive and both within 63 bits, rounded once -- to nearest,
- * ties to even -- to BITS bits of precision (24 for a single-float, 53
- * for a double), and so exact in a double.  Dividing in floating point
- * would round twice.  The magnitude is between 2^-62 and 2^62, so neither
- * format's exponent is ever out of range. */
-static double ratio_rounded(intptr_t n, intptr_t d, int bits) {
-    if (n == 0) return 0;
-    bool negative = n < 0;
-    uint64_t un = negative ? -(uint64_t)n : (uint64_t)n, ud = (uint64_t)d;
+/* floor(log2 A), A positive */
+static int w_log2(i128 a) {
+    int64_t hi = w_int(w_sar(a, 64));
+    return hi != 0 ? 64 + log2_floor((uint64_t)hi) : log2_floor((uint64_t)w_int(a));
+}
+
+/* N/D, D positive and within 63 bits and N's magnitude below 2^125,
+ * rounded once -- to nearest, ties to even -- to BITS bits of precision
+ * (24 for a single-float, 53 for a double), and so exact in a double.
+ * Dividing in floating point would round twice.  The magnitude is between
+ * 2^-62 and 2^125, so neither format's exponent is ever out of range. */
+static double wide_ratio_rounded(i128 n, int64_t d, int bits) {
+    int sign = w_sign(n);
+    if (sign == 0) return 0;
+    i128 un = sign < 0 ? w_neg(n) : n, ud = w_of(d);
     /* Q = floor(N * 2^S / D), with BITS + 1 bits: one to round by.  N *
-     * 2^S is below 2^116, and Q below 2^(BITS + 1). */
-    int s = bits - (log2_floor(un) - log2_floor(ud));
+     * 2^S, or D * 2^-S, is below 2^117. */
+    int s = bits - (w_log2(un) - log2_floor((uint64_t)d));
     i128 q, r;
     for (;;) {
-        i128 num = w_of((int64_t)un), den = w_of((int64_t)ud);
+        i128 num = un, den = ud;
         if (s >= 0) num = w_shl(num, s); else den = w_shl(den, -s);
         q = w_div(num, den);
         r = w_mod(num, den);
@@ -287,7 +293,12 @@ static double ratio_rounded(intptr_t n, intptr_t d, int bits) {
     uint64_t whole = (uint64_t)w_int(q), mantissa = whole >> 1;
     if ((whole & 1) && (w_sign(r) != 0 || (mantissa & 1))) mantissa++;
     double magnitude = ldexp((double)mantissa, 1 - s);
-    return negative ? -magnitude : magnitude;
+    return sign < 0 ? -magnitude : magnitude;
+}
+
+/* N/D, D positive and both within 63 bits, rounded as above */
+static double ratio_rounded(intptr_t n, intptr_t d, int bits) {
+    return wide_ratio_rounded(w_of(n), d, bits);
 }
 
 /* C * P + Q, which must not pass DY_INT_MAX; none is negative */
@@ -445,6 +456,35 @@ D dy_add(D a, D b) { return arith(OP_ADD, a, b); }
 D dy_sub(D a, D b) { return arith(OP_SUB, a, b); }
 D dy_mul(D a, D b) { return arith(OP_MUL, a, b); }
 D dy_div(D a, D b) { return arith(OP_DIV, a, b); }
+
+/* A - B * Q, the remainder of floor/ and the rest (chapter 14), Q an
+ * integer held exactly in a double, and A or B a float: by Common Lisp's
+ * contagion, as the interactive implementation computes it.  With B a
+ * float, Q is converted to B's format and multiplied in it; with B
+ * rational, B * Q is exact, and rounded once to A's format.  Neither step
+ * needs Q, nor B * Q, to fit in 63 bits: only the remainder is the
+ * result. */
+D dy_float_remainder(D a, D b, double q) {
+    int ka = number_kind(a), kb = number_kind(b);
+    if (ka == N_NOT) not_a_number(a);
+    if (kb == N_NOT) not_a_number(b);
+    if (q == 0) q = 0;                         /* the integer 0, not -0.0 */
+    D product;
+    if (kb >= N_SINGLE) {
+        product = dy_mul(b, make_float(kb, q));
+    } else {
+        int64_t n = kb == N_INT ? DY_INT_VALUE(b)
+            : DY_INT_VALUE(((DyRatio *)DY_PTR(b))->numerator);
+        int64_t d = kb == N_INT ? 1 : DY_INT_VALUE(((DyRatio *)DY_PTR(b))->denominator);
+        /* Q = M * 2^E, M within 62 bits */
+        int e = 0;
+        if (fabs(q) >= 0x1p62) { e = ilogb(q) - 52; q = ldexp(q, -e); }
+        i128 exact = w_mul(w_of(n), w_of((int64_t)q));
+        double v = ldexp(wide_ratio_rounded(exact, d, ka == N_SINGLE ? 24 : 53), e);
+        product = make_float(ka, v);
+    }
+    return dy_sub(a, product);
+}
 
 D dy_negate(D a) {
     switch (number_kind(a)) {

@@ -796,6 +796,24 @@ found
 0.33333325s0
 ")
 
+ ;; A float divided by an exact number: the remainder takes the divisor
+ ;; times the quotient exactly, however large, and rounds it once to the
+ ;; float's format; only a quotient answered must fit in 63 bits.
+ (float-remainder-past-63-bits
+  "(bind ((q r (floor/ 5.0e18 3))) (print (list q r)))
+   (bind ((q r (truncate/ 1.0e10 2305843009213693951/2305843009213693952))) (print (list q r)))
+   (print (list (modulo 1.0e30 7.0) (modulo 5.0e18 3) (remainder 1.0s19 3) (modulo -1.0e19 3)))
+   (print (list (modulo 1.0e19 1/3) (modulo 1.0e300 7) (remainder -1.0e200 1/7)))
+   (print (list (modulo 1.0e25 4611686018427387901/3) (modulo 1.2345678901234567e22 1234567891011)))
+   (print (list (modulo 9.87654321e17 123456789/1024) (modulo 1.0l0 1/3)))"
+  "(1666666666666666752 0.0)
+(10000000000 0.0)
+(0.0 0.0 0.0s0 0.0)
+(0.0 0.0 0.0)
+(5.366930574042726e16 1001111158784.0)
+(72448.0 0.0l0)
+")
+
  ;; integral?, numerator and denominator of floats beyond 63-bit integers
  (large-floats
   "(print (integral? 1.0e20))

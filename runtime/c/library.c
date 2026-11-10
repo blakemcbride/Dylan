@@ -104,7 +104,8 @@ PRIMITIVE(divide) {
     }
     /* As the interactive implementation does it, by Common Lisp: the
      * quotient a / b in the arguments' float format, made an integer;
-     * then a - b * that, by the usual contagion. */
+     * then a - b * that, by the usual contagion.  Only the quotient
+     * answered must fit in 63 bits. */
     double q = dy_float_value(dy_div(a, b));
     switch (kind) {
     case FLOOR: q = floor(q); break;
@@ -112,9 +113,9 @@ PRIMITIVE(divide) {
     case ROUND: q = nearbyint(q); break;      /* ties to even */
     default: q = trunc(q); break;
     }
+    if (only_remainder) return dy_float_remainder(a, b, q);
     D quotient = integer_of_double(q);
-    r = dy_sub(a, dy_mul(b, quotient));
-    return only_remainder ? r : two_values(quotient, r);
+    return two_values(quotient, dy_float_remainder(a, b, q));
 }
 
 /* (%math op x [y]): the irrational functions, on floats.  A rational

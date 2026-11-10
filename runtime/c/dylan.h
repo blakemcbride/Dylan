@@ -725,6 +725,9 @@ D dy_int_round(D a, D b, D *remainder);
  * the remainder alone is answered, and the quotient may be any size. */
 D dy_rational_divide(int kind, D a, D b, D *remainder, bool want_quotient);
 D dy_rationalize(D x);                          /* a float's simplest rational */
+/* A - B * Q by Common Lisp's contagion, A or B a float and Q an integer
+ * held exactly in a double, of any size (number.c) */
+D dy_float_remainder(D a, D b, double q);
 
 /* ------------------------------------------------------------- Numbers
  *

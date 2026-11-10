@@ -216,9 +216,9 @@ module: dylan
                  ((id? k high))
               (if (and (binary< j high)
                        (or (not (binary< i middle))
-                           ;; binary< called directly is done inline on numbers
+                           ;; %element< called directly does binary< inline on numbers
                            (if less?
-                               (binary< (%vector-element from j) (%vector-element from i))
+                               (%element< (%vector-element from j) (%vector-element from i))
                                (test (%vector-element from j) (%vector-element from i)))))
                   (begin (%vector-element-setter to k (%vector-element from j))
                          (set! j (binary+ j 1)))

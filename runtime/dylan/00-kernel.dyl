@@ -59,6 +59,12 @@ module: dylan
         #f
         (if (id? more '()) #t (apply >= y more)))))
 
+;;; The library compares the elements and keys a program gives it by
+;;; these, which call a program's methods, as the operators do.  Its own
+;;; counting and indexing does not (the compiler's *LIBRARY-ARITHMETIC*).
+(define %element= (method (x y) (binary= x y)))
+(define %element< (method (x y) (binary< x y)))
+
 ;;; =hash: = objects hash alike (chapter 9).  More methods with the
 ;;; collections.
 

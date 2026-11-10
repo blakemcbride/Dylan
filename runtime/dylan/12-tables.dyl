@@ -20,7 +20,7 @@ module: dylan
   (method (t key)
     (bind-methods ((walk (l)
                      (cond ((id? l '()) #f)
-                           ((= (car (car l)) key) (car l))
+                           ((%element= (car (car l)) key) (car l))
                            (else: (walk (cdr l))))))
       (walk (%vector-element (%buckets t) (%bucket-index t key))))))
 
@@ -78,7 +78,7 @@ module: dylan
     (bind ((bucket (%vector-element (%buckets t) k)))
       (when (%table-find t key)
         (%vector-element-setter (%buckets t) k
-                                (choose (method (entry) (not (= (car entry) key))) bucket))
+                                (choose (method (entry) (not (%element= (car entry) key))) bucket))
         (set! (%count t) (binary- (%count t) 1)))
       t)))
 

@@ -539,13 +539,51 @@ known not to be (:NO), or neither (:MAYBE)?"
           ((subclass-info-p class type) :maybe)
           (t :no))))
 
+(defvar *call-site* nil
+  "The IR-FN whose code holds the call being typed, when that is not the
+code of *CFUN*.")
+
+(defparameter *library-arithmetic*
+  '("binary+" "binary-" "binary*" "binary/" "binary<" "binary=" "unary-")
+  "The generic functions whose integer and float methods the library's own
+arithmetic and comparisons keep, whatever methods the program adds.")
+
+(defparameter *operator-definitions*
+  '("+" "*" "-" "/" "=" "/=" "<" ">" "<=" ">=" "min" "max" "binary="
+    "%element=" "%element<")
+  "The library's definitions that do their work by the generic functions
+of *LIBRARY-ARITHMETIC* on any values, a program's methods included: the
+operators (chapter 14), the comparison of collections by their elements,
+and the comparison of the elements and keys a program gives the
+library.")
+
+(defun library-arithmetic-p (entry)
+  "Is the call of ENTRY's generic function, being typed or compiled, the
+library's own arithmetic?  The library counts and indexes with + and <:
+methods a program adds to them, even for two integers, must not change
+that.  Its operators, which may call a program's methods, are not its own."
+  (let ((site (or *call-site* (and *cfun* (cfun-fn *cfun*)))))
+    (and site
+         (member (first entry) *library-arithmetic* :test #'string=)
+         (ir-fn-library-p site)
+         (let ((top site))
+           (loop while (ir-fn-parent top) do (setf top (ir-fn-parent top)))
+           (let ((var (defined-variable top)))
+             (not (and var (eq (module-var-module var) (dylan-module))
+                       (not (setter-name-p (module-var-name var)))
+                       (member (dylan::dylan-symbol->string
+                                (name-symbol (module-var-name var)))
+                               *operator-definitions* :test #'string=))))))))
+
 (defun inline-cases (g args)
   "The cases of G's inline methods that might apply to ARGS, each (CASE
 . FITS)."
-  (let ((entry (inline-entry g (length args))))
+  (let* ((entry (inline-entry g (length args)))
+         (own (and entry (library-arithmetic-p entry))))
     (loop for c in (cddr entry)
           for fits = (mapcar #'argument-fit args (case-classes c))
-          when (and (not (member :no fits)) (library-only-for-p g (case-classes c))
+          when (and (not (member :no fits))
+                    (or own (library-only-for-p g (case-classes c)))
                     ;; nor a divisor known to be 0, which C compilers warn of
                     (not (and (search "!= 0" (or (case-extra c) ""))
                               (let ((d (constant-atom* (second args))))

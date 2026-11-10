@@ -2441,6 +2441,29 @@ after
 (#f #t #f #f #f)
 (\"A\" \"a\" \"b\" \"B\")
 ")
+ ;; A program's methods on binary+, binary< and binary= for two integers
+ ;; are called by the operators, sort's default test and the comparison
+ ;; of collections by their elements; the library's own counting and
+ ;; indexing does not call them.  Switched off at the end, since the
+ ;; interpreter runs every case in one image.
+ (library-arithmetic-not-the-programs
+  "(define on #t)
+(define-method binary+ ((a <integer>) (b <integer>)) (if on 'sum (next-method)))
+(define-method binary< ((a <integer>) (b <integer>)) (if on #f (next-method)))
+(define-method binary= ((a <integer>) (b <integer>)) (if on #t (next-method)))
+(print (list (+ 1 2) (apply + '(1 2)) (< 1 2) (> 2 1) (= 1 2) (min 3 4) (max 3 4)))
+(print (list (size (list 1 2 3)) (concatenate \"ab\" \"cd\") (format #f \"~a\" 42)
+             (element #(10 20 30) 2) (reverse \"abc\")))
+(print (list (sort '(3 1 2)) (= (list 1 2) (list 3 4)) (= #(1 2) #(3 4))))
+(print (handler-case (error \"bad ~a\" 7) ((<error> condition: c) (format #f \"~a\" c))))
+(set! on #f)
+(print (list (+ 1 2) (< 1 2) (= 1 2) (sort '(3 1 2)) (= (list 1 2) (list 3 4))))"
+  "(sum sum #f #f #t 3 3)
+(3 \"abcd\" \"42\" 30 \"cba\")
+((3 1 2) #t #t)
+\"bad 7\"
+(3 #t #f (1 2 3) #f)
+")
  ;; Chapter 12: as-lowercase of a string is (map as-lowercase string), and
  ;; as-lowercase! (map-into string as-lowercase string); so for upper case.
  (string-case-by-characters

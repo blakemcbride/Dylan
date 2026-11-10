@@ -370,7 +370,8 @@ NIL for <object>."
                (if (eq (ir-call-kind e) :exit)
                    :none
                    (multiple-value-bind (kind what swap) (call-callee e)
-                     (let* ((args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e)))
+                     (let* ((*call-site* (ir-call-site e))
+                            (args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e)))
                             (type
                               (case kind
                                 (:generic (or (step-type what (mapcar #'atom-type* args))
@@ -525,7 +526,8 @@ code for the call uses it only as a C double."
                            for p in (ir-fn-required target)
                            do (note a p))
                      (multiple-value-bind (kind what swap) (call-callee e)
-                       (let ((args (if swap (reverse (ir-call-arguments e))
+                       (let ((*call-site* (ir-call-site e))
+                             (args (if swap (reverse (ir-call-arguments e))
                                        (ir-call-arguments e))))
                          (case kind
                            (:generic (loop for a in args for raw in (raw-uses what args)
@@ -604,7 +606,8 @@ holds."
                  (if group
                      (progn (funcall derive (nth i (ir-fn-required target))) t)
                      (multiple-value-bind (kind what swap) (call-callee e)
-                       (let ((args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e)))
+                       (let ((*call-site* (ir-call-site e))
+                             (args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e)))
                              (result (gethash e results)))
                          (flet ((derived-result ()
                                   (and result (progn (funcall derive result) t))))

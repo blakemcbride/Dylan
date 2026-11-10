@@ -59,6 +59,7 @@
  (dylan%function->method
   two-collections
   (lambda (coll-1 coll-2)
+    (dylan%check-runtime-stack)
     (let ((key-sequence-1 (dylan-call dylan/key-sequence coll-1))
           (key-sequence-2 (dylan-call dylan/key-sequence coll-2))
           (size-1 (collection-size coll-1))
@@ -93,6 +94,7 @@
  (dylan%function->method
   two-sequences
   (lambda (seq-1 seq-2)
+    (dylan%check-runtime-stack)
     (let ((size-1 (collection-size seq-1))
           (size-2 (collection-size seq-2)))
       (bool

@@ -752,6 +752,7 @@ slot-descriptors leaves them out, as a compiled program does.")
                ;; hashing them terminates.  A dotted list is = only to one
                ;; with = elements and final tail, so it hashes as though
                ;; its tail were one more element.
+               (dylan%check-runtime-stack)
                (if (and (consp collection) (dotted-list-tail collection))
                    (let ((hash 0) (index 0))
                      (loop for rest = collection then (cdr rest)
@@ -1190,6 +1191,7 @@ slot-descriptors leaves them out, as a compiled program does.")
           (lambda (multiple-values next-method &rest args)
             (declare (ignore next-method))
             (labels ((compose (fn rest-fns)
+                       (dylan%check-runtime-stack)
                        (if (null rest-fns)
                            (dylan-apply fn args)
                            (dylan-call fn (compose (car rest-fns)

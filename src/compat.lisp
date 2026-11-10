@@ -461,7 +461,7 @@ would exhaust SBCL's binding stack."
              ;; An element, through PRINT-OBJECT when printing for it.  A
              ;; collection nested too deep for the stack is the error a
              ;; method nested too deep is (DYLAN%CHECK-STACK).
-             (dylan%check-print-stack)
+             (dylan%check-runtime-stack)
              (if target
                  (dylan-call dylan/print-object x target (bool escape))
                  (dylan-print x stream escape)))

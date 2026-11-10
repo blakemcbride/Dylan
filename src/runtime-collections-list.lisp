@@ -53,6 +53,7 @@
   ;; Chapter 9: lists are = when their elements are = (not id?), and a
   ;; dotted list's final cdrs are = too.
   (lambda (list-1 list-2)
+    (dylan%check-runtime-stack)
     (loop
       (cond ((and (consp list-1) (consp list-2))
              (when (false? (dylan-call dylan/= (car list-1) (car list-2)))

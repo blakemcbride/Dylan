@@ -290,6 +290,7 @@ expression that evaluates to a class or singleton, chapter 6.)"
          ((stringp value) (if (every (lambda (c) (< (char-code c) 256)) value)
                               "<byte-string>" "<unicode-string>"))
          ((vectorp value) "<simple-object-vector>")
+         ((gfun-p value) "<generic-function>")
          (t (error "No class for ~s." value)))
    *classes*))
 
@@ -312,8 +313,29 @@ expression that evaluates to a class or singleton, chapter 6.)"
                     (let ((class (global-class (second x))))
                       (make-spec :singleton (constant-class class) class
                                  (address (class-c-name class)))))
-                   (t (compile-error "a singleton specializer must be of a constant or a class")))))
+                   ;; Chapter 6's singleton of a slot's generic function
+                   ((and (eq (car x) :global) (fixed-generic-var-p (second x)))
+                    (let ((g (gfun-for (second x))))
+                      (make-spec :singleton (constant-class g) g
+                                 (address (gfun-c-name g)))))
+                   (t (compile-error "a singleton specializer must be of a constant, a class or a generic function")))))
           (t (compile-error "a specializer must be a class or a singleton known at compile time"))))))
+
+(defun fixed-generic-var-p (var)
+  "Is VAR the variable of a program's generic function that holds no other
+value: defined by define-generic-function, define-method or as a slot's
+accessor, never by define, and assigned by no set!?"
+  (let ((definitions (module-var-definitions var)))
+    (and definitions
+         (not (eq (module-var-module var) (dylan-module)))
+         (not (module-var-predefined-p var))
+         (not (gethash var *assigned-globals*))
+         (notany #'define-variable-node-p definitions)
+         (every (lambda (d)
+                  (or (define-generic-node-p d) (define-method-node-p d)
+                      ;; A slot's getter or setter
+                      (define-class-node-p d) (define-slot-node-p d)))
+                definitions))))
 
 (defun runtime-spec-p (spec)
   "Is SPEC the singleton of an object known only when the program runs:

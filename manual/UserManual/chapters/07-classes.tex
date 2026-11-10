@@ -527,8 +527,9 @@ the object's classes.
 \end{dylan}
 
 \noindent The compiler to C does not accept that program: there, a
-singleton used as a method's specializer must be of a literal, a class, or
-a variable whose definition gives it a literal value, because the
+singleton used as a method's specializer must be of a literal, a class, a
+variable whose definition gives it a literal value, or a generic function
+of the program's that is never assigned, because the
 specializer must be known when compiling
 (Section~\ref{sec:functions-singletons}). A singleton of an instance made at
 run time can still own slots, through \code{define-slot}, and singletons of

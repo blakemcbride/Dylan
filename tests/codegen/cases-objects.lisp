@@ -3256,4 +3256,28 @@ defined
 (print (list px@y p!z pw))"
   "(5 6 7)
 ")
+ ;; A singleton of a generic function as a specializer (chapter 6's
+ ;; slot-initialized? method for a virtual slot): one defined by
+ ;; define-generic-function, by define-method or as a slot's getter.
+ (singleton-of-a-generic-function
+  "(define-generic-function vs (x))
+(define-class <v> (<object>) (vs allocation: virtual))
+(define-method slot-initialized? ((x <v>) (g (singleton vs))) #f)
+(print (slot-initialized? (make <v>) vs))
+(define-method only-dm (x) x)
+(define-method which ((f (singleton only-dm))) 'only-dm)
+(define-method which ((f (singleton vs))) 'vs)
+(define-method which ((f <generic-function>)) 'other)
+(define-method which (f) 'not-a-generic)
+(define-generic-function another (x))
+(print (list (which only-dm) (which vs) (which another) (which 5)))
+(print (map (method (s) (instance? s <singleton>)) (method-specializers (find-method which (list (singleton vs))))))
+(define-class <w> (<object>) (wg init-value: 3))
+(define-method which ((f (singleton wg))) 'wg)
+(print (which wg))"
+  "#f
+(only-dm vs other not-a-generic)
+(#t)
+wg
+")
 )

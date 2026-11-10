@@ -114,7 +114,8 @@ to change them; a compiled program cannot:
 \item Each specializer of a method made with \code{define-method}, and
   each superclass of a class, must be known when compiling: a class, a
   constant variable holding one, \code{(singleton \meta{x})}, or
-  \code{(make <singleton> object: \meta{x})} of a constant. A
+  \code{(make <singleton> object: \meta{x})} of a constant or of a
+  generic function of the program's that is never assigned. A
   \code{define-slot} owner may be any singleton, but a class owner must
   be known when compiling, and a \code{define-slot} on a singleton that
   runs again must be for the same object.

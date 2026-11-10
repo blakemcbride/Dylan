@@ -720,7 +720,9 @@ Define methods with \code{define-method} instead. A class cannot be defined twic
 Each specializer of a method made by \code{define-method}, and each
 superclass of a class, must be something the compiler can find: a class
 named directly, a variable defined as a constant class, \code{(singleton
-\meta{x})}, or \code{(make <singleton> object: \meta{x})} of a constant.
+\meta{x})}, or \code{(make <singleton> object: \meta{x})} of a constant or
+of a generic function of the program's that no \code{set!} or
+\code{define} assigns.
 A variable whose value is computed when the program runs is a compile
 error:
 

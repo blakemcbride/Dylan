@@ -512,8 +512,10 @@ Singletons can also give an individual object slots of its own
 In the compiler to C every specializer of a method added to a generic
 function must be known when compiling: a class or a variable whose value is
 a class, or \code{(singleton \meta{x})} or \code{(make <singleton> object:
-\meta{x})} where \meta{x} is a literal, a class, or a variable whose
-\code{define} gives it a literal value. \code{(singleton (+ 1 2))}, and a
+\meta{x})} where \meta{x} is a literal, a class, a variable whose
+\code{define} gives it a literal value, or the variable of one of the
+program's generic functions that no \code{set!} or \code{define} assigns
+(such as a slot's getter, for \code{slot-initialized?}). \code{(singleton (+ 1 2))}, and a
 singleton of an object made at run time, are errors there, though the
 Common Lisp implementation accepts them.
 \end{warnbox}

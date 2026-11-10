@@ -986,4 +986,21 @@ stop
   "1
 "
   :error "a handler returned from error: not a list: 5")
+ ;; An error raised each time a condition is made, for the error before
+ ;; it, is reported at last, not signalled without end: both stop at once
+ (error-making-each-condition
+  "(define-method initialize ((x <object>) #key) (next-method))
+(print 'before)
+(car 5)"
+  "before
+"
+  :error "keyword argument not accepted: format-string:")
+ (error-in-each-condition-initialize
+  "(define-method initialize ((x <simple-error>) #rest r) (car 5))
+(print 'before)
+(print (handler-case (car 6) ((<error> condition: c) 'caught)))
+(print 'after)"
+  "before
+"
+  :error "not a list: 5")
 )

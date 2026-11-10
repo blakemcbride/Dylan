@@ -129,10 +129,25 @@
            (dylan-call dylan/error "handler-bind: the test: is not a function: ~s" test))))
   (implementation-specific/push-handler type function test description thunk))
 
+(defvar *conditions-being-made* 0
+  "How many conditions MAKE-DEFAULT-CONDITION is making, one inside
+another: each for an error raised while the one before it was made.")
+
+(defconstant +conditions-made-limit+ 64
+  "With this many conditions being made one inside another -- as when a
+program's initialize method fails on every condition -- the next error is
+reported, not signalled, as a compiled program reports its runtime's
+errors below its stack's hard limit; each level would otherwise hold its
+condition's making until the stack or the heap is exhausted.")
+
 (defun make-default-condition (args type operator)
   "Handles one arg (a condition) or many args (format string and format
 args).  Assumes TYPE is a <simple-error> or <simple-warning>."
-  (let ((name (string-downcase (symbol-name operator))))
+  (when (and (stringp (car args))
+             (>= *conditions-being-made* +conditions-made-limit+))
+    (error 'dylan-condition :offered t :message (car args) :irritants (cdr args)))
+  (let ((name (string-downcase (symbol-name operator)))
+        (*conditions-being-made* (1+ *conditions-being-made*)))
     (cond ((null args)
            (dylan-call dylan/error "wrong number of arguments (0)"))
           ((subclass? (get-type (car args)) <condition>)

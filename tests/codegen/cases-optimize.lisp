@@ -354,6 +354,25 @@ made-specially
 2.5
 "
   :error "")
+ (float-chain-to-unknown
+  ;; Three or more arguments: a step whose value is a double, unboxed, is
+  ;; boxed when the next step's other argument is not known to be a double.
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+   (define x 1/2)
+   (print (list (* 1.5 2.0 x) (+ 1.5 2.5 x)))
+   (define-method f3 (a b c) (* a b c))
+   (print (f3 1.5 2.0 1/2))
+   (define-method f2 ((a <double-float>) b) (- a 0.5 b))
+   (print (f2 1.5 1/4))
+   (print (try (method () (/ 1.0e300 1.5 0.0))))
+   (define-method g ((a <double-float>) (b <double-float>) c) (+ a b c 1))
+   (print (list (g 1.0 2.0 3) (g 1.0 2.0 1/2)))"
+  "(1.5 4.5)
+1.5
+0.75
+\"ERR: division by zero\"
+(7.0 4.5)
+")
  (next-method-arguments
   ;; (next-method) with the method's own arguments, captured or not
   "(define-class <a> (<object>))

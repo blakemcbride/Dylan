@@ -211,7 +211,11 @@ by a real closure, not just by a contified fn.")
     (const (c-constant *cdata* (const-value a)))
     (ivar (let ((c (constant-atom a)))
             (if c (c-constant *cdata* (const-value c)) (var-read a))))
-    (c-atom (c-atom-expr a))))
+    ;; A C double stands as a Dylan object boxed, as an unboxed variable
+    ;; does in VAR-READ; ATOM-DOUBLE-C takes it raw
+    (c-atom (if (c-atom-double-p a)
+                (box-double (c-atom-expr a))
+                (c-atom-expr a)))))
 
 (defvar *thread-variables* nil "MODULE-VAR -> index, for thread variables.")
 

@@ -349,10 +349,14 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
         dy_error("define-slot: the class is read-only", owner->class);
     D getter = descriptor(d)->getter;
     bool instance = descriptor(d)->kind == 0;
+    /* The slot replaced, if any, which the subclasses that inherit it
+     * share */
+    D replaced = dy_find_slot_descriptor(*owner->slots, getter);
     *owner->slots = put_slot(*owner->slots, d);
     if (instance) initialize_early(owner, d);
-    /* Down through the subclasses, breadth first, as far as each lacks a
-     * slot with the getter */
+    /* Every instance of the owner is given the slot (chapter 6): down
+     * through the subclasses, breadth first, as far as each lacks a slot
+     * with the getter or inherits the one replaced */
     intptr_t size = 0, room = 0, next = 0, seen_size = 0;
     const DyProgramClass **queue = queue_subclasses(NULL, &size, &room, owner);
     const DyProgramClass **seen = malloc((size_t)(room + 1) * sizeof *seen);
@@ -370,7 +374,8 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
         }
         seen[seen_size++] = c;
         D slots = *c->slots;
-        if (slot_position(DY_VECTOR_DATA(slots), DY_VECTOR_SIZE(slots), getter) >= 0) continue;
+        D had = dy_find_slot_descriptor(slots, getter);
+        if (had != DY_FALSE && had != replaced) continue;
         *c->slots = put_slot(slots, d);
         if (instance) initialize_early(c, d);
         queue = queue_subclasses(queue, &size, &room, c);

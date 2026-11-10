@@ -867,39 +867,38 @@ slots.")
             (add-a-slot owner new-slot
                         #'class.slots #'set-class-slots!
                         #'add-slot-to-class!)
-            ;; The subclasses that inherit the slot replaced, each with
-            ;; accessors of its own, lose its setter as the owner does
-            (when replaced
-              (map-over-all-subclasses!
-               (lambda (class)
-                 (let ((slot (same-slot-getter-in-slot-vector->slot
-                              getter (class.slots class))))
-                   (and slot (slot.inherited? slot))))
-               (lambda (class inherits)
-                 (when inherits
-                   (remove-replaced-setter class replaced new-slot)))
-               (class.subclasses owner)))
+            ;; Chapter 6: every instance of OWNER is given the new slot,
+            ;; so it goes down through the subclasses that lack a slot with
+            ;; the getter or inherit the one replaced, which goes with its
+            ;; accessors; a slot of a subclass's own, or one inherited from
+            ;; elsewhere, stops it.
             (map-over-all-subclasses!
              (lambda (class)
-               ;; Stop showering down if we hit a class that already has a
-               ;; generic function for this slot.
-               (not (member getter (map 'list #'(lambda (s)
-                                                  (and s (slot.getter s)))
-                                        (class.slots class)))))
+               (let ((slot (same-slot-getter-in-slot-vector->slot
+                            getter (class.slots class))))
+                 (or (null slot)
+                     (and replaced
+                          (eq (slot-original slot) (slot-original replaced))))))
              (lambda (class test)
                (if test
-                   (add-a-slot class
-                               ;; A class slot's storage stays with its
-                               ;; owner, whose class data has already grown
-                               ;; by now, so subclasses share the owner's
-                               ;; location rather than computing one.
-                               (copy-slot new-slot t
-                                          (if (eq allocation 'class)
-                                              (slot.data-location new-slot)
-                                              (figure-data-location
-                                               class allocation)))
-                               #'class.slots #'set-class-slots!
-                               #'add-slot-to-class!)
+                   (progn
+                     (let ((old (same-slot-getter-in-slot-vector->slot
+                                 getter (class.slots class))))
+                       (when old
+                         (remove-this-slot-only! class (class.slots class) old)
+                         (remove-slot-accessors! class old)))
+                     (add-a-slot class
+                                 ;; A class slot's storage stays with its
+                                 ;; owner, whose class data has already grown
+                                 ;; by now, so subclasses share the owner's
+                                 ;; location rather than computing one.
+                                 (copy-slot new-slot t
+                                            (if (eq allocation 'class)
+                                                (slot.data-location new-slot)
+                                                (figure-data-location
+                                                 class allocation)))
+                                 #'class.slots #'set-class-slots!
+                                 #'add-slot-to-class!))
                    ;; A subclass's own redefinition must still respecify
                    ;; what the new definition specifies
                    (let ((own (same-slot-getter-in-slot-vector->slot

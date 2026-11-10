@@ -1720,8 +1720,8 @@ error: keyword argument not accepted: ~s
 ")
  ;; define-slot when it runs: the instances given the slot newest first,
  ;; the class's then its subclasses' breadth first; a redefinition gives
- ;; the class's instances the new initial value but not a subclass's that
- ;; has the slot already; required init-keywords, slot-initialized?,
+ ;; the new initial value to the class's instances and to those of each
+ ;; subclass that inherits the slot; required init-keywords, slot-initialized?,
  ;; class and each-subclass slots; one run twice.
  (define-slot-when-run-details
   "(define-method try (thunk)
@@ -1774,7 +1774,7 @@ error: keyword argument not accepted: ~s
   "(1 2 3 4 5)
 (7 9 8 10 6)
 #({the generic function g} {the generic function h})
-(1 11 3 4 5)
+(1 11 3 12 5)
 #({the generic function g} {the generic function h})
 error: make: the required init-keyword is missing: ~s
 7
@@ -1782,15 +1782,15 @@ error: the slot r is not initialized
 #f
 #t
 {the generic function g}
-#f
+#t
 sh
 (5 6 5 5)
 #({the generic function g} {the generic function h} {the generic function r} {the generic function each} {the generic function k})
-(given 14 k 1)
+(given 15 k 1)
 1
 2
 #({the generic function g} {the generic function h} {the generic function r} {the generic function shared} {the generic function each} {the generic function twice})
-14
+15
 ")
  ;; make checks the required init-keywords before initializing any slot,
  ;; and the keywords nothing takes after; define-slot with multiple
@@ -2400,7 +2400,7 @@ char
 (when (not flag) (define-slot <p> another init-value: 2))
 (print (list (another p1) (another (make <q>))))"
   "(200 #t)
-(7 9 9)
+(9 9 9)
 (2 2)
 ")
  ;; A generic function's parameter list is its first definition's to run
@@ -2752,7 +2752,7 @@ end
   ""
   :compile-error "slot x: redefining an inherited slot must respecify its type:")
  ;; A subclass's slot that does respecify the type is accepted, and a
- ;; subclass without its own slot inherits the slot it had.
+ ;; subclass without its own slot takes the new one.
  (redefined-slot-types-accepted
   "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
 (define-class <b> (<a>) (x type: <string> init-value: \"t\"))
@@ -2768,9 +2768,9 @@ end
 (print (slot-type (slot-descriptor (make <r>) x)))"
   "\"t\"
 \"u\"
-1
-1
-{the class <object>}
+\"s\"
+\"s\"
+{the class <string>}
 ")
  ;; A constant slot has no setter, even when one is named (chapter 6).
  (constant-slot-has-no-setter
@@ -2828,5 +2828,69 @@ konst
 4
 \"ERR: no applicable method for (setter u)\"
 6
+")
+ ;; A define-slot that redefines a class's slot gives it to every instance
+ ;; of the class (chapter 6): the subclasses that inherit the slot replaced
+ ;; take the new one, their instances made before it too.
+ (define-slot-reaches-subclasses
+  "(define-method try (f) (handler-case (f) ((<error>) 'error)))
+(define-class <a> (<object>) (y init-value: 10))
+(define-class <b> (<a>))
+(define-class <c> (<b>))
+(define b (make <b>))
+(define c (make <c>))
+(define-slot <a> y init-value: 33)
+(print (list (y (make <a>)) (y b) (y (make <b>)) (y c) (y (make <c>))))
+(set! (y b) 5)
+(print (list (y b) (y c)))
+(define-class <p> (<object>) (u init-value: 10))
+(define-class <q> (<p>))
+(define q (make <q>))
+(define-slot <p> u allocation: class init-value: 44)
+(print (list (u (make <p>)) (u q) (u (make <q>))))
+(set! (u q) 7)
+(print (list (u (make <p>)) (u q)))
+(define-class <r> (<object>) (v init-value: 10))
+(define-class <s> (<r>))
+(define s (make <s>))
+(define-slot <r> v init-value: 33 setter: #f)
+(print (list (v s) (try (method () (set! (v s) 5) (v s)))))
+(define-class <t> (<object>) (w init-value: 10))
+(define-class <u> (<t>))
+(define tu (make <u>))
+(define-slot <t> w allocation: virtual)
+(define-method w ((x <t>)) 'virtual)
+(print (list (w (make <t>)) (w tu) (w (make <u>))))
+(define-class <e> (<object>) (k init-value: 10))
+(define-class <f> (<e>))
+(define-class <g> (<f>) (j init-value: 1))
+(define-class <h> (<f>) (k init-value: 70 init-keyword: k:))
+(define g (make <g>))
+(define-slot <e> k init-value: 33 init-keyword: k:)
+(print (list (k g) (k (make <g> k: 4)) (k (make <h>)) (j g)))
+(define-slot <f> k init-value: 55 init-keyword: k:)
+(print (list (k (make <e>)) (k (make <f>)) (k g) (k (make <g>)) (k (make <h>))))
+(define-class <i> (<object>) (n init-value: 10))
+(define-class <j> (<i>))
+(define ij (make <j>))
+(define-slot <i> n type: <integer> init-value: 33)
+(print (list (try (method () (set! (n ij) 'x) (n ij))) (init-value (first (slot-descriptors <j>)))))
+(define-method again (value) (define-slot <i> n init-value: value))
+(again 5)
+(print (list (n (make <i>)) (n ij) (n (make <j>))))
+(again 6)
+(define-class <l> (<j>))
+(print (list (n (make <i>)) (n ij) (n (make <j>)) (n (make <l>))))"
+  "(33 33 33 33 33)
+(5 33)
+(44 44 44)
+(7 7)
+(33 error)
+(virtual virtual virtual)
+(33 4 70 1)
+(33 55 55 55 70)
+(error 33)
+(5 5 5)
+(6 6 6 6)
 ")
 )

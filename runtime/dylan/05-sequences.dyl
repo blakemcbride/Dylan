@@ -148,9 +148,14 @@ module: dylan
            ((id? l '()) result)
         (%replace-vector! result i (car l) 0 (%vector-size (car l)))))))
 
-;;; An unbounded range has no end to stop at
+;;; What NAME concatenates are sequences, and an unbounded range has no
+;;; end to stop at
 (define %check-bounded
   (method (name sequences)
+    (for ((l sequences (cdr l)))
+         ((id? l '()))
+      (unless (%instance? (car l) <sequence>)
+        (error "~a: not a sequence: ~s" name (car l))))
     (unless (every? (method (s) (or (not (%instance? s <range>)) (size s))) sequences)
       (error "~a: the range is unbounded" name))))
 

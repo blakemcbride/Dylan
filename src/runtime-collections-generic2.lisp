@@ -356,8 +356,11 @@ compiled library's %from-list does."
                    (return (copy-like source (nreverse kept)))))))))
 
 (defun check-bounded (name sequences)
-  "Signal an error if one of SEQUENCES is an unbounded range, which has no
-end to stop at."
+  "Signal an error if one of SEQUENCES is not a sequence, or is an
+unbounded range, which has no end to stop at."
+  (dolist (s sequences)
+    (unless (true? (dylan-call dylan/instance? s <sequence>))
+      (dylan-call dylan/error "~a: not a sequence: ~s" name s)))
   (dolist (s sequences)
     (when (and (true? (dylan-call dylan/instance? s <range>))
                (null (collection-size s)))

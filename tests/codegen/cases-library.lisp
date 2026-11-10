@@ -3126,4 +3126,36 @@ eq
 #t
 #t
 ")
+ ;; What concatenate and concatenate-as join are sequences (chapter 12): a
+ ;; symbol or a number among them is an error.
+ (concatenate-takes-sequences
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (concatenate \"ab\" 'xy))))
+(print (try (method () (concatenate \"ab\" 5))))
+(print (try (method () (concatenate '(1) \"c\" 5))))
+(print (try (method () (concatenate (vector 1) 'q))))
+(print (try (method () (concatenate (range from: 1 size: 2) 'q))))
+(print (try (method () (concatenate (make <deque>) 'q))))
+(print (try (method () (concatenate (make <stretchy-vector>) 'q))))
+(print (try (method () (concatenate-as <deque> '(1) 5))))
+(print (try (method () (concatenate-as <list> '(1) 'r))))
+(print (try (method () (concatenate-as <integer> '(1) 'r))))
+(print (try (method () (concatenate \"ab\" (range from: 1)))))
+(print (try (method () (concatenate \"ab\" \"cd\" '(#\\e)))))
+(print (try (method () (concatenate-as <vector> '(1) \"x\" (vector 2)))))"
+  "\"ERR: concatenate: not a sequence: xy\"
+\"ERR: concatenate: not a sequence: 5\"
+\"ERR: concatenate: not a sequence: 5\"
+\"ERR: concatenate: not a sequence: q\"
+\"ERR: concatenate: not a sequence: q\"
+\"ERR: concatenate: not a sequence: q\"
+\"ERR: concatenate: not a sequence: q\"
+\"ERR: concatenate-as: not a sequence: 5\"
+\"ERR: concatenate-as: not a sequence: r\"
+\"ERR: concatenate-as: the class is not a mutable sequence: {the class <integer>}\"
+\"ERR: concatenate: the range is unbounded\"
+\"abcde\"
+#(1 #\\x 2)
+")
 )

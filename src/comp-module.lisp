@@ -347,7 +347,7 @@ again from their own clauses, so that their imports are recomputed."
 (defun compile-define-module-form (forms module-vars bound-vars really-compile
                                    multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
-  (must-be-list-of-at-least-length forms 1 "DEFINE-MODULE: invalid syntax")
+  (must-have-syntax forms 1 "define-module")
   ;; A defining form, as the compiler to C makes it (chapter 12)
   (unless (null bound-vars)
     (dylan%error "define-module must be at top level"))

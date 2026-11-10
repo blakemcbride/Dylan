@@ -379,7 +379,8 @@ than the default accepts."
 (defparameter dylan/slot-initialized?
   (dylan%generic-fn
    'slot-initialized?
-   (make-param-list `((instance ,<object>) (getter ,<generic-function>))
+   ;; Any getter: one that reads no slot of the instance is an error
+   (make-param-list `((instance ,<object>) (getter ,<object>))
                     nil nil nil)
    (lambda (instance getter)
      (multiple-value-bind (singleton-slot singleton)
@@ -390,8 +391,9 @@ than the default accepts."
                            getter (class.slots class)))))
        ;; Chapter 6: an error if the getter does not access a slot.
        (unless the-slot
-         (dylan-call dylan/error "slot-initialized? -- no such slot"
-                     instance getter class))
+         (dylan-call dylan/error
+                     "slot-initialized?: the getter does not read a slot of the object: ~s"
+                     instance))
        (bool (not (eq *the-uninitialized-slot-value*
                 (case (slot.allocation the-slot)
                   ((virtual constant) 'initialized)

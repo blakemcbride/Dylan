@@ -442,12 +442,9 @@ answers #f (an unbounded collection)."
 ;; CURRENT-ELEMENT
 ;;
 (defparameter dylan/current-element
-  (dylan%generic-fn
-   'current-element one-collection-and-a-state
-   (lambda (collection state)
-     (dylan-call dylan/error
-                 "current-element -- not specialized for this collection type"
-                 collection state))))
+  ;; No method of its own: a collection and state no method takes is no
+  ;; applicable method, as in the compiled library
+  (dylan%generic-fn 'current-element one-collection-and-a-state nil))
 
 (add-method
  dylan/current-element
@@ -470,7 +467,7 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((list ,<list>) (state ,<object>)) nil nil nil)
+  (make-param-list `((list ,<list>) (state ,<pair>)) nil nil nil)
   (lambda (list state)
     (declare (ignore list))
     (car state))))

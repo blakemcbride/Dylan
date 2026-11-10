@@ -174,7 +174,7 @@
 
 (defun compile-bind-form (e module-vars bound-vars really-compile
                           multiple-values? continue)
-  (must-be-list-of-at-least-length e 1 "BIND form invalid")
+  (must-have-syntax e 1 "bind")
   (let ((bindings (car e))
         (forms (cdr e)))
     (if (null bindings)
@@ -303,8 +303,7 @@
                                              multiple-values? continue)
   (declare (ignore compiler multiple-values?)) ; No sub-compilations or
                                         ; reductions
-  (must-be-list-of-at-least-length e 2
-                                   "DEFINE-GENERIC-FUNCTION: invalid syntax")
+  (must-have-syntax e 2 "define-generic-function")
   ;; Keyword options after the parameter list are accepted and ignored.
   (validate-keywords (cddr e) t #'dylan%error)
   (parse-define-generic-function
@@ -535,7 +534,7 @@ Its faults are worded as the compiler to C words them."
 (defun compile-define-class-form (e mod-vars bound-vars compiler
                                   multiple-values? continue)
   (declare (ignore multiple-values?))   ; No reductions
-  (must-be-list-of-at-least-length e 2 "DEFINE-CLASS: invalid syntax")
+  (must-have-syntax e 2 "define-class")
   (let ((superclasses (cadr e))
         (slots (expand-slots (cddr e))))
     ;; Two slots with one getter would be one slot (chapter 6).
@@ -565,7 +564,7 @@ Its faults are worded as the compiler to C words them."
 (defun compile-define-slot-form (e mod-vars bound-vars compiler
                                  multiple-values? continue)
   (declare (ignore multiple-values?))   ; Ignored
-  (must-be-list-of-at-least-length e 2 "DEFINE-SLOT: invalid syntax")
+  (must-have-syntax e 2 "define-slot")
   (let ((owner (car e))
         (slot (cdr e)))
     ;; The Scheme spliced OWNER into the output uncompiled, which happened

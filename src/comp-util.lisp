@@ -185,6 +185,13 @@ looks like one a name of its own (see DYLAN-USER-SYMBOL)."
   (or (list-of-at-least-length? l n)
       (dylan%error error-message l)))
 
+;;; A special form's shape, checked as the compiler to C checks it, with
+;;; its words: "WHAT: bad syntax".  N counts the elements after the
+;;; form's name: at least N, or, if EXACT, N.
+(defun must-have-syntax (l n what &optional exact)
+  (or (if exact (list-of-length? l n) (list-of-at-least-length? l n))
+      (dylan%error (concatenate 'string what ": bad syntax"))))
+
 (defun module-refs (variable bound-vars module-vars continue core)
   "Called to generate code to deal with direct references to module
 variables.  VARIABLE is the variable name, CORE is a procedure to generate

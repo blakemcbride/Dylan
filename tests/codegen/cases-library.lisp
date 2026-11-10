@@ -2747,4 +2747,35 @@ half
   "(print (quote -1/0))"
   ""
   :compile-error "Bad number in Dylan input: -1/0")
+ ;; The library's errors are worded alike in both implementations
+ ;; (chapter 11): concatenate-as, replace-subsequence!, make of
+ ;; <singleton>, slot-initialized?, as <range>, slot-value of a virtual
+ ;; slot, and current-element and its setter where no method applies.
+ (library-error-messages
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (concatenate-as <range> '(1) '(2)))))
+(print (try (method () (replace-subsequence! (vector 1 2 3) #(a b) start: 2))))
+(print (try (method () (make <singleton>))))
+(define-class <v> (<object>) (vs allocation: virtual) (s init-value: 1))
+(define-method vs ((x <v>)) 1)
+(define obj (make <v>))
+(print (try (method () (slot-initialized? obj car))))
+(print (try (method () (as <range> '(0 1 3)))))
+(define r (range from: 0 size: 3))
+(print (try (method () (set! (current-element r (initial-state r)) 5))))
+(print (try (method () (slot-value obj (slot-descriptor obj vs)))))
+(print (try (method () (current-element '(1) 'bogus))))
+(print (try (method () (condition-format-string (make <simple-warning> format-string: \"w~a\" format-arguments: '(1))))))
+(print (try (method () (condition-format-string (make <simple-restart>)))))"
+  "\"ERR: concatenate-as: the class is not a mutable sequence: {the class <range>}\"
+\"ERR: replace-subsequence!: the sequence is too short\"
+\"ERR: make: a <singleton> needs object:\"
+\"ERR: slot-initialized?: the getter does not read a slot of the object: {instance of <v>}\"
+\"ERR: as: the elements of (0 1 3) are not in steps\"
+\"ERR: no applicable method for (setter current-element)\"
+\"ERR: slot-value: a virtual slot has no storage: {slot vs}\"
+\"ERR: no applicable method for current-element\"
+\"w~a\"
+\"ERR: no applicable method for condition-format-string\"
+")
 )

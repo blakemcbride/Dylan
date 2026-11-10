@@ -71,11 +71,10 @@
 
 (defun compile-handler-bind-form (e module-vars bound-vars really-compile
                                   multiple-values? continue)
-  (must-be-list-of-at-least-length e 1 "HANDLER-BIND: bad syntax")
+  (must-have-syntax e 1 "handler-bind")
   (let ((handler-spec (car e))
         (form (if (null (cdr e)) dylan%false `(begin ,@(cdr e)))))
-    (must-be-list-of-at-least-length
-     handler-spec 2 "HANDLER-BIND: bad syntax for handler specification")
+    (must-have-syntax handler-spec 2 "handler-bind handler")
     (let ((keywords (cddr handler-spec)))
       (validate-keywords keywords '(:test :description) #'dylan%error)
       (let ((type (car handler-spec))
@@ -93,7 +92,7 @@
 
 (defun compile-handler-case-form (e module-vars bound-vars really-compile
                                   multiple-values? continue)
-  (must-be-list-of-at-least-length e 1 "HANDLER-CASE: bad syntax")
+  (must-have-syntax e 1 "handler-case")
   (let ((protected-form (car e))
         (protections (cdr e)))
     (dolist (protection protections)

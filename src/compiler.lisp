@@ -666,7 +666,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
 
 (defun compile-bind-exit-form (forms module-vars bound-vars really-compile
                                multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "BIND-EXIT form invalid")
+  (must-have-syntax forms 1 "bind-exit")
   (let ((var (car forms))
         (forms (cdr forms)))
     (must-be-list-of-length var 1 "BIND-EXIT bad variable")
@@ -712,7 +712,8 @@ it; the last result form delivers MULTIPLE-VALUES?."
 (defun compile-define-form (forms module-vars bound-vars really-compile
                             multiple-values? continue)
   (declare (ignore multiple-values?))   ; No reductions
-  (must-be-list-of-length forms 2 "Bad DEFINE syntax")
+  (unless (list-of-length? forms 2)
+    (dylan%error "define: needs a variable name and a value"))
   (let ((name (car forms))
         (value (cadr forms)))
     (unless (variable-name? name)
@@ -830,7 +831,7 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-define-macro-form (forms module-vars bound-vars really-compile
                                   multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
-  (must-be-list-of-at-least-length forms 2 "Bad DEFINE-MACRO syntax")
+  (must-have-syntax forms 2 "define-macro")
   (let ((name (car forms))
         (params (cadr forms))
         (body (cddr forms)))
@@ -878,7 +879,7 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-dotimes-form (forms module-vars bound-vars really-compile
                              multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "DOTIMES: bad syntax")
+  (must-have-syntax forms 1 "dotimes")
   (let ((v/c/r (car forms))
         (forms (cdr forms)))
     (must-be-list-of-at-least-length v/c/r 2
@@ -915,7 +916,7 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-for-each-form (forms module-vars bound-vars really-compile
                               multiple-values? continue)
-  (must-be-list-of-at-least-length forms 2 "FOR-EACH: bad syntax")
+  (must-have-syntax forms 2 "for-each")
   (dolist (binding (car forms))
     (must-be-list-of-length binding 2 "FOR-EACH: bad binding"))
   (check-names-once "for-each" (mapcar #'car (car forms)))
@@ -1064,7 +1065,7 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-quasiquote-form (forms module-vars bound-vars really-compile
                                 multiple-values? continue)
   (declare (ignore multiple-values?))
-  (must-be-list-of-length forms 1 "QUASIQUOTE: invalid syntax")
+  (must-have-syntax forms 1 "quasiquote" t)
   (multiple-value-bind (skeleton expressions) (quasi-skeleton (car forms))
     (if (null expressions)
         (funcall continue `(quote ,skeleton) module-vars)
@@ -1084,7 +1085,7 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-quote-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
   (declare (ignore bound-vars really-compile multiple-values?))
-  (must-be-list-of-length forms 1 "QUOTE: invalid syntax")
+  (must-have-syntax forms 1 "quote" t)
   (funcall continue `(quote ,@forms) module-vars))
 
 ;;; COMPILE-SELECT-FORM is in the file comp-sf.lisp
@@ -1098,7 +1099,7 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-unless-form (forms module-vars bound-vars really-compile
                             multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "UNLESS: bad syntax")
+  (must-have-syntax forms 1 "unless")
   (compile-forms forms module-vars bound-vars really-compile
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)
@@ -1113,7 +1114,7 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-until-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
   (declare (ignore multiple-values?))
-  (must-be-list-of-at-least-length forms 1 "UNTIL: bad syntax")
+  (must-have-syntax forms 1 "until")
   (compile-forms forms module-vars bound-vars really-compile nil
                  (lambda (forms module-vars)
                    (funcall continue
@@ -1126,7 +1127,7 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-unwind-protect-form (forms module-vars bound-vars really-compile
                                     multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "UNWIND-PROTECT: bad syntax")
+  (must-have-syntax forms 1 "unwind-protect")
   (funcall
    really-compile (car forms) module-vars bound-vars multiple-values?
    (lambda (c-protect module-vars)
@@ -1141,7 +1142,7 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-when-form (forms module-vars bound-vars really-compile
                           multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "WHEN: bad syntax")
+  (must-have-syntax forms 1 "when")
   (compile-forms forms module-vars bound-vars really-compile
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)
@@ -1155,7 +1156,7 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-while-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
-  (must-be-list-of-at-least-length forms 1 "WHILE: bad syntax")
+  (must-have-syntax forms 1 "while")
   (compile-forms forms module-vars bound-vars really-compile
                  (if (null (cdr forms)) nil multiple-values?)
                  (lambda (forms module-vars)

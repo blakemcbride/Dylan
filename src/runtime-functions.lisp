@@ -108,8 +108,7 @@
                    rest :object
                    (lambda ()
                      (dylan-call dylan/error
-                                 "(make (singleton <singleton>)) -- object not supplied"
-                                 class rest)))))
+                                 "make: a <singleton> needs object:")))))
       (dylan%make-singleton object)))))
 
 (add-method
@@ -381,8 +380,8 @@ a descriptor of a class INSTANCE is not an instance of is an error."
                   (aref (class.class-data (get-type instance)) loc))
                  ;; Chapter 11: an error for a virtual slot.
                  ((virtual)
-                  (dylan-call dylan/error "slot-value -- a virtual slot"
-                              instance (slot.debug-name slot-desc)))
+                  (dylan-call dylan/error "slot-value: a virtual slot has no storage: ~s"
+                              slot-desc))
                  ((constant) loc)
                  (t (dylan-call dylan/error "slot-value -- internal error"
                                 slot-desc allocation)))))
@@ -420,12 +419,11 @@ a descriptor of a class INSTANCE is not an instance of is an error."
          ((each-subclass)
           (setf (aref (class.class-data (get-type instance)) loc) new-value))
          ((virtual)
-          (dylan-call dylan/error "(setter slot-value) -- a virtual slot"
-                      instance (slot.debug-name slot-desc) new-value))
+          (dylan-call dylan/error "slot-value: a virtual slot has no storage: ~s"
+                      slot-desc))
          ((constant)
-          (dylan-call dylan/error
-                      "(setter slot-value) -- can't set a constant slot"
-                      instance slot-desc new-value))
+          (dylan-call dylan/error "slot-value: a constant slot cannot be set: ~s"
+                      instance))
          (t (dylan-call dylan/error
                         "(setter slot-value) -- internal error"
                         slot-desc allocation)))))))

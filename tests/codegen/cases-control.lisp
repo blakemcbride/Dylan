@@ -917,4 +917,22 @@ after
 (1 4)
 stop
 ")
+ ;; case's and select's clauses, and quote's form, are checked alike in
+ ;; both implementations, with the same words.
+ (case-else-not-last
+  "(case 1 (else: 'e) ((1) 'one))"
+  ""
+  :compile-error "case: the else: clause must be the last")
+ (case-bad-match-list
+  "(case 1 (5 'a))"
+  ""
+  :compile-error "case: bad match list 5")
+ (select-bad-clause
+  "(select 1 = 5)"
+  ""
+  :compile-error "select: bad clause 5")
+ (quote-bad-syntax
+  "(print (quote . a))"
+  ""
+  :compile-error "quote: bad syntax")
 )

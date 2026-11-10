@@ -113,7 +113,7 @@
                           multiple-values? continue)
   (labels
       ((compile-clause (clause mod-vars continue)
-         (must-be-list-of-at-least-length clause 1 "COND -- bad clause syntax")
+         (must-have-syntax clause 1 "cond clause")
          (let ((predicate (car clause))
                (consequents (cdr clause)))
            (funcall
@@ -179,13 +179,13 @@ string literals are id?."
 
 (defun compile-case-form (e module-vars bound-vars compiler
                           multiple-values? continue)
-  (must-be-list-of-at-least-length e 1 "CASE -- bad syntax")
+  (must-have-syntax e 1 "case")
   (check-case-keys-once (cdr e))
   (let ((have-default? nil))
     (labels
         ((compile-clause (clause mod-vars continue)
            (unless (consp clause)
-             (dylan%error "CASE -- bad clause syntax" clause))
+             (dylan%error "case: bad clause ~a" clause))
            (let ((match-list (car clause))
                  (consequents (cdr clause)))
              (let ((new-match
@@ -195,7 +195,7 @@ string literals are id?."
                            ((and (listp match-list)
                                  (null (cdr (cl:last match-list))))
                             `(member !case-key ',match-list))
-                           (t (dylan%error "CASE -- bad match list" clause)))))
+                           (t (dylan%error "case: bad match list ~a" match-list)))))
                (if (null consequents)
                    (funcall continue `(,new-match ,compiled-sharp-f) mod-vars)
                    (compile-forms consequents mod-vars bound-vars compiler
@@ -222,7 +222,7 @@ string literals are id?."
                                                        !case-key))))))
                        mod-vars)
                       (if have-default?
-                          (dylan%error "CASE -- else isn't last clause" e)
+                          (dylan%error "case: the else: clause must be the last")
                           (compile-clause (car clauses) mod-vars
                                           (lambda (code mod-vars)
                                             (walk (cdr clauses)
@@ -234,12 +234,12 @@ string literals are id?."
 
 (defun compile-select-form (e module-vars bound-vars compiler
                             multiple-values? continue)
-  (must-be-list-of-at-least-length e 2 "SELECT -- bad syntax")
+  (must-have-syntax e 2 "select")
   (let ((have-default? nil))
     (labels
         ((compile-clause (clause mod-vars continue)
            (unless (consp clause)
-             (dylan%error "SELECT -- bad clause syntax" clause))
+             (dylan%error "select: bad clause ~a" clause))
            (let ((match-list (car clause))
                  (consequents (cdr clause)))
              (let ((new-match
@@ -258,8 +258,8 @@ string literals are id?."
                                            (dylan%call nil !select-test
                                                        !select-target ,code)))
                                        matches)))))
-                           (t (dylan%error "SELECT -- bad match list"
-                                           clause)))))
+                           (t (dylan%error "select: bad match list ~a"
+                                           match-list)))))
                (if (null consequents)
                    (funcall continue `(,new-match ,compiled-sharp-f) mod-vars)
                    (compile-forms consequents mod-vars bound-vars compiler
@@ -291,7 +291,7 @@ string literals are id?."
                                                      !select-target))))))
                          mod-vars)
                         (if have-default?
-                            (dylan%error "SELECT -- else isn't last clause" e)
+                            (dylan%error "select: the else: clause must be the last")
                             (compile-clause (car clauses) mod-vars
                                             (lambda (code mod-vars)
                                               (walk (cdr clauses)
@@ -303,7 +303,7 @@ string literals are id?."
 
 (defun compile-for-form (e module-vars bound-vars compiler
                          multiple-values? continue)
-  (must-be-list-of-at-least-length e 2 "FOR -- bad syntax")
+  (must-have-syntax e 2 "for")
   (let ((bindings (car e))
         (end-test (cadr e))
         (body (cddr e)))

@@ -57,59 +57,27 @@
  (dylan%function->method
   (make-param-list `((class ,(dylan%make-singleton <range>))
                      (collection ,<collection>)) nil nil nil)
+  ;; A collection as a range: its numbers must go up or down by one step,
+  ;; as the compiled library has it.
   (lambda (class collection)
+    (declare (ignore class))
     (if (true? (dylan-call dylan/instance? collection <range>))
         collection
-        (let ((size (collection-size collection)))
-          (cond ((= size 0) (empty-range))
-                ((= size 1)
-                 (dylan-call dylan/range
-                             :from (current-element collection
-                                               (initial-state
-                                                           collection))
-                             :size 1))
-                ((minusp size)
-                 (dylan-call dylan/error
-                             "(as (singleton <range>) <collection>) -- internal error.size retured negative number"
-                             size class collection))
+        (let ((l (sequence->list collection)))
+          (cond ((null l) (empty-range))
+                ((null (cdr l)) (dylan-call dylan/range :from (car l) :size 1))
+                ((notevery (lambda (x) (true? (dylan-call dylan/instance? x <number>))) l)
+                 (dylan-call dylan/error "as: the elements of ~s are not numbers"
+                             collection))
                 (t
-                 (let* ((state (initial-state collection))
-                        (first (current-element
-                                           collection state))
-                        (state-2 (next-state collection state))
-                        (second (current-element
-                                            collection state-2)))
-                   (if (and (true? (dylan-call dylan/subclass? (get-type first) <number>))
-                            (true? (dylan-call dylan/subclass? (get-type second)
-                                        <number>)))
-                       (let ((step (dylan-call dylan/- second first)))
-                         (loop with state = (next-state
-                                                        collection state-2)
-                               with prev = second
-                               do (if state
-                                      (let ((cur (current-element
-                                                  collection state)))
-                                        (if (true? (dylan-call dylan/= step
-                                                        (dylan-call dylan/-
-                                                                    cur prev)))
-                                            (progn
-                                              (setf prev cur)
-                                              (setf state
-                                                    (next-state
-                                                                collection
-                                                                state)))
-                                            (return
-                                              (dylan-call
-                                               dylan/error
-                                               "(as (singleton <range>) <collection>) -- numbers not in sync"
-                                               class collection))))
-                                      (return (dylan-call dylan/range
-                                                          :from first :by step
-                                                          :size size)))))
-                       (dylan-call
-                        dylan/error
-                        "(as (singleton <range>) <collection>) -- elements are not numbers"
-                        class collection))))))))))
+                 (let ((step (dylan-call dylan/- (second l) (first l))))
+                   (loop for (prev x) on (cdr l)
+                         while x
+                         unless (true? (dylan-call dylan/= (dylan-call dylan/- x prev) step))
+                           do (dylan-call dylan/error "as: the elements of ~s are not in steps"
+                                          collection))
+                   (dylan-call dylan/range :from (first l) :by step
+                                           :size (length l))))))))))
 
 ;;;
 ;;; RANGE SPECIALIZED MAKE
@@ -749,16 +717,6 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
                            "intersection: unbounded ranges of floats: ~s ~s"
                            range-1 range-2)))))))
 
-;;;
-;;; Mutable Collection
-;;;
+;;; A range is not mutable: (setter current-element) has no method for it.
 
-(add-method
- dylan/setter/current-element/
- (dylan%function->method
-  (make-param-list `((range ,<range>) (state ,<object>) (new-value ,<object>))
-                   nil nil nil)
-  (lambda (range state new-value)
-    (dylan-call dylan/error
-                "((setter current-element) <range>) -- range not mutable"
-                range state new-value))))
+

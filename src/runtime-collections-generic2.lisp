@@ -362,8 +362,8 @@ compiled library's %from-list does."
    (lambda (class seq-1 &rest rest)
      (unless (subclass? class <mutable-sequence>)
        (dylan-call dylan/error
-                   "concatenate-as -- target class not a mutable sequence"
-                   class seq-1 rest))
+                   "concatenate-as: the class is not a mutable sequence: ~s"
+                   class))
      (dylan-call dylan/as class
                  (mapcan #'sequence->list (cons seq-1 rest))))))
 
@@ -404,8 +404,7 @@ compiled library's %from-list does."
                  (not (and (integerp start) size (<= 0 start)
                            (<= (+ start (length inserted)) size))))
         (dylan-call dylan/error
-                    "replace-subsequence! -- the sequence is too short"
-                    mutable start))
+                    "replace-subsequence!: the sequence is too short"))
       (when inserted
         (let ((state (dylan-call dylan/get-state mutable start)))
           (dolist (element inserted)
@@ -640,15 +639,14 @@ compiled library's %from-list does."
 ;;;;
 
 (defparameter dylan/setter/current-element/
+  ;; No method of its own, as in the compiled library: a range, say, is
+  ;; not mutable, and no method takes it
   (dylan%generic-fn
    'setter/current-element/
    (make-param-list `((mutable-collection ,<mutable-collection>)
                       (state ,<object>) (new-value ,<object>))
                     nil nil nil)
-   (lambda (mutable-collection state new-value)
-     (dylan-call dylan/error
-                 "(setter current-element) -- cannot set! this collection type"
-                 mutable-collection state new-value))))
+   nil))
 
 (defparameter dylan/setter/element/
   (dylan%generic-fn

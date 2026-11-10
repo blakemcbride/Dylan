@@ -388,20 +388,9 @@
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((list ,<list>) (state ,<object>) (new-value ,<object>))
+  (make-param-list `((list ,<list>) (state ,<pair>) (new-value ,<object>))
                    nil nil nil)
   (lambda (list state new-value)
     (declare (ignore list))
     (setf (car state) new-value)
     new-value)))
-
-(add-method
- dylan/setter/current-element/
- (dylan%function->method
-  (make-param-list `((empty-list ,<empty-list>) (state ,<object>)
-                     (new-value ,<object>))
-                   nil nil nil)
-  (lambda (empty-list state new-value)
-    (dylan-call dylan/error
-                "setter/current-element/ for <empty-list>: not possible"
-                empty-list state new-value))))

@@ -190,7 +190,7 @@
 (defun compile-method-form (e mod-vars bound-vars compiler
                             multiple-values? continue)
   (declare (ignore multiple-values?))   ; No reductions
-  (must-be-list-of-at-least-length e 1 "METHOD -- invalid syntax")
+  (must-have-syntax e 1 "method")
   (let ((params (car e))
         (forms (or (cdr e) (list dylan%false))))   ; An empty body answers #f
     (parse-method-parameter-list
@@ -325,7 +325,7 @@
                                        !next next-method ,@so-far)))
                             (t (push (car so-far) result)
                                (pop so-far)))))))
-    (must-be-list-of-at-least-length e 2 "DEFINE-METHOD -- invalid syntax")
+    (must-have-syntax e 2 "define-method")
     (let ((name (car e))
           (params (cadr e))
           (forms (cddr e)))
@@ -362,7 +362,7 @@
 
 (defun compile-bind-methods-form (e mod-vars bound-vars compiler
                                   multiple-values? continue)
-  (must-be-list-of-at-least-length e 1 "BIND-METHODS -- bad syntax")
+  (must-have-syntax e 1 "bind-methods")
   (let ((bindings (car e))
         (forms (or (cdr e) (list dylan%false))))   ; An empty body answers #f
     (dolist (binding bindings)

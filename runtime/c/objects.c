@@ -164,6 +164,60 @@ void dy_check_keyword_list(D f, D pairs, const D *accepted, size_t n) {
     }
 }
 
+/* Is the type A, a class or singleton, within the type B? */
+static bool type_within(D a, D b) {
+    if (dy_kind_p(a, DY_KIND_SINGLETON))
+        return dy_specializer_matches(((DySingleton *)DY_PTR(a))->object, b);
+    return dy_kind_p(b, DY_KIND_CLASS)
+        && dy_wrapper_subtype(((DyClass *)DY_PTR(a))->instance_wrapper,
+                              ((DyClass *)DY_PTR(b))->instance_wrapper);
+}
+
+/* Add to the format string at OUT the text TEXT, each ~ doubled. */
+static char *add_text(char *out, const char *text) {
+    for (; *text; text++) {
+        *out++ = *text;
+        if (*text == '~') *out++ = '~';
+    }
+    return out;
+}
+
+/* Add to the format string at OUT the type T: a class by its name, a
+ * singleton as (singleton ~s), its object added to the end of *ARGUMENTS. */
+static char *add_type(char *out, D t, D *arguments) {
+    if (dy_kind_p(t, DY_KIND_SINGLETON)) {
+        D cell = dy_pair(((DySingleton *)DY_PTR(t))->object, DY_EMPTY);
+        if (*arguments == DY_EMPTY) *arguments = cell;
+        else dy_set_tail(*arguments, cell);
+        strcpy(out, "(singleton ~s)");
+        return out + strlen(out);
+    }
+    D name = ((DyClass *)DY_PTR(t))->name;
+    return add_text(out, name == DY_FALSE ? "an anonymous class" : dy_symbol_utf8(name));
+}
+
+static size_t type_text_length(D t) {
+    if (dy_kind_p(t, DY_KIND_SINGLETON)) return 14;
+    D name = ((DyClass *)DY_PTR(t))->name;
+    return name == DY_FALSE ? 18 : strlen(dy_symbol_utf8(name));
+}
+
+void dy_check_slot_type_within(D type, D inherited, const char *getter) {
+    if (inherited == DY_UNBOUND || type_within(type, inherited)) return;
+    size_t room = 2 * (strlen(getter) + type_text_length(type) + type_text_length(inherited))
+        + 80;
+    char *format = dy_alloc_bytes(room), *out = format;
+    D arguments = DY_EMPTY;
+    out = add_text(out, "slot ");
+    out = add_text(out, getter);
+    out = add_text(out, ": the new slot type ");
+    out = add_type(out, type, &arguments);
+    out = add_text(out, " is not a subtype of the inherited type ");
+    out = add_type(out, inherited, &arguments);
+    *out = 0;
+    dy_error_format(format, arguments);
+}
+
 /* ------------------------------------------------------- Next methods */
 
 /* env[0] is the next method, env[1] the argument count, env[2..] the

@@ -325,6 +325,16 @@ _Noreturn void dy_error(const char *message, D irritant) {
     report("error", message, irritant);
 }
 
+/* Signal a <simple-error> with the format string FORMAT and the list
+ * ARGUMENTS, if the library is ready; else report FORMAT and stop. */
+_Noreturn void dy_error_format(const char *format, D arguments) {
+    if (can_signal(error_hook)) {
+        DY_CALL(error_hook, dy_make_string_from_utf8(format, strlen(format)),
+                arguments, 0, 0, 2);
+    }
+    report("error", format, arguments == DY_EMPTY ? 0 : arguments);
+}
+
 /* dy_error with the message BEFORE NAME AFTER, however long NAME is. */
 _Noreturn void dy_error_naming(const char *before, const char *name, const char *after,
                                D irritant) {

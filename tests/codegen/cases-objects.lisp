@@ -523,7 +523,7 @@ not-a-singleton
    (define-class <b> (<a>) (v type: <string> init-value: \"s\" init-keyword: v:))
    (print (v (make <b>)))"
   ""
-  :compile-error "not a subclass of")
+  :compile-error "not a subtype of")
 
  ;; Chapter 6: a slot's type and initial value are evaluated after the
  ;; class's variable is defined, so they may name the class.
@@ -2729,7 +2729,7 @@ end
 (define-slot <b> x type: <integer> init-value: 3 init-keyword: bx:)
 (print 'after)"
   ""
-  :compile-error "slot x: the new slot type <integer> is not a subclass of the inherited type <string>")
+  :compile-error "slot x: the new slot type <integer> is not a subtype of the inherited type <string>")
  (class-slot-respecify-type
   "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
 (define-class <b> (<a>) (x init-value: 'bx))
@@ -2741,7 +2741,7 @@ end
 (define-class <b> (<a>) (x type: <integer> init-value: 3))
 (print 'after)"
   ""
-  :compile-error "slot x: the new slot type <integer> is not a subclass of the inherited type <string>")
+  :compile-error "slot x: the new slot type <integer> is not a subtype of the inherited type <string>")
  ;; ... the subclass's slot being defined before the inherited one too.
  (define-slot-checks-subclass-slots
   "(define-class <a> (<object>) (x init-value: 1))
@@ -3204,5 +3204,32 @@ object
 defined
 defined
 \"ERR: the type of the slot q is not a class or singleton: 5\"
+")
+ ;; A redefined slot's type is within each inherited slot's type (chapter
+ ;; 6): checked when the definition runs, for a type computed then and for
+ ;; singletons.
+ (slot-type-within-inherited-when-run
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
+(define-method pick () <integer>)
+(define-method pick-ok () <byte-string>)
+(print (try (method () (define-class <b> (<a>) (x type: (pick) init-value: 3)) 'defined)))
+(print (try (method () (define-class <b2> (<a>) (x type: (pick-ok) init-value: \"t\")) 'defined)))
+(print (try (method () (define-class <b3> (<a>) (x type: (singleton 5) init-value: 5)) 'defined)))
+(print (try (method () (define-class <b4> (<a>) (x type: (singleton \"u\") init-value: \"u\")) 'defined)))
+(define-class <s> (<object>) (y type: (singleton 1) init-value: 1))
+(print (try (method () (define-class <s2> (<s>) (y type: (singleton 1) init-value: 1)) 'defined)))
+(print (try (method () (define-class <s3> (<s>) (y type: (singleton 2) init-value: 2)) 'defined)))
+(print (try (method () (define-class <s4> (<s>) (y type: <integer> init-value: 1)) 'defined)))
+(print (try (method () (define-class <s5> (<s>) (y type: (singleton \"a~b\") init-value: \"a~b\")) 'defined)))"
+  "\"ERR: slot x: the new slot type <integer> is not a subtype of the inherited type <string>\"
+defined
+\"ERR: slot x: the new slot type (singleton 5) is not a subtype of the inherited type <string>\"
+defined
+defined
+\"ERR: slot y: the new slot type (singleton 2) is not a subtype of the inherited type (singleton 1)\"
+\"ERR: slot y: the new slot type <integer> is not a subtype of the inherited type (singleton 1)\"
+\"ERR: slot y: the new slot type (singleton \\\"a~b\\\") is not a subtype of the inherited type (singleton 1)\"
 ")
 )

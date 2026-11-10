@@ -351,6 +351,9 @@ void dy_init(void);
 _Noreturn void dy_error(const char *message, D irritant);
 _Noreturn void dy_error_naming(const char *before, const char *name, const char *after,
                                D irritant);
+/* dy_error with the format string FORMAT (format's directives) and the
+ * list ARGUMENTS. */
+_Noreturn void dy_error_format(const char *format, D arguments);
 _Noreturn void dy_integer_overflow(void);
 /* Warn, as define does when its variable already has a value (chapter 4). */
 void dy_redefining_variable(const char *name);
@@ -1292,6 +1295,10 @@ void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
  * arguments: for a check made after calls that may have reused the
  * thread's argument area. */
 void dy_check_keyword_list(D f, D pairs, const D *accepted, size_t n);
+/* Chapter 6: TYPE, the type of a slot GETTER redefined in a subclass, is
+ * within INHERITED, the type of the slot it overrides (not checked while
+ * INHERITED is DY_UNBOUND, its definition not yet run). */
+void dy_check_slot_type_within(D type, D inherited, const char *getter);
 
 /* A next-method object that, called with no arguments, calls NEXT with
  * the arguments the current method was given. */

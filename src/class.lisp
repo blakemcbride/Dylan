@@ -562,16 +562,45 @@ checks them."
           (when (and (slot.setter old) (not (slot.setter new-slot)))
             (missing "setter:"))))
       (let ((new (slot.type new-slot)))
-        (when (and (slot.type-given? new-slot) (class? new))
+        (when (and (slot.type-given? new-slot) (slot-type? new))
           (dolist (old olds)
             (let ((was (slot.type old)))
-              (when (and (slot.type-given? old) (class? was)
-                         (not (subclass? new was)))
-                (dylan-call dylan/error
-                            (format nil "slot ~a: the new slot type ~a is not a subclass of the inherited type ~a"
-                                    name
-                                    (dylan-symbol->string (class.debug-name new))
-                                    (dylan-symbol->string (class.debug-name was))))))))))))
+              (when (and (slot.type-given? old) (slot-type? was)
+                         (not (type-within? new was)))
+                (dylan-apply dylan/error
+                             (format nil "slot ~a: the new slot type ~a is not a subtype of the inherited type ~a"
+                                     (tildes-doubled name) (type-text new) (type-text was))
+                             (loop for type in (list new was)
+                                   when (singleton? type)
+                                     collect (singleton.object type)))))))))))
+
+(defun slot-type? (type)
+  (or (class? type) (singleton? type)))
+
+(defun type-within? (a b)
+  "Is the type A, a class or singleton, within the type B?"
+  (cond ((singleton? a)
+         (let ((object (singleton.object a)))
+           (if (class? b)
+               (subclass? (get-type object) b)
+               (id? object (singleton.object b)))))
+        ((class? b) (subclass? a b))
+        (t nil)))
+
+(defun tildes-doubled (string)
+  "STRING in a format string, standing for itself."
+  (with-output-to-string (out)
+    (loop for c across string
+          do (write-char c out)
+             (when (char= c #\~) (write-char c out)))))
+
+(defun type-text (type)
+  "TYPE as a slot type error names it, in a format string: a class by its
+name; a singleton as (singleton ~s), its object an argument."
+  (cond ((singleton? type) "(singleton ~s)")
+        ((class.debug-name type)
+         (tildes-doubled (dylan-symbol->string (class.debug-name type))))
+        (t "an anonymous class")))
 
 (defun remove-this-slot-only! (owner slot-vector slot)
   (incf *class-structure-epoch*)        ; See REQUIRED-INIT-KEYWORDS

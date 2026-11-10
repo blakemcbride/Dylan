@@ -580,9 +580,22 @@ intersection of the types of all the slots it overrides."
         (let ((was (slot-type-class old)))
           (when (and was (not (subclass-info-p new was)))
             (let ((*location* (or (sdef-location sd) *location*)))
-              (compile-error "slot ~a: the new slot type ~a is not a subclass of the inherited type ~a"
+              (compile-error "slot ~a: the new slot type ~a is not a subtype of the inherited type ~a"
                              (name-string (module-var-name (sdef-getter sd)))
                              (class-info-name new) (class-info-name was)))))))))
+
+(defun gen-slot-type-redefinition-checks (sd)
+  "Code checking, when SD's definition runs, the type of the slot SD
+redefines against the type of each it overrides: what
+CHECK-SLOT-TYPE-REDEFINITION, which sees only the classes known before
+the program is optimized, could not -- a type computed when run, or a
+singleton."
+  (when (and (sdef-class sd) (not (eq (sdef-allocation sd) :virtual)))
+    (dolist (old (inherited-slot-definitions (sdef-class sd) (sdef-getter sd)))
+      (when (slot-spec-type (sdef-spec old))
+        (emit "dy_check_slot_type_within(~a, ~a, ~a);"
+              (sdef-c sd "type") (sdef-c old "type")
+              (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))))))))
 
 (defun check-slot-redefinition (sd old)
   "Chapter 6: if you redefine an inherited slot, you must respecify all the
@@ -883,7 +896,8 @@ is set, a method takes any."
         (emit "~a = ~a;" type (atom-c (slot-spec-type spec)))
         ;; Chapter 6: a slot's type is a class or a singleton.
         (emit "if (!dy_kind_p(~a, DY_KIND_CLASS) && !dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error_naming(\"the type of the slot \", ~a, \" is not a class or singleton\", ~a);"
-              type type (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))) type)))
+              type type (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))) type)
+        (gen-slot-type-redefinition-checks sd)))
     (when (slot-spec-init-value spec)
       (let ((v (atom-c (slot-spec-init-value spec))))
         (emit "~a = ~a;" (sdef-c sd "init") v)

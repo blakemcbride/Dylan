@@ -181,6 +181,16 @@ check "bin/dylan file: stops at the error" sh -c 'grep -q "^2" batch.out && ! gr
 check "bin/dylan file: the error reported" grep -q "^Dylan error: " batch.err
 echo '(print 4)' > four.dyl
 check "bin/dylan file: status 0 without an error" sh -c '"$0" four.dyl < /dev/null | grep -q "^4"' "$dylan"
+# bin/dylan reads a file's header, from the file or the standard input,
+# and compiles the forms in the module it names
+printf 'module: dylan-user\nauthor: me\n        Example, Inc.\n\n(print (+ 1 2))\n' > header.dyl
+check "bin/dylan file: a header read" sh -c '"$0" header.dyl < /dev/null 2>&1 | grep -q "^3" && ! "$0" header.dyl < /dev/null 2>&1 | grep -q error' "$dylan"
+check "bin/dylan < file: a header read" sh -c '"$0" < header.dyl 2>&1 | grep -q "^3" && ! "$0" < header.dyl 2>&1 | grep -q error' "$dylan"
+printf 'module: nosuch\n\n(print 1)\n' > nosuch.dyl
+"$dylan" < nosuch.dyl > nosuch.out 2> nosuch.err; status=$?
+check "bin/dylan < file: a header's unknown module" sh -c 'test "$0" = 1 && grep -q "^Dylan error: unknown module nosuch" nosuch.err && ! grep -q "^1" nosuch.out' "$status"
+printf 'list (print 5)\n' > noheader.dyl
+check "bin/dylan < file: a first line not a header is read" sh -c '"$0" < noheader.dyl 2>&1 | grep -q "^5"' "$dylan"
 # Writing to a closed pipe ends the run, as SIGPIPE ends a compiled
 # program; an output that fails otherwise is an error reported
 echo '(for ((i 0 (+ i 1))) ((= i 200000)) (print i))' > pipe.dyl

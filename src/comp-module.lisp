@@ -376,6 +376,18 @@ again from their own clauses, so that their imports are recomputed."
          (every (lambda (c) (or (alphanumericp c) (char= c #\-)))
                 (subseq line 0 colon)))))
 
+(defun read-header-rest (stream first-line)
+  "The module the header that begins with FIRST-LINE names (or NIL),
+reading the rest of it from STREAM, through its blank line."
+  (let ((module nil))
+    (loop for line = first-line then (read-line stream nil "")
+          until (string= (string-trim " 	" line) "")
+          do (when (header-keyword-line-p line)
+               (let ((colon (position #\: line)))
+                 (when (string-equal (subseq line 0 colon) "module")
+                   (setf module (string-trim " 	" (subseq line (1+ colon))))))))
+    module))
+
 (defun read-source-header (stream)
   "Read the header of a Dylan source file, if it has one, and answer the
 module it names (or NIL).  Without a header the stream is left untouched."
@@ -386,16 +398,25 @@ module it names (or NIL).  Without a header the stream is left untouched."
         (let ((first-line (read-line stream nil "")))
           (if (not (header-keyword-line-p first-line))
               (progn (file-position stream start) nil)
-              (let ((module nil))
-                (loop for line = first-line then (read-line stream nil "")
-                      until (string= (string-trim " 	" line) "")
-                      do (when (header-keyword-line-p line)
-                           (let ((colon (position #\: line)))
-                             (when (string-equal (subseq line 0 colon) "module")
-                               (setf module (string-trim " 	"
-                                                         (subseq line
-                                                                 (1+ colon))))))))
-                module))))))
+              (read-header-rest stream first-line))))))
+
+(defun read-stream-header (stream)
+  "READ-SOURCE-HEADER, for a stream that may not be a file (bin/dylan's
+standard input): answer the module the header names, or NIL, and the
+stream of the source after it -- STREAM, or, if its first line was read
+and is not a header, that line followed by STREAM."
+  (let ((first (peek-char nil stream nil nil)))
+    (if (not (and first (alpha-char-p first)))
+        (values nil stream)
+        (multiple-value-bind (first-line missing-newline) (read-line stream nil "")
+          (if (header-keyword-line-p first-line)
+              (values (read-header-rest stream first-line) stream)
+              (values nil (make-concatenated-stream
+                           (make-string-input-stream
+                            (if missing-newline
+                                first-line
+                                (format nil "~a~%" first-line)))
+                           stream)))))))
 
 ;;; The compile-time environment (an extension: macros).  Macro bodies and
 ;;; the forms of DEFINE-FOR-MACROS are compiled in a module of their own

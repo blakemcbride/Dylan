@@ -66,7 +66,11 @@ other arguments are refused with a usage message."
 at a terminal to use the debugger."
   (when batch
     (setf dylan::*batch* t
-          sb-ext:*invoke-debugger-hook* #'dylan::end-batch-run))
+          sb-ext:*invoke-debugger-hook* #'dylan::end-batch-run)
+    ;; A file's header names the module its forms are compiled in
+    (multiple-value-bind (module rest) (dylan::read-stream-header *standard-input*)
+      (setf *standard-input* rest)
+      (when module (dylan::in-module module))))
   (loop
     (with-simple-restart (abort "Return to the Dylan read-eval-print loop.")
       (dylan:rep)

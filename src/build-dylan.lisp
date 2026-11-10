@@ -49,7 +49,8 @@ other arguments are refused with a usage message."
                     (first arguments)))
          (in (and file (open-source-file file))))
     (cond ((null arguments)
-           (run-loop (not (eql 1 (sb-unix:unix-isatty 0)))))
+           (let ((*standard-input* (dylan::make-pushback-stream *standard-input*)))
+             (run-loop (not (eql 1 (sb-unix:unix-isatty 0))))))
           (in
            (with-open-stream (in in)
              (let ((*standard-input* in))

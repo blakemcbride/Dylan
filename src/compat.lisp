@@ -978,6 +978,40 @@ T and NIL -- #t and #f -- so they get lower-case names of their own."
              (peek-char nil stream nil nil)))
     (dylan-token-object token)))
 
+;;; SBCL's fd-streams cannot take back a character once a PEEK-CHAR or
+;;; LISTEN after it has met the end of a pipe that held more before it, as
+;;; PEEK-DYLAN-SECOND-CHAR does at a # or . that ends the input.  bin/dylan
+;;; reads its standard input through a PUSHBACK-STREAM, which keeps the
+;;; characters taken back itself.
+(defclass pushback-stream (sb-gray:fundamental-character-input-stream)
+  ((source :initarg :source :reader pushback-stream-source)
+   (pending :initform '() :accessor pushback-stream-pending)))
+
+(defun make-pushback-stream (source)
+  (make-instance 'pushback-stream :source source))
+
+(defmethod sb-gray:stream-read-char ((s pushback-stream))
+  (if (pushback-stream-pending s)
+      (pop (pushback-stream-pending s))
+      (read-char (pushback-stream-source s) nil :eof)))
+
+(defmethod sb-gray:stream-unread-char ((s pushback-stream) char)
+  (push char (pushback-stream-pending s))
+  nil)
+
+(defmethod sb-gray:stream-read-char-no-hang ((s pushback-stream))
+  (if (pushback-stream-pending s)
+      (pop (pushback-stream-pending s))
+      (read-char-no-hang (pushback-stream-source s) nil :eof)))
+
+(defmethod sb-gray:stream-listen ((s pushback-stream))
+  (or (and (pushback-stream-pending s) t)
+      (listen (pushback-stream-source s))))
+
+(defmethod sb-gray:stream-clear-input ((s pushback-stream))
+  (setf (pushback-stream-pending s) '())
+  (clear-input (pushback-stream-source s)))
+
 (defun peek-dylan-second-char (stream)
   "The character after the one PEEK-CHAR would return, or NIL."
   (let ((first (read-char stream nil nil)))

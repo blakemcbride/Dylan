@@ -255,6 +255,10 @@ printf "(print 'one)\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
 check "bin/dylan: (exit) quits" sh -c 'grep -q "^one" exit.out && ! grep -q "^two" exit.out'
 printf "(define-method exit () (print 'mine))\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
 check "bin/dylan: (exit) calls a program's exit" sh -c 'grep -q "^mine" exit.out && grep -q "^two" exit.out'
+# A # that ends the standard input, after a form, is an end of file there
+# as at the end of a file
+printf '(print 1)\n#' | "$dylan" > hash-end.out 2>&1
+check "bin/dylan: a # ending the standard input" grep -q "End of file after # in Dylan input" hash-end.out
 # bin/dylan recurses as deep as a compiled program: a million calls
 printf '(define-method count-up (n) (if (= n 0) 0 (+ 1 (count-up (- n 1)))))\n(print (count-up 1000000))\n' | "$dylan" > deep.out 2>&1; status=$?
 check "bin/dylan: a recursion a million calls deep" sh -c "test $status = 0 && grep -q 1000000 deep.out"

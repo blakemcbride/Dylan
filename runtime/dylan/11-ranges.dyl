@@ -47,19 +47,26 @@ module: dylan
     (bind-methods ((limit (n) (when (or (not count) (binary< n count)) (set! count n))))
       ;; With by: 0 every value is FROM: the range is unbounded if FROM is
       ;; within the bound, and empty if not.
+      ;; Of integers, the counts are exact whatever the size of the bound
+      ;; less FROM (%range-steps).
       (when up-to
-        (if (zero? by)
-            (unless (binary< from up-to) (limit 0))
-            (limit (max 0 (ceiling/ (binary- up-to from) by)))))
+        (cond ((zero? by) (unless (binary< from up-to) (limit 0)))
+              ((%integers? up-to from by) (limit (%range-steps 1 up-to from by)))
+              (else: (limit (max 0 (ceiling/ (binary- up-to from) by))))))
       (when through
-        (if (zero? by)
-            (when (binary< through from) (limit 0))
-            (limit (max 0 (binary+ (floor/ (binary- through from) by) 1)))))
+        (cond ((zero? by) (when (binary< through from) (limit 0)))
+              ((%integers? through from by) (limit (%range-steps 2 through from by)))
+              (else: (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))))
       (bind ((r (%make <range>)))
         (set! (%from r) from)
         (set! (%by r) by)
         (set! (%size r) count)
         r))))
+
+;;; Whether A, B and C are all integers
+(define %integers?
+  (method (a b c)
+    (and (%instance? a <integer>) (%instance? b <integer>) (%instance? c <integer>))))
 
 (define-method make ((class (singleton <range>)) #rest arguments)
   (apply range arguments))
@@ -184,6 +191,17 @@ module: dylan
         ((zero? (%by r))
          (and (%range-index? r 0) (test value (%from r)) #t))
         ((%float-range? r) (%float-range-member? value r test))
+        ;; A range of integers: VALUE's index exactly, whatever the size of
+        ;; VALUE less from.  The element there is VALUE's exact value; past
+        ;; 63 bits, the index is of an unbounded range alone.
+        ((and (%instance? (%from r) <integer>) (%instance? (%by r) <integer>) (%exact? value))
+         (bind ((v (%exact value)))
+           (and (%instance? v <integer>)
+                (bind ((k (%range-steps 0 v (%from r) (%by r))))
+                  (and k
+                       (if (id? k #t) (not (%size r)) (%range-index? r k))
+                       (test value v)
+                       #t)))))
         (else:
          (bind ((from (%from r)) (by (%by r))
                 (k (if (and (%exact? value) (%exact? from) (%exact? by))
@@ -346,27 +364,51 @@ module: dylan
     (bind ((d (lcm (denominator a) (denominator b))))
       (binary/ (lcm (binary* a d) (binary* b d)) d))))
 
+;;; The first point of the grid COMMON + k PERIOD at or after LO, and the
+;;; last at or before HI.  Of integers, exactly, whatever the distance from
+;;; COMMON: #t if the point is beyond 63 bits and the other end, BOUND, is
+;;; given, which it is then past.
+
+(define %grid-first
+  (method (common period lo bound)
+    (if (%integers? common period lo)
+        (bind ((m (%range-steps 3 common lo period)))
+          (if (and bound (binary< (binary- 4611686018427387903 m) lo)) #t (binary+ lo m)))
+        (binary+ common (binary* period (ceiling/ (binary- lo common) period))))))
+
+(define %grid-last
+  (method (common period hi bound)
+    (if (%integers? common period hi)
+        (bind ((m (%range-steps 3 hi common period)))
+          (if (and bound (binary< hi (binary+ -4611686018427387904 m))) #t (binary- hi m)))
+        (binary- common (binary* period (ceiling/ (binary- common hi) period))))))
+
 (define %grid-intersection
   (method (x y)
     (bind ((d1 (abs (%by x)))
            (d2 (abs (%by y)))
            (period (%rational-lcm d1 d2))
-           ;; A point common to both grids, among one period of the first's
+           (integers? (and (%integers? (%from x) (%from y) period)
+                           (%instance? d1 <integer>) (%instance? d2 <integer>)))
+           ;; A point common to both grids, among one period of the first's:
+           ;; of integers, toward zero, and found exactly (%range-steps).
            (common (bind-exit (return)
-                     (for ((k 0 (binary+ k 1)))
-                          ((not (binary< k (binary/ period d1))) #f)
-                       (bind ((p (binary+ (%from x) (binary* k d1))))
-                         (when (%instance? (binary/ (binary- p (%from y)) d2) <integer>)
-                           (return p)))))))
+                     (bind ((step (if (and integers? (not (negative? (%from x)))) (unary- d1) d1)))
+                       (for ((k 0 (binary+ k 1)))
+                            ((not (binary< k (binary/ period d1))) #f)
+                         (bind ((p (binary+ (%from x) (binary* k step))))
+                           (when (if integers?
+                                     (zero? (%range-steps 3 p (%from y) d2))
+                                     (%instance? (binary/ (binary- p (%from y)) d2) <integer>))
+                             (return p))))))))
       (bind ((lo1 hi1 (%range-interval x))
              (lo2 hi2 (%range-interval y)))
         (bind ((lo (if (and lo1 lo2) (max lo1 lo2) (or lo1 lo2)))
                (hi (if (and hi1 hi2) (min hi1 hi2) (or hi1 hi2))))
-          (bind ((first (and common lo
-                             (binary+ common (binary* period (ceiling/ (binary- lo common) period)))))
-                 (last (and common hi
-                            (binary- common (binary* period (ceiling/ (binary- common hi) period))))))
+          (bind ((first (and common lo (%grid-first common period lo hi)))
+                 (last (and common hi (%grid-last common period hi lo))))
             (cond ((not common) (%empty-range))
+                  ((or (id? first #t) (id? last #t)) (%empty-range))
                   ((and first last)
                    (cond ((binary< last first) (%empty-range))
                          ((positive? (%by x)) (range from: first through: last by: period))

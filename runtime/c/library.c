@@ -118,6 +118,42 @@ PRIMITIVE(divide) {
     return two_values(quotient, dy_float_remainder(a, b, q));
 }
 
+/* (%range-steps kind a b c), of integers, C not 0: the arithmetic of a
+ * range of integers from B by C (chapter 12), done exactly, whatever the
+ * size of A - B, which fits in 64 bits:
+ *   0  the index at which A would be, (A - B) / C, if an integer and not
+ *      negative; #f if not; #t if it is one beyond 63 bits
+ *   1  the number of elements below the bound A (up-to:),
+ *      max(0, ceiling((A - B) / C))
+ *   2  the number not past the bound A (through:),
+ *      max(0, floor((A - B) / C) + 1)
+ *   3  (A - B) modulo C
+ * A count beyond 63 bits is an integer overflow. */
+PRIMITIVE(range_steps) {
+    need(self, argc, 4, 4);
+    int64_t a = int_arg(a1), b = int_arg(a2), c = int_arg(a3);
+    if (c == 0) dy_division_by_zero();
+    int64_t d = a - b, q = d / c, r = d % c;
+    switch (int_arg(a0)) {
+    case 0:
+        if (r != 0 || q < 0) return DY_FALSE;
+        return q > DY_INT_MAX ? DY_TRUE : DY_INT(q);
+    case 1:
+        if (r != 0 && (r > 0) == (c > 0)) q++;
+        if (q <= 0) return DY_INT(0);
+        if (q > DY_INT_MAX) dy_integer_overflow();
+        return DY_INT(q);
+    case 2:
+        if (r != 0 && (r > 0) != (c > 0)) q--;
+        if (q < 0) return DY_INT(0);
+        if (q >= DY_INT_MAX) dy_integer_overflow();
+        return DY_INT(q + 1);
+    default:
+        if (r != 0 && (r > 0) != (c > 0)) r += c;
+        return DY_INT(r);
+    }
+}
+
 /* (%math op x [y]): the irrational functions, on floats.  A rational
  * argument gives a <double-float> (the manual's examples). */
 PRIMITIVE(math) {

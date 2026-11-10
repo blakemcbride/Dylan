@@ -996,6 +996,35 @@ Zip:
 (0 2 4 6 8)
 ")
 
+ ;; The same near the 63-bit limit: a range of integers is sized, searched
+ ;; and intersected exactly, whatever the distances between its bounds and
+ ;; the numbers asked of it, when the answer fits.
+ (range-arithmetic-near-63-bits
+  "(define r (range from: 4611686018427387900 size: 3))
+   (print (list (member? -7 r) (member? 1/3 r) (member? 4611686018427387902 r)
+                (member? 4611686018427387903 r) (member? 4611686018427387902.0 r test: =)))
+   (print (list (member? 4611686018427387903 (range from: -1 by: -1))
+                (member? 4611686018427387902 (range from: -4611686018427387904 by: 2))
+                (member? 4611686018427387902 (range from: -4611686018427387904 by: 1 size: 5))))
+   (print (intersection r (range from: -10 size: 3)))
+   (print (list (size (range from: -4611686018427387904 up-to: 4611686018427387903 by: 4611686018427387903))
+                (size (range from: -4611686018427387904 through: 4611686018427387903 by: 4611686018427387903))
+                (size (range from: 4611686018427387903 through: -4611686018427387904 by: -3))
+                (size (range from: 4611686018427387903 up-to: -4611686018427387904 by: 3))))
+   (print (intersection (range from: -4611686018427387904 by: 3) (range from: 4611686018427387800 by: 2)))
+   (print (intersection (range from: 4611686018427387900 by: -7) (range from: -4611686018427387900 by: 5 size: 10)))
+   (print (intersection (range from: 4611686018427387903 by: 1) (range from: 4611686018427387903 by: -2 size: 3)))
+   (print (intersection (range from: 4611686018427387900 by: 1 size: 4) (range from: 4611686018427387902 by: 1)))"
+  "(#f #f #t #f #f)
+(#f #t #f)
+{range 0 by 1 size 0}
+(3 3 3074457345618258603 0)
+{range 4611686018427387800 by 6}
+{range -4611686018427387865 by -35 size 2}
+{range 4611686018427387903 by 2 size 1}
+{range 4611686018427387902 by 1 size 2}
+")
+
  ;; A collection of numbers in steps as a range
  (as-range
   "(print (as <range> '(1 3 5)))

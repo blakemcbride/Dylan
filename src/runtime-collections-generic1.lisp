@@ -61,7 +61,6 @@
   (lambda (coll-1 coll-2)
     (dylan%check-runtime-stack)
     (let ((key-sequence-1 (dylan-call dylan/key-sequence coll-1))
-          (key-sequence-2 (dylan-call dylan/key-sequence coll-2))
           (size-1 (collection-size coll-1))
           (size-2 (collection-size coll-2)))
       (bool
@@ -70,22 +69,20 @@
              ;; will handle infinite ranges and circular lists
              ((not (= size-1 size-2)) nil)
              (t
-              (loop with state = (initial-state key-sequence-1)
+              ;; Each key of the first is looked up in the second, with a
+              ;; default no element can be, as the compiled library does.
+              (loop with absent = (list nil)
+                    with state = (initial-state key-sequence-1)
                     do (if (not state)
                            (return t)
-                           (let ((key (current-element
-                                                  key-sequence-1 state)))
-                             (if (and (true?
-                                       (dylan-call dylan/member? key key-sequence-2
-                                                   :test
-                                                   (make-dylan-callable
-                                                    (lambda (a b)
-                                                      (dylan-call dylan/= a b)))))
+                           (let* ((key (current-element key-sequence-1 state))
+                                  (other (library-element coll-2 key :default absent)))
+                             (if (and (not (eq other absent))
                                       (true?
                                        (dylan-call
                                         dylan/=
                                         (library-element coll-1 key)
-                                        (library-element coll-2 key))))
+                                        other)))
                                  (setf state (next-state key-sequence-1 state))
                                  (return nil))))))))))))
 

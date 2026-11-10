@@ -2430,7 +2430,7 @@ added
   :error "\"c\" is not an instance of {the class <integer>}")
  ;; A program's assignment to a library variable changes the program's
  ;; calls; the library's own functions keep the library's (chapter 7).
- (library-keeps-its-functions
+ (program-assigns-library-variables
   "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
 (define old binary+)
 (define-method g (a b) (binary+ a b))
@@ -2487,7 +2487,7 @@ my-car
 #(1 2)
 ")
  ;; ... (setter element), print-object, error, as and make among them.
- (library-keeps-its-functions-2
+ (program-assigns-library-variables-2
   "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
 (define-class <pt> (<object>) (x init-value: 1 init-keyword: x:))
 (define-method binary+ ((a <pt>) (b <pt>)) (make <pt> x: (+ (x a) (x b))))

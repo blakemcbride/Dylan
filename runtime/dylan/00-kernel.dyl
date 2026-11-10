@@ -81,8 +81,18 @@ module: dylan
   (method (function #rest more)
     (if (id? more '())
         function
-        (bind ((rest (apply compose more)))
-          (method (#rest arguments) (function (apply rest arguments)))))))
+        ;; The last function takes the arguments, each one before it the
+        ;; value of the one after it, and FUNCTION's values are the
+        ;; result.  LATER is the others, last first.
+        (bind ((later (for ((l more (cdr l))
+                            (r '() (cons (car l) r)))
+                           ((id? l '()) r))))
+          (method (#rest arguments)
+            (bind-methods ((through (fs value)
+                             (if (id? fs '())
+                                 (function value)
+                                 (through (cdr fs) ((car fs) value)))))
+              (through (cdr later) (apply (car later) arguments))))))))
 
 (define complement
   (method (predicate)

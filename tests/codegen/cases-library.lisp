@@ -3158,4 +3158,24 @@ eq
 \"abcde\"
 #(1 #\\x 2)
 ")
+ ;; compose (chapter 17): the last function takes the arguments and the
+ ;; first's values are the result; 300,000 functions are composed in linear
+ ;; time.
+ (compose-of-many-functions
+  "(define-method many (n f)
+  (for ((i 0 (+ i 1)) (l '() (cons f l))) ((= i n) l)))
+(define inc (method (x) (+ x 1)))
+(print ((apply compose (many 300000 inc)) 0))
+(print ((compose inc) 5))
+(print ((compose list (method (a b) (+ a b))) 1 2))
+(print ((compose (method (x) (* x 10)) inc (method (#rest r) (size r))) 'a 'b 'c))
+(bind ((#rest vs ((compose (method (x) (values x (* x 2))) inc) 4))) (print vs))
+(print ((compose list) 1 2))"
+  "300000
+6
+(3)
+40
+(5 10)
+(1 2)
+")
 )

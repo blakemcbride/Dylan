@@ -49,7 +49,8 @@
 (declaim (special dylan/get-range-start dylan/get-range-step dylan/get-range-end
                   dylan/set-range-start! dylan/set-range-step!
                   dylan/set-range-end! dylan/get-range-count
-                  dylan/set-range-count!))
+                  dylan/set-range-count! dylan/get-range-grid
+                  dylan/set-range-grid!))
 
 (add-method
  dylan/as
@@ -153,6 +154,27 @@
                        (setf dylan/get-range-count get))
                      :init (lambda () nil))
 
+;;; copy-sequence, reverse and intersection make a range of a range, with
+;;; the same elements (chapter 12).  Of a range of floats, whose elements
+;;; are rounded, the new range keeps the grid of the one it is made from:
+;;; its element i is the grid's element base + stride * i, origin + (base +
+;;; stride * i) * origin-step, computed as that range computes it, as in
+;;; the compiled library (11-ranges.dyl).  Its start, step and end are
+;;; still its first element, its step and its last element, and COUNT its
+;;; size.  The grid is NIL for any other range.
+
+(defstruct (range-grid (:constructor make-range-grid (origin step base stride)))
+  origin step base stride)
+
+(defparameter dylan/get-range-grid nil)
+(defparameter dylan/set-range-grid! nil)
+
+(create-private-slot <range> <object> "internal-range-grid"
+                     (lambda (set get)
+                       (setf dylan/set-range-grid! set)
+                       (setf dylan/get-range-grid get))
+                     :init (lambda () nil))
+
 ;;; A range's bounds and step are the reals given, an <extended-float>
 ;;; among them: a structure (compat.lisp), not a CL number.  The range's
 ;;; arithmetic is done on the double-float it holds, and an element or
@@ -173,9 +195,6 @@ any of them is one."
 (defun range-element-at (start step k)
   "START + K*STEP, the element at the index K."
   (range-result (+ (range-number start) (* k (range-number step))) start step))
-
-(defun range-negate (step)
-  (range-result (- (range-number step)) step))
 
 (defun zero-step? (range)
   (zerop (range-number (dylan-call dylan/get-range-step range))))
@@ -199,6 +218,57 @@ any of them is one."
   dylan/get-range-end dylan/set-range-end!)
 (define-direct-slot range-count set-range-count! <range>
   dylan/get-range-count dylan/set-range-count!)
+(define-direct-slot range-grid set-range-grid! <range>
+  dylan/get-range-grid dylan/set-range-grid!)
+
+(defun range-ref (range i)
+  "RANGE's element at the index I."
+  (let ((grid (range-grid range)))
+    (if grid
+        (range-element-at (range-grid-origin grid) (range-grid-step grid)
+                          (+ (range-grid-base grid) (* (range-grid-stride grid) i)))
+        (range-element-at (range-start range) (range-step range) i))))
+
+(defun float-range-p (range)
+  "Whether RANGE's elements are floats, rounded."
+  (or (range-grid range)
+      (let ((start (range-start range)) (step (range-step range)))
+        (or (floatp start) (extended-float? start)
+            (floatp step) (extended-float? step)))))
+
+(defun range-grid-of (range)
+  "RANGE's grid, as a RANGE-GRID: its own, or its start and step's."
+  (or (range-grid range)
+      (make-range-grid (range-start range) (range-step range) 0 1)))
+
+(defun sub-range (range k0 d n)
+  "A range of N elements (NIL, unbounded) of RANGE, those at the indexes
+K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
+  (if (float-range-p range)
+      (let* ((grid (range-grid-of range))
+             (origin (range-grid-origin grid))
+             (step (range-grid-step grid))
+             (base (+ (range-grid-base grid) (* (range-grid-stride grid) k0)))
+             (stride (* (range-grid-stride grid) d))
+             (new (dylan%make-<object> <range>)))
+        (set-range-grid! new (make-range-grid origin step base stride))
+        (set-range-start! new (range-element-at origin step base))
+        (set-range-step! new (range-result (* stride (range-number step)) step))
+        (set-range-count! new n)
+        (set-range-end! new (and n (if (plusp n) (range-ref new (- n 1)) (range-start new))))
+        new)
+      (let ((from (range-ref range k0))
+            (by (* d (range-step range))))
+        (if n
+            (dylan-call dylan/range :from from :by by :size n)
+            (dylan-call dylan/range :from from :by by)))))
+
+(defun grid-index (range k)
+  "The index of RANGE whose element is its grid's element K, or NIL."
+  (let* ((grid (range-grid-of range))
+         (i (/ (- k (range-grid-base grid)) (range-grid-stride grid)))
+         (size (range-size range)))
+    (and (integerp i) (>= i 0) (or (null size) (< i size)) i)))
 
 (defun range-size (range)
   "The size of RANGE, or NIL if it is unbounded."
@@ -208,7 +278,7 @@ any of them is one."
     ;; END is on the range's grid (see RANGE), so (END - START)/STEP is an
     ;; integer -- up to float rounding, which ROUND undoes.
     (cond
-      ((zerop step) (range-count range))
+      ((or (zerop step) (range-grid range)) (range-count range))
       (end
        (if (funcall (if (plusp step) #'< #'>) end start)
            0
@@ -231,9 +301,7 @@ any of them is one."
     (dylan%keyword-validate next-method rest '(:default))
     (let ((size (collection-size range)))
       (if (and (>= key 0) (or (null size) (< key size)))
-          (range-element-at (dylan-call dylan/get-range-start range)
-                            (dylan-call dylan/get-range-step range)
-                            key)
+          (range-ref range key)
           (let* ((default-marker (cons 1 2))
                  (default (dylan%find-keyword rest :default
                                               (lambda () default-marker))))
@@ -285,16 +353,34 @@ any of them is one."
                            #'=
                            (lambda (a b) (and class-matches (eql a b))))))
            (bool
-            (if (zerop step)
-                (and (not (eql 0 (dylan-call dylan/get-range-count range)))
-                     (funcall same? val start))
+            (cond
+              ((zerop step)
+               (and (not (eql 0 (dylan-call dylan/get-range-count range)))
+                    (funcall same? val start)))
+              ;; A range of floats: one of the grid elements by the index
+              ;; (VAL - origin) / step rounds to, an element being rounded,
+              ;; that is an element of RANGE.  Its elements are floats: id?
+              ;; to no rational.
+              ((float-range-p range)
+               (and (or (not (eq test dylan/id?)) (floatp val))
+                    (let* ((grid (range-grid-of range))
+                           (q (/ (- val (range-number (range-grid-origin grid)))
+                                 (range-number (range-grid-step grid)))))
+                      (and (< (abs q) 4d18)
+                           (let ((k (round q)))
+                             (some (lambda (d)
+                                     (let ((i (grid-index range (+ k d))))
+                                       (and i (funcall same? val
+                                                       (range-number (range-ref range i))))))
+                                   '(0 -1 1)))))))
+              (t
                 (and (funcall (if (minusp step) #'<= #'>=) val start)
                      (or (not end)
                          (funcall (if (minusp step) #'>= #'<=) val end))
                      (let ((k (/ (- (rational val) (rational start))
                                  (rational step))))
                        (and (integerp k)
-                            (funcall same? val (+ start (* k step)))))))))))))))
+                            (funcall same? val (+ start (* k step))))))))))))))))
 
 ;;;;
 ;;;; Functions for Sequences (page 104)
@@ -349,13 +435,8 @@ any of them is one."
            (end (check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s"
                                  range start
                                  (dylan%find-keyword rest :end
-                                                     (lambda () dylan%false))))
-           (step (dylan-call dylan/get-range-step range))
-           (from (range-element-at (dylan-call dylan/get-range-start range)
-                                   step start)))
-      (if end
-          (dylan-call dylan/range :from from :size (- end start) :by step)
-          (dylan-call dylan/range :from from :by step))))))
+                                                     (lambda () dylan%false)))))
+      (sub-range range start 1 (and end (- end start)))))))
 
 (add-method
  dylan/concatenate
@@ -381,24 +462,21 @@ any of them is one."
              (dylan-call dylan/error "reverse: the range is unbounded"))
             ((zerop (collection-size range))
              (dylan-call dylan/range :from start :by step :size 0))
-            (t (dylan-call dylan/range :from end :by (range-negate step)
-                           :size (collection-size range))))))))
+            (t (let ((n (collection-size range)))
+                 (sub-range range (- n 1) -1 n))))))))
 
 (add-method
  dylan/reverse!
  (dylan%function->method
   one-range
   (lambda (range)
-    (let ((start (dylan-call dylan/get-range-start range))
-          (end (dylan-call dylan/get-range-end range))
-          (step (dylan-call dylan/get-range-step range)))
-      (if end
-          (progn
-            (dylan-call dylan/set-range-start! range end)
-            (dylan-call dylan/set-range-end! range start)
-            (dylan-call dylan/set-range-step! range (range-negate step))
-            range)
-          (dylan-call dylan/error "reverse: the range is unbounded"))))))
+    (let ((reversed (dylan-call dylan/reverse range)))
+      (set-range-start! range (range-start reversed))
+      (set-range-step! range (range-step reversed))
+      (set-range-end! range (range-end reversed))
+      (set-range-count! range (range-count reversed))
+      (set-range-grid! range (range-grid reversed))
+      range))))
 
 (add-method
  dylan/last
@@ -528,13 +606,27 @@ any of them is one."
           (size-2 (collection-size range-2)))
       ;; Equal when their elements are: a range of one element has no
       ;; step to compare.
+      ;; A range on another's grid is compared by its elements if bounded,
+      ;; by its grid if not, as in the compiled library.
       (bool
        (cond ((or (and size-1 (not size-2))
                   (and (not size-1) size-2))
               nil)                      ; One is unbound
              ((not (and size-1 size-2)) ; Both unbound
-              (and (= start-1 start-2) (= step-1 step-2)))
+              (let ((grid-1 (range-grid-of range-1))
+                    (grid-2 (range-grid-of range-2)))
+                (and (= start-1 start-2) (= step-1 step-2)
+                     (= (range-number (range-grid-origin grid-1))
+                        (range-number (range-grid-origin grid-2)))
+                     (= (range-number (range-grid-step grid-1))
+                        (range-number (range-grid-step grid-2)))
+                     (= (range-grid-base grid-1) (range-grid-base grid-2))
+                     (= (range-grid-stride grid-1) (range-grid-stride grid-2)))))
              ((/= size-1 size-2) nil)
+             ((or (range-grid range-1) (range-grid range-2))
+              (loop for i below size-1
+                    always (true? (dylan-call dylan/= (range-ref range-1 i)
+                                              (range-ref range-2 i)))))
              ((= 0 size-1) t)           ; Empty ranges are binary=
              ((= 1 size-1) (= start-1 start-2))
              (t (and (= start-1 start-2)
@@ -593,6 +685,22 @@ any of them is one."
                 (first (dylan-call dylan/range :from first :by period))
                 (t (dylan-call dylan/range :from last :by (- period)))))))))
 
+(defun float-intersection (range-1 range-2 test)
+  (let ((ks (loop for i below (collection-size range-1)
+                  when (true? (dylan-call dylan/member? (range-ref range-1 i) range-2
+                                          :test test))
+                    collect i)))
+    (cond ((null ks) (empty-range))
+          ((null (cdr ks)) (sub-range range-1 (car ks) 1 1))
+          (t (let ((d (- (second ks) (first ks))))
+               (loop for (a b) on ks
+                     while b
+                     unless (= (- b a) d)
+                       do (dylan-call dylan/error
+                                      "intersection: the elements of ~s in ~s are not in steps"
+                                      range-1 range-2))
+               (sub-range range-1 (car ks) d (length ks)))))))
+
 (defun general-intersection (next-method range-1 range-2 rest)
   "The sequence method's intersection of the two ranges."
   (if (functionp next-method)
@@ -634,12 +742,11 @@ any of them is one."
              (ranges-intersection range-1 range-2))
             ((and (collection-size range-1)
                   (collection-size range-2))
-             ;; Floats: intersect the elements.
-             (dylan-call dylan/as <range>
-                         (general-intersection next-method range-1 range-2
-                                               rest)))
+             ;; Floats: the elements of the first in the second, which
+             ;; must be at indexes in steps.
+             (float-intersection range-1 range-2 (or test dylan/id?)))
             (t (dylan-call dylan/error
-                           "(intersection <range> <range>) -- unbounded ranges with float steps"
+                           "intersection: unbounded ranges of floats: ~s ~s"
                            range-1 range-2)))))))
 
 ;;;

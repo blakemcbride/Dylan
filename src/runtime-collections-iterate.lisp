@@ -104,7 +104,7 @@
 ;;; index for a simple vector, and the index for a range.  A range is read
 ;;; afresh each time, as the methods do, since ADD! and REVERSE! change it.
 
-(declaim (ftype function range-size range-start range-step range-element-at
+(declaim (ftype function range-size range-ref
                          deque-count deque-ref deque-check))
 
 (defun initial-state (collection)
@@ -155,7 +155,7 @@
          (svref collection (svref state 0)))
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
-         (range-element-at (range-start collection) (range-step collection) state))
+         (range-ref collection state))
         ((and *fast-iterate-deque* (integerp state) (instance? collection)
               (eq (instance.class collection) <deque>))
          (deque-ref collection (deque-check collection state)))
@@ -498,9 +498,7 @@ answers #f (an unbounded collection)."
   (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
   (lambda (range state)
     ;; FROM + k*BY, the first element too, as element answers.
-    (range-element-at (dylan-call dylan/get-range-start range)
-                      (dylan-call dylan/get-range-step range)
-                      state))))
+    (range-ref range state))))
 (add-method
  dylan/current-element
  (dylan%function->method

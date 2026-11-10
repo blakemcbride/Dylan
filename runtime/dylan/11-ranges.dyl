@@ -5,13 +5,25 @@ module: dylan
 ;;; <range> (chapter 12, "Operations on Ranges"): arithmetic sequences,
 ;;; possibly unbounded.  Element i is from + i * by; the size is #f if the
 ;;; range has no bound.  The iteration state is the index.
+;;;
+;;; copy-sequence, reverse and intersection make a range of a range, with
+;;; the same elements (chapter 12).  Of a range of floats, whose elements
+;;; are rounded, the new range keeps the grid of the one it is made from:
+;;; its element i is the grid's element base + stride * i, origin + (base +
+;;; stride * i) * origin-by, computed as that range computes it.  Its from
+;;; and by are still its first element and its step.  %origin is #f for any
+;;; other range.
 
 ;;; The slots take no init-keywords: make of a program's subclass of
 ;;; <range> takes only the subclass's own, as for the other collections.
 (define-class <range> (<sequence>)
   (%from init-value: 0)
   (%by init-value: 1)
-  (%size init-value: #f))
+  (%size init-value: #f)
+  (%origin init-value: #f)
+  (%origin-by init-value: 1)
+  (%base init-value: 0)
+  (%stride init-value: 1))
 
 (define-method class-for-copy ((r <range>)) <list>)
 
@@ -52,7 +64,46 @@ module: dylan
 (define-method make ((class (singleton <range>)) #rest arguments)
   (apply range arguments))
 
-(define %range-element (method (r i) (binary+ (%from r) (binary* i (%by r)))))
+(define %range-element
+  (method (r i)
+    (if (%origin r)
+        (binary+ (%origin r) (binary* (binary+ (%base r) (binary* (%stride r) i)) (%origin-by r)))
+        (binary+ (%from r) (binary* i (%by r))))))
+
+;;; Whether R's elements are floats, rounded
+(define %float-range?
+  (method (r)
+    (or (%origin r) (%instance? (%from r) <float>) (%instance? (%by r) <float>))))
+
+;;; R's grid: its element K is origin + K * by
+(define %grid-origin (method (r) (or (%origin r) (%from r))))
+(define %grid-by (method (r) (if (%origin r) (%origin-by r) (%by r))))
+
+;;; A range of N elements (#f, unbounded) of R, those at the indexes K0,
+;;; K0 + D, K0 + 2D, ...: on R's grid if R is a range of floats.
+(define %sub-range
+  (method (r k0 d n)
+    (if (%float-range? r)
+        (bind ((s (%make <range>))
+               (origin (%grid-origin r))
+               (by (%grid-by r))
+               (base (binary+ (%base r) (binary* (%stride r) k0)))
+               (stride (binary* (%stride r) d)))
+          (set! (%origin s) origin)
+          (set! (%origin-by s) by)
+          (set! (%base s) base)
+          (set! (%stride s) stride)
+          (set! (%from s) (binary+ origin (binary* base by)))
+          (set! (%by s) (binary* stride by))
+          (set! (%size s) n)
+          s)
+        (make <range> from: (%range-element r k0) by: (binary* d (%by r)) size: n))))
+
+;;; The index of R whose element is the grid's element K, if any
+(define %grid-index
+  (method (r k)
+    (bind ((i (binary/ (binary- k (%base r)) (%stride r))))
+      (and (%range-index? r i) i))))
 
 (define %range-index?
   (method (r i)
@@ -132,6 +183,7 @@ module: dylan
         ((not (%instance? value <real>)) #f)
         ((zero? (%by r))
          (and (%range-index? r 0) (test value (%from r)) #t))
+        ((%float-range? r) (%float-range-member? value r test))
         (else:
          (bind ((from (%from r)) (by (%by r))
                 (k (if (and (%exact? value) (%exact? from) (%exact? by))
@@ -140,6 +192,22 @@ module: dylan
            (and (%instance? k <integer>)
                 (%range-index? r k)
                 (test value (%range-element r k))
+                #t)))))
+
+;;; Whether VALUE is an element of the range of floats R: one of the grid
+;;; elements by the index (VALUE - origin) / by rounds to, an element
+;;; being rounded, that is an element of R.  Its elements are floats: id?
+;;; to no rational.
+(define %float-range-member?
+  (method (value r test)
+    (and (or (not (id? test id?)) (%instance? value <float>))
+         (bind ((q (binary/ (binary- value (%grid-origin r)) (%grid-by r))))
+           (and (binary< (abs q) 4.0e18)
+                (bind ((k (round q)))
+                  (any? (method (d)
+                          (bind ((i (%grid-index r (binary+ k d))))
+                            (and i (test value (%range-element r i)))))
+                        '(0 -1 1)))
                 #t)))))
 
 ;;; A real, exactly: a float as the rational it holds
@@ -186,35 +254,45 @@ module: dylan
                            (and n (binary< n end)))))
       (error "copy-sequence: bad start: or end: for ~s: ~s ~s" r start end)))
   (bind ((stop (or end (%size r))))
-    (make <range> from: (%range-element r start) by: (%by r)
-                  size: (and stop (max 0 (binary- stop start))))))
+    (%sub-range r start 1 (and stop (max 0 (binary- stop start))))))
 
 (define-method reverse ((r <range>))
   (unless (%size r) (error "reverse: the range is unbounded"))
   (if (zero? (%size r))
       (make <range> from: (%from r) by: (%by r) size: 0)
-      (make <range> from: (%range-element r (binary- (%size r) 1))
-                    by: (unary- (%by r)) size: (%size r))))
+      (%sub-range r (binary- (%size r) 1) -1 (%size r))))
 
 (define-method reverse! ((r <range>))
   (bind ((reversed (reverse r)))
     (set! (%from r) (%from reversed))
     (set! (%by r) (%by reversed))
+    (set! (%origin r) (%origin reversed))
+    (set! (%origin-by r) (%origin-by reversed))
+    (set! (%base r) (%base reversed))
+    (set! (%stride r) (%stride reversed))
     r))
 
 ;;; An unbounded range is = only to a range with the same start and step
-;;; (a sequence's elements would never end), and its hash is of those.
+;;; (a sequence's elements would never end), on the same grid, and its
+;;; hash is of those.  A bounded range made on another's grid is compared
+;;; by its elements.
 (define-method =hash ((r <range>))
   (if (%size r)
       (next-method)
       (%entry-hash (=hash (%from r)) (=hash (%by r)))))
 
 (define-method binary= ((x <range>) (y <range>))
-  (and (= (%size x) (%size y))
-       (or (and (%size x) (zero? (%size x)))
-           (and (= (%from x) (%from y))
-                (or (and (%size x) (= (%size x) 1))
-                    (= (%by x) (%by y)))))))
+  (cond ((not (= (%size x) (%size y))) #f)
+        ((and (%size x) (or (%origin x) (%origin y))) (next-method))
+        ((not (%size x))
+         (and (= (%from x) (%from y)) (= (%by x) (%by y))
+              (= (%grid-origin x) (%grid-origin y)) (= (%grid-by x) (%grid-by y))
+              (= (%base x) (%base y)) (= (%stride x) (%stride y))))
+        (else:
+         (or (zero? (%size x))
+             (and (= (%from x) (%from y))
+                  (or (= (%size x) 1)
+                      (= (%by x) (%by y))))))))
 
 ;;; The intersection of two ranges is a range, as the interactive
 ;;; implementation makes it (src/runtime-collections-range.lisp), and is
@@ -225,7 +303,8 @@ module: dylan
 ;;; the range is; two meet in the grid of their common points, whose step
 ;;; is the least common multiple of theirs, clipped to both intervals, and
 ;;; run the way the first runs.  Ranges of floats, both bounded, are
-;;; intersected as sequences.
+;;; intersected as sequences: the elements of the first that are in the
+;;; second, which must be at indexes in steps.
 (define-method intersection ((x <range>) (y <range>) #key (test id?))
   (cond ((not (or (id? test id?) (id? test =))) (next-method))
         ((zero? (%by x))
@@ -235,10 +314,25 @@ module: dylan
            (if (and (member? v y) (member? v x)) (range from: v size: 1) (%empty-range))))
         ((every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
          (%grid-intersection x y))
-        ((and (%size x) (%size y)) (as <range> (next-method)))
+        ((and (%size x) (%size y)) (%float-intersection x y test))
         (else: (error "intersection: unbounded ranges of floats: ~s ~s" x y))))
 
 (define %empty-range (method () (range from: 0 size: 0)))
+
+(define %float-intersection
+  (method (x y test)
+    (bind ((ks (for ((i (binary- (%size x) 1) (binary- i 1))
+                     (ks '() (if (member? (%range-element x i) y test: test) (cons i ks) ks)))
+                    ((negative? i) ks))))
+      (cond ((id? ks '()) (%empty-range))
+            ((id? (cdr ks) '()) (%sub-range x (car ks) 1 1))
+            (else:
+             (bind ((d (binary- (car (cdr ks)) (car ks))))
+               (for ((l (cdr ks) (cdr l)))
+                    ((id? (cdr l) '()))
+                 (unless (= (binary- (car (cdr l)) (car l)) d)
+                   (error "intersection: the elements of ~s in ~s are not in steps" x y)))
+               (%sub-range x (car ks) d (%list-length ks))))))))
 
 ;;; The lowest and highest elements of R, #f where unbounded
 (define %range-interval

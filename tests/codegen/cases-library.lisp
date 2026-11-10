@@ -930,7 +930,7 @@ Zip:
 {range 1 by 1 size 6}
 {range 10 by -6 size 2}
 {range 0 by 1 size 0}
-{range 1.0 by 1.0 size 2}
+{range 1.0 by 1 size 2}
 (0 2 4 6 8)
 ")
 
@@ -1898,7 +1898,7 @@ error
 \"ERR: subsequence-position: count: must be an integer: 1.5\"
 ")
  ;; Element i of a range is from + i*by, the first one too (with a float
- ;; step, a float), and reverse runs from the last by -by.
+ ;; step, a float), and reverse has the same elements, last first.
  (range-elements
   "(define r (range from: 1 by: 0.5 up-to: 3))
 (print (first r))
@@ -1929,7 +1929,7 @@ error
 #t
 (1.0 1.5 2.0 2.5)
 (0.30000000000000004 0.30000000000000004 0.0)
-(0.30000000000000004 0.20000000000000004 0.10000000000000003 0.0)
+(0.30000000000000004 0.2 0.1 0.0)
 1.0
 (1.0 1.0)
 1/2
@@ -1943,7 +1943,7 @@ error
 (1.0 1.0 1.0)
 #t
 \"ERR: reverse: the range is unbounded\"
-(1.4 1.2999999999999998 1.2 1.0999999999999999 0.9999999999999999)
+(1.4 1.3 1.2 1.1 1.0)
 (-1 1 3 5)
 0
 (2.5 2.0 1.5 1.0)
@@ -2528,5 +2528,143 @@ half
 ({<deque> a x c} {<deque> 2 2 1} {<deque> 3 2 1})
 (1500 12 1)
 ({<stretchy-vector> a b} 2)
+")
+ ;; A range of floats holds origin + k * by, so member?, reverse,
+ ;; copy-sequence, reverse!, = and intersection agree with element
+ ;; (chapter 12).
+ (float-range-steps
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define r (range from: 0.0 by: 0.1 size: 10))
+(print (member? (element r 3) r))
+(print (every? (method (x) (member? x r)) r))
+(print (try (method () (intersection r r))))
+(print (as <list> (try (method () (intersection r r)))))
+(define r20 (range from: 0.0 by: 0.1 size: 20))
+(print (as <list> (reverse r20)))
+(print (= (as <list> (reverse r20)) (reverse (as <list> r20))))
+(print (as <list> (copy-sequence r20 start: 3)))
+(print (= (as <list> (copy-sequence r20 start: 3)) (copy-sequence (as <list> r20) start: 3)))
+(print (reverse r20))
+(print (copy-sequence r20 start: 3 end: 7))
+(print (= (reverse (reverse r20)) r20))
+(define rr (copy-sequence r20))
+(reverse! rr)
+(print (= rr (reverse r20)))
+(print (as <list> rr))
+(print (member? 0.30000000000000004 (reverse r20)))
+(print (member? 0.3 (reverse r20)))
+(print (member? 0.3 r20 test: =))
+(print (member? 3 (range from: 0.0 by: 1.0 size: 5)))
+(print (member? 3 (range from: 0.0 by: 1.0 size: 5) test: =))
+(print (member? 3.0 (range from: 0 by: 1 size: 5)))
+(print (member? 3.0 (range from: 0 by: 1 size: 5) test: =))
+(define u (range from: 0.0 by: 0.1))
+(print (member? (element u 1000) u))
+(print (element (copy-sequence u start: 5) 2))
+(print (= (copy-sequence u start: 5) (copy-sequence u start: 5)))
+(print (= (copy-sequence u start: 5) (range from: (element u 5) by: 0.1)))
+(print (as <list> (intersection (copy-sequence r20 start: 2) (range from: 0.0 by: 0.2 size: 10) test: =)))
+(print (as <list> (intersection (range from: 0 size: 5) (range from: 0.0 by: 1.0 size: 5) test: =)))
+(print (intersection (range from: 0 size: 5) (range from: 0.0 by: 1.0 size: 5)))
+(print (as <list> (reverse (range from: 1 by: 2 size: 4))))
+(print (reverse (range from: 1 by: 2 size: 4)))
+(print (copy-sequence (range from: 1 by: 2 size: 4) start: 1))
+(print (= (copy-sequence r20 start: 3) (as <list> (copy-sequence r20 start: 3))))
+(print (try (method () (intersection (range from: 0.0 by: 0.1 size: 30) (vector 0.0 0.1 0.30000000000000004)))))
+(print (size (reverse r20)))
+(print (last (reverse r20)))"
+  "#t
+#t
+{range 0.0 by 0.1 size 10}
+(0.0 0.1 0.2 0.30000000000000004 0.4 0.5 0.6000000000000001 0.7000000000000001 0.8 0.9)
+(1.9000000000000001 1.8 1.7000000000000002 1.6 1.5 1.4000000000000001 1.3 1.2000000000000002 1.1 1.0 0.9 0.8 0.7000000000000001 0.6000000000000001 0.5 0.4 0.30000000000000004 0.2 0.1 0.0)
+#t
+(0.30000000000000004 0.4 0.5 0.6000000000000001 0.7000000000000001 0.8 0.9 1.0 1.1 1.2000000000000002 1.3 1.4000000000000001 1.5 1.6 1.7000000000000002 1.8 1.9000000000000001)
+#t
+{range 1.9000000000000001 by -0.1 size 20}
+{range 0.30000000000000004 by 0.1 size 4}
+#t
+#t
+(1.9000000000000001 1.8 1.7000000000000002 1.6 1.5 1.4000000000000001 1.3 1.2000000000000002 1.1 1.0 0.9 0.8 0.7000000000000001 0.6000000000000001 0.5 0.4 0.30000000000000004 0.2 0.1 0.0)
+#t
+#f
+#f
+#f
+#t
+#f
+#t
+#t
+0.7000000000000001
+#t
+#f
+(0.2 0.4 0.6000000000000001 0.8 1.0 1.2000000000000002 1.4000000000000001 1.6 1.8)
+(0 1 2 3 4)
+{range 0 by 1 size 0}
+(7 5 3 1)
+{range 7 by -2 size 4}
+{range 3 by 2 size 3}
+#t
+(0.0 0.1 0.30000000000000004)
+20
+0.0
+")
+ ;; ... of <single-float>s and <extended-float>s too, a zero step, a
+ ;; <ratio> start with a float step, and ranges whose elements are
+ ;; not in steps of each other.
+ (float-range-steps-2
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define e (range from: (as <extended-float> 0) by: (as <extended-float> 0.1) size: 6))
+(print (map object-class (as <list> e)))
+(print (as <list> (reverse e)))
+(print (map object-class (as <list> (reverse e))))
+(print (member? (element e 3) (reverse e)))
+(print (member? (element e 3) (copy-sequence e start: 2)))
+(print (reverse e))
+(define s (range from: 0.0s0 by: 0.1s0 size: 6))
+(print (as <list> (reverse s)))
+(print (member? (element s 3) (reverse s)))
+(print (member? (element s 3) s))
+(print (intersection s (reverse s)))
+(print (as <list> (intersection s (reverse s))))
+(define z (range from: 0.5 by: 0.0 size: 3))
+(print (reverse z))
+(print (as <list> (copy-sequence z start: 1)))
+(print (member? 0.5 (reverse z)))
+(print (try (method () (intersection (range from: 0.0 by: 0.1) (range from: 0.0 by: 0.2)))))
+(define m (range from: 1 by: 0.5 size: 5))
+(print (as <list> (reverse m)))
+(print (member? 2 m test: =))
+(print (member? 2.0 (reverse m)))
+(define r (range from: 0.0 by: 0.1 size: 10))
+(define rr (reverse r))
+(reverse! rr)
+(print (= rr r))
+(print (as <list> (copy-sequence (reverse r) start: 2 end: 5)))
+(print (as <list> (reverse (copy-sequence (reverse r) start: 2 end: 5))))
+(print (try (method () (intersection r (range from: 0.0 by: 0.30000000000000004 size: 4) test: =))))
+(print (= (range from: 0.0 by: 0.1 size: 3) (copy-sequence r end: 3)))"
+  "({the class <extended-float>} {the class <extended-float>} {the class <extended-float>} {the class <extended-float>} {the class <extended-float>} {the class <extended-float>})
+(0.5l0 0.4l0 0.30000000000000004l0 0.2l0 0.1l0 0.0l0)
+({the class <extended-float>} {the class <extended-float>} {the class <extended-float>} {the class <extended-float>} {the class <extended-float>} {the class <extended-float>})
+#t
+#t
+{range 0.5l0 by -0.1l0 size 6}
+(0.5s0 0.4s0 0.3s0 0.2s0 0.1s0 0.0s0)
+#t
+#t
+{range 0.0s0 by 0.1s0 size 6}
+(0.0s0 0.1s0 0.2s0 0.3s0 0.4s0 0.5s0)
+{range 0.5 by -0.0 size 3}
+(0.5 0.5)
+#t
+\"ERR: intersection: unbounded ranges of floats: {range 0.0 by 0.1} {range 0.0 by 0.2}\"
+(3.0 2.5 2.0 1.5 1.0)
+#t
+#t
+#t
+(0.7000000000000001 0.6000000000000001 0.5)
+(0.5 0.6000000000000001 0.7000000000000001)
+{range 0.0 by 0.30000000000000004 size 3}
+#t
 ")
 )

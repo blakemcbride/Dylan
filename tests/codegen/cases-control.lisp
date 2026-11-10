@@ -935,4 +935,13 @@ stop
   "(print (quote . a))"
   ""
   :compile-error "quote: bad syntax")
+ ;; A handler may not return from an error the implementation signals,
+ ;; as from one error signals (chapter 13).
+ (handler-returns-from-trap-error
+  "(print 1)
+(print (handler-bind (<error> (method (c next) 'ret)) (car 5)))
+(print 2)"
+  "1
+"
+  :error "a handler returned from error: not a list: 5")
 )

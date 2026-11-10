@@ -390,13 +390,21 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
       (funcall dylan-compiled-output)))
 
 ;; A name for the condition handler...
+;;
+;; A Lisp error that is one of Dylan's own -- a wrong argument count, a
+;; value of the wrong type -- is signalled as ERROR signals it, and a
+;; handler may not return from it either (chapter 13); any other Lisp
+;; condition, which the default handler declines, goes back to the Lisp
+;; handlers.
 (defun dylan%lisp-condition-handler (condition)
   (multiple-value-bind (format-string format-arguments)
       (implementation-specific/reflect-condition condition)
-    (dylan-call dylan/signal
-                (dylan-call dylan/make <simple-error>
-                            :format-string format-string
-                            :format-arguments format-arguments))))
+    (let ((dylan-condition (dylan-call dylan/make <simple-error>
+                                       :format-string format-string
+                                       :format-arguments format-arguments)))
+      (dylan-call dylan/signal dylan-condition)
+      (unless (implementation-specific/is-reflected-error? format-string format-arguments)
+        (implementation-specific/return-from-error dylan-condition)))))
 
 ;;; Chapter 2: every Dylan function is a method or a generic function.
 ;;; These predefined functions are Lisp closures, made methods here with

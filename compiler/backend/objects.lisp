@@ -1523,8 +1523,11 @@ congruent with that one, the error then."
         (setf (gfun-defined-c g) name)
         (declare-object "static int ~a;" name))
       ;; Its variable is read-only once its define-generic-function has
-      ;; run (chapter 5), not before.
-      (when (and (gfun-declared-keys g) (gethash var *assigned-globals*))
+      ;; run (chapter 5), not before; and the keys it names are accepted
+      ;; from then (LEAF-KEYWORD-CHECK).
+      (when (and (gfun-declared-keys g)
+                 (or (gethash var *assigned-globals*)
+                     (not (eq (gfun-declared-keys g) :none))))
         (let ((name (format nil "~a_declared" (gfun-c-name g))))
           (setf (gfun-declared-c g) name)
           (declare-object "static int ~a;" name))))
@@ -1992,22 +1995,68 @@ it does not apply."
 
 (defun leaf-keyword-check (g methods)
   "C code checking the keyword arguments for a call whose applicable
-methods are METHODS, or NIL."
+methods are METHODS, or NIL.  Only the methods attached when the call is
+made count (chapter 6), and the keys a define-generic-function names only
+once it has run: a program's, flagged (GMETHOD-FLAG-C, GFUN-DECLARED-C),
+are known only then."
   (when (gfun-variable-p g)
     (let* ((r (gfun-required g))
-           (any (some #'gmethod-rest-p methods))
            (declared (gfun-declared-keys g))
-           (keyed (or (some #'gmethod-keys methods)
-                      (and declared (not (eq declared :none))))))
-      (cond ((not keyed) nil)
-            (any (format nil "dy_check_keywords(self, argc, ~d, a0, a1, a2, a3, NULL, 0);" r))
-            (t (let ((keys (remove-duplicates
-                            (append (loop for m in methods
-                                          for k = (gmethod-keys m)
-                                          when (consp k) append k)
-                                    (and (consp declared) declared)))))
-                 (format nil "dy_check_keywords(self, argc, ~d, a0, a1, a2, a3, ~a, ~d);"
-                         r (keyword-array keys) (length keys))))))))
+           ;; Each source of keys, as (flag keyed rest keys): FLAG the C
+           ;; of the flag set while it counts, or NIL if it always does
+           (sources (append
+                     (loop for m in methods
+                           for k = (gmethod-keys m)
+                           collect (list (gmethod-flag-c m) (and k t) (gmethod-rest-p m)
+                                         (and (consp k) k)))
+                     (and declared (not (eq declared :none))
+                          (list (list (gfun-declared-c g) t nil
+                                      (and (consp declared) declared))))))
+           (check (format nil "dy_check_keywords(self, argc, ~d, a0, a1, a2, a3, " r)))
+      (labels ((condition (test)
+                 ;; T if a source passing TEST always counts, else the
+                 ;; flags of those that may, NIL if none
+                 (let ((those (remove-if-not test sources)))
+                   (if (some (lambda (s) (null (first s))) those)
+                       t
+                       (mapcar #'first those))))
+               (c-test (flags) (format nil "~{~a~^ || ~}" flags)))
+        (let ((keyed (condition #'second))
+              (any (condition #'third))
+              (always-keys (remove-duplicates
+                            (loop for (flag nil nil keys) in sources
+                                  unless flag append keys)))
+              (flagged-keys (loop for (flag nil nil keys) in sources
+                                  when (and flag keys) collect (cons flag keys))))
+          (flet ((check-keys (out)
+                   ;; The keys of the sources that count, gathered when run
+                   (if (and (null always-keys) (null flagged-keys))
+                       (format out "~a~a, 0);" check (keyword-array '()))
+                       (progn
+                         ;; (Initialized: with every flag clear, none is stored.)
+                         (format out "{~%            D accepted[~d] = { 0 };~%            size_t n = 0;"
+                                 (+ (length always-keys)
+                                    (loop for (nil . keys) in flagged-keys sum (length keys))))
+                         (dolist (k always-keys)
+                           (format out "~%            accepted[n++] = ~a;" (c-constant *cdata* k)))
+                         (loop for (flag . keys) in flagged-keys
+                               do (format out "~%            if (~a) {~{ accepted[n++] = ~a;~} }"
+                                          flag (mapcar (lambda (k) (c-constant *cdata* k)) keys)))
+                         (format out "~%            ~aaccepted, n);~%        }" check)))))
+            (cond ((null keyed) nil)
+                  ((and (eq keyed t) (eq any t))
+                   (format nil "~aNULL, 0);" check))
+                  ((and (eq keyed t) (null any) (null flagged-keys))
+                   (format nil "~a~a, ~d);" check (keyword-array always-keys) (length always-keys)))
+                  (t
+                   (with-output-to-string (out)
+                     (unless (eq keyed t) (format out "if (~a) " (c-test keyed)))
+                     (format out "{~%        ")
+                     (cond ((eq any t) (format out "~aNULL, 0);" check))
+                           (t (when any
+                                (format out "if (~a) ~aNULL, 0); else " (c-test any) check))
+                              (check-keys out)))
+                     (format out "~%    }"))))))))))
 
 (defun emit-dispatch (g)
   (let* ((*leaves* (make-hash-table :test #'equal))

@@ -609,9 +609,10 @@ compiled library's %from-list does."
         (when (null init-state-pattern)
           ;; An empty pattern occurs at every index, up to the size of BIG.
           (return-from subsequence-position
-            (if (<= count (+ 1 (collection-size big)))
-                (- count 1)
-                dylan%false)))
+            (let ((size (collection-size big)))
+              (if (or (null size) (<= count (+ 1 size)))
+                  (- count 1)
+                  dylan%false))))
         (loop with first-of-pattern = (library-element pattern 0)
               with state = (initial-state big)
               with num-found = 0

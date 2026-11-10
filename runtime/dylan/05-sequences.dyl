@@ -295,30 +295,54 @@ module: dylan
           ((zero? n) (error "last: the sequence is empty"))
           (else: (%library-element-setter s (binary- n 1) new-value)))))
 
-;;; Searching: the index of the COUNTth place PATTERN occurs in BIG.
+;;; Searching: the index of the COUNTth place PATTERN occurs in BIG.  BIG
+;;; is read as the search goes, keeping only the elements a match at INDEX
+;;; may need, so that an unbounded sequence is searched too (chapter 12).
 
 (define-generic-function subsequence-position (big pattern #key test count))
 (define-method subsequence-position ((big <sequence>) (pattern <sequence>)
                                      #key (test id?) (count 1))
-  (bind ((b (%elements big))
-         (p (%elements pattern)))
-    (bind-methods ((matches? (b p)
+  ;; The countth place, counting from 1: there is none before the first.
+  (unless (%instance? count <integer>)
+    (error "subsequence-position: count: must be an integer: ~s" count))
+  (bind ((p (%elements pattern))
+         (m (size p))
+         (state (initial-state big))
+         ;; The elements of BIG read from INDEX on, HAVE of them, the last
+         ;; in the pair TAIL
+         (window '())
+         (tail #f)
+         (have 0))
+    (bind-methods ((fill ()
+                     (when (and state (binary< have m))
+                       (bind ((cell (list (current-element big state))))
+                         (if (id? window '()) (set! window cell) (%set-cdr! tail cell))
+                         (set! tail cell)
+                         (set! have (binary+ have 1))
+                         (set! state (next-state big state))
+                         (fill))))
+                   (matches? (w p)
                      (cond ((id? p '()) #t)
-                           ((id? b '()) #f)
-                           ((test (car b) (car p)) (matches? (cdr b) (cdr p)))
+                           ((test (car w) (car p)) (matches? (cdr w) (cdr p)))
                            (else: #f)))
-                   (search (b index left)
-                     (cond ((matches? b p)
-                            (cond ((= left 1) index)
-                                  ;; An empty pattern matches at the end too, and no further
-                                  ((id? b '()) #f)
-                                  (else: (search (cdr b) (binary+ index 1) (binary- left 1)))))
-                           ((id? b '()) #f)
-                           (else: (search (cdr b) (binary+ index 1) left)))))
-      ;; The countth place, counting from 1: there is none before the first.
-      (unless (%instance? count <integer>)
-        (error "subsequence-position: count: must be an integer: ~s" count))
-      (if (binary< count 1) #f (search b 0 count)))))
+                   (search (index left)
+                     (fill)
+                     (cond ((binary< have m) #f)
+                           ((matches? window p)
+                            (if (= left 1) index (advance index (binary- left 1))))
+                           (else: (advance index left))))
+                   ;; On to the next index; an empty pattern matches at the
+                   ;; end too, and no further.
+                   (advance (index left)
+                     (cond ((not (id? window '()))
+                            (set! window (cdr window))
+                            (set! have (binary- have 1))
+                            (search (binary+ index 1) left))
+                           (state
+                            (set! state (next-state big state))
+                            (search (binary+ index 1) left))
+                           (else: #f))))
+      (if (binary< count 1) #f (search 0 count)))))
 
 ;;; A shallow copy of a sequence is a copy of it.
 (define-method shallow-copy ((s <sequence>)) (copy-sequence s))

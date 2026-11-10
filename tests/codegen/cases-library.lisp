@@ -218,6 +218,38 @@ foo:
 4
 ")
 
+ ;; subsequence-position reads BIG as it searches, so an unbounded sequence
+ ;; is searched too; an empty pattern occurs at every index, the end
+ ;; included (chapter 12).
+ (subsequence-position-searches-lazily
+  "(print (subsequence-position (range from: 0) '(5 6)))
+   (print (subsequence-position (range from: 0 by: 2) '(100 102)))
+   (print (subsequence-position (range from: 0) '() count: 3))
+   (print (list (subsequence-position '(1 2 3) '() count: 4)
+                (subsequence-position '(1 2 3) '() count: 5)
+                (subsequence-position '() '())
+                (subsequence-position '() '(1))))
+   (print (list (subsequence-position \"aaaa\" \"aa\" count: 3)
+                (subsequence-position \"aaaa\" \"aa\" count: 4)
+                (subsequence-position \"abcabcab\" \"cab\" count: 2)
+                (subsequence-position #(1 2 3 4) #(3 4 5))))
+   (print (subsequence-position \"abcabc\" \"ABC\" count: 2
+                                test: (method (a b) (= (as-uppercase a) b))))
+   (define-class <ssp-seq> (<sequence>) (items init-value: '(3 1 4 1 5)))
+   (define-method initial-state ((b <ssp-seq>)) (if (empty? (items b)) #f (items b)))
+   (define-method next-state ((b <ssp-seq>) s) (if (empty? (cdr s)) #f (cdr s)))
+   (define-method current-element ((b <ssp-seq>) s) (car s))
+   (print (list (subsequence-position (make <ssp-seq>) '(1 5))
+                (subsequence-position (make <ssp-seq>) '(1) count: 2)))"
+  "5
+50
+2
+(3 #f 0 #f)
+(2 #f 5 #f)
+3
+(3 3)
+")
+
  ;; Chapter 12: lists
  (lists
   "(print (list (cons 1 2) (cons 1 '(2 3 4 5)) (list 1 2 3) (list (+ 4 3) (- 4 3))))

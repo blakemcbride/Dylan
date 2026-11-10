@@ -39,6 +39,9 @@ Reading a file, not a terminal, there is no debugger: an unhandled error
 ends the run with status 1 (DYLAN::*BATCH*).  The one argument
 bin/dylan takes, a file, is read as if it were the standard input; any
 other arguments are refused with a usage message."
+  ;; Writing to a closed pipe ends the run, as it ends a compiled program,
+  ;; not in an error reported on the same output.
+  (sb-sys:enable-interrupt sb-unix:sigpipe :default)
   (let* ((arguments (rest sb-ext:*posix-argv*))
          (file (and arguments (null (rest arguments))
                     (plusp (length (first arguments)))

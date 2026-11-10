@@ -181,6 +181,13 @@ check "bin/dylan file: stops at the error" sh -c 'grep -q "^2" batch.out && ! gr
 check "bin/dylan file: the error reported" grep -q "^Dylan error: " batch.err
 echo '(print 4)' > four.dyl
 check "bin/dylan file: status 0 without an error" sh -c '"$0" four.dyl < /dev/null | grep -q "^4"' "$dylan"
+# Writing to a closed pipe ends the run, as SIGPIPE ends a compiled
+# program; an output that fails otherwise is an error reported
+echo '(for ((i 0 (+ i 1))) ((= i 200000)) (print i))' > pipe.dyl
+(timeout -s KILL 60 "$dylan" pipe.dyl < /dev/null; echo $? > pipe.status) | head -1 > /dev/null
+check "bin/dylan: a closed pipe ends the run" test "$(cat pipe.status)" = 141
+timeout -s KILL 60 "$dylan" pipe.dyl < /dev/null >&- 2> closed.err; status=$?
+check "bin/dylan: a closed standard output is an error" sh -c 'test "$0" = 1 && grep -q "^Dylan error: " closed.err' "$status"
 "$dylan" no-such-file.dyl > usage.out 2> usage.err < /dev/null; status=$?
 check "bin/dylan: a file it cannot read" sh -c 'test "$0" = 2 && grep -q "^dylan: cannot read no-such-file.dyl" usage.err && grep -q "^usage: dylan" usage.err' "$status"
 "$dylan" four.dyl four.dyl > usage.out 2> usage.err < /dev/null; status=$?

@@ -93,7 +93,8 @@ program reports it."
   "The debugger when the loop reads a file (*BATCH*): report CONDITION as
 a compiled program reports an unhandled error, and exit with status 1."
   (declare (ignore hook))
-  (finish-output *standard-output*)
+  ;; The error may be the standard output's own
+  (ignore-errors (finish-output *standard-output*))
   (format *error-output* "~&Dylan error: ~a~%" (batch-error-message condition))
   (finish-output *error-output*)
   #+sbcl (sb-ext:exit :code 1 :abort t)

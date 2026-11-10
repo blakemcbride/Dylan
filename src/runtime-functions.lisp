@@ -322,7 +322,8 @@ own functions such as make take any keyword arguments, is #rest without
   ;; objects, and adding slots to the singleton.
   (dylan%generic-fn
    'slot-descriptor
-   (make-param-list `((instance ,<object>) (getter ,<generic-function>))
+   ;; Any getter: one that reads no slot of the instance gives #f (chapter 11)
+   (make-param-list `((instance ,<object>) (getter ,<object>))
                     nil nil nil)
    (lambda (obj getter)
      (let ((slot (or (object-singleton-slot obj getter)

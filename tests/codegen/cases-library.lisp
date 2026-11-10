@@ -2672,6 +2672,15 @@ half
   "(print (list (imag-part 2.5) (imag-part 1.5s0) (imag-part 3)))"
   "(0 0 0)
 ")
+ ;; slot-descriptor of a function that is not a getter of the object's
+ ;; class is #f (chapter 6).
+ (slot-descriptor-of-a-non-getter
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (slot-descriptor (make <table>) car))))
+(print (try (method () (slot-descriptor 5 5))))"
+  "#f
+#f
+")
  ;; A float too small to represent reads as zero (chapter 14).
  (tiny-float-reads-as-zero
   "(print (list 1e-400 (object-class 1e-400) (object-class 1.0l0) 1.5s38))"

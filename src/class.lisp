@@ -830,7 +830,7 @@ slots.")
                   allocation))
     ;; Chapter 6's slot options.
     (when (and type (not (or (class? type) (singleton? type))))
-      (dylan-call dylan/error "slot -- type: is not a class or singleton"
+      (dylan-call dylan/error "the type of the slot ~a is not a class or singleton: ~s"
                   debug-name type))
     (dolist (keyword (list init-keyword required-init-keyword))
       (when (and keyword (not (keyword? keyword)))

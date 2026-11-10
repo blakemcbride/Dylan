@@ -879,7 +879,11 @@ is set, a method takes any."
   "Code, for the define-class form, storing the slot definition's values."
   (let ((spec (sdef-spec sd)))
     (when (slot-spec-type spec)
-      (emit "~a = ~a;" (sdef-c sd "type") (atom-c (slot-spec-type spec))))
+      (let ((type (sdef-c sd "type")))
+        (emit "~a = ~a;" type (atom-c (slot-spec-type spec)))
+        ;; Chapter 6: a slot's type is a class or a singleton.
+        (emit "if (!dy_kind_p(~a, DY_KIND_CLASS) && !dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error_naming(\"the type of the slot \", ~a, \" is not a class or singleton\", ~a);"
+              type type (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))) type)))
     (when (slot-spec-init-value spec)
       (let ((v (atom-c (slot-spec-init-value spec))))
         (emit "~a = ~a;" (sdef-c sd "init") v)

@@ -3189,4 +3189,20 @@ object
 \"ERR: the arguments after the required ones are not keyword/value pairs\"
 0
 ")
+ ;; A slot's type: is a class or a singleton (chapter 6), checked when the
+ ;; define-class or define-slot runs.
+ (slot-type-must-be-a-type
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define t5 5)
+(print (try (method () (define-class <c19> (<object>) (s type: t5 init-keyword: s:)) 'defined)))
+(print (try (method () (define-class <c20> (<object>) (s type: (singleton 5))) 'defined)))
+(print (try (method () (define-class <c21> (<object>) (s type: <integer>)) 'defined)))
+(define-class <c22> (<object>))
+(print (try (method () (define-slot <c22> q type: t5) 'defined)))"
+  "\"ERR: the type of the slot s is not a class or singleton: 5\"
+defined
+defined
+\"ERR: the type of the slot q is not a class or singleton: 5\"
+")
 )

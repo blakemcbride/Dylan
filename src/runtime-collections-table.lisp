@@ -53,14 +53,13 @@
  dylan/shallow-copy
  (dylan%function->method
   (make-param-list `((table ,<table>)) nil nil nil)
+  ;; Chapter 11: the copy is made by make of the class-for-copy.
   (lambda (table)
-    (let* ((new-table (dylan-call dylan/make <table>))
+    (let* ((new-table (dylan-call dylan/make (dylan-call dylan/class-for-copy table)))
            (key-sequence (dylan-call dylan/key-sequence table)))
       (do ((state (initial-state key-sequence)
                   (next-state key-sequence state)))
-          ((not state)
-           (dylan-call dylan/as (dylan-call dylan/class-for-copy table)
-                       new-table))
+          ((not state) new-table)
         (let ((key (current-element key-sequence state)))
           (library-element-setter new-table key
                       (library-element table key))))))))

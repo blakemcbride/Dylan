@@ -3097,4 +3097,33 @@ object
 ({the class <deque>} (c b))
 ({the class <pair>} (q))
 ")
+ ;; shallow-copy of a table is made by make of its class-for-copy
+ ;; (chapter 11): a program's subclass copies as itself.
+ (table-subclass-shallow-copy
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <my-tb> (<table>) (label init-value: 'm init-keyword: label:))
+(define mt (make <my-tb> label: 'orig))
+(set! (element mt 'k) 1)
+(set! (element mt 'j) 2)
+(define c (try (method () (shallow-copy mt))))
+(print (object-class c))
+(print (list (id? c mt) (label c) (size c) (element c 'k) (element c 'j)))
+(set! (element c 'k) 10)
+(print (list (element mt 'k) (element c 'k)))
+(define t (make <table>))
+(set! (element t 1) 'one)
+(define tc (shallow-copy t))
+(print (list (object-class tc) (element tc 1) (id? tc t)))
+(define-class <other-tb> (<table>))
+(define-method class-for-copy ((x <other-tb>)) <my-tb>)
+(define o (make <other-tb>))
+(set! (element o 'a) 'b)
+(define oc (shallow-copy o))
+(print (list (object-class oc) (element oc 'a) (label oc)))"
+  "{the class <my-tb>}
+(#f m 2 1 2)
+(1 10)
+({the class <table>} one #f)
+({the class <my-tb>} b m)
+")
 )

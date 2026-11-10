@@ -129,8 +129,9 @@ module: dylan
        (apply f (%list-map (method (c) (%library-element c key %no-default)) collections))))
     t))
 
+;;; Chapter 11: the copy is made by make of the class-for-copy.
 (define-method shallow-copy ((t <table>))
-  (bind ((copy (make <table>)))
+  (bind ((copy (make (class-for-copy t))))
     (for ((state (initial-state t) (next-state t state)))
          ((not state) copy)
       (%library-element-setter copy (current-key t state) (current-element t state)))))

@@ -835,7 +835,9 @@ slots.")
              (dylan-call dylan/error
                          "the slot of a singleton takes no init-keyword"
                          debug-name (or init-keyword required-init-keyword))))
-          ((and (class? owner) (class.read-only? owner))
+          ;; A sealed class, a built-in one sealed from the start
+          ;; included, is read-only too.
+          ((and (class? owner) (or (class.read-only? owner) (class.sealed? owner)))
            (dylan-call dylan/error "define-slot: the class is read-only: ~s" owner))
           ((not (class? owner))
            (dylan-call dylan/error

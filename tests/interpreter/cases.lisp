@@ -34,4 +34,19 @@
 (print 'after)"
   ""
   :error "modules use each other")
+ ;; define-slot on a sealed class, a built-in one sealed from the start
+ ;; included, is an error when it runs: a sealed class is read-only.  (The
+ ;; compiler to C takes a class owner only of the program's own classes.)
+ (define-slot-on-sealed-class
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (define-slot <integer> tagx init-value: 7) 'defined)))
+(print (try (method () (define-slot <pair> tagp init-value: 7) 'defined)))
+(define-class <mine> (<object>))
+(seal <mine>)
+(print (try (method () (define-slot <mine> tagm init-value: 7) 'defined)))"
+  "\"ERR: define-slot: the class is read-only: {the class <integer>}\"
+\"ERR: define-slot: the class is read-only: {the class <pair>}\"
+\"ERR: define-slot: the class is read-only: {the class <mine>}\"
+")
 )

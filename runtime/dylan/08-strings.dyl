@@ -57,9 +57,12 @@ module: dylan
 (define-method make ((class (singleton <unicode-string>)) #key (size 0) (fill #\space))
   (%make-unicode-string size fill))
 
-;;; <string> has no direct instances: make of it makes a <byte-string>.
+;;; <string> has no direct instances: make of it makes a <byte-string>,
+;;; or a <unicode-string> if the fill does not fit in eight bits.
 (define-method make ((class (singleton <string>)) #key (size 0) (fill #\space))
-  (%make-byte-string size fill))
+  (if (%wide-character? fill)
+      (%make-unicode-string size fill)
+      (%make-byte-string size fill)))
 
 ;;; Lexicographic order, by binary< on the characters; a strict prefix is
 ;;; the lesser.

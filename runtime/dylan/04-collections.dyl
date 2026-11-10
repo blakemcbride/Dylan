@@ -149,13 +149,26 @@ module: dylan
 ;;; It must be of the class (chapter 12): no <empty-list> holds elements,
 ;;; and no <pair> is empty.
 
+;;; <string> has no direct instances: a string of characters that do not
+;;; all fit in eight bits is a <unicode-string>, any other a <byte-string>
+;;; (chapter 12).
+
+(define %wide-character?
+  (method (x)
+    (and (%instance? x <character>) (binary< 255 (%character->integer x)))))
+
 (define %from-list
   (method (class elements)
     (if (%subclass? class <list>)
         (if (%instance? elements class)
             elements
             (error "as: ~s cannot be converted to ~s" elements class))
-        (bind ((result (make class size: (%list-length elements))))
+        (bind ((result (make (if (and (id? class <string>)
+                                      (not (%list-every? (method (e) (not (%wide-character? e)))
+                                                         elements)))
+                                 <unicode-string>
+                                 class)
+                             size: (%list-length elements))))
           (for ((state (initial-state result) (next-state result state))
                 (l elements (cdr l)))
                ((or (not state) (id? l '())) result)

@@ -123,7 +123,8 @@ made with its size and filled through the iteration protocol, as the
 compiled library's %from-list does."
   (if (subclass? class <list>)
       (dylan-call dylan/as class elements)
-      (let ((result (dylan-call dylan/make class :size (length elements))))
+      (let ((result (dylan-call dylan/make (string-class-for class elements)
+                                :size (length elements))))
         (loop for state = (initial-state result) then (next-state result state)
               for rest on elements
               while state

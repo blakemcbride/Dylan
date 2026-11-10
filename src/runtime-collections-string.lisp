@@ -94,6 +94,20 @@
             (replace string characters)
             string))))))
 
+;;; <string> has no direct instances: a string of characters that do not
+;;; all fit in eight bits is a <unicode-string>, any other a <byte-string>
+;;; (chapter 12).
+
+(defun wide-character-p (x)
+  (and (characterp x) (> (char-code x) 255)))
+
+(defun string-class-for (class elements)
+  "The class to make for CLASS holding the list ELEMENTS: <unicode-string>
+for <string> if any of them is a character above code 255, else CLASS."
+  (if (and (eq class <string>) (some #'wide-character-p elements))
+      <unicode-string>
+      class))
+
 (defun check-byte-character (string character &optional (prefix ""))
   "Signal an error, as the compiler to C does, if CHARACTER is to go into
 STRING and is not a character, or STRING is a <byte-string> and its code is
@@ -119,10 +133,13 @@ above 255."
   (make-param-list `((class ,(dylan%make-singleton <string>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
-    (declare (ignore class))
     (if (true? (dylan-call dylan/instance? collection <string>))
         collection
-        (dylan-call dylan/as <byte-string> collection)))))
+        (let ((elements (iterate->list #'identity collection)))
+          (dylan-call dylan/as
+                      (let ((class (string-class-for class elements)))
+                        (if (eq class <string>) <byte-string> class))
+                      elements))))))
 
 ;;;
 ;;; BYTE-STRING MAKE yields a Lisp string
@@ -163,7 +180,8 @@ the keyword arguments REST."
 
 ;;;
 ;;; STRING SPECIALIZED MAKE
-;;; And we'll make <string> turn into <byte-string>
+;;; <string> makes a <byte-string>, or a <unicode-string> if the fill does
+;;; not fit in eight bits
 ;;;
 (add-method
  dylan/make
@@ -171,7 +189,11 @@ the keyword arguments REST."
   (make-param-list `((string ,(dylan%make-singleton <string>))) nil nil :any)
   (lambda (class &rest rest)
     (declare (ignore class))
-    (dylan-apply dylan/make <byte-string> rest))))
+    (dylan-apply dylan/make
+                 (if (wide-character-p (dylan%find-keyword rest :fill (lambda () nil)))
+                     <unicode-string>
+                     <byte-string>)
+                 rest))))
 
 ;;;
 ;;; UNICODE-STRING SPECIALIZED MAKE, whose fill: may be any character

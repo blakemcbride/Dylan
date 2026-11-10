@@ -2893,4 +2893,42 @@ konst
 (5 5 5)
 (6 6 6 6)
 ")
+ ;; Chapter 10: no method can be added to a generic function that
+ ;; make-read-only has made read-only, by a define-method run later, at
+ ;; top level or not; the generic function keeps its methods.
+ (read-only-generic-takes-no-methods
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method f1 (x) 1)
+(make-read-only f1)
+(define-method later () (define-method f1 ((x <integer>)) 2))
+(print (try later))
+(print (f1 5))
+(define g2 (make <generic-function> required: 1))
+(define-method addg2 () (define-method g2 ((x <integer>)) 'int))
+(addg2)
+(print (g2 5))
+(make-read-only g2)
+(define-method addg2b () (define-method g2 ((x <string>)) 'str))
+(print (try addg2b))
+(print (try (method () (g2 \"s\"))))
+(print (size (generic-function-methods f1)))
+(define-class <p> (<object>))
+(define-generic-function describe-it (x))
+(define-method describe-it ((x <object>)) 'object)
+(make-read-only describe-it)
+(define-method add-p () (define-method describe-it ((x <p>)) 'p))
+(print (try add-p))
+(print (describe-it (make <p>)))
+(define-method f1 ((x <string>)) 3)
+(print 'not-reached)"
+  "\"ERR: the generic function is read-only: {the generic function f1}\"
+1
+int
+\"ERR: the generic function is read-only: {an anonymous generic function}\"
+\"ERR: no applicable method for an anonymous generic function\"
+1
+\"ERR: the generic function is read-only: {the generic function describe-it}\"
+object
+"
+  :error "the generic function is read-only: {the generic function f1}")
 )

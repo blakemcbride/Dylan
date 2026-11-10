@@ -1660,12 +1660,13 @@ made before (GMETHOD-CLOSURE-C).  With DEFINE, the definition gives the
 generic function's variable its value too, first, since that may be an
 error.  The change itself is made with the methods' lock held, so that
 definitions running at once in several threads attach each method once
-(dy_lock_methods)."
+(dy_lock_methods).  A read-only generic function takes none (chapter 10)."
   (let ((g (gethash (gmethod-var m) *gfuns*))
         (replaced (gmethod-siblings m)))
     (append
      (and define (generic-definition-c g))
-     (list "dy_lock_methods();")
+     (list (format nil "dy_check_addable(~a);" (address (gfun-c-name g)))
+           "dy_lock_methods();")
      (loop for s in replaced
            when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
      (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))

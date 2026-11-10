@@ -772,8 +772,9 @@ program runs. \code{add-method}, \code{remove-method} and
 \code{freeze-methods} exist only in the Common Lisp implementation; in the
 compiler to C, whose generic functions are fixed when the program is
 compiled, using them is an error when compiling. \code{make-read-only}
-exists in both, but in the compiler to C it changes nothing, since no
-generic function can change there anyway; it returns its argument.
+exists in both: a \code{define-method} that would add a method to the
+generic function afterwards is an error when it runs (``the generic
+function is read-only'').
 
 \begin{description}
 \item[\code{(add-method \meta{generic-function} \meta{method})}] adds the

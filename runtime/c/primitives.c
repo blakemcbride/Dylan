@@ -212,6 +212,7 @@ PRIMITIVE(make_generic_function) {
     g->name = a1;
     g->methods = dy_make_vector(0, DY_FALSE);
     g->required = DY_INT_VALUE(a0);
+    g->read_only = 0;
     /* #(required rest? keys), keys #f for no #key */
     D info = dy_make_vector(3, DY_FALSE);
     ((DyVector *)DY_PTR(info))->data[0] = a0;
@@ -234,10 +235,12 @@ PRIMITIVE(seal) {
 
 /* (make-read-only class-or-generic-function): no slot can be added to a
  * read-only class (chapter 11), the one change a static program can make
- * to it; unlike seal, it hides nothing. */
+ * to it, and no method to a read-only generic function (chapter 10);
+ * unlike seal, it hides nothing. */
 PRIMITIVE(make_read_only) {
     need(self, argc, 1, 1);
-    if (!dy_kind_p(a0, DY_KIND_GENERIC)) as_class(a0)->read_only = 1;
+    if (dy_kind_p(a0, DY_KIND_GENERIC)) ((DyGeneric *)DY_PTR(a0))->read_only = 1;
+    else as_class(a0)->read_only = 1;
     return a0;
 }
 
@@ -473,6 +476,7 @@ void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     DyGeneric *g = DY_PTR(generic);
     if (g->entry != no_methods_entry && g->entry != made_dispatch)
         dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);
+    dy_check_addable(generic);
     const char *gname = g->name == DY_FALSE ? "an anonymous generic function" : dy_symbol_utf8(g->name);
     D *gi = ((DyVector *)DY_PTR(g->info))->data;
     D *mi = ((DyVector *)DY_PTR(((DyFunction *)DY_PTR(method))->info))->data;

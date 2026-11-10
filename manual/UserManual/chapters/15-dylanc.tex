@@ -752,8 +752,9 @@ of a variable that holds it adds to, as it does to any generic function;
 such a generic function chooses its methods when it is called. \code{seal}
 works as the manual says. \code{make-read-only} of a class, or
 \code{seal}, makes a \code{define-slot} on it an error when it runs
-(``define-slot: the class is read-only''); of a generic function,
-\code{make-read-only} answers its argument.
+(``define-slot: the class is read-only''); of a generic function, it
+makes a \code{define-method} of it an error when it runs (``the generic
+function is read-only'').
 
 \paragraph{Numbers.}
 Integers are 63 bits: from $-2^{62}$ to $2^{62}-1$, that is from

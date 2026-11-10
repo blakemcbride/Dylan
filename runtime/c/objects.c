@@ -57,6 +57,11 @@ static pthread_mutex_t methods_lock = PTHREAD_MUTEX_INITIALIZER;
 void dy_lock_methods(void) { pthread_mutex_lock(&methods_lock); }
 void dy_unlock_methods(void) { pthread_mutex_unlock(&methods_lock); }
 
+void dy_check_addable(D generic) {
+    if (((DyGeneric *)DY_PTR(generic))->read_only)
+        dy_error("the generic function is read-only", generic);
+}
+
 void dy_add_method(D generic, D method, const D *replaced, intptr_t n) {
     DyGeneric *g = DY_PTR(generic);
     DyVector *old = DY_PTR(g->methods);

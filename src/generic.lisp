@@ -311,8 +311,8 @@ whose DATA is given, or NIL."
   (let ((data (generic-function-data generic-function))
         (param-list (method.param-list method)))
     (cond ((generic-function-data.read-only? data)
-           (dylan-call dylan/error
-                       "add-method -- generic function is read-only"
+           ;; As the compiler to C words it
+           (dylan-call dylan/error "the generic function is read-only: ~s"
                        generic-function))
           ;; As the compiler to C words them, which checks in this order
           ((congruency-error data param-list)

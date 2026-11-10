@@ -415,6 +415,7 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
   (lambda (range-1 &rest rest)
     (unless (collection-size range-1)
       (dylan-call dylan/error "concatenate: the range is unbounded"))
+    (check-bounded "concatenate" rest)
     (mapcan #'sequence->list (cons range-1 rest)))))
 
 (add-method

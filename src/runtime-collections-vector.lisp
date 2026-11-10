@@ -234,6 +234,7 @@
  (dylan%function->method
   (make-param-list `((sov ,<simple-object-vector>)) nil 'rest nil)
   (lambda (vector-1 &rest rest)
+    (check-bounded "concatenate" rest)
     (let ((result (coerce vector-1 'list)))
       (dolist (v (mapcar (lambda (seq)
                            (dylan-call dylan/as <simple-object-vector> seq))
@@ -249,6 +250,7 @@
   ;; class-for-copy.  (The Scheme re-applied CONCATENATE to the same
   ;; arguments, which dispatched straight back here.)
   (lambda (vector-1 &rest rest)
+    (check-bounded "concatenate" rest)
     (dylan-call dylan/as (dylan-call dylan/class-for-copy vector-1)
                 (dylan-call dylan/apply dylan/concatenate
                             (dylan-call dylan/as <simple-object-vector>

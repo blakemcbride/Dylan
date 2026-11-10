@@ -111,6 +111,7 @@ module: dylan
   ;; Chapter 12: CLASS must be a subclass of <mutable-sequence>
   (unless (%subclass? class <mutable-sequence>)
     (error "concatenate-as: the class is not a mutable sequence: ~s" class))
+  (%check-bounded "concatenate-as" (cons s more))
   (bind ((sequences (cons s more)))
     (bind-methods ((gather (sequences r)
                      (if (id? sequences '())
@@ -147,12 +148,20 @@ module: dylan
            ((id? l '()) result)
         (%replace-vector! result i (car l) 0 (%vector-size (car l)))))))
 
+;;; An unbounded range has no end to stop at
+(define %check-bounded
+  (method (name sequences)
+    (unless (every? (method (s) (or (not (%instance? s <range>)) (size s))) sequences)
+      (error "~a: the range is unbounded" name))))
+
 (define-generic-function concatenate (sequence1 #rest sequences))
 (define-method concatenate ((s <sequence>) #rest more)
+  (%check-bounded "concatenate" (cons s more))
   (apply concatenate-as (class-for-copy s) s more))
 
 ;;; Byte strings, most often, at once
 (define-method concatenate ((s <byte-string>) #rest more)
+  (%check-bounded "concatenate" more)
   (bind ((class (class-for-copy s)))
     (or (and (id? class <byte-string>) (%concatenate-byte-strings s more))
         (apply concatenate-as class s more))))

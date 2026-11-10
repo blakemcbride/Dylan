@@ -244,6 +244,7 @@ the keyword arguments REST."
  (dylan%function->method
   (make-param-list `((byte-string ,<byte-string>)) nil 'rest nil)
   (lambda (string-1 &rest rest)
+    (check-bounded "concatenate" rest)
     ;; A new string, even of one argument (chapter 12)
     (let ((result (copy-seq string-1)))
       (dolist (s (mapcar (lambda (seq) (dylan-call dylan/as <byte-string> seq))
@@ -256,6 +257,7 @@ the keyword arguments REST."
  (dylan%function->method
   (make-param-list `((unicode-string ,<unicode-string>)) nil 'rest nil)
   (lambda (string-1 &rest rest)
+    (check-bounded "concatenate" rest)
     (as-unicode-string
      (apply #'concatenate 'string string-1
             (mapcar (lambda (seq) (dylan-call dylan/as <unicode-string> seq)) rest))))))
@@ -266,6 +268,7 @@ the keyword arguments REST."
  (dylan%function->method
   (make-param-list `((string ,<string>)) nil 'rest nil)
   (lambda (string-1 &rest rest)
+    (check-bounded "concatenate" rest)
     (list->sequence-like string-1
                          (mapcan #'sequence->list (cons string-1 rest))))))
 

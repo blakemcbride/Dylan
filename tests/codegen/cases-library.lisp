@@ -1057,6 +1057,45 @@ Zip:
 (0.0s0 1.0s0 2.0s0)
 (1/2 1 3/2)
 ")
+ ;; concatenate and concatenate-as signal an error for an unbounded
+ ;; range, wherever it comes among the arguments
+ (concatenate-unbounded-range
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define u (range from: 0))
+(print (try (method () (concatenate u '(1)))))
+(print (try (method () (concatenate '(1) u))))
+(print (try (method () (concatenate '(1) '(2) u))))
+(print (try (method () (concatenate (vector 1) u))))
+(print (try (method () (concatenate \"ab\" u))))
+(print (try (method () (concatenate (make <deque>) u))))
+(print (try (method () (concatenate (make <stretchy-vector>) u))))
+(print (try (method () (concatenate (range from: 1 size: 2) u))))
+(print (try (method () (concatenate-as <list> '(1) u))))
+(print (try (method () (concatenate-as <vector> u))))
+(print (concatenate '(1) (range from: 2 size: 2) (vector 4)))
+(print (concatenate-as <list> (range from: 0 size: 2) \"ab\"))
+(print (try (method () (concatenate (as <unicode-string> \"ab\") u))))
+(define-class <my-str> (<string>) (chars init-value: \"xy\"))
+(define-method size ((s <my-str>)) 2)
+(define-method initial-state ((s <my-str>)) 0)
+(define-method next-state ((s <my-str>) i) (if (< i 1) (+ i 1) #f))
+(define-method current-element ((s <my-str>) i) (element (chars s) i))
+(print (try (method () (concatenate (make <my-str>) u))))"
+  "\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate-as: the range is unbounded\"
+\"ERR: concatenate-as: the range is unbounded\"
+(1 2 3 4)
+(0 1 #\\a #\\b)
+\"ERR: concatenate: the range is unbounded\"
+\"ERR: concatenate: the range is unbounded\"
+")
 
  ;; A collection of numbers in steps as a range
  (as-range

@@ -355,6 +355,14 @@ compiled library's %from-list does."
                      (incf index))
                    (return (copy-like source (nreverse kept)))))))))
 
+(defun check-bounded (name sequences)
+  "Signal an error if one of SEQUENCES is an unbounded range, which has no
+end to stop at."
+  (dolist (s sequences)
+    (when (and (true? (dylan-call dylan/instance? s <range>))
+               (null (collection-size s)))
+      (dylan-call dylan/error "~a: the range is unbounded" name))))
+
 (defparameter dylan/concatenate-as
   (dylan%generic-fn
    'concatenate-as
@@ -364,6 +372,7 @@ compiled library's %from-list does."
        (dylan-call dylan/error
                    "concatenate-as: the class is not a mutable sequence: ~s"
                    class))
+     (check-bounded "concatenate-as" (cons seq-1 rest))
      (dylan-call dylan/as class
                  (mapcan #'sequence->list (cons seq-1 rest))))))
 
@@ -371,6 +380,7 @@ compiled library's %from-list does."
   (dylan%generic-fn
    'concatenate at-least-one-sequence
    (lambda (seq-1 &rest rest)
+     (check-bounded "concatenate" (cons seq-1 rest))
      (list->sequence-like seq-1
                           (mapcan #'sequence->list (cons seq-1 rest))))))
 

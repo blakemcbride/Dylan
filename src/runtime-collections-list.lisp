@@ -197,6 +197,7 @@
  (dylan%function->method
   at-least-one-list
   (lambda (list-1 &rest rest)
+    (check-bounded "concatenate" rest)
     ;; A new list: every list is copied, the last too.
     (let ((result '()))
       (dolist (l (cons list-1 (mapcar (lambda (seq) (dylan-call dylan/as <list> seq))

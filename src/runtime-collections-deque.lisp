@@ -267,6 +267,7 @@
  (dylan%function->method
   (make-param-list `((deque ,<deque>)) nil t nil)
   (lambda (deque-1 &rest rest)
+    (check-bounded "concatenate" rest)
     (let ((result-deque (dylan-call dylan/make <deque>)))
       (dolist (collection (cons deque-1 rest) result-deque)
         (iterate! (lambda (element)

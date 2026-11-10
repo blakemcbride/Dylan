@@ -318,14 +318,20 @@ void dy_debug_write(FILE *out, D x) {
         }
         return;
     }
+    /* These as print-object prints them (14-printing.dyl); a lock, a
+     * condition variable and an atomic integer as any instance, below. */
     case DY_KIND_THREAD: fputs("{thread}", out); return;
-    case DY_KIND_SLOT_DESCRIPTOR: fputs("{slot}", out); return;
-    case DY_KIND_LOCK: fputs("{lock}", out); return;
-    case DY_KIND_CONDITION_VARIABLE: fputs("{condition-variable}", out); return;
-    case DY_KIND_ATOMIC_INTEGER:
-        fprintf(out, "{atomic-integer %" PRIdPTR "}",
-                (intptr_t)atomic_load(&((DyAtomicInteger *)DY_PTR(x))->value));
+    case DY_KIND_SLOT_DESCRIPTOR: {
+        D getter = ((DySlotDescriptor *)DY_PTR(x))->getter;
+        D name = DY_FALSE;
+        if (dy_kind_p(getter, DY_KIND_GENERIC))
+            name = ((DyGeneric *)DY_PTR(getter))->name;
+        fputs("{slot ", out);
+        if (name == DY_FALSE) fputs("#f", out);
+        else print_symbol_name(out, ((DySymbol *)DY_PTR(name))->name);
+        fputc('}', out);
         return;
+    }
     case DY_KIND_GENERIC: {
         D name = ((DyGeneric *)DY_PTR(x))->name;
         if (name == DY_FALSE) {

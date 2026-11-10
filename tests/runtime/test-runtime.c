@@ -128,6 +128,14 @@ static void test_classes(void) {
     CHECK(dy_instance_p(dy_pair(DY_INT(1), DY_EMPTY), &dy_wrapper_pair));
     CHECK_PRINTS(dy_object_class(DY_INT(1)), "{the class <integer>}");
     CHECK_PRINTS(dy_object_class(DY_TRUE), "{the class <boolean>}");
+    /* The runtime's own objects print as print-object prints them. */
+    static DyLock lock = { &dy_wrapper_lock }, recursive = { &dy_wrapper_recursive_lock };
+    static DyConditionVariable condition = { &dy_wrapper_condition_variable };
+    static DyAtomicInteger atomic = { &dy_wrapper_atomic_integer, 3 };
+    CHECK_PRINTS(DY_OBJ(&lock), "{instance of <lock>}");
+    CHECK_PRINTS(DY_OBJ(&recursive), "{instance of <recursive-lock>}");
+    CHECK_PRINTS(DY_OBJ(&condition), "{instance of <condition-variable>}");
+    CHECK_PRINTS(DY_OBJ(&atomic), "{instance of <atomic-integer>}");
 }
 
 /* ------------------------------------------------------------ Constants */

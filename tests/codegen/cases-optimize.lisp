@@ -483,6 +483,16 @@ made-specially
   "{the class <extended-float>}
 5.0l0
 ")
+ ;; An <extended-float> literal is a number to id?, case and select: it
+ ;; is id? to an equal extended float made when the program runs.
+ (extended-float-literal-identity
+  "(define e (as <extended-float> 2))
+(print (list (id? e 2.0l0) (id? 2.0l0 e) (case e ((2.0l0) 'ext) (else: 'none)) (select e id? ((2.0l0) 'ext) (else: 'none))))
+(define-method m (x) (list (id? x 1.5l0) (case x ((1.5l0) 'yes) (else: 'no))))
+(print (list (m (as <extended-float> 1.5)) (m 1.5) (m 'a)))"
+  "(#t #t ext ext)
+((#t yes) (#f no) (#f no))
+")
  ;; An <extended-float> made through a class found by direct-subclasses,
  ;; with the class never named, stays one too.
  (extended-float-by-reflection

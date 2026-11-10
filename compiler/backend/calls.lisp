@@ -373,7 +373,9 @@ makes it a tail call, used when TAIL."
 float or ratio, or of a class no boxed number is an instance of?"
   (let ((c (if (const-p a) a (and (ivar-p a) (constant-atom a)))))
     (if c
-        (not (and (numberp (const-value c)) (not (integerp (const-value c)))))
+        ;; (The compiler's <extended-float> is a structure, not a number.)
+        (not (or (and (numberp (const-value c)) (not (integerp (const-value c))))
+                 (dylan::extended-float? (const-value c))))
         (let ((type (atom-type a))
               (number (find-class-info "<number>" *classes*)))
           (and type

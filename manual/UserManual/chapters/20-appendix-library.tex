@@ -27,9 +27,9 @@ implementation's read-eval-print loop. A name marked \textsc{l} is
 unknown to the compiler to C, rejected by it when compiling, or an error
 when a compiled program calls it: the compiler reports
 \code{add-method}, \code{remove-method}, \code{add-slot},
-\code{remove-slot} and \code{freeze-methods} as impossible in a static
-program, and \code{<rectangular-complex>} and
-\code{(setter direct-superclasses)} as not supported; \code{gensym},
+\code{remove-slot}, \code{(setter direct-superclasses)} and
+\code{freeze-methods} as impossible in a static program, and
+\code{<rectangular-complex>} as not supported; \code{gensym},
 which macro bodies may call, \code{lisp-variable} and
 \code{lisp-procedure} are errors when a compiled program calls them.
 
@@ -61,7 +61,7 @@ Name & Description & \\
 
 \section{Classes, instances and slots}\label{sec:lib-classes}
 
-{\sloppy Making objects and examining classes (\dylanbook{chapter 11}). The compiler to C fixes a program's classes when it compiles it, so it rejects \code{add-slot} and \code{remove-slot} (Chapter~\ref{ch:dylanc}).\par}
+{\sloppy Making objects and examining classes (\dylanbook{chapter 11}). The compiler to C fixes a program's classes when it compiles it, so it rejects \code{add-slot}, \code{remove-slot} and \code{(setter direct-superclasses)} (Chapter~\ref{ch:dylanc}).\par}
 
 {\small\frenchspacing
 \begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.43\textwidth}>{\raggedright\arraybackslash}p{0.47\textwidth}>{\centering\arraybackslash}p{0.04\textwidth}@{}}

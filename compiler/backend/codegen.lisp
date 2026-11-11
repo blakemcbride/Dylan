@@ -595,7 +595,7 @@ every use of VAR has instead, or something without effect no one uses?"
       ((and (module-var-predefined-p var) (null (module-var-definitions var)))
         (let ((c (predefined-c-value var *classes*)))
           (unless c
-            (if (member (dylan::dylan-symbol->string (name-symbol (module-var-name var)))
+            (if (member (name-string (module-var-name var))
                         *static-program-exclusions* :test #'string-equal)
                 (compile-error "~a cannot be used: a program's classes and generic functions are fixed when it is compiled"
                                (name-string (module-var-name var)))

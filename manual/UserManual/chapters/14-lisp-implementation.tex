@@ -664,7 +664,8 @@ dynamic, as the 1992 manual allows:
 
 \begin{itemize}
 \item \code{add-method}, \code{remove-method}, \code{add-slot},
-  \code{remove-slot} and \code{freeze-methods} work. A program can add a
+  \code{remove-slot}, \code{(setter direct-superclasses)} and
+  \code{freeze-methods} work. A program can add a
   slot to a class that already has instances:
 \begin{repl}
 ? (define-class <sq> (<object>) (side init-keyword: side:))

@@ -109,7 +109,8 @@ to change them; a compiled program cannot:
 
 \begin{itemize}
 \item \code{add-method}, \code{remove-method}, \code{add-slot},
-  \code{remove-slot} and \code{freeze-methods} are compile errors,
+  \code{remove-slot}, \code{(setter direct-superclasses)} and
+  \code{freeze-methods} are compile errors,
   wherever they appear.
 \item Each specializer of a method made with \code{define-method}, and
   each superclass of a class, must be known when compiling: a class, a

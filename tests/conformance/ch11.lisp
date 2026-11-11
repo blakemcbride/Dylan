@@ -284,8 +284,9 @@ error
   "(tea symbol)
 ")
 
- ;; add-slot and remove-slot change a class at run time, which a static
- ;; program cannot do (README, CompilerPlan.md); the compiler reports them.
+ ;; add-slot, remove-slot and (setter direct-superclasses) change a class
+ ;; at run time, which a static program cannot do (README, CompilerPlan.md);
+ ;; the compiler reports them.
  ;; The interactive implementation has them, so these are the compiler's.
  (ch11-add-slot
   "(define-class <p> (<object>))
@@ -298,5 +299,12 @@ error
    (remove-slot <p> (slot-descriptor (make <p>) foo))"
   ""
   :compile-error "remove-slot cannot be used"
+  :compiler-only t)
+ (ch11-set-direct-superclasses
+  "(define-class <a> (<object>))
+   (define-class <b> (<object>))
+   (set! (direct-superclasses <b>) (list <a>))"
+  ""
+  :compile-error "(setter direct-superclasses) cannot be used"
   :compiler-only t)
 )

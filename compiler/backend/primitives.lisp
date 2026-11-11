@@ -133,6 +133,7 @@ NIL if it has none yet."
                (format nil "DY_OBJ(&~a)" (class-c-name class))))))))
 
 (defparameter *static-program-exclusions*
-  '("add-method" "remove-method" "add-slot" "remove-slot" "freeze-methods")
+  '("add-method" "remove-method" "add-slot" "remove-slot" "freeze-methods"
+    "(setter direct-superclasses)")
   "Functions of the manual that change classes or generic functions, which
-a static program cannot do (CompilerPlan.md).")
+a static program cannot do (CompilerPlan.md), by NAME-STRING.")

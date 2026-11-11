@@ -596,8 +596,8 @@ updated to the new definition before they are next used.
 
 All of this works in the Common Lisp implementation. A program for the
 compiler to C is static: its classes and their slots are fixed when it is
-compiled. There \code{add-slot} and \code{remove-slot} are errors when
-compiling, \code{make} of \code{<class>} is an error when run, and
+compiled. There \code{add-slot}, \code{remove-slot} and
+\code{(setter direct-superclasses)} are errors when compiling, \code{make} of \code{<class>} is an error when run, and
 \code{define-slot} on a class, which the compiler handles as part of the
 class's definition, is the way to add a slot (Section~\ref{sec:classes-define-slot}).
 

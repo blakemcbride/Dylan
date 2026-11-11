@@ -49,4 +49,23 @@
 \"ERR: define-slot: the class is read-only: {the class <pair>}\"
 \"ERR: define-slot: the class is read-only: {the class <mine>}\"
 ")
+ ;; (setter direct-superclasses) remakes a class (chapter 11): an instance
+ ;; keeps the slots that survive, takes the new ones' initial values, and
+ ;; dispatch follows the new superclasses.  (A static program cannot
+ ;; change its classes: the compiler to C refuses it.)
+ (set-direct-superclasses
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <c> (<object>) (z init-value: 3))
+(define-class <b> (<a>) (y init-value: 2))
+(define-method describe ((o <a>)) \"an <a>\")
+(define-method describe ((o <object>)) \"something\")
+(define b (make <b>))
+(print (list (x b) (describe b) (instance? b <a>)))
+(set! (direct-superclasses <b>) (list <c>))
+(print (direct-superclasses <b>))
+(print (list (z b) (y b) (describe b) (instance? b <a>) (instance? b <c>)))"
+  "(1 \"an <a>\" #t)
+({the class <c>})
+(3 2 \"something\" #f #t)
+")
 )

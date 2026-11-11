@@ -708,7 +708,8 @@ are these.
 
 \paragraph{Changing classes and generic functions.}
 \code{add-method}, \code{remove-method}, \code{add-slot},
-\code{remove-slot} and \code{freeze-methods} cannot be used. Any use of
+\code{remove-slot}, \code{(setter direct-superclasses)} and
+\code{freeze-methods} cannot be used. Any use of
 them --- even one that would never run --- is a compile error:
 
 \begin{shell}

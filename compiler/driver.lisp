@@ -265,20 +265,28 @@ compile."
          (object (merge-pathnames (format nil "~a.o" digest) *library-cache-directory*)))
     (if (probe-file object)
         object
+        ;; The C and the object are written under names of this process's
+        ;; own and renamed whole, the C first, so that a build running at
+        ;; the same time never compiles half a file or finds an object
+        ;; without its C.  The C's #line directives name it as renamed.
         (let* ((source (make-pathname :type "c" :defaults object))
                (temporary (make-pathname :name (format nil "~a-~d" digest (sb-unix:unix-getpid))
-                                         :defaults object)))
+                                         :defaults object))
+               (temporary-source (make-pathname :type "c" :defaults temporary)))
           (ensure-directories-exist object)
-          (with-open-file (out source :direction :output :if-exists :supersede
-                                      :external-format :latin-1)
+          (with-open-file (out temporary-source :direction :output :if-exists :supersede
+                                                :external-format :latin-1)
             (write-string (replace-all text placeholder (c-name-string (native-name source))) out))
-          (when (zerop (run cc (append (remove-if (lambda (o) (search "-Wl," o)) options)
-                                       (list "-c" (native-name source)
-                                             "-o" (native-name temporary)))))
-            ;; Renamed whole, for builds running at the same time
-            (rename-file temporary object)
-            (prune-library-cache)
-            object)))))
+          (cond ((zerop (run cc (append (remove-if (lambda (o) (search "-Wl," o)) options)
+                                        (list "-c" (native-name temporary-source)
+                                              "-o" (native-name temporary)))))
+                 (rename-file temporary-source source)
+                 (rename-file temporary object)
+                 (prune-library-cache)
+                 object)
+                (t (ignore-errors (delete-file temporary-source))
+                   (ignore-errors (delete-file temporary))
+                   nil))))))
 
 (defun prune-library-cache ()
   "Keep the newest *LIBRARY-CACHE-SIZE* objects in the cache, and their C."

@@ -3199,4 +3199,34 @@ Pqr
 abc
 \"keyword argument not accepted: Zork:\"
 ")
+ ;; remove-duplicates! on a deque or stretchy vector, a program's subclass
+ ;; too, works in place, as remove! does (Bugs04 B10).
+ (remove-duplicates-in-place
+  "(define-class <my-deque> (<deque>))
+(define-class <my-sv> (<stretchy-vector>))
+(for-each ((d (list (as <deque> '(1 2 1 3 2 4)) (as <stretchy-vector> '(1 2 1 3 2 4))
+                    (make <my-deque>) (make <my-sv>) (as <deque> '()) (as <stretchy-vector> '(5)))))
+          ()
+  (when (instance? d <my-deque>) (for-each ((e '(3 3 1 3))) () (push-last d e)))
+  (when (instance? d <my-sv>) (for-each ((e '(3 3 1 3))) () (add! d e)))
+  (bind ((r (remove-duplicates! d)))
+    (print (list (id? r d) (as <list> r) (size d) (object-class r) (first r default: #f)))))
+(bind ((d (as <deque> '(1 2 11 12 3 21))))
+  (print (list (id? d (remove-duplicates! d test: (method (a b) (= (modulo a 10) (modulo b 10))))) (as <list> d))))
+(bind ((v (as <stretchy-vector> '(1 2 11 12 3 21))))
+  (print (list (id? v (remove-duplicates! v test: (method (a b) (= (modulo a 10) (modulo b 10))))) (as <list> v))))
+(bind ((v (as <stretchy-vector> '(1 2 1))))
+  (remove-duplicates! v) (add! v 9) (push (as <deque> '(1 1)) 0) (print (as <list> v)))
+(print (handler-case (remove-duplicates! (as <deque> '(1 1)) bad: 1) ((<error> condition: c) (format #f \"ERR: ~a\" c))))"
+  "(#t (1 2 3 4) 4 {the class <deque>} 1)
+(#t (1 2 3 4) 4 {the class <stretchy-vector>} 1)
+(#t (3 1) 2 {the class <my-deque>} 3)
+(#t (3 1) 2 {the class <my-sv>} 3)
+(#t () 0 {the class <deque>} #f)
+(#t (5) 1 {the class <stretchy-vector>} 5)
+(#t (1 2 3))
+(#t (1 2 3))
+(1 2 9)
+\"ERR: keyword argument not accepted: bad:\"
+")
 )

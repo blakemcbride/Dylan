@@ -151,3 +151,11 @@ module: dylan
     (set! (%first d) 0)
     (for-each ((e kept)) () (push-last d e))
     d))
+
+;;; In place too, as in the Common Lisp implementation
+(define-method remove-duplicates! ((d <deque>) #key (test id?))
+  (bind ((kept (remove-duplicates (%elements d) test: test)))
+    (set! (%count d) 0)
+    (set! (%first d) 0)
+    (for-each ((e kept)) () (push-last d e))
+    d))

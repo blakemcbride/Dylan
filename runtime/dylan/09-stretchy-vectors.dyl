@@ -120,3 +120,10 @@ module: dylan
     (set! (%count v) 0)
     (for-each ((e kept)) () (add! v e))
     v))
+
+;;; In place too, as in the Common Lisp implementation
+(define-method remove-duplicates! ((v <stretchy-vector>) #key (test id?))
+  (bind ((kept (remove-duplicates (%elements v) test: test)))
+    (set! (%count v) 0)
+    (for-each ((e kept)) () (add! v e))
+    v))

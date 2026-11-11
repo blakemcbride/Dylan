@@ -283,18 +283,21 @@ hello  hello.c  hello.dyl  hello-dylan.c  hello-dylan-user.c  hello.h
 \paragraph{\code{\#line} directives.} \index{\#line directives}
 The generated C carries \code{\#line} directives that name the Dylan file
 and line each statement came from, and after each function a directive
-back to the C file itself. A C compiler's warnings, a debugger's
+back to the C file itself. A C compiler counts the lines after a
+directive on from its number, so a directive is repeated, without the
+file's name, before each further statement it covers. A C compiler's warnings, a debugger's
 breakpoints and stack traces, and a profiler's reports therefore name
 places in your Dylan source. Here is the start of the function
 \file{hello-dylan-user.c} holds for \code{greet}:
 
 \begin{ccode}
-D fn1190_greet(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+D fn1525_greet(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;
-    D v105609, v105610, v105611;
+    D v107857, v107858, v107859;
 #line 1 "hello.dyl"
     if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);
-    v105609 = a0;
+#line 1
+    v107857 = a0;
 #line 2 "hello.dyl"
     ...
 \end{ccode}
@@ -418,14 +421,15 @@ this \file{sum.dyl},
 $ bin/dylanc -g -o sum sum.dyl
 $ gdb -batch -ex "break sum.dyl:3" -ex run sum
 ...
-Thread 1 "sum" hit Breakpoint 1, fn1190_sum_to (self=4692864, a0=201,
-    a1=0, a2=0, a3=0, argc=1) at /home/me/sum.dyl:3
+Breakpoint 1, fn1525_sum_to_spec (self=5261952, p0=201)
+    at /home/me/sum.dyl:3
 3               (s 0 (+ s i)))
 \end{shell}
 
 The names of the C functions are those the compiler gave the Dylan
-functions (\code{fn1190\_sum\_to} is the method \code{sum-to}), and the
-values are Dylan values in their machine representation: \code{a0=201}
+functions (\code{fn1525\_sum\_to\_spec} is the specialized entry of the
+method \code{sum-to}, Section~\ref{sec:internals-calls-convention}), and
+the values are Dylan values in their machine representation: \code{p0=201}
 is the integer 100, stored shifted left one bit with the low bit set.
 Chapter~\ref{ch:internals} explains the representation.
 

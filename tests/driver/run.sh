@@ -79,6 +79,7 @@ check "-k" "$dylanc" -k -o kept greet.dyl main.dyl
 check "-k keeps the C" test -f kept.c -a -f kept.h -a -f kept-dylan.c -a -f kept-dylan-user.c
 check "#line to the source" grep -q '#line 1 ".*greet.dyl"' kept-dylan-user.c
 check "#line back to the C" grep -q '#line [0-9]* ".*kept-dylan-user.c"' kept-dylan-user.c
+check "#line again for each statement" grep -q '^#line [0-9]*$' kept-dylan-user.c
 check "--no-lines" "$dylanc" -k --no-lines -o nolines greet.dyl main.dyl
 check "--no-lines writes none" sh -c '! grep -q "#line" nolines-dylan-user.c'
 check "-C" "$dylanc" -C -o conly greet.dyl main.dyl

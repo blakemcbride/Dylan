@@ -140,6 +140,23 @@ generated.")
           (setf *line-location* (cons file line))
           (push (format nil "#line ~d ~a" line (line-file-name file)) *lines*))))))
 
+(defun write-function-lines (lines out)
+  "Write LINES, a function's, to OUT.  A C compiler counts the lines after
+a #line directive on from its number, so each line after the first that a
+directive covers gets the directive again, without the file's name, which
+stays: every statement keeps its own Dylan line."
+  (let ((directive nil) (covered 0))
+    (dolist (line lines)
+      (cond ((and (> (length line) 6) (string= "#line " line :end2 6))
+             (setf directive (subseq line 0 (position #\Space line :start 6))
+                   covered 0))
+            ((and directive (plusp covered))
+             (format out "~a~%" directive))
+            (t nil))
+      (unless (and (> (length line) 6) (string= "#line " line :end2 6))
+        (incf covered))
+      (format out "~a~%" line))))
+
 (defun line-file-name (name)
   "NAME, a file's, as a #line directive's string: with _ for each \", \\
 and newline, which C compilers copy unescaped into the assembler."
@@ -1229,8 +1246,7 @@ specialized entry, made with *SPEC* SPEC."
             (format out "    double ~{~a~^, ~};~%" (mapcar #'v-name doubles)))))
       (dolist (local (reverse (cfun-extra-locals cfun)))
         (format out "    ~a ~a;~%" (cdr local) (car local)))
-      (dolist (line (reverse *lines*))
-        (format out "~a~%" line))
+      (write-function-lines (reverse *lines*) out)
       (format out "}~%")
       (when *line-location*
         ;; Back to the C file (output.lisp writes the line number).

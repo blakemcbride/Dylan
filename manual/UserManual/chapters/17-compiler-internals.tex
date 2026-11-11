@@ -638,40 +638,57 @@ inline operation tests its arguments.
 \file{sum-dylan-user.c}:
 
 \begin{ccode}
-D fn1190_sum_to(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+D fn1525_sum_to(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     (void)self; (void)a0; (void)a1; (void)a2; (void)a3; (void)argc;
-    D v105609, v105610, v105612, v105613, v105614, v105615, v105616,
-      v105617, v105618, v105619;
+    D v107857, v107858, v107860, v107861, v107862, v107863, v107864,
+      v107865, v107866, v107867;
     D t1;
     D t2;
     D t3;
     D t4;
 #line 1 "sum.dyl"
+    DY_CHECK_STACK();
+#line 1
     if (DY_UNLIKELY(argc != 1)) dy_wrong_argument_count(self, argc);
-    v105609 = a0;
+#line 1
+    v107857 = a0;
 #line 2 "sum.dyl"
     t1 = DY_INT(0);
+#line 2
     t2 = DY_INT(0);
-    v105612 = t1;
-    v105613 = t2;
+#line 2
+    v107860 = t1;
+#line 2
+    v107861 = t2;
+#line 2
     goto for_1;
+#line 2
     for_1:;
 #line 4 "sum.dyl"
-    v105615 = DY_BOOL((intptr_t)(v105609) < (intptr_t)(v105612));
+    v107863 = DY_BOOL((intptr_t)(v107857) < (intptr_t)(v107860));
 #line 2 "sum.dyl"
-    if (v105615 != DY_FALSE) {
+    if (v107863 != DY_FALSE) {
+#line 2
         dy_thread->mv_count = 1;
-        return v105613;
+#line 2
+        return v107861;
+#line 2
     } else {
-        v105617 = dy_int_add(v105612, DY_INT(1));
+#line 2
+        v107865 = dy_int_add(v107860, DY_INT(1));
 #line 3 "sum.dyl"
-        v105619 = dy_int_add(v105613, v105612);
+        v107867 = dy_int_add(v107861, v107860);
 #line 2 "sum.dyl"
-        t3 = v105617;
-        t4 = v105619;
-        v105612 = t3;
-        v105613 = t4;
+        t3 = v107865;
+#line 2
+        t4 = v107867;
+#line 2
+        v107860 = t3;
+#line 2
+        v107861 = t4;
+#line 2
         goto for_1;
+#line 2
     }
 }
 \end{ccode}
@@ -680,10 +697,12 @@ D fn1190_sum_to(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 Reading it from the top:
 
 \begin{itemize}
-\item The function has the uniform entry. Its name, \code{fn1190\_sum\_to},
+\item The function has the uniform entry. Its name, \code{fn1525\_sum\_to},
   is a number and the Dylan name; every variable \code{v}\meta{n} is
   one IR variable, and every \code{t}\meta{n} a temporary.
-\item It checks that it was given one argument; the method is the only
+\item It checks that the stack has room (\code{DY\_CHECK\_STACK}: a
+  recursion too deep is an error, not a crash) and that it was given one
+  argument; the method is the only
   method of \code{sum-to}, and its dispatch function has already checked
   that the argument is an \code{<integer>}.
 \item The \code{for} loop has become a label, \code{for\_1}, and a
@@ -702,7 +721,9 @@ Reading it from the top:
   value count might be left over from a call made earlier in the
   function.
 \item The \code{\#line} directives name the Dylan line each statement came
-  from.
+  from. A C compiler counts the lines after a directive on from its
+  number, so the directive is repeated, without the file's name, before
+  each further statement it covers.
 \end{itemize}
 
 If \code{sum-to} were instead written as \code{(define sum-to (method
@@ -710,7 +731,7 @@ If \code{sum-to} were instead written as \code{(define sum-to (method
 inside it: a method made by \code{method} and stored in a variable is
 called through the variable, and must check its own argument. The
 comparison would then be preceded by a test, \code{if
-(DY\_IS\_INT(v105609))}, with a call of the generic function
+(DY\_IS\_INT(v107857))}, with a call of the generic function
 \code{binary<} for the other case. Small differences like this are the
 subject of the next chapter.
 

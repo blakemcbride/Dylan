@@ -292,7 +292,9 @@ $ bin/dylanc -o app modules.dyl shapes.dyl app.dyl
 It first finds every top-level \code{define-module} form in every file,
 then defines each module after the modules it uses. The order of the
 \code{define-module} forms, and of the files that contain them, therefore
-does not matter. Then it compiles each file's forms in the module its
+does not matter, but each module is defined once: a second
+\code{define-module} of the same name is an error. Then it compiles each
+file's forms in the module its
 header names. A \code{define-module} that a macro makes is found only
 when the compiler reaches the macro's use: the module is defined there,
 and a module that uses it is defined when its own \code{define-module}
@@ -307,6 +309,7 @@ e4.dyl:2:1: error: define-module: modules m1 use each other
 e5.dyl:1:1: error: unknown module nosuch
 e7.dyl:1:1: error: define-module: cannot export car, which is imported
 e8b.dyl:5:5: error: define of f: the variable is imported from module a
+e9.dyl:2:1: error: define-module: module m1 is already defined at e9.dyl:1:1
 \end{shell}
 
 \noindent

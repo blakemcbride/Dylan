@@ -120,6 +120,7 @@ to change them; a compiled program cannot:
   be known when compiling, and a \code{define-slot} on a singleton that
   runs again must be for the same object.
 \item A class cannot be defined twice.
+\item A module cannot be defined twice.
 \item A generic function's parameter list is that of its first
   definition to run. Definitions that are not congruent with each other
   are refused when compiling if which of them runs first is known only

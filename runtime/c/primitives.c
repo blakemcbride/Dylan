@@ -151,8 +151,12 @@ PRIMITIVE(instance_p) {
 
 PRIMITIVE(subclass_p) {
     need(self, argc, 2, 2);
-    return DY_BOOL(dy_wrapper_subtype(as_class(a0)->instance_wrapper,
-                                      as_class(a1)->instance_wrapper));
+    /* The first argument is checked first, whatever order the C compiler
+       evaluates a call's arguments in */
+    DyClass *class1 = as_class(a0);
+    DyClass *class2 = as_class(a1);
+    return DY_BOOL(dy_wrapper_subtype(class1->instance_wrapper,
+                                      class2->instance_wrapper));
 }
 
 PRIMITIVE(singleton) {

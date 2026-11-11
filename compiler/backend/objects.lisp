@@ -448,6 +448,12 @@ variable's value (chapter 6's slot types and initial values may name it)."
                    (when (class-info-sealed-p s)
                      (compile-error "~a is sealed: it cannot be subclassed" (class-info-name s))))
                  (setf (class-info-supers (gclass-info g)) supers))))
+    ;; An inconsistent precedence is reported at the define-class that
+    ;; makes the class, with its file and line.
+    (loop for (d . g) in user
+          do (at-node (d)
+               (handler-case (compute-cpl (gclass-info g))
+                 (error (e) (compile-error "~a" (princ-to-string e))))))
     (let ((all (append (built-in-class-infos-of *classes*)
                        (mapcar (lambda (u) (gclass-info (cdr u))) user))))
       (handler-case (setf *classes* (prepare-classes all))
@@ -472,7 +478,8 @@ variable's value (chapter 6's slot types and initial values may name it)."
         ((:class :each-subclass)
          (when (or (slot-spec-init-function spec) (slot-spec-init-keyword spec)
                    (slot-spec-required-init-keyword spec))
-           (compile-error "slot ~a: a ~(~a~) slot takes only an init-value:" name allocation)))
+           (compile-error "slot ~a: ~a slot takes only an init-value:"
+                          name (if (eq allocation :class) "a class" "an each-subclass"))))
         (:constant
          (unless (slot-spec-init-value spec)
            (compile-error "slot ~a: a constant slot needs an init-value:" name)))

@@ -328,7 +328,9 @@ reached, as the forms run in order."
 was declared before (DECLARE-MODULES-IN) and is defined now if it waited
 for a module a macro makes; one a macro made is declared and defined."
   (if (and *module-forms* (gethash form *module-forms*))
-      (let ((module (gethash (cadr form) *dylan-modules*)))
+      ;; One that is not a list of a name and clauses was refused when
+      ;; it was declared.
+      (let ((module (and (consp (cdr form)) (gethash (cadr form) *dylan-modules*))))
         (when (and module (eq (dylan-module-form module) form))
           (define-pending-module module)))
       (progn (declare-module form)

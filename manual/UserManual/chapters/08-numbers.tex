@@ -138,8 +138,9 @@ Class & Compiler to C & Common Lisp implementation \\
 \noindent \code{<double-float>} is the default: a float literal without
 an exponent marker, or with \code{e} or \code{d}, is a double. An
 \code{<extended-float>} is a separate class with a double's precision,
-the widest of the three for contagion; the only way to make one is
-\code{as} (see section~\ref{sec:numbers-conversion}).
+the widest of the three for contagion; one is written with the exponent
+marker \code{l}, as \code{1.5l0} (below), or made with \code{as} (see
+section~\ref{sec:numbers-conversion}).
 \code{(+ (as <extended-float> 1/8) 1)} is the \code{<extended-float>}
 \code{1.125l0}.
 
@@ -404,13 +405,13 @@ Function & Rounds toward \\
 \end{center}
 
 \begin{dylan}
-(floor 7/2)      ; => 3 and 1/2
-(floor -7/2)     ; => -4 and 1/2
-(ceiling 2.5)    ; => 3 and -0.5
-(truncate -2.7)  ; => -2 and -0.7000000000000002
-(round 2.5)      ; => 2 and 0.5       the tie goes to 2, which is even
-(round 3.5)      ; => 4 and -0.5
-(round -2.5)     ; => -2 and -0.5
+(floor 7/2)      ; => 3, 1/2
+(floor -7/2)     ; => -4, 1/2
+(ceiling 2.5)    ; => 3, -0.5
+(truncate -2.7)  ; => -2, -0.7000000000000002
+(round 2.5)      ; => 2, 0.5      the tie goes to 2, which is even
+(round 3.5)      ; => 4, -0.5
+(round -2.5)     ; => -2, -0.5
 \end{dylan}
 
 \noindent Use \code{bind} to receive both values (chapter~\ref{ch:control});
@@ -429,13 +430,13 @@ second, round the quotient as the one-argument function of the same name
 does, and answer the rounded quotient and the remainder:
 
 \begin{dylan}
-(floor/ 7 2)        ; => 3 and 1
-(floor/ -7 2)       ; => -4 and 1
-(ceiling/ 7 2)      ; => 4 and -1
-(truncate/ -7 2)    ; => -3 and -1
-(round/ 7 2)        ; => 4 and -1
-(round/ 5 2)        ; => 2 and 1
-(floor/ 7.5 2)      ; => 3 and 1.5
+(floor/ 7 2)        ; => 3, 1
+(floor/ -7 2)       ; => -4, 1
+(ceiling/ 7 2)      ; => 4, -1
+(truncate/ -7 2)    ; => -3, -1
+(round/ 7 2)        ; => 4, -1
+(round/ 5 2)        ; => 2, 1
+(floor/ 7.5 2)      ; => 3, 1.5
 \end{dylan}
 
 \index{modulo}\index{remainder}
@@ -585,9 +586,11 @@ differently: \code{(expt 2 100)} is an error, ``integer overflow'', in
 the compiler to C, and \code{1267650600228229401496703205376} in the
 Common Lisp implementation.
 
-\noindent An error from Common Lisp's arithmetic reaches a Dylan
-handler as a \code{<simple-error>} whose message begins
-\code{Lisp condition:} (chapter~\ref{ch:conditions}).
+\noindent An arithmetic error reaches a Dylan handler as a
+\code{<simple-error>} with the same message in both implementations:
+\code{division by zero}, or \code{arithmetic error:} and its kind, as
+\code{arithmetic error: floating-point-overflow}
+(Section~\ref{sec:conditions-runtime-errors}).
 
 \section{Integers as bits}\label{sec:numbers-logical}
 

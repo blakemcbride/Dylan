@@ -385,10 +385,11 @@ develop it interactively and compile it with \cmd{dylanc}.
 \index{size builds}
 By default the library is compiled apart from the program and linked
 whole (Section~\ref{sec:dylanc-cache}), which makes builds fast but
-executables large: hello world is about 460~KB of code and data. With
+executables large: hello world is about 1,060~KB of code and data. With
 \cmd{-Os}, the library is compiled with the program and shaken
-(Section~\ref{sec:internals-shaking}), and hello world is about 220~KB,
-stripped; Section~\ref{sec:dylanc-size} compares the builds. The
+(Section~\ref{sec:internals-shaking}), and hello world is about 650~KB,
+stripped. About 310~KB of either is the MPS collector, which is linked
+in; Section~\ref{sec:dylanc-size} compares the builds. The
 original goal was under 100~KB. The shaking is by name and class, so a
 call of a generic function such as \code{print-object}, \code{make} or
 \code{as} keeps every method that could apply to a class with instances,

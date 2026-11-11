@@ -1,7 +1,7 @@
 # Building and running on Linux
 
 Linux is where this system is developed and tested (Fedora, SBCL 2.6.3,
-GCC 15). For macOS see [`macOS.md`](macOS.md); for Windows,
+GCC 16). For macOS see [`macOS.md`](macOS.md); for Windows,
 [`Windows.md`](Windows.md).
 
 ## What you need

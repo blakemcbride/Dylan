@@ -359,25 +359,27 @@ with the program, keeping only what the program can reach.
 
 These are the sizes of the \code{greet} program above, built with GCC~16
 on x86-64 Linux, as reported by \cmd{size} (the code, the initialized
-data and the uninitialized data, excluding the shared C and collector
-libraries):
+data and the uninitialized data, excluding the shared C library; the
+MPS collector is linked in):
 
 \begin{center}
 \begin{tabular}{lrr}
 \toprule
 Build & text + data (KB) & file size (KB) \\
 \midrule
-default (\cmd{-O2}) & 463 & 2765 \\
-\cmd{-{}-whole} & 307 & 1798 \\
-\cmd{-{}-lto} & 334 & 2374 \\
-\cmd{-Os} & 221 & 231 \\
+default (\cmd{-O2}) & 1063 & 5936 \\
+\cmd{-{}-whole} & 815 & 4478 \\
+\cmd{-{}-lto} & 721 & 4629 \\
+\cmd{-Os} & 654 & 664 \\
 \bottomrule
 \end{tabular}
 \end{center}
 
 The file sizes of all but the \cmd{-Os} build include debugging
-information. Hello world built \cmd{-Os} is about 220~KB of code and data;
-most of it is library code that a call of a generic function such as
+information. Hello world built \cmd{-Os} is about 650~KB of code and data,
+of which about 310~KB is the MPS collector; with \cmd{-{}-gc boehm}, whose
+collector is a shared library, it is about 340~KB. Most of the rest is
+library code that a call of a generic function such as
 \code{print-object}, \code{make} or \code{as} could reach.
 Chapter~\ref{ch:performance} says more about size.
 
@@ -601,10 +603,12 @@ Section~\ref{sec:dylanc-runtime-errors}). Treat such a warning as an
 error unless you know why it is there: it is usually a misspelling.
 
 An \textbf{error} stops the build: no executable is made and
-\cmd{dylanc} exits with status~1. Errors found while reading and
-converting the source --- an unbalanced parenthesis, a malformed special
-form, an integer too large --- are all reported in one run; the compiler
-abandons the top-level form that has the error and goes on to the next.
+\cmd{dylanc} exits with status~1. Errors found while converting the
+source --- a malformed special form, an integer too large --- are all
+reported in one run; the compiler abandons the top-level form that has
+the error and goes on to the next. An error in reading the source --- an
+unbalanced parenthesis, a number that cannot be read, such as
+\code{1e400} --- stops the reading, and it is the only error reported.
 Errors found later, when the program is analysed as a whole, stop at the
 first. For example:
 

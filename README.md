@@ -218,10 +218,9 @@ can write. Macros are exported and imported as variables are, and a local
 variable of the same name hides one. The bodies run in the Common Lisp
 implementation of Dylan, with its library, `gensym`, and what
 `(define-for-macros form ...)` defines — forms run only while compiling.
-Under the compiler they run in an environment of their own, apart from
-the program; in the interactive implementation, which compiles and runs a
-form at a time, they run in the program's own. `dylanc -E` writes each
-use of a macro and its expansion.
+In both implementations they run in an environment of their own, apart
+from the program. `dylanc -E` writes each use of a macro and its
+expansion.
 
 **Threads** (an extension): `make-thread` with a function of no arguments,
 `join-thread` (which answers its values), `current-thread` and
@@ -234,8 +233,8 @@ What a static program cannot do, which the 1992 manual allows:
 
 - **Change its classes or generic functions while running:** `add-method`,
   `remove-method`, `add-slot`, `remove-slot` and `freeze-methods` are
-  reported when compiling. A `<generic-function>` made by `make` has no
-  methods.
+  reported when compiling. A `<generic-function>` made by `make` is given
+  methods only by `define-method` of a variable that holds it.
 - **Specializers known only when running:** each must be a class or
   singleton the compiler can find — a literal, a constant variable,
   `(singleton x)` or `(make <singleton> object: x)` of a constant. A
@@ -329,12 +328,12 @@ Each line gives the best of three runs for each, their ratios, and
 
 | | |
 |---|---|
-| `src/` | the Common Lisp implementation — 41 Lisp files, ~16,800 lines |
+| `src/` | the Common Lisp implementation — 41 Lisp files, ~18,300 lines |
 | `Makefile` | builds `bin/dylan`, the Common Lisp implementation as one executable (`src/build-dylan.lisp`); `make distclean` (or `realclean`) removes everything built |
 | `src/README` | how it works, and which Thomas file each file grew from |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
 | `dylan-examples.dyl` | the examples from the Dylan book |
-| `compiler/` | the compiler to C, in Common Lisp — ~10,400 lines |
+| `compiler/` | the compiler to C, in Common Lisp — ~12,400 lines |
 | `bin/dylanc` | its command line |
 | `runtime/` | its runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
 | `tests/` | its tests |

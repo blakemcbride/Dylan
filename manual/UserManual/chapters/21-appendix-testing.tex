@@ -49,7 +49,7 @@ passed and 1 otherwise.
 
 \section{The front end and the IR}\label{sec:test-front-ir}
 
-\file{tests/front-end/cases.lisp} holds 55 cases. Each is a list
+\file{tests/front-end/cases.lisp} holds 56 cases. Each is a list
 
 \begin{lisp}
 (name "dylan source" expected)
@@ -100,7 +100,7 @@ compiled, built, run, and whose output is compared with what the test
 expects. They share one runner, \file{tests/codegen/runner.lisp}.
 
 \begin{description}
-\item[\file{tests/codegen/cases*.lisp}] Some 250 programs testing the
+\item[\file{tests/codegen/cases*.lisp}] Some 430 programs testing the
   compiler's features phase by phase: \file{cases.lisp} (calls, tail
   calls, closures, \code{\#rest} and \code{\#key}, multiple values,
   run-time errors), \file{cases-control.lisp} (exits, cleanups,

@@ -380,8 +380,8 @@ $ ./app
 \end{shell}
 
 \paragraph{What files appear.} Normally the only file \cmd{dylanc} leaves
-behind is the executable. The C it generates is written beside the
-executable and deleted once the C compiler has finished with it. The \cmd{-k} (\cmd{-{}-keep-c}) option keeps it:
+behind is the executable. The C it generates is written in a temporary
+directory and deleted once the C compiler has finished with it. The \cmd{-k} (\cmd{-{}-keep-c}) option keeps it:
 
 \begin{shell}
 $ bin/dylanc -k hello.dyl

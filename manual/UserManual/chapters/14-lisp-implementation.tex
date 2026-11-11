@@ -452,7 +452,7 @@ Dylan & Common Lisp \\
 \endhead
 integers & integers, fixnums or bignums: there is no limit on size \\
 ratios & ratios \\
-floats & \code{double-float}s \\
+floats & \code{single-float}s and \code{double-float}s; an \code{<extended-float>} is a \code{double-float} in a structure of its own \\
 complex numbers & complex numbers; \code{(make-rectangular 1 2)} is \code{\#c(1 2)} \\
 characters & characters \\
 strings & Lisp strings \\
@@ -708,8 +708,9 @@ implementation provides.
   they need each other's modules; the compiler to C sees the whole
   program first (Chapter~\ref{ch:modules}).
 \item Errors are reported when the code runs; the compiler to C reports
-  many of them, such as an assignment to a read-only variable, when it
-  compiles.
+  many of them, such as a special form written wrongly or a key in two
+  match lists of a \code{case}, when it compiles, before any of the
+  program runs.
 \end{itemize}
 
 \section{Limitations}\label{sec:lisp-limitations}

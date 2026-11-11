@@ -130,6 +130,8 @@ to change them; a compiled program cannot:
   \code{<generic-function>} made by \code{make} is given methods only by
   \code{define-method} of a variable that holds it.
 \item There is no evaluation or loading of code at run time.
+\item \code{gensym} is for macros, while compiling: a compiled program
+  that calls it gets an error (Chapter~\ref{ch:extensions}).
 \end{itemize}
 
 \subsection{Numbers}
@@ -194,7 +196,8 @@ manual leaves a choice open or where the host shows through. A portable
 program depends on none of these; each is described where it arises.
 
 \begin{itemize}
-\item The interactive implementation needs modules declared before use
+\item At its prompt and reading a pipe, the interactive implementation
+  needs a module defined after the modules it uses
   (Section~\ref{sec:modules-lisp}).
 \item A compiled program that an unhandled error stops reports it on
   the standard error, \code{Dylan error:} and the message, as the

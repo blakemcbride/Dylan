@@ -318,17 +318,19 @@ macro:
 
 \begin{shell}
 $ bin/dylanc -E m1.dyl
-m1.dyl:4:1: (my-unless (= 1 2) (print 'one) (print 'two))
-  => (if (= 1 2) #f (begin (print 'one) (print 'two)))
-m1.dyl:7:8: (my-unless #t 'never)
-  => (if #t #f (begin 'never))
+m1.dyl:4:1: (my-unless (= 1 2) (print (quote one)) (print (quote two)))
+  => (if (= 1 2) #f (begin (print (quote one)) (print (quote two))))
+m1.dyl:7:8: (my-unless #t (quote never))
+  => (if #t #f (begin (quote never)))
 m1.dyl:12:1: (show (+ 1 2))
-  => (format #t "~s => ~s~%" '(+ 1 2) (+ 1 2))
-m1.dyl:13:1: (show (reverse '(a b c)))
-  => (format #t "~s => ~s~%" '(reverse '(a b c)) (reverse '(a b c)))
+  => (format #t "~s => ~s~%" (quote (+ 1 2)) (+ 1 2))
+m1.dyl:13:1: (show (reverse (quote (a b c))))
+  => (format #t "~s => ~s~%" (quote (reverse (quote (a b c))))
+             (reverse (quote (a b c))))
 \end{shell}
 
-Only the program's macros are shown, not the built-in syntax. Each step
+\noindent (The last expansion is broken in two to fit the page.) Only the
+program's macros are shown, not the built-in syntax. Each step
 of a macro that expands into another macro is shown separately. The
 interactive implementation has no equivalent; there, a macro's expansion
 can be seen by calling its body's logic as an ordinary function on quoted

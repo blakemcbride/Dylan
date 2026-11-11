@@ -23,12 +23,15 @@ The narrow last column says which implementations provide the name.
 \noindent
 Every entry was checked by referring to it in a small program compiled
 with \cmd{bin/dylanc} and by evaluating it at the interactive
-implementation's read-eval-print loop. A name marked \textsc{l} is either
-unknown to the compiler to C or rejected by it when compiling: the
-compiler reports \code{add-method}, \code{remove-method},
-\code{add-slot}, \code{remove-slot} and \code{freeze-methods} as
-impossible in a static program, and \code{<rectangular-complex>} and
-\code{(setter direct-superclasses)} as not supported.
+implementation's read-eval-print loop. A name marked \textsc{l} is
+unknown to the compiler to C, rejected by it when compiling, or an error
+when a compiled program calls it: the compiler reports
+\code{add-method}, \code{remove-method}, \code{add-slot},
+\code{remove-slot} and \code{freeze-methods} as impossible in a static
+program, and \code{<rectangular-complex>} and
+\code{(setter direct-superclasses)} as not supported; \code{gensym},
+which macro bodies may call, \code{lisp-variable} and
+\code{lisp-procedure} are errors when a compiled program calls them.
 
 \section{Objects, equality and comparison}\label{sec:lib-objects}
 
@@ -321,7 +324,7 @@ Name & Description & \\
 \code{(current-element collection state)}\index{current-element} & The element at \code{state}. &  \\
 \code{((setter current-element) collection state new-value)} & Replaces the element at \code{state}. &  \\
 \code{(current-key collection state)}\index{current-key} & The key of the element at \code{state}. &  \\
-\code{(final-state collection)}\index{final-state} & The state of the last element of a sequence, or \code{\#f}. &  \\
+\code{(final-state collection)}\index{final-state} & The state of the last element, or \code{\#f}: of a vector, string, deque, array or bounded range, which can be walked backward (Section~\ref{sec:collections-iteration}). &  \\
 \code{(previous-state collection state)}\index{previous-state} & The state of the element before \code{state}, or \code{\#f}. &  \\
 \code{(copy-state collection state)}\index{copy-state} & A copy of \code{state} that can be advanced independently. &  \\
 \bottomrule

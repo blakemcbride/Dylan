@@ -51,9 +51,10 @@ declare types and receive multiple values, as \code{bind} does. None of
 these is part of this language. There is no \code{define-variable} or
 \code{define-constant}, and \code{define} takes exactly one plain name and
 one expression; \code{(define (x <integer>) 3)} and \code{(define a b
-(values 1 2))} are errors in both implementations. The compiler to C adds
+(values 1 2))} are errors in both implementations. Both add
 \code{define-thread-variable}, which defines a variable each thread has its
-own value of (Chapter~\ref{ch:extensions}).
+own value of (Chapter~\ref{ch:extensions}); threads exist only in compiled
+programs, so in the interactive implementation it is an error.
 \end{notebox}
 
 \section{Lexical variables: bind}\label{sec:control-bind}

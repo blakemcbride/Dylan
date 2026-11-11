@@ -526,10 +526,11 @@ Definition & Creates \\
 \end{tabular}
 \end{center}
 
-\noindent Both implementations add three more definitions, which are
-described in Chapter~\ref{ch:extensions}: \code{define-macro},
-\code{define-for-macros} and \code{define-thread-variable} (threads
-exist only in compiled programs).
+\noindent Chapter~\ref{ch:extensions} describes three more definitions,
+which both implementations add: \code{define-macro},
+\code{define-for-macros} and \code{define-thread-variable}. Threads
+exist only in compiled programs, so in the interactive implementation
+\code{define-thread-variable} is an error.
 
 The 1992 manual describes definitions as if they were ordinary forms that
 could appear anywhere, and both implementations accept \code{define} inside

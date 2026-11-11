@@ -216,10 +216,12 @@ returns. A handler for \code{<abort>} decides what abandoning means:
 
 \index{break}
 \code{(break)} or \code{(break \meta{string} \meta{argument} ...)} is a
-breakpoint. In the Common Lisp implementation it enters the debugger
-with the message, offering a restart that continues; in the compiler to
-C, which has no debugger, it prints \code{Dylan break:} and the message
-on standard error and continues. Either way it then answers \code{\#f}.
+breakpoint. At the Common Lisp implementation's prompt it enters the
+debugger with the message, offering a restart that continues; in the
+compiler to C, which has no debugger, and in the Common Lisp
+implementation reading a file or its standard input, it prints
+\code{Dylan break:} and the message on standard error and continues.
+Either way it then answers \code{\#f}.
 
 \section{Handling with handler-case}\label{sec:conditions-handler-case}
 
@@ -269,7 +271,7 @@ more specific classes first. The options are:
 
 (handler-case (values 1 2)
   ((<error>) 'oops))
-; => 1 and 2
+; => 1, 2
 \end{dylan}
 
 \noindent The clause's forms run after the exit, in the dynamic
@@ -538,8 +540,8 @@ restart, which makes \code{break} answer \code{\#f}.
 
 An error signalled by Common Lisp itself (a Lisp type error inside a
 built-in function, a floating-point overflow) is offered first to Dylan's
-handlers as a \code{<simple-error>} whose message begins
-\code{Lisp condition:}. If none takes it, it reaches the debugger as the
+handlers as a \code{<simple-error>}, worded as
+Section~\ref{sec:conditions-runtime-errors} describes. If none takes it, it reaches the debugger as the
 Lisp error it is, and the debugger offers \code{DYLAN-REP}, which
 returns to the Dylan prompt, and Common Lisp's own restarts. In a program compiled to Lisp with
 \code{dylan:compile-file} and loaded into the runtime, an unhandled error
@@ -605,6 +607,7 @@ a keyword the function does not take & \code{keyword argument not accepted: b:} 
 calling something not a function & \code{not a function: 5} \\
 integer overflow & \code{integer overflow (integers are 63 bits)} \\
 division by zero & \code{division by zero} \\
+a floating-point overflow & \code{arithmetic error: floating-point-overflow} \\
 a typed slot or variable given a wrong value & \code{"s" is not an instance of \{the class <integer>\}} (a \code{<type-error>}) \\
 reading an uninitialized slot & \code{the slot s is not initialized} \\
 a variable with no value & \code{the variable x@dylan-user has no value} \\
@@ -624,7 +627,8 @@ In the Common Lisp implementation an error that arises inside Common Lisp
 itself is reflected as a Dylan \code{<simple-error>}, which handlers see
 as they see any other: the host's errors for a call with the wrong number
 of arguments, a value of the wrong type (\code{not a list: 5} for
-\code{(car 5)}) and division by zero are worded as above, and any
+\code{(car 5)}), division by zero and floating-point overflow are worded
+as above, and any
 other has a message beginning \code{Lisp condition:} followed by Common
 Lisp's own description.
 

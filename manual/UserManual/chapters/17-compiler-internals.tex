@@ -15,7 +15,7 @@ itself. The design, phase by phase, is also recorded in
 \section{The stages}\label{sec:internals-pipeline}
 
 \index{compiler!stages}
-The compiler is about 9\,000 lines of Common Lisp in \file{compiler/}.
+The compiler is about 12\,000 lines of Common Lisp in \file{compiler/}.
 It is a \term{whole-program compiler}: it sees the entire program, with
 the library, before it writes any C, and since nothing changes once the
 program runs, everything it learns about the program is true for good.
@@ -545,8 +545,8 @@ a superclass does not count.
 Shaking is by name and class, not by data flow, and so it keeps more
 than a program needs: a call of a generic function such as
 \code{print-object}, \code{make} or \code{as} keeps every method that
-could apply to a class with instances. That is why hello world is still
-about 220~KB when built \cmd{-Os}.
+could apply to a class with instances. That is why hello world built
+\cmd{-Os} is still about 340~KB of code and data apart from the collector.
 
 \section{Type inference and inlining}\label{sec:internals-types}
 \label{sec:internals-calls}

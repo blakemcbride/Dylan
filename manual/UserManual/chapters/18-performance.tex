@@ -165,12 +165,12 @@ only in their first lines:
 \toprule
 Definition & Time \\
 \midrule
-\code{(define tak (method (x y z) ...))} & 0.04 s \\
+\code{(define tak (method (x y z) ...))} & 0.03 s \\
 \code{(define-method tak (x y z) ...)} & 0.04 s \\
 \code{(define-method tak ((x <integer>) (y <integer>) (z <integer>)) ...)}
-  & 0.08 s \\
+  & 0.04 s \\
 \code{(define tak (method ((x <integer>) (y <integer>) (z <integer>)) ...))}
-  & 0.30 s \\
+  & 0.31 s \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -180,11 +180,14 @@ Definition & Time \\
   dispatched at all, and a \code{define} of a \code{method} with no
   specializers is called directly; both are as fast as the program can
   be.
-\item Specializing the only method on \code{<integer>} makes every call
-  go through the dispatch function, which tests the argument classes.
-  Inside the method the arguments are then known to be integers, which
-  helps a method that does much work with them, but here the method is
-  tiny and the dispatch doubles its cost.
+\item Specializing the only method on \code{<integer>} costs nothing
+  here. The arguments of every call are known to be integers ---
+  constants, results of integer arithmetic, and results of \code{tak}
+  itself --- so the compiler calls the method directly, and inside it
+  the arguments are known to be integers. A call whose arguments' classes
+  the compiler cannot tell goes through the dispatch function, which
+  tests them; for a method as small as this one, that doubles the cost
+  of the call.
 \item A \code{method} with specializers stored with \code{define} is the
   slowest: it is a closure that checks its own arguments on every call,
   is called through the variable, and does not pass on to the compiler
@@ -192,8 +195,9 @@ Definition & Time \\
 \end{itemize}
 
 So: specialize methods when you need dispatch, or when the method does
-enough with its arguments to profit from knowing their classes; do not
-specialize a lone method merely to document its argument types; and
+enough with its arguments to profit from knowing their classes; a lone
+method specialized only to document its argument types costs a dispatch
+wherever the compiler cannot tell the classes of its arguments; and
 define functions with \code{define-method}, or with \code{define} of an
 unspecialized \code{method}.
 
@@ -412,23 +416,23 @@ them name Dylan source lines. On Linux, \cmd{perf} is the simplest:
 \begin{shell}
 $ bin/dylanc takp.dyl
 $ perf stat -e task-clock ./takp
-15
-             78.05 msec task-clock:u
-       0.078615932 seconds time elapsed
+13
+             43.22 msec task-clock:u
+       0.043655983 seconds time elapsed
 $ perf record ./takp
 $ perf report --stdio
-    50.04%  takp     takp                  [.] fn1190_tak
-    49.68%  takp     takp                  [.] dy_gf_tak_e10c5970_dispatch
+    99.10%  takp     takp                  [.] fn1525_tak
+     0.20%  takp     takp                  [.] fn687_toplevel
 ...
 \end{shell}
 
 The functions are named as the compiler names them
-(Section~\ref{sec:internals-reading}): \code{fn1190\_tak} is a method
-\code{tak}; \code{dy\_gf\_tak\_e10c5970\_dispatch} is the dispatch
-function of the generic function \code{tak}. Here, with the method
-specialized on \code{<integer>}, half the time goes to dispatch --- the
-case of the second table above. Other names to recognize:
-\code{\_spec} marks a specialized entry, \code{dy\_maker\_}\meta{class}
+(Section~\ref{sec:internals-reading}): \code{fn1525\_tak} is a method
+\code{tak}, specialized on \code{<integer>} and called directly, and
+nearly all the time is spent in it. Other names to recognize: a name
+such as \code{dy\_gf\_tak\_e10c5970\_dispatch} is the dispatch function
+of a generic function, here \code{tak}, which a call goes through when
+the compiler cannot tell its arguments' classes; \code{\_spec} marks a specialized entry, \code{dy\_maker\_}\meta{class}
 a class's maker, and \code{GC\_}\meta{name} the collector; time in the
 collector's functions is time spent allocating and collecting.
 \cmd{perf annotate} shows the hot instructions with the Dylan lines they

@@ -122,18 +122,19 @@ compiled: a reference to one checks that its method has been made
       (or (get name 'program-variable) name)
       (new-name "!module/" name "/")))
 
+(defun simple-variable-name? (x)
+  (and (symbolp x)
+       (not (null x))
+       (not (keyword? x))
+       (not (eq x t))                   ; #t, which a Dylan name T is not
+       (not (eq x 'setter))             ; Chapter 3: never a variable name
+       (not (dylan-special-name? x))))
+
 (defun variable-name? (x)
-  (flet ((simple-variable-name? (x)
-           (and (symbolp x)
-                (not (null x))
-                (not (keyword? x))
-                (not (eq x t))         ; #t, which a Dylan name T is not
-                (not (eq x 'setter))   ; Chapter 3: never a variable name
-                (not (dylan-special-name? x)))))
-    (or (simple-variable-name? x)
-        (and (list-of-length? x 2)
-             (eq (car x) 'setter)
-             (simple-variable-name? (cadr x))))))
+  (or (simple-variable-name? x)
+      (and (list-of-length? x 2)
+           (eq (car x) 'setter)
+           (simple-variable-name? (cadr x)))))
 
 (defun name->keyword (symbol)
   "The keyword a call writes for the parameter SYMBOL, NAME: for the
@@ -196,6 +197,80 @@ looks like one a name of its own (see DYLAN-USER-SYMBOL)."
 (defun must-have-syntax (l n what &optional exact)
   (or (if exact (list-of-length? l n) (list-of-at-least-length? l n))
       (dylan%error (concatenate 'string what ": bad syntax"))))
+
+(defun proper-list? (x)
+  (list-of-at-least-length? x 0))
+
+(defun syntax-error (what control &rest arguments)
+  "Signal a special form's syntax error as the compiler to C words it:
+\"WHAT: \" and CONTROL, a format control of ~a directives."
+  (apply #'dylan%error (concatenate 'string what ": " control) arguments))
+
+(defun check-keyword-options (options allowed what)
+  "Check OPTIONS, keyword/value pairs, each keyword one of ALLOWED and
+given at most once, as the compiler to C checks them, with its words."
+  (let ((seen '()))
+    (loop (cond ((null options) (return))
+                ((not (and (consp options) (keyword? (car options))
+                           (consp (cdr options))))
+                 (syntax-error what "bad keyword options ~a" options))
+                ((not (member (car options) allowed))
+                 (syntax-error what "unknown option ~a" (car options)))
+                ((member (car options) seen)
+                 (syntax-error what "option ~a given twice" (car options)))
+                (t (push (car options) seen)
+                   (setf options (cddr options)))))))
+
+(defun require-variable-name (x what)
+  (unless (variable-name? x)
+    (syntax-error what "~a is not a variable name" x)))
+
+;;; A method's parameter list (chapter 6), checked as the compiler to C
+;;; checks it (compiler/front/syntax.lisp, PARSE-PARAMETERS), with its
+;;; words; WHAT names the form: method, define-method or bind-methods.
+;;;
+;;;   (required ... [#next var] [#rest var] [#key key-spec ...])
+(defun check-parameter-list (params what)
+  (unless (proper-list? params)
+    (syntax-error what "bad parameter list ~a" params))
+  (let ((l params) (names '()) (keywords '()))
+    (loop while (and l (not (member (car l) '(!next !rest !key))))
+          do (let ((p (pop l)))
+               (cond ((variable-name? p) (push p names))
+                     ((and (consp p) (variable-name? (car p))
+                           (list-of-length? p 2))
+                      (push (car p) names))
+                     (t (syntax-error what "bad parameter ~a" p)))))
+    (dolist (marker '(!next !rest))
+      (when (eq (car l) marker)
+        (pop l)
+        (unless (and l (variable-name? (car l)))
+          (syntax-error what "~a needs a variable name" marker))
+        (push (pop l) names)))
+    (when (eq (car l) '!key)
+      (pop l)
+      (loop while l
+            do (let ((spec (pop l)))
+                 (cond ((simple-variable-name? spec)
+                        (push (name->keyword spec) keywords)
+                        (push spec names))
+                       ;; (keyword: var [default]): any variable name
+                       ((and (consp spec) (keyword? (car spec)))
+                        (unless (and (proper-list? spec) (<= 2 (length spec) 3)
+                                     (variable-name? (cadr spec)))
+                          (syntax-error what "bad #key parameter ~a" spec))
+                        (push (car spec) keywords)
+                        (push (cadr spec) names))
+                       ((and (consp spec) (simple-variable-name? (car spec)))
+                        (unless (and (proper-list? spec) (<= 1 (length spec) 2))
+                          (syntax-error what "bad #key parameter ~a" spec))
+                        (push (name->keyword (car spec)) keywords)
+                        (push (car spec) names))
+                       (t (syntax-error what "bad #key parameter ~a" spec))))))
+    (when l
+      (syntax-error what "unexpected ~a in parameter list" (car l)))
+    (check-names-once what (reverse names))
+    (check-names-once what (reverse keywords))))
 
 (defun module-refs (variable bound-vars module-vars continue core)
   "Called to generate code to deal with direct references to module

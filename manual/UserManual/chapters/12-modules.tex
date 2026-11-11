@@ -365,8 +365,8 @@ Redefining a module with \code{define-module} replaces its clauses, and every mo
 is brought up to date at once, as \dylanbook{chapter 5} asks: variables
 newly exported become visible immediately in the modules that import
 them. A redefinition that would make a module use itself, directly or
-through others, is an error (\code{define-module -- modules use each
-other}), and the module stays as it was.
+through others, is an error (\code{define-module: modules m1 use each
+other}, for a module \code{m1}), and the module stays as it was.
 
 \subsection{At the read-eval-print loop}
 

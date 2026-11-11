@@ -155,7 +155,9 @@ compiled library's %from-list does."
             do (if state
                    (let ((cur-element (current-element
                                                   seq state)))
-                     (if (and (or (null count) (< changed count))
+                     ;; Compared as the compiled library compares them
+                     (if (and (or (null count)
+                                  (true? (dylan-call dylan/binary< changed count)))
                               (true? (dylan-call test? cur-element value)))
                          (progn
                            (setf state (next-state seq state))

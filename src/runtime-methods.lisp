@@ -283,12 +283,12 @@ after a check that its argument is a class or slot descriptor itself: an
 instance of a program's subclass of <class> or <slot-descriptor> has none
 of their contents, so is not one, as in the compiled library."
   (cond ((null operation) nil)
-        ((eq param-list one-class)
+        ((member param-list (list one-class any-class))
          (lambda (class)
            (unless (class? class)
              (dylan-call dylan/error "not a class: ~s" class))
            (funcall operation class)))
-        ((eq param-list one-slot)
+        ((member param-list (list one-slot any-slot))
          (lambda (slot)
            (unless (slot? slot)
              (dylan-call dylan/error "not a slot descriptor: ~s" slot))
@@ -591,14 +591,14 @@ irrational functions; an exact real stays exact."
 ;;; answer an empty sequence for a sealed class.
 
 (defparameter dylan/all-superclasses
-  (dylan%generic-fn 'all-superclasses one-class
+  (dylan%generic-fn 'all-superclasses any-class
                     (lambda (class)
                       (if (class.sealed? class)
                           '()
                           (map-over-all-superclasses! class #'identity)))))
 
 (defparameter dylan/direct-superclasses
-  (dylan%generic-fn 'direct-superclasses one-class
+  (dylan%generic-fn 'direct-superclasses any-class
                     (lambda (class)
                       (if (class.sealed? class)
                           '()
@@ -612,7 +612,7 @@ irrational functions; an exact real stays exact."
                     #'dylan%set-direct-superclasses))
 
 (defparameter dylan/direct-subclasses
-  (dylan%generic-fn 'direct-subclasses one-class
+  (dylan%generic-fn 'direct-subclasses any-class
                     (lambda (class)
                       ;; In the order defined, as the compiler to C has them
                       (reverse (population->list (class.subclasses class))))))
@@ -664,13 +664,13 @@ slot-descriptors leaves them out, as a compiled program does.")
 
 ;;; Chapter 11: #f for a slot in a sealed class.
 (defparameter dylan/slot-getter
-  (dylan%generic-fn 'slot-getter one-slot
+  (dylan%generic-fn 'slot-getter any-slot
                     (lambda (slot)
                       (if (slot-of-sealed-class? slot)
                           dylan%false
                           (or-false (slot.getter slot))))))
 (defparameter dylan/slot-setter
-  (dylan%generic-fn 'slot-setter one-slot
+  (dylan%generic-fn 'slot-setter any-slot
                     (lambda (slot)
                       (if (or (slot-of-sealed-class? slot)
                               ;; Chapter 6: a constant slot has no setter.
@@ -680,10 +680,10 @@ slot-descriptors leaves them out, as a compiled program does.")
 (defparameter dylan/slot-type
   ;; A slot made without a type -- the predefined conditions' -- is of
   ;; type <object>.
-  (dylan%generic-fn 'slot-type one-slot
+  (dylan%generic-fn 'slot-type any-slot
                     (lambda (slot) (or (slot.type slot) <object>))))
 (defparameter dylan/slot-allocation
-  (dylan%generic-fn 'slot-allocation one-slot #'slot.allocation))
+  (dylan%generic-fn 'slot-allocation any-slot #'slot.allocation))
 
 (defparameter dylan/binary<
   (dylan%generic-fn 'binary< two-numbers (boolean-function #'<)))
@@ -980,22 +980,22 @@ slot-descriptors leaves them out, as a compiled program does.")
   (dylan%generic-fn 'rationalize one-number #'rationalize))
 
 (defparameter dylan/init-function
-  (dylan%generic-fn 'init-function one-slot
+  (dylan%generic-fn 'init-function any-slot
                     (lambda (slot) (or-false (slot.init-function slot)))))
 
 (defparameter dylan/init-keyword
-  (dylan%generic-fn 'init-keyword one-slot
+  (dylan%generic-fn 'init-keyword any-slot
                     ;; Chapter 6: required-init-keyword: is "like
                     ;; init-keyword:", so it is the slot's init-keyword too.
                     (lambda (slot) (or-false (or (slot.init-keyword slot)
                                                  (slot.required-init-keyword slot))))))
 
-(defparameter dylan/init-value (dylan%generic-fn 'init-value one-slot nil))
+(defparameter dylan/init-value (dylan%generic-fn 'init-value any-slot nil))
 
 (add-method
  dylan/init-value
  (dylan%dylan-callable->method
-  one-slot
+  any-slot
   (lambda (multiple-values next-method slot)
     (declare (ignore next-method))
     (unless (slot? slot)
@@ -1026,21 +1026,24 @@ slot-descriptors leaves them out, as a compiled program does.")
   (make-param-list `((fn ,<function>)) nil t nil)
   (lambda (multiple-values next-method fn &rest args)
     (declare (ignore next-method))
-    (unless (functionp fn)
-      (dylan-call dylan/error "not a function: ~s" fn))
-    ;; Chapter 8: the last argument, a sequence, is required.
+    ;; Chapter 8: the last argument, a sequence, is required.  The
+    ;; arguments are checked in the compiled library's order: their
+    ;; number, the sequence, then the function.
     (when (null args)
       (dylan-call dylan/error "wrong number of arguments (~a)" 1))
-    (dylan-full-apply fn multiple-values next-method/not-generic
-                      (split-last
-                       args
-                       (lambda (early end)
-                         (let ((sequence (car end)))
-                           (unless (true? (dylan-call dylan/instance? sequence <sequence>))
-                             (dylan-call dylan/error
-                                         "apply: the last argument is not a sequence: ~s"
-                                         sequence))
-                           (append early (iterate->list #'identity sequence)))))))))
+    (let ((arguments
+            (split-last
+             args
+             (lambda (early end)
+               (let ((sequence (car end)))
+                 (unless (true? (dylan-call dylan/instance? sequence <sequence>))
+                   (dylan-call dylan/error
+                               "apply: the last argument is not a sequence: ~s"
+                               sequence))
+                 (append early (iterate->list #'identity sequence)))))))
+      (unless (functionp fn)
+        (dylan-call dylan/error "not a function: ~s" fn))
+      (dylan-full-apply fn multiple-values next-method/not-generic arguments)))))
 
 (defparameter dylan/as
   (dylan%generic-fn

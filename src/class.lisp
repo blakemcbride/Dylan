@@ -336,8 +336,9 @@ slot vector, the class-data size and the instance-data size."
                                                constraints))
                                     remaining)))
                    (when (null candidates)
+                     ;; As the compiler to C words it
                      (dylan-call dylan/error
-                                 "inconsistent class precedence"
+                                 "inconsistent class precedence for ~a"
                                  (class.debug-name class)))
                    (let ((next
                            (if (null (cdr candidates))
@@ -424,17 +425,23 @@ value stored when the slot is initialized is checked as the setter's is."
         ((virtual constant) 'done))))
   'done)
 
-(defun dylan%make-a-class (name superclasses new-getter-fns)
-  (make-dylan-class name superclasses new-getter-fns nil))
+(defun dylan%make-a-class (name superclasses new-getter-fns
+                           &optional (what "define-class"))
+  (make-dylan-class name superclasses new-getter-fns nil what))
 
-(defun make-dylan-class (name superclasses new-getter-fns top?)
+(defun make-dylan-class (name superclasses new-getter-fns top?
+                         &optional (what "define-class"))
+  ;; WHAT names the form, in the errors, as the compiler to C words them
   (when (and (not top?) (null superclasses))
-    (dylan-call dylan/error "must specify at least one superclass"))
+    (dylan-call dylan/error
+                (concatenate 'string what ": at least one superclass is needed")))
   (dolist (superclass superclasses)
     (unless (class? superclass)
       (dylan-call dylan/error "not a class: ~s" superclass)))
-  (unless (unique? superclasses #'member)
-    (dylan-call dylan/error "multiple inheritance from identical superclasses"))
+  (loop for (superclass . more) on superclasses
+        when (member superclass more)
+          do (dylan-call dylan/error (concatenate 'string what ": ~a is given twice")
+                         (class.debug-name superclass)))
   (dolist (superclass superclasses)
     (when (class.sealed? superclass)
       ;; As the compiler to C words it
@@ -827,14 +834,15 @@ slots.")
                                   "dylan%add-slot -- bad allocation for singleton"
                                   current-class debug-name allocation))))))
     (cond ((singleton? owner)
+           ;; As the compiler to C words it
            (unless (member allocation '(instance constant virtual))
              (dylan-call dylan/error
-                         "the slot of a singleton must be instance, constant or virtual"
-                         debug-name allocation))
+                         "slot ~a: the slot of a singleton must be instance, constant or virtual"
+                         debug-name))
            (when (or init-keyword required-init-keyword)
              (dylan-call dylan/error
-                         "the slot of a singleton takes no init-keyword"
-                         debug-name (or init-keyword required-init-keyword))))
+                         "slot ~a: the slot of a singleton takes no init-keyword"
+                         debug-name)))
           ;; A sealed class, a built-in one sealed from the start
           ;; included, is read-only too.
           ((and (class? owner) (or (class.read-only? owner) (class.sealed? owner)))
@@ -867,20 +875,22 @@ slots.")
       (when (and keyword (not (keyword? keyword)))
         (dylan-call dylan/error "slot -- init-keyword: is not a keyword"
                     debug-name keyword)))
+    ;; As the compiler to C words them
     (when (and (eq allocation 'constant) (not has-init-value?))
-      (dylan-call dylan/error "slot -- a constant slot needs an init-value:"
+      (dylan-call dylan/error "slot ~a: a constant slot needs an init-value:"
                   debug-name))
     (when (and (eq allocation 'virtual)
                (or has-init-value? init-function init-keyword
                    required-init-keyword))
-      (dylan-call dylan/error
-                  "slot -- a virtual slot takes no initialization options"
+      (dylan-call dylan/error "slot ~a: a virtual slot cannot be initialized"
                   debug-name))
     (when (and (member allocation '(class each-subclass))
                (or init-function required-init-keyword init-keyword))
       (dylan-call dylan/error
-                  "dylan%add-slot -- bad combination of allocation and initialization"
-                  allocation init-function required-init-keyword init-keyword))
+                  (if (eq allocation 'class)
+                      "slot ~a: a class slot takes only an init-value:"
+                      "slot ~a: an each-subclass slot takes only an init-value:")
+                  debug-name))
     (let ((new-slot (make-slot debug-name getter setter type init-value
                                has-init-value? init-function init-keyword
                                required-init-keyword allocation nil

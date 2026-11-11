@@ -198,6 +198,10 @@ pairs of the KEYS (chapter 6)."
   (dylan%function->method
    (make-param-list `((stream ,<object>) (control ,<object>)) nil t nil)
    (lambda (stream control &rest arguments)
+     ;; The control string is checked first, as the compiled library
+     ;; checks it
+     (unless (stringp control)
+       (dylan-call dylan/error "format: not a string: ~s" control))
      (let* ((target (cond ((false? stream) (%make-dylan-stream :string))
                           ((eq stream t) dylan/*standard-output*)
                           (t (dylan-stream-argument stream))))

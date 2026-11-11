@@ -1181,6 +1181,8 @@ itself."
           do (write-char c out)
              (when (char= c #\~) (write-char #\~ out)))))
 
+(declaim (ftype function iterate->list))   ; runtime-collections-iterate.lisp
+
 (defun dylan-format-message (control arguments)
   "CONTROL with ARGUMENTS as a condition's message: ~a and ~d an argument
 as display writes it, ~s as write does, through PRINT-OBJECT, as the
@@ -1206,7 +1208,10 @@ compiler's %message-text does."
                                   (write-char (char control (1+ i)) out)))
                                (incf i 2))
                              (progn (write-char ch out) (incf i)))))))
-        (dolist (arg args)
+        ;; The arguments left, by the iteration protocol, as the compiled
+        ;; library's for-each walks them: what is not a collection has no
+        ;; initial-state.
+        (dolist (arg (if (listp args) args (iterate->list #'identity args)))
           (write-char #\Space out)
           (put arg nil out))))))
 

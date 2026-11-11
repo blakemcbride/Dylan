@@ -256,4 +256,55 @@ FreSh
 1
 (3 3)
 ")
+ ;; A bad define-module is reported in the same words by both
+ ;; implementations.
+ (define-module-uses-itself
+  "(define-module m1 (use dylan) (use m1))"
+  ""
+  :compile-error "define-module: modules m1 use each other")
+ (define-modules-use-each-other
+  "(define-module a (use dylan) (use b))
+(define-module b (use dylan) (use a))"
+  ""
+  :compile-error "define-module: modules a use each other")
+ (define-module-exports-imported
+  "(define-module m4 (use dylan) (export car))"
+  ""
+  :compile-error "define-module: cannot export car, which is imported")
+ (define-module-creates-imported
+  "(define-module m4 (use dylan) (create car))"
+  ""
+  :compile-error "define-module: cannot create car, which is imported")
+ (define-module-dylan
+  "(define-module dylan (use dylan))"
+  ""
+  :compile-error "define-module: the dylan module cannot be redefined")
+ (define-module-bad-name
+  "(define-module 5)"
+  ""
+  :compile-error "define-module: bad module name 5")
+ (define-module-unknown-clause
+  "(define-module m5 (frob))"
+  ""
+  :compile-error "define-module: unknown clause (frob)")
+ (define-module-unknown-module
+  "(define-module m5 (use nosuch))"
+  ""
+  :compile-error "unknown module nosuch")
+ (define-module-import-not-exported
+  "(define-module m5 (use dylan import: (nosuch)))"
+  ""
+  :compile-error "define-module: nosuch is not exported from dylan")
+ (define-module-prefix-not-a-string
+  "(define-module m5 (use dylan prefix: 5))"
+  ""
+  :compile-error "define-module: prefix: must be a string, not 5")
+ (define-module-option-twice
+  "(define-module m5 (use dylan import: (car) import: (cdr)))"
+  ""
+  :compile-error "define-module use clause: option import: given twice")
+ (define-module-two-variables-one-name
+  "(define-module m5 (use dylan rename: ((car => kar))) (use dylan rename: ((cdr => kar))))"
+  ""
+  :compile-error "define-module: two variables named kar in m5")
 )

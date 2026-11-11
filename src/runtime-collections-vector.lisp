@@ -397,7 +397,7 @@
 (add-method
  dylan/current-key
  (dylan%function->method
-  (make-param-list `((vector ,<vector>) (state ,<object>)) nil nil nil)
+  (make-param-list `((vector ,<vector>) (state ,<simple-object-vector>)) nil nil nil)
   (lambda (vector state) (declare (ignore vector)) (aref state 0))))
 
 ;;;
@@ -454,7 +454,7 @@
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((sov ,<simple-object-vector>) (state ,<object>)
+  (make-param-list `((sov ,<simple-object-vector>) (state ,<simple-object-vector>)
                      (new-value ,<object>))
                    nil nil nil)
   (lambda (sov state new-value)
@@ -464,7 +464,7 @@
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((stretchy-vector ,<stretchy-vector>) (state ,<object>)
+  (make-param-list `((stretchy-vector ,<stretchy-vector>) (state ,<simple-object-vector>)
                      (new-value ,<object>))
                    nil nil nil)
   (lambda (st-vector state new-value)

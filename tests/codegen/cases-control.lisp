@@ -1026,4 +1026,91 @@ is-g
              (case e ((2.0l0) 'a) ((2.0l0) 'b) (else: 'c))))"
   ""
   :compile-error "case: 2.0l0 appears in more than one match list")
+ ;; A malformed special form is reported in the same words by both
+ ;; implementations: each names the form and the part that is wrong.
+ (bind-binding-without-init
+  "(bind ((x)) x)"
+  ""
+  :compile-error "bind: bad binding (x)")
+ (bind-binding-not-a-list
+  "(bind (x) 1)"
+  ""
+  :compile-error "bind: bad binding x")
+ (bind-bad-variable
+  "(bind ((1 2)) 1)"
+  ""
+  :compile-error "bind: bad variable 1")
+ (bind-bad-rest
+  "(bind ((#rest a b 1)) 1)"
+  ""
+  :compile-error "bind: bad #rest in (#rest a b 1)")
+ (define-setter-not-a-variable
+  "(define setter 5)"
+  ""
+  :compile-error "define: setter is not a variable name")
+ (dotimes-bad-clause
+  "(dotimes (i) 1)"
+  ""
+  :compile-error "dotimes: bad (var count [result]) (i)")
+ (for-bad-variable-clause
+  "(for ((i 0 1 2)) (#t))"
+  ""
+  :compile-error "for: bad variable clauses ((i 0 1 2))")
+ (for-bad-end-test
+  "(for ((i 0 1)) 5)"
+  ""
+  :compile-error "for: bad end test 5")
+ (for-each-bindings-not-a-list
+  "(for-each (x '(1)) () 1)"
+  ""
+  :compile-error "for-each: bad bindings (x (quote (1)))")
+ (for-each-bad-variable
+  "(for-each ((1 '(1))) () 1)"
+  ""
+  :compile-error "for-each: bad bindings ((1 (quote (1))))")
+ (begin-dotted
+  "(begin . 5)"
+  ""
+  :compile-error "begin: bad syntax")
+ (and-dotted
+  "(and . 5)"
+  ""
+  :compile-error "and: bad syntax")
+ (call-dotted
+  "(define-method f (x) x)
+(f . 1)"
+  ""
+  :compile-error "(f . 1) is not a Dylan expression")
+ (bind-exit-bad-variable
+  "(bind-exit k 1)"
+  ""
+  :compile-error "bind-exit: bad exit variable k")
+ (method-parameters-not-a-list
+  "(method x 1)"
+  ""
+  :compile-error "method: bad parameter list x")
+ (method-next-after-rest
+  "(method (#rest r #next n) r)"
+  ""
+  :compile-error "method: unexpected #next in parameter list")
+ (method-key-twice
+  "(method (a #key k k) k)"
+  ""
+  :compile-error "method: k appears twice")
+ (define-method-not-a-variable
+  "(define-method 5 () 1)"
+  ""
+  :compile-error "define-method: 5 is not a variable name")
+ (define-generic-function-specialized
+  "(define-generic-function g ((a <integer>)))"
+  ""
+  :compile-error "define-generic-function: bad parameter (a <integer>)")
+ (bind-methods-bad-binding
+  "(bind-methods ((f)) 1)"
+  ""
+  :compile-error "bind-methods: bad binding (f)")
+ (bind-methods-bad-name
+  "(bind-methods ((5 () 1)) 1)"
+  ""
+  :compile-error "bind-methods: bad binding (5 () 1)")
 )

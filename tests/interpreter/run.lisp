@@ -180,7 +180,12 @@ longer, and the library's generic functions lose the methods it added."
   (maphash (lambda (symbol spelling) (setf (gethash symbol *symbol-spellings*) spelling))
            *system-spellings*)
   (setf (gethash 'dylan-user *dylan-modules*) *dylan-user-module*)
-  (setf *program-variables* '()))
+  (setf *program-variables* '())
+  ;; A class knows its instances while they live, and a define-slot on a
+  ;; class initializes each (chapter 6): the program's objects are
+  ;; collected now, so that the next program finds none of them, as when
+  ;; it runs alone, whenever the collector happened to run before.
+  (sb-ext:gc :full t))
 
 ;;; Not CONDITION-MESSAGE, which would replace the runtime's own function of
 ;;; that name, the message of a Dylan condition, and print conditions as

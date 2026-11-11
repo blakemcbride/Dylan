@@ -33,7 +33,7 @@
 (define-module m1 (use dylan) (use m2))
 (print 'after)"
   ""
-  :error "modules use each other")
+  :error "define-module: modules m1 use each other")
  ;; define-slot on a sealed class, a built-in one sealed from the start
  ;; included, is an error when it runs: a sealed class is read-only.  (The
  ;; compiler to C takes a class owner only of the program's own classes.)

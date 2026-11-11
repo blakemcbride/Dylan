@@ -580,7 +580,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
                            ,(name->module-variable name) ',name))
                         (t (name->module-variable name)))
                   new-mod-vars)))
-      ((symbolp e) (dylan%error "illegal Dylan variable" e))
+      ((symbolp e) (dylan%error "~a cannot be used as a variable" e))
       (binding
        (funcall (cdr binding) (cdr e) module-vars bound-vars
                 #'really-compile multiple-values? continue))
@@ -593,7 +593,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
                         (funcall continue
                                  `(dylan%call ,multiple-values? ,@forms)
                                  module-vars))))
-      (t (dylan%error "ill-formed expression" e)))))
+      (t (dylan%error "~a is not a Dylan expression" e)))))
 
 (defparameter compilation-functions
   '((and            . compile-and-form)
@@ -657,6 +657,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
 
 (defun compile-and-form (forms module-vars bound-vars really-compile
                          multiple-values? continue)
+  (must-have-syntax forms 0 "and")
   (if (null forms)
       (funcall continue t module-vars)  ; (and) is true
       (compile-forms forms module-vars bound-vars really-compile
@@ -670,6 +671,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
 
 (defun compile-begin-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)
+  (must-have-syntax forms 0 "begin")
   (if (null forms)
       (funcall continue compiled-sharp-f module-vars)
       (compile-forms forms module-vars bound-vars really-compile
@@ -684,9 +686,8 @@ it; the last result form delivers MULTIPLE-VALUES?."
   (must-have-syntax forms 1 "bind-exit")
   (let ((var (car forms))
         (forms (cdr forms)))
-    (must-be-list-of-length var 1 "BIND-EXIT bad variable")
-    (unless (variable-name? (car var))
-      (dylan%error "BIND-EXIT -- bad variable name" var forms))
+    (unless (and (list-of-length? var 1) (variable-name? (car var)))
+      (syntax-error "bind-exit" "bad exit variable ~a" var))
     (let ((name (variable->lexical (car var))))
       (funcall
        really-compile
@@ -731,8 +732,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
     (dylan%error "define: needs a variable name and a value"))
   (let ((name (car forms))
         (value (cadr forms)))
-    (unless (variable-name? name)
-      (dylan%error "bad DEFINE variable" forms))
+    (require-variable-name name "define")
     (check-not-imported name "DEFINE")
     (check-not-macro name "DEFINE")
     (funcall really-compile value
@@ -741,6 +741,9 @@ it; the last result form delivers MULTIPLE-VALUES?."
              (lambda (compiled-value new-module-vars)
                (funcall continue
                         `(progn
+                           (dylan%check-not-class
+                            ',(name->module-variable (variable->name name))
+                            ',name)
                            (dylan%check-assignable
                             ',(name->module-variable (variable->name name))
                             ',name)
@@ -897,15 +900,12 @@ call, with the macro's name, as the compiler to C reports it."
   (must-have-syntax forms 1 "dotimes")
   (let ((v/c/r (car forms))
         (forms (cdr forms)))
-    (must-be-list-of-at-least-length v/c/r 2
-                                     "DOTIMES: Bad var/count/result list")
+    (unless (and (proper-list? v/c/r) (<= 2 (length v/c/r) 3)
+                 (variable-name? (car v/c/r)))
+      (syntax-error "dotimes" "bad (var count [result]) ~a" v/c/r))
     (let ((var (car v/c/r))
           (count-form (cadr v/c/r))
           (result (if (consp (cddr v/c/r)) (caddr v/c/r) dylan%false)))
-      (unless (variable-name? var)
-        (dylan%error "DOTIMES -- invalid variable" var forms))
-      (unless (or (null (cddr v/c/r)) (null (cdddr v/c/r)))
-        (dylan%error "DOTIMES -- bad syntax"))
       (let ((name (variable->lexical var)))
         (compile-forms
          forms module-vars (cons name bound-vars) really-compile nil
@@ -932,8 +932,14 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-for-each-form (forms module-vars bound-vars really-compile
                               multiple-values? continue)
   (must-have-syntax forms 2 "for-each")
-  (dolist (binding (car forms))
-    (must-be-list-of-length binding 2 "FOR-EACH: bad binding"))
+  (unless (and (proper-list? (car forms)) (car forms)
+               (every (lambda (binding)
+                        (and (list-of-length? binding 2)
+                             (variable-name? (car binding))))
+                      (car forms)))
+    (syntax-error "for-each" "bad bindings ~a" (car forms)))
+  (unless (proper-list? (cadr forms))
+    (syntax-error "for-each" "bad end test ~a" (cadr forms)))
   (check-names-once "for-each" (mapcar #'car (car forms)))
   (let ((names (mapcar (lambda (binding) (variable->lexical (car binding)))
                        (car forms)))
@@ -1002,6 +1008,7 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-or-form (forms module-vars bound-vars really-compile
                         multiple-values? continue)
   ;; The first true value, or the value(s) of the last form.
+  (must-have-syntax forms 0 "or")
   (compile-forms forms module-vars bound-vars really-compile multiple-values?
                  (lambda (code mod-vars)
                    (funcall continue
@@ -1110,7 +1117,8 @@ call, with the macro's name, as the compiler to C reports it."
                             multiple-values? continue)
   (declare (ignore module-vars bound-vars really-compile
                    multiple-values? continue))
-  (dylan%error "bad SETTER syntax" forms))
+  ;; A well-formed (setter name) is a variable (REALLY-COMPILE)
+  (dylan%error "bad setter variable ~a" (cons 'setter forms)))
 
 (defun compile-unless-form (forms module-vars bound-vars really-compile
                             multiple-values? continue)

@@ -73,7 +73,7 @@
 
 (defun find-module (name &optional (errorp t))
   (or (gethash name *dylan-modules*)
-      (and errorp (dylan%error "unknown module" name))))
+      (and errorp (dylan%error "unknown module ~a" name))))
 
 ;;; Lisp names made for module variables, so that a name already resolved
 ;;; is never resolved again.
@@ -93,6 +93,11 @@ other module's has."
   (or (member symbol dylan%predefined-names)
       (let ((dylan (gethash 'dylan *dylan-modules*)))
         (and dylan (member symbol (module.exports dylan))))))
+
+(defvar *module-variable-names* (make-hash-table :test #'eq)
+  "The Lisp name of each module variable -> (DYLAN-VARIABLE . MODULE-NAME),
+so that an error names the variable as the program writes it, whatever
+its Lisp name (MODULE-VARIABLE-SHOWN).")
 
 (defun module-variable-name (module symbol setter?)
   "The Lisp name of the variable MODULE owns under SYMBOL (or, if SETTER?,
@@ -116,6 +121,8 @@ under (SETTER SYMBOL))."
     ;; modules must still resolve for themselves.
     (unless (eq name symbol)
       (setf (gethash name *resolved-names*) t))
+    (setf (gethash name *module-variable-names*)
+          (cons (if setter? (list 'setter symbol) symbol) (module.name module)))
     name))
 
 (defun resolve-symbol (module symbol)
@@ -203,13 +210,14 @@ symbol) -- refers to in the current module."
   (if (and (list-of-length? spec 3) (eq (cadr spec) '=>)
            (symbolp (car spec)) (symbolp (caddr spec)))
       (cons (car spec) (caddr spec))
-      (dylan%error "define-module -- bad rename" spec)))
+      (dylan%error "define-module: bad rename ~a" spec)))
 
 (defun process-use-clause (module clause)
   "Import into MODULE what CLAUSE says; answer the names it imports."
   (destructuring-bind (used-name &rest options) clause
-    (validate-keywords options '(:import :exclude :prefix :rename :export)
-                       #'dylan%error)
+    ;; Its faults are worded as the compiler to C words them.
+    (check-keyword-options options '(:import :exclude :prefix :rename :export)
+                           "define-module use clause")
     (let* ((used (find-module used-name))
            (exports (module-exports used))
            (import (dylan%find-keyword options :import (lambda () 'all)))
@@ -219,15 +227,16 @@ symbol) -- refers to in the current module."
                             (dylan%find-keyword options :rename (lambda () '()))))
            (export (dylan%find-keyword options :export (lambda () '())))
            (pairs '()))                 ; (old . new)
-      (when (eq used module)
-        (dylan%error "define-module -- a module cannot use itself" used-name))
       (unless (stringp prefix)
-        (dylan%error "define-module -- prefix: must be a string" prefix))
+        (dylan%error "define-module: prefix: must be a string, not ~a" prefix))
       (when (and exclude (not (eq import 'all)))
-        (dylan%error "define-module -- exclude: needs import: all" clause))
+        (dylan%error "define-module: exclude: needs import: all"))
+      (unless (or (eq import 'all) (listp import))
+        (dylan%error "define-module: bad import: ~a" import))
       (flet ((add (old new)
                (unless (member old exports)
-                 (dylan%error "define-module -- not exported" old used-name))
+                 (dylan%error "define-module: ~a is not exported from ~a"
+                              old used-name))
                (pushnew (cons old new) pairs :test #'equal))
              (prefixed (old)
                ;; The name the reader makes of the prefixed name, as the
@@ -256,7 +265,7 @@ symbol) -- refers to in the current module."
             (when (and previous
                        (not (and (eq (car previous) owner)
                                  (eq (cdr previous) name))))
-              (dylan%error "define-module -- two variables with one name"
+              (dylan%error "define-module: two variables named ~a in ~a"
                            (cdr pair) (module.name module)))
             (setf (gethash (cdr pair) (module.imports module))
                   (cons owner name)))))
@@ -265,66 +274,77 @@ symbol) -- refers to in the current module."
               ((listp export)
                (dolist (name export)
                  (unless (member name imported)
-                   (dylan%error "define-module -- export: of a name not imported"
-                                name used-name)))
+                   (dylan%error "define-module: export: of ~a, which is not imported"
+                                name)))
                export)
-              (t (dylan%error "define-module -- bad export:" export)))))))
+              (t (dylan%error "define-module: bad export: ~a" export)))))))
 
 (defun dylan%define-module (name clauses)
   "Define (or redefine) the module NAME; answer NAME."
+  ;; Its faults are worded as the compiler to C words them.
+  (unless (and (symbolp name) name (not (keyword? name)) (not (eq name t)))
+    (dylan%error "define-module: bad module name ~a" name))
   (when (eq name 'dylan)
-    (dylan%error "define-module -- the dylan module cannot be redefined"))
-  (unless (and (symbolp name) name (not (keyword? name)))
-    (dylan%error "define-module -- bad module name" name))
+    (dylan%error "define-module: the dylan module cannot be redefined"))
   (let ((module (make-dylan-module :name name :clauses clauses))
         (exports '()))
     (dolist (clause clauses)
       (unless (and (consp clause) (null (cdr (cl:last clause))))
-        (dylan%error "define-module -- bad clause" clause))
+        (dylan%error "define-module: bad clause ~a" clause))
       (case (car clause)
         ((use)
-         (unless (cdr clause)
-           (dylan%error "define-module -- use needs a module name" clause))
+         (unless (and (consp (cdr clause)) (symbolp (cadr clause)) (cadr clause)
+                      (not (keyword? (cadr clause))) (not (eq (cadr clause) t)))
+           (dylan%error "define-module: use needs a module name"))
+         ;; A module may not come to use itself, directly or through
+         ;; others (chapter 5), redefined or not.
+         (when (or (eq (cadr clause) name) (module-uses? (cadr clause) name))
+           (dylan%error "define-module: modules ~a use each other" name))
          (setf exports
                (append (process-use-clause module (cdr clause)) exports)))
         ((export create)
          (dolist (variable (cdr clause))
            (unless (and (symbolp variable) (variable-name? variable))
-             (dylan%error "define-module -- bad variable name" variable))
+             (dylan%error "define-module: bad variable name ~a" variable))
            (push variable exports)))
-        (t (dylan%error "define-module -- unknown clause" clause))))
+        (t (dylan%error "define-module: unknown clause ~a" clause))))
     ;; Owned variables may not also be imported.
     (dolist (clause clauses)
       (when (member (car clause) '(export create))
         (dolist (variable (cdr clause))
           (when (gethash variable (module.imports module))
-            (dylan%error "define-module -- cannot export or create an imported variable"
-                         variable name)))))
-    ;; A module redefined must not come to use itself (chapter 5).
-    (dolist (clause clauses)
-      (when (and (eq (car clause) 'use)
-                 (or (eq (cadr clause) name) (module-uses? (cadr clause) name)))
-        (dylan%error "define-module -- modules use each other" name
-                     (cadr clause))))
+            (dylan%error "define-module: cannot ~a ~a, which is imported"
+                         (if (eq (car clause) 'export) "export" "create")
+                         variable)))))
     (setf (module.exports module) (remove-duplicates exports))
     (setf (gethash name *dylan-modules*) module)
     (update-using-modules name)
     name))
 
+(defvar *undefined-module-clauses* '()
+  "The modules the define-module forms of the file being run declare that
+are not defined before its first form runs (DYLAN%PREDEFINE-MODULES), as
+(name . clauses): one that uses itself through others is, when its own
+form is reached, an error that it does so, not that a module it uses is
+unknown, as in the compiler to C.")
+
 (defun module-uses? (name target)
   "Does the module NAME use the module TARGET, directly or through others?"
   (let ((seen '()) (todo (list name)))
     (loop while todo
-          do (let ((module (gethash (pop todo) *dylan-modules*)))
-               (when module
-                 (dolist (clause (module.clauses module))
-                   (when (eq (car clause) 'use)
-                     (let ((used (cadr clause)))
-                       (when (eq used target)
-                         (return-from module-uses? t))
-                       (unless (member used seen)
-                         (push used seen)
-                         (push used todo))))))))
+          do (let* ((next (pop todo))
+                    (module (gethash next *dylan-modules*))
+                    (clauses (if module
+                                 (module.clauses module)
+                                 (cdr (assoc next *undefined-module-clauses*)))))
+               (dolist (clause clauses)
+                 (when (eq (car clause) 'use)
+                   (let ((used (cadr clause)))
+                     (when (eq used target)
+                       (return-from module-uses? t))
+                     (unless (member used seen)
+                       (push used seen)
+                       (push used todo)))))))
     nil))
 
 (defvar *modules-being-updated* '())
@@ -383,6 +403,7 @@ modules it uses; the first form of a name counts."
                           clauses))
           (push (cons name clauses) pending))))
     (setf pending (nreverse pending))
+    (setf *undefined-module-clauses* '())
     (flet ((ready-p (entry)
              (every (lambda (clause)
                       (or (not (eq (car clause) 'use))
@@ -395,7 +416,8 @@ modules it uses; the first form of a name counts."
             while entry
             do (setf pending (remove entry pending))
                (handler-case (dylan%define-module (car entry) (cdr entry))
-                 (error () nil))))))
+                 (error () nil)))
+      (setf *undefined-module-clauses* pending))))
 
 (defun read-module-forms (stream)
   "The top-level define-module forms of what STREAM has left, read ahead

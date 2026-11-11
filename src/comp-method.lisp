@@ -191,6 +191,7 @@
                             multiple-values? continue)
   (declare (ignore multiple-values?))   ; No reductions
   (must-have-syntax e 1 "method")
+  (check-parameter-list (car e) "method")
   (let ((params (car e))
         (forms (or (cdr e) (list dylan%false))))   ; An empty body answers #f
     (parse-method-parameter-list
@@ -331,9 +332,9 @@
     (let ((name (car e))
           (params (cadr e))
           (forms (cddr e)))
-      (unless (variable-name? name)
-        (dylan%error "DEFINE-METHOD -- illegal name" name params forms))
+      (require-variable-name name "define-method")
       (check-not-macro name "DEFINE-METHOD")
+      (check-parameter-list params "define-method")
       (funcall
        compiler `(method ,(rebuild-param-list params) ,@forms)
        mod-vars bound-vars nil
@@ -346,6 +347,8 @@
              params nil
              (lambda (reqs next rest keys)
                `(progn
+                  (dylan%check-not-class
+                   ',(name->module-variable (variable->name name)) ',name)
                   (cond ((dylan%eq? ,ref ',the-unassigned-value)
                          ,(funcall set
                                    `(dylan%implicit-generic-function
@@ -367,9 +370,16 @@
   (must-have-syntax e 1 "bind-methods")
   (let ((bindings (car e))
         (forms (or (cdr e) (list dylan%false))))   ; An empty body answers #f
+    ;; Checked as the compiler to C checks them, with its words
+    (unless (proper-list? bindings)
+      (syntax-error "bind-methods" "bad bindings ~a" bindings))
     (dolist (binding bindings)
-      (must-be-list-of-at-least-length binding 3
-                                       "BIND-METHODS -- illegal binding syntax"))
+      (unless (and (list-of-at-least-length? binding 2)
+                   (variable-name? (car binding)))
+        (syntax-error "bind-methods" "bad binding ~a" binding)))
+    (check-names-once "bind-methods" (mapcar #'car bindings))
+    (dolist (binding bindings)
+      (check-parameter-list (cadr binding) "bind-methods"))
     (let ((names (mapcar (lambda (binding) (variable->lexical (car binding)))
                          bindings))
           (methods (mapcar (lambda (binding)

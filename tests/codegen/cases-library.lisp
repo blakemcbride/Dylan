@@ -3305,4 +3305,47 @@ none
 {an anonymous method}
 (#t #t #t same)
 ")
+ ;; The library's errors are worded alike in both implementations: a
+ ;; bad iteration state, a bad count:, an argument that is not a class
+ ;; or slot descriptor, an unbound name with an @ in it.
+ (library-errors-worded-alike
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (format #f \"~a\" (make <simple-error> format-string: \"a\" format-arguments: 7)))))
+(print (try (method () (for-each ((x '(1)) (y 5)) () 1))))
+(print (try (method () (do list '(1) 5))))
+(print (try (method () (next-state '(1 2 3) 5))))
+(print (try (method () (current-element (range from: 0) 'x))))
+(print (try (method () (current-key (make <table>) 'x))))
+(print (try (method () (map-as <array> + '(1 2)))))
+(print (try (method () (remove '(1 2 3) 1 count: 'x))))
+(print (try (method () (find-key '(1 2 3) odd? skip: #f))))
+(print (try (method () (apply 5))))
+(print (try (method () (format 5 6))))
+(print (try (method () (all-superclasses 5))))
+(print (try (method () (direct-subclasses 5))))
+(print (try (method () (subclass? 5 6))))
+(print (try (method () (slot-getter 5))))
+(print (try (method () (init-value 5))))
+(print (try (method () x@y)))
+(print (try (method () ((setter q@r) 1))))"
+  "\"ERR: no applicable method for initial-state\"
+\"ERR: no applicable method for key-sequence\"
+\"ERR: no applicable method for key-sequence\"
+\"ERR: no applicable method for next-state\"
+\"ERR: no applicable method for current-element\"
+\"ERR: no applicable method for current-key\"
+\"ERR: make: <array> requires dimensions:\"
+\"ERR: no applicable method for binary<\"
+\"ERR: no applicable method for binary<\"
+\"ERR: wrong number of arguments (1)\"
+\"ERR: format: not a string: 6\"
+\"ERR: not a class: 5\"
+\"ERR: not a class: 5\"
+\"ERR: not a class: 5\"
+\"ERR: not a slot descriptor: 5\"
+\"ERR: not a slot descriptor: 5\"
+\"ERR: the variable x@y@dylan-user has no value\"
+\"ERR: the variable (setter q@r)@dylan-user has no value\"
+")
 )

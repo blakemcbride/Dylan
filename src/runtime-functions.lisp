@@ -96,7 +96,8 @@
                           (if (class? superclasses)
                               (list superclasses)
                               (iterate->list #'identity superclasses))
-                          '())))))
+                          '()
+                          "make")))))
 
 (add-method
  dylan/make

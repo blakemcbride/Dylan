@@ -84,12 +84,8 @@
                  (pop rest)))))
 
 (defun binding->rest (binding)
-  (let ((found (member '!rest binding)))
-    (if found
-        (progn
-          (must-be-list-of-length found 3 "bind -- error in bindings")
-          (cadr found))
-        nil)))
+  ;; The init form, last, is an expression, never the #rest marker
+  (cadr (member '!rest (butlast binding))))
 
 (defun binding->init (binding)
   (last binding))
@@ -172,6 +168,27 @@
 
 ;;; Compiling the BIND form
 
+(defun check-binding (binding)
+  "Check a bind form's BINDING as the compiler to C checks it, with its
+words (compiler/front/convert.lisp, PARSE-BINDING)."
+  (unless (list-of-at-least-length? binding 2)
+    (syntax-error "bind" "bad binding ~a" binding))
+  (let* ((specs (butlast binding))
+         (rest-tail (member '!rest specs))
+         (rest (and rest-tail
+                    (if (and (= (length rest-tail) 2)
+                             (variable-name? (second rest-tail)))
+                        (second rest-tail)
+                        (syntax-error "bind" "bad #rest in ~a" binding))))
+         (names (mapcar (lambda (spec)
+                          (cond ((variable-name? spec) spec)
+                                ((and (list-of-length? spec 2)
+                                      (variable-name? (car spec)))
+                                 (car spec))
+                                (t (syntax-error "bind" "bad variable ~a" spec))))
+                        (ldiff specs rest-tail))))
+    (check-names-once "bind" (append names (and rest (list rest))))))
+
 (defun compile-bind-form (e module-vars bound-vars really-compile
                           multiple-values? continue)
   (must-have-syntax e 1 "bind")
@@ -183,8 +200,9 @@
             (funcall really-compile `(begin ,@forms)
                      module-vars bound-vars multiple-values? continue))
         (progn
-          (unless (and (listp bindings) (null (cdr (cl:last bindings))))
-            (dylan%error "bind -- bad bindings" bindings))
+          (unless (proper-list? bindings)
+            (syntax-error "bind" "bad bindings ~a" bindings))
+          (check-binding (car bindings))
           (let* ((binding (car bindings))
                  (bound-names (binding->names binding))
                  (rest-name (binding->rest binding))
@@ -299,13 +317,47 @@
                 (t (gen-fn-param-error params
                                        (list 'unknown-stopper rest))))))))))
 
+(defun check-generic-function-form (e)
+  "Check the define-generic-function form E, less its first element, as
+the compiler to C checks it, with its words."
+  (let ((name (car e))
+        (params (cadr e))
+        (options (cddr e))
+        (what "define-generic-function"))
+    (require-variable-name name what)
+    (unless (proper-list? params)
+      (syntax-error what "bad parameter list ~a" params))
+    (unless (and (evenp (length options))
+                 (loop for k in options by #'cddr always (keyword? k)))
+      (syntax-error what "bad options ~a" options))
+    (let ((l params) (keys '()))
+      (loop while (and l (not (member (car l) '(!next !rest !key))))
+            do (unless (variable-name? (car l))
+                 (syntax-error what "bad parameter ~a" (car l)))
+               (pop l))
+      (when (eq (car l) '!rest)
+        (pop l)
+        (unless (and l (variable-name? (car l)))
+          (syntax-error what "#rest needs a variable name"))
+        (pop l))
+      (when (eq (car l) '!key)
+        (pop l)
+        (loop while l
+              do (let ((k (pop l)))
+                   (cond ((keyword? k) (push k keys))
+                         ((simple-variable-name? k) (push (name->keyword k) keys))
+                         (t (syntax-error what "bad keyword ~a" k)))))
+        (check-names-once what (reverse keys)))
+      (when l
+        (syntax-error what "unexpected ~a in parameter list" (car l))))))
+
 (defun compile-define-generic-function-form (e mod-vars bound-vars compiler
                                              multiple-values? continue)
   (declare (ignore compiler multiple-values?)) ; No sub-compilations or
                                         ; reductions
   (must-have-syntax e 2 "define-generic-function")
   ;; Keyword options after the parameter list are accepted and ignored.
-  (validate-keywords (cddr e) t #'dylan%error)
+  (check-generic-function-form e)
   (parse-define-generic-function
    (car e) (cadr e) (cddr e)
    (lambda (name reqs rest keys)
@@ -313,7 +365,10 @@
       name bound-vars mod-vars
       continue
       (lambda (ref set)
-        `(if (dylan%not (or (dylan%eq? ,ref ',the-unassigned-value)
+        `(progn
+          (dylan%check-not-class
+           ',(name->module-variable (variable->name name)) ',name)
+          (if (dylan%not (or (dylan%eq? ,ref ',the-unassigned-value)
                             (dylan%generic-function? ,ref)))
              ;; As the compiler to C words it
              (dylan-call dylan/error
@@ -333,7 +388,7 @@
                ,@(unless (member (variable->name name) dylan%predefined-variables)
                    `((dylan%make-variable-read-only
                       ',(name->module-variable (variable->name name)))))
-               ',name)))))))
+               ',name))))))))
 
 ;;; Parsing and compiling the DEFINE-CLASS form
 
@@ -456,8 +511,7 @@ Its faults are worded as the compiler to C words them."
                               ;; As the compiler to C words it
                               (dylan-call dylan/error
                                           ,(format nil "~a is defined both as a variable and as a generic function"
-                                                   (definition-name-string
-                                                    (variable->name name))))))
+                                                   (definition-name-string name)))))
                        ,ref)))
                  (funcall continue nil mod-vars))))
     (get-mod-var
@@ -497,10 +551,10 @@ Its faults are worded as the compiler to C words them."
                        (if (dylan%not (or (dylan%eq? ,ref
                                                      ',the-unassigned-value)
                                           (dylan%class? ,ref)))
+                           ;; As the compiler to C words it
                            (dylan-call dylan/error
-                                       "define-class -- already has a value"
-                                       ',name ,ref
-                                       ',(mapcar #'slot.getter slots))
+                                       ,(format nil "~a is defined both as a class and otherwise"
+                                                (definition-name-string name)))
                            ;; Chapter 6: the slots' types and initial
                            ;; values are evaluated after the variable holds
                            ;; the class, so they may name it.  A class
@@ -541,6 +595,9 @@ Its faults are worded as the compiler to C words them."
                                   multiple-values? continue)
   (declare (ignore multiple-values?))   ; No reductions
   (must-have-syntax e 2 "define-class")
+  (require-variable-name (car e) "define-class")
+  (unless (proper-list? (cadr e))
+    (syntax-error "define-class" "bad superclass list ~a" (cadr e)))
   (let ((superclasses (cadr e))
         (slots (expand-slots (cddr e))))
     ;; Two slots with one getter would be one slot (chapter 6).

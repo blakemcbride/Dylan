@@ -429,7 +429,7 @@ the keyword arguments REST."
   (add-method
    dylan/setter/current-element/
    (dylan%function->method
-    (make-param-list `((byte-string ,class) (state ,<object>)
+    (make-param-list `((byte-string ,class) (state ,<simple-object-vector>)
                        (new-value ,<object>))
                      nil nil nil)
     (lambda (the-string state new-value)

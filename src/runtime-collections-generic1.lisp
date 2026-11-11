@@ -237,8 +237,11 @@ new instance of CLASS, by default FIRST's class-for-copy."
       (if (subclass? class <sequence>)
           (dylan-call dylan/as class (mapcar #'value-at keys))
           (let ((result
-                  ;; An array is made with the first array's dimensions.
-                  (if (subclass? class <array>)
+                  ;; An array is made with the first array's dimensions;
+                  ;; anything else, by make alone, as the compiled library
+                  ;; makes it.
+                  (if (and (subclass? class <array>)
+                           (subclass? (get-type first) <array>))
                       (dylan-call dylan/make
                                   (if (eq class <%general-array>) <array> class)
                                   :dimensions (dylan-call dylan/dimensions
@@ -463,8 +466,9 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
            (index 0 (+ index 1)))
           ((not state) failure)
         (when (true? (dylan-call predicate (current-element collection state)))
-          ;; A skip below 1 skips none
-          (if (not (< 0 skip))
+          ;; A skip below 1 skips none; compared as the compiled library
+          ;; compares it
+          (if (not (true? (dylan-call dylan/binary< 0 skip)))
               (return (if sequence?
                           index
                           (current-key collection state)))
@@ -493,7 +497,12 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
     (let ((count (false->nil (dylan%find-keyword rest :count (lambda () nil)))))
       (loop with state = (initial-state coll)
             with num-changed = 0
-            do (cond ((or (and count (>= num-changed count)) (not state)) (return coll))
+            do (cond ((or (not state)
+                          ;; Compared as the compiled library compares it
+                          (and count
+                               (not (true? (dylan-call dylan/binary<
+                                                       num-changed count)))))
+                      (return coll))
                      ((true? (dylan-call predicate
                                          (current-element
                                                      coll state)))

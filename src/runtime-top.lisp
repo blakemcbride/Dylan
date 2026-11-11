@@ -141,6 +141,11 @@ direct call (NEXT-METHOD #f) is checked here."
 (defparameter one-integer (make-param-list `((integer ,<integer>)) nil nil nil))
 (defparameter one-class (make-param-list `((class ,<class>)) nil nil nil))
 (defparameter one-slot (make-param-list `((slot ,<slot-descriptor>)) nil nil nil))
+;;; A class or slot descriptor that the function checks itself (for
+;;; REPRESENTATION-CHECKED), so that anything else is "not a class" or "not
+;;; a slot descriptor", as the compiled library's methods on <object> say.
+(defparameter any-class (make-param-list `((class ,<object>)) nil nil nil))
+(defparameter any-slot (make-param-list `((slot ,<object>)) nil nil nil))
 (defparameter one-char (make-param-list `((character ,<character>)) nil nil nil))
 (defparameter one-string (make-param-list `((string ,<string>)) nil nil nil))
 (defparameter one-byte-string

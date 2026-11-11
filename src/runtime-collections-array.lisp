@@ -364,7 +364,7 @@ in a compiled program."
 (add-method
  dylan/current-key
  (dylan%function->method
-  (make-param-list `((array ,<array>) (state ,<object>)) nil nil nil)
+  (make-param-list `((array ,<array>) (state ,<simple-object-vector>)) nil nil nil)
   (lambda (array state) (declare (ignore array)) state)))
 
 ;;;
@@ -374,7 +374,7 @@ in a compiled program."
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((array ,<array>) (state ,<object>) (new-value ,<object>))
+  (make-param-list `((array ,<array>) (state ,<simple-object-vector>) (new-value ,<object>))
                    nil nil nil)
   ;; The state is the element's subscripts, which may be none.
   (lambda (array state new-value)

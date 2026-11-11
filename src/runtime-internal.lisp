@@ -54,13 +54,24 @@
 
 (defun module-variable-shown (name)
   "The module variable whose Lisp name is NAME as the compiler to C shows
-it: (setter foo) for the setter variable dylan/setter/foo/, its module
-after it (the compile-time environment's as compile-time)."
-  (let* ((shown (module-variable-shown-1 name))
-         (at (search "@!" shown)))
-    (if at
-        (concatenate 'string (subseq shown 0 (1+ at)) (subseq shown (+ at 2)))
-        shown)))
+it: as the program writes it, (setter foo) for the setter variable
+dylan/setter/foo/, its module after it (the compile-time environment's
+as compile-time)."
+  (let ((entry (gethash name *module-variable-names*)))
+    (if entry
+        (let ((module (dylan-symbol->string (cdr entry))))
+          (format nil "~a@~a" (definition-name-string (car entry))
+                  (string-left-trim "!" module)))
+        ;; A name made in another image, by a compiled file's compilation
+        (let* ((shown (module-variable-shown-1 name))
+               (at (search "@!" shown))
+               (shown (if at
+                          (concatenate 'string (subseq shown 0 (1+ at))
+                                       (subseq shown (+ at 2)))
+                          shown)))
+          (if (find #\@ shown)
+              shown
+              (concatenate 'string shown "@dylan-user"))))))
 
 (defun module-variable-shown-1 (name)
   (let* ((string (symbol-name name))
@@ -81,10 +92,9 @@ after it (the compile-time environment's as compile-time)."
 (defun dylan%free-variable-ref (value name)
   (if (eq value the-unassigned-value)
       ;; As the compiler to C words it: the variable, with its module
-      (let ((shown (module-variable-shown name)))
-        (dylan-call dylan/error
-                    (format nil "the variable ~a~:[@dylan-user~;~] has no value"
-                            shown (find #\@ shown))))
+      (dylan-call dylan/error
+                  (format nil "the variable ~a has no value"
+                          (module-variable-shown name)))
       value))
 
 ;;; Read-only module variables (chapter 5): DEFINE-CLASS and
@@ -110,6 +120,21 @@ after it (the compile-time environment's as compile-time)."
   (when (gethash variable *read-only-variables*)
     (dylan-call dylan/error
                 (format nil "~a holds a class or generic function and cannot be assigned"
+                        (definition-name-string name)))))
+
+(defun dylan%defined-as-class-p (variable)
+  "Does the module VARIABLE hold the class a define-class made?"
+  (and (gethash variable *read-only-variables*)
+       (boundp variable)
+       (class? (symbol-value variable))))
+
+(defun dylan%check-not-class (variable name)
+  "A definition of the variable a define-class defines -- define,
+define-method, define-generic-function -- is an error, worded as the
+compiler to C words it."
+  (when (dylan%defined-as-class-p variable)
+    (dylan-call dylan/error
+                (format nil "~a is defined both as a class and otherwise"
                         (definition-name-string name)))))
 
 (defun dylan%note-redefinition (variable name)
@@ -461,10 +486,12 @@ first, and adds an initial NIL next-method argument."
                      while state
                      do (visit (current-element collection state)))
                (return-from dylan%for-each dylan%false))))))
-  (dolist (collection collections)
-    (unless (subclass? (get-type collection) <collection>)
-      ;; As a compiled program finds it: initial-state has no method
-      (dylan-call dylan/initial-state collection)))
+  ;; As a compiled program finds it: what is not a collection has no
+  ;; initial-state alone, and among several, no key-sequence
+  ;; (COLLECTIONS-ITERATE)
+  (when (and (null (cdr collections))
+             (not (subclass? (get-type (car collections)) <collection>)))
+    (dylan-call dylan/initial-state (car collections)))
   (collections-iterate fn
                        (lambda (result) (and result (car result)))
                        dylan%false

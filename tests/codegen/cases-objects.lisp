@@ -3585,4 +3585,63 @@ other-error
 \"define-slot: the class is read-only: ~s\"
 \"no applicable method for p-note\"
 ")
+ ;; A bad class or slot definition is reported in the same words by both
+ ;; implementations.
+ (define-class-not-a-variable
+  "(define-class 5 (<object>))"
+  ""
+  :compile-error "define-class: 5 is not a variable name")
+ (define-class-superclasses-not-a-list
+  "(define-class <a> <object>)"
+  ""
+  :compile-error "define-class: bad superclass list <object>")
+ (define-class-no-superclass
+  "(define-class <a> ())"
+  ""
+  :compile-error "define-class: at least one superclass is needed")
+ (define-class-superclass-twice
+  "(define-class <a> (<object> <object>))"
+  ""
+  :compile-error "define-class: <object> is given twice")
+ (define-class-inconsistent-precedence
+  "(define-class <x> (<object>))
+(define-class <y> (<x>))
+(define-class <z> (<x> <y>))"
+  ""
+  :compile-error "inconsistent class precedence for <z>")
+ (define-then-define-class
+  "(define <zz> 5)
+(define-class <zz> (<object>))"
+  ""
+  :compile-error "<zz> is defined both as a class and otherwise")
+ (define-class-then-define
+  "(define-class <zz> (<object>))
+(define <zz> 5)"
+  ""
+  :compile-error "<zz> is defined both as a class and otherwise")
+ (class-slot-init-function
+  "(define-class <a> (<object>) (s allocation: class init-function: (method () 1)))"
+  ""
+  :compile-error "slot s: a class slot takes only an init-value:")
+ (each-subclass-slot-init-keyword
+  "(define-class <a> (<object>) (s allocation: each-subclass init-keyword: s:))"
+  ""
+  :compile-error "slot s: an each-subclass slot takes only an init-value:")
+ (constant-slot-without-value
+  "(define-class <a> (<object>) (s allocation: constant))"
+  ""
+  :compile-error "slot s: a constant slot needs an init-value:")
+ (virtual-slot-initialized
+  "(define-class <a> (<object>) (s allocation: virtual init-value: 1))"
+  ""
+  :compile-error "slot s: a virtual slot cannot be initialized")
+ (singleton-slot-init-keyword
+  "(define v 1)
+(define-slot (singleton v) t1 init-keyword: t1:)"
+  ""
+  :compile-error "slot t1: the slot of a singleton takes no init-keyword")
+ (singleton-slot-class-allocation
+  "(define-slot (singleton 1) z allocation: class)"
+  ""
+  :compile-error "slot z: the slot of a singleton must be instance, constant or virtual")
 )

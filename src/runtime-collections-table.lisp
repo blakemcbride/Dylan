@@ -286,7 +286,7 @@ many keys share a hash code; growing would not help them."
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((table ,<table>) (state ,<object>) (new-value ,<object>))
+  (make-param-list `((table ,<table>) (state ,<pair>) (new-value ,<object>))
                    nil nil nil)
   (lambda (table state new-value)
     (library-element-setter table

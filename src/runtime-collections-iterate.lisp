@@ -322,13 +322,17 @@ answers #f (an unbounded collection)."
 (defparameter dylan/next-state
   (dylan%generic-fn 'next-state one-collection-and-a-state nil))
 
+;;; Each method takes only the states it makes, so that anything else is
+;;; no applicable method, as in the compiled library: a pair for a list
+;;; or a table, an integer for a range or a deque, and a simple vector of
+;;; indices for an array, a vector included.
 (add-method
  dylan/next-state
  (state-method
-  (make-param-list `((list ,<list>) (state ,<object>)) nil nil nil)
+  (make-param-list `((list ,<list>) (state ,<pair>)) nil nil nil)
   (lambda (list state)
     (declare (ignore list))
-    (and (consp state) (list-rest (cdr state))))))
+    (list-rest (cdr state)))))
 
 (add-method                             ; Array => "Odometer style"
  dylan/next-state
@@ -358,12 +362,6 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/next-state
  (state-method
-  (make-param-list `((null ,<empty-list>) (state ,<object>)) nil nil nil)
-  (lambda (emp-list state) (declare (ignore emp-list state)) nil)))
-
-(add-method
- dylan/next-state
- (state-method
   (make-param-list `((deque ,<deque>) (state ,<integer>)) nil nil nil)
   (lambda (deque state)
     (let ((next (+ state 1)))
@@ -372,7 +370,7 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/next-state
  (state-method
-  (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
+  (make-param-list `((range ,<range>) (state ,<integer>)) nil nil nil)
   (lambda (range state)
     (let ((size (collection-size range)))
       (if (or (null size) (< (+ state 1) size)) (+ state 1) nil)))))
@@ -380,7 +378,7 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/next-state
  (state-method
-  (make-param-list `((table ,<table>) (state ,<object>)) nil nil nil)
+  (make-param-list `((table ,<table>) (state ,<pair>)) nil nil nil)
   (lambda (table state)
     (let ((hash-index (car state))
           (bucket-left (cadr state))
@@ -406,7 +404,7 @@ answers #f (an unbounded collection)."
 (add-method                             ; Array => "Odometer style"
  dylan/previous-state
  (state-method
-  (make-param-list `((array ,<array>) (state ,<sequence>)) nil nil nil)
+  (make-param-list `((array ,<array>) (state ,<simple-object-vector>)) nil nil nil)
   ;; The odometer run backwards: decrement the last index that can be, and
   ;; set every index after it to its maximum.  The state passed in is not
   ;; modified.
@@ -433,7 +431,7 @@ answers #f (an unbounded collection)."
 (add-method                             ; Not defined in the manual
  dylan/previous-state
  (state-method
-  (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
+  (make-param-list `((range ,<range>) (state ,<integer>)) nil nil nil)
   (lambda (range state)
     (declare (ignore range))
     (if (plusp state) (- state 1) nil))))
@@ -449,12 +447,12 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((array ,<array>) (state ,<sequence>)) nil nil nil)
+  (make-param-list `((array ,<array>) (state ,<simple-object-vector>)) nil nil nil)
   (lambda (array state) (library-element array state))))
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((sov ,<simple-object-vector>) (state ,<sequence>))
+  (make-param-list `((sov ,<simple-object-vector>) (state ,<simple-object-vector>))
                    nil nil nil)
   (lambda (vec state) (aref vec (aref state 0)))))
 ;;; Any other vector, such as a stretchy vector: its one index.  (element
@@ -462,7 +460,7 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((vector ,<vector>) (state ,<sequence>)) nil nil nil)
+  (make-param-list `((vector ,<vector>) (state ,<simple-object-vector>)) nil nil nil)
   (lambda (vec state) (aref (vector-value vec) (aref state 0)))))
 (add-method
  dylan/current-element
@@ -471,16 +469,11 @@ answers #f (an unbounded collection)."
   (lambda (list state)
     (declare (ignore list))
     (car state))))
-(add-method
- dylan/current-element
- (dylan%function->method
-  (make-param-list `((null ,<empty-list>) (state ,<sequence>)) nil nil nil)
-  (lambda (emp-list state) (declare (ignore emp-list state)) nil)))
 (dolist (class (list <byte-string> <unicode-string>))
   (add-method
    dylan/current-element
    (dylan%function->method
-    (make-param-list `((string ,class) (state ,<sequence>))
+    (make-param-list `((string ,class) (state ,<simple-object-vector>))
                      nil nil nil)
     (lambda (string state) (char string (aref state 0))))))
 (add-method
@@ -492,14 +485,14 @@ answers #f (an unbounded collection)."
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((range ,<range>) (state ,<object>)) nil nil nil)
+  (make-param-list `((range ,<range>) (state ,<integer>)) nil nil nil)
   (lambda (range state)
     ;; FROM + k*BY, the first element too, as element answers.
     (range-ref range state))))
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((table ,<table>) (state ,<object>)) nil nil nil)
+  (make-param-list `((table ,<table>) (state ,<pair>)) nil nil nil)
   (lambda (table state)
     (declare (ignore table))
     (cadr (car (cadr state))))))
@@ -547,14 +540,10 @@ collection.  DONE? is a Lisp function applied to the result of FN to test
 for loop completion.  It returns NIL to continue the iteration, or a Lisp
 thunk to return the value.  DEFAULT-VALUE is returned if any collection
 runs out before the DONE? test causes an exit."
-  (unless (all? (lambda (collection)
-                  (subclass? (get-type collection) <collection>))
-                collections)
-    (dylan-call dylan/error "do -- not all arguments are collections"
-                collections))
   ;; Chapter 12, "Collection Alignment": unless they are all sequences,
   ;; several collections are aligned by key, and FN sees the elements at
-  ;; each key they share.
+  ;; each key they share.  Among them, what is not a collection has no
+  ;; key-sequence, as in the compiled library.
   (when (and (cdr collections) (notevery #'sequence? collections))
     (let ((keys (aligned-keys collections)))
       (when (sequence? (car collections))
@@ -764,15 +753,14 @@ integer, whatever the sequence, as in a compiled program."
    (make-param-list `((collection ,<explicit-key-collection>)
                       (state ,<object>))
                     nil nil nil)
-   (lambda (collection state)
-     (dylan-call dylan/error
-                 "current-key -- not implemented for this collection type"
-                 collection state))))
+   ;; No method of its own: a collection and state no method takes is no
+   ;; applicable method, as in the compiled library
+   nil))
 
 (add-method
  dylan/current-key
  (dylan%function->method
-  (make-param-list `((table ,<table>) (state ,<object>)) nil nil nil)
+  (make-param-list `((table ,<table>) (state ,<pair>)) nil nil nil)
   (lambda (table state)
     (declare (ignore table))
     (car (car (cadr state))))))

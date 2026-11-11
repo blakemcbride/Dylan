@@ -29,22 +29,59 @@ The home for this package is **<https://github.com/blakemcbride/Dylan>**.
 > notice forbids sale or transfer for compensation. See
 > [License](#license) below.
 
-## Origins
+## Origins: what is Thomas and what is new
 
 The project began as a direct translation into Common Lisp of **Thomas**,
 the Scheme implementation that Matt Birkholz, Jim Miller and Ron Weiss
-wrote at Digital Equipment Corporation's Cambridge Research Laboratory in
-1992. It has since gone far from that start:
+wrote in four weeks at Digital Equipment Corporation's Cambridge Research
+Laboratory in 1992. Their goals were to learn the language, to publish
+readable source, and to write small programs; their README says Thomas
+"has no optimizations of any kind. It does not perform well."
 
-- The Common Lisp implementation was corrected against the manual, chapter
-  by chapter — `#f` and the empty list are distinct, modules (design notes
-  32 and 33), keyword checking, sealing, slot options and much else — and
-  rebuilt for speed: generic dispatch through caches, calls made directly,
+Only one part of this system descends from Thomas — the Common Lisp
+implementation in `src/` — and it has been heavily changed:
+
+- **Corrected against the manual**, chapter by chapter. `#f` and the empty
+  list are distinct objects (in Thomas, on MIT Scheme, they were one);
+  modules (design notes 32 and 33) replace Thomas's single namespace;
+  keyword checking, sealing, slot options and much else follow the manual.
+- **Rebuilt for speed**: generic dispatch through caches, direct calls,
   arithmetic, `element` and iteration done inline, slots read directly.
-  Thomas's own goals explicitly did not include performing well.
-- The compiler to C is new, written for this project. It shares only the
-  reader with the Common Lisp implementation, which also runs its macros
-  while compiling.
+- **Extended**: macros; streams, `format` and `print-object`, printing as
+  the compiler to C prints; `<extended-float>`; a standalone executable,
+  `bin/dylan`.
+- **Measured**: about half of `src/` (8,900 of 18,400 lines) is still as
+  first translated; the rest was added or rewritten since. The design —
+  Dylan compiled to the host Lisp, a runtime library, the read-eval-print
+  loop — is still Thomas's.
+
+Everything else is new, written for this project, with no Thomas code in
+it:
+
+- **The compiler to C** (`compiler/`, ~12,400 lines) and **its runtime**
+  (`runtime/c`, ~7,300 lines of C; `runtime/dylan`, the library in Dylan,
+  ~3,600 lines): native executables, proper tail calls, type inference,
+  decision-tree dispatch, inlining, unboxed floats, a generational
+  collector and threads. It shares only the reader with the Common Lisp
+  implementation, which also runs its macros while compiling. Its programs
+  run the benchmarks about 18 times faster than the Common Lisp
+  implementation, and beat plain SBCL on 8 of 11
+  ([`SpeedComparison.md`](SpeedComparison.md)).
+- **The tests**: Thomas tested only the book's examples. The suites in
+  `tests/` (~16,700 lines) cover the manual chapter by chapter, the
+  compiler, the runtime, stress, and the sanitizers.
+- **The benchmarks** (`bench/`) and **the user manual**
+  (`manual/UserManual/`).
+
+| | Thomas (1992) | This system |
+|---|---|---|
+| Implementations | one: Dylan compiled to Scheme | two: to Common Lisp (from Thomas) and to C (new) |
+| Host | MIT CScheme, Scheme->C, Gambit | SBCL; GCC or Clang |
+| Performance | no optimizations | optimized in both; the C is faster than plain SBCL |
+| `#f` and `()` | the same object | distinct, as the manual says |
+| Modules | none | design notes 32 and 33 |
+| Macros, threads, streams | none | macros and streams in both; threads in C |
+| Tests | the book's examples | suites for the manual, the compiler and the runtime |
 
 Thomas's sources are no longer here. Each file of `src/` still records
 which Thomas file it grew from (see [`src/README`](src/README)), and

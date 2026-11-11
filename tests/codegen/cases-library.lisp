@@ -3178,4 +3178,25 @@ eq
 (5 10)
 (1 2)
 ")
+ ;; A #key parameter does not spell its keyword, so as may; a variable's
+ ;; name is a symbol the program spells (chapter 15; Bugs04 B9).
+ (symbols-spelled-as-read
+  "(define-method kc (#key foo) foo)
+(print FOO:)
+(define-method kd (#key quux) quux)
+(print (as <keyword> \"QUUX\"))
+(define-generic-function ge (#key Bar))
+(print (as <keyword> \"BAR\"))
+(define-method fq (Pqr) Pqr)
+(print (as <symbol> \"PQR\"))
+(define abc 1)
+(print (as <symbol> \"ABC\"))
+(print (handler-case (kc foo: 1 Zork: 2) ((<error> condition: c) (format #f \"~a\" c))))"
+  "FOO:
+QUUX:
+BAR:
+Pqr
+abc
+\"keyword argument not accepted: Zork:\"
+")
 )

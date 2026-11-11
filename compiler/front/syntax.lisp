@@ -52,9 +52,9 @@ AT-LEAST, at least N) elements."
     (compile-error "~a: ~a is not a variable name" what x)))
 
 (defun name-keyword (symbol)
-  "The keyword that names a parameter or slot SYMBOL: foo: for foo."
-  (dylan::remember-spelling (intern (symbol-name symbol) :keyword)
-                            (dylan::dylan-symbol->string symbol)))
+  "The keyword that names a parameter SYMBOL: foo: for foo.  The keyword
+is not entered, so it keeps the spelling it is entered in (chapter 15)."
+  (intern (dylan::dylan-spelled-name symbol) :keyword))
 
 (defun check-unique (names what)
   (loop for (name . rest) on names

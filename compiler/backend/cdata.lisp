@@ -197,12 +197,15 @@ named SPELLING."
               (let ((string (c-string data spelling))
                     (name (content-name data (if (eq kind :keyword) "dy_keyword_" "dy_symbol_")
                                         key))
-                    ;; The top-level form that makes it, if the program's
-                    (form (or (and *symbol-forms*
-                                   (gethash (format nil "~:[s~;k~]:~a" (eq kind :keyword) key)
-                                            *symbol-forms*))
+                    ;; The top-level form that makes it, if the program's;
+                    ;; one no form spells, a #key parameter's keyword, is
+                    ;; never made by the program, and as may make it.
+                    (form (if *symbol-forms*
+                              (or (gethash (format nil "~:[s~;k~]:~a" (eq kind :keyword) key)
+                                           *symbol-forms*)
+                                  "INTPTR_MAX")
                               0)))
-                (define-c data "DySymbol ~a = { &dy_wrapper_~(~a~), ~a, 0, ~d };"
+                (define-c data "DySymbol ~a = { &dy_wrapper_~(~a~), ~a, 0, ~a };"
                           name kind (address string) form)
                 (push name (cdata-symbol-list data))
                 name)))))
@@ -272,6 +275,21 @@ declarations to put before the data, which may refer to what they
 declare."
   (let ((count (length classes))
         (class-text '()))
+    ;; Every symbol and keyword the program spells, a variable's name too,
+    ;; so that as finds it with the program's spelling, as the reader
+    ;; would have made it (chapter 15).
+    (when *symbol-forms*
+      (let ((spelled '()))
+        (maphash (lambda (symbol spelling)
+                   (let* ((kind (if (keywordp symbol) :keyword :symbol))
+                          (form (gethash (format nil "~:[s~;k~]:~a" (eq kind :keyword)
+                                                 (string-downcase spelling))
+                                         *symbol-forms*)))
+                     (when (and (integerp form) (plusp form))
+                       (push (list (string-downcase spelling) spelling kind) spelled))))
+                 dylan::*symbol-spellings*)
+        (loop for (nil spelling kind) in (sort spelled #'string< :key #'first)
+              do (c-symbol data spelling kind))))
     ;; The class objects' own constants go into DATA first.
     (dolist (c classes)
       (let ((name (c-symbol data (class-info-name c) :symbol))

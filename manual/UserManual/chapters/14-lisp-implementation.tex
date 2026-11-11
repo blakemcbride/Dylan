@@ -704,8 +704,9 @@ implementation provides.
 \paragraph{What behaves differently.}
 
 \begin{itemize}
-\item Modules must be declared before they are used, in order; the
-  compiler to C sees the whole program first (Chapter~\ref{ch:modules}).
+\item A program of several files is compiled file by file, in the order
+  they need each other's modules; the compiler to C sees the whole
+  program first (Chapter~\ref{ch:modules}).
 \item Errors are reported when the code runs; the compiler to C reports
   many of them, such as an assignment to a read-only variable, when it
   compiles.

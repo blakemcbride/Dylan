@@ -500,4 +500,19 @@ other
 2000
 \"the arguments after the required ones are not keyword/value pairs\"
 ")
+ ;; Chapter 12: the modules a program's top-level define-module forms declare,
+ ;; here and in a top-level begin, are defined each after the modules it
+ ;; uses, so a module may be used, or named by the header, before its form.
+ (modules-in-any-order
+  "module: app
+
+(define-module app (use dylan) (use shapes))
+(begin
+  (define-module shapes (use dylan) (use geometry export: all) (create area))
+  (define-module geometry (use dylan) (create unit)))
+(define unit 2)
+(define-method area (w h) (* unit w h))
+(print (area 3 4))"
+  "24
+")
 )

@@ -81,27 +81,25 @@ as the name of a module, or NIL, and the text of the forms after them."
                     (loop for line = (read-line in nil nil)
                           while line do (write-line line out))))))))
 
-(defun define-module-form-p (form)
-  (and (consp form) (symbolp (car form))
-       (string-equal (symbol-name (car form)) "DEFINE-MODULE")))
-
 (defun evaluate-program (text)
   "Read, compile and evaluate the forms of the Dylan program TEXT one by
 one, as the read-eval-print loop does: each is read after the one before
 it has run, which matters to a symbol's spelling (chapter 15: as may make
 a symbol before a later form spells it).  A module: header puts the forms
-in that module, as it does a compiled program's -- all but the
-define-module forms before the first other form, which define it."
+in that module, as it does a compiled program's; the modules the
+program's define-module forms declare are defined first, as bin/dylan
+defines a file's (PREDEFINE-FILE-MODULES)."
   (multiple-value-bind (module text) (program-header text)
+   (with-input-from-string (in text)
+     (dylan%predefine-modules (read-module-forms in)))
+   (when module
+     (in-module module))
    (with-input-from-string (in text)
     (let ((eof (list 'eof))
           (module-variables '()))
       (loop for form = (dylan-read in nil eof)
             until (eq form eof)
-            do (when (and module (not (define-module-form-p form)))
-                 (in-module module)
-                 (setf module nil))
-               (compile-expression
+            do (compile-expression
                 form nil module-variables
                 (lambda (new-variables preamble compiled)
                   (implementation-specific/eval (append preamble (list compiled)))

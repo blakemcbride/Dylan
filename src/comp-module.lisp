@@ -345,6 +345,84 @@ again from their own clauses, so that their imports are recomputed."
                     (dylan%define-module (module.name user)
                                          (module.clauses user))))))
 
+;;; The order of the define-module forms (chapter 12).  The compiler to C
+;;; sees the whole program before any of it runs, and defines each module
+;;; a top-level define-module form declares after the modules it uses, so
+;;; the order of those forms does not matter.  A file is given the same
+;;; here: its modules are defined before its first form runs, and each
+;;; define-module form defines its module again, from the same clauses,
+;;; when it is reached.  A module that uses one no such form declares (a
+;;; macro may make it), or whose definition fails, is left to its own
+;;; define-module form, which defines it then or reports the error.
+
+(defun top-level-module-forms (forms)
+  "The define-module forms among FORMS and in their top-level begin forms,
+as the compiler to C finds them."
+  (let ((found '()))
+    (labels ((proper-p (x)
+               (and (listp x) (null (cdr (cl:last x)))))
+             (walk (form)
+               (when (and (consp form) (proper-p form))
+                 (case (car form)
+                   ((define-module) (push form found))
+                   ((begin) (mapc #'walk (cdr form)))))))
+      (mapc #'walk forms))
+    (nreverse found)))
+
+(defun dylan%predefine-modules (forms)
+  "Define the modules the define-module FORMS declare, each after the
+modules it uses; the first form of a name counts."
+  (let ((pending '()))
+    (dolist (form forms)
+      (let ((name (and (consp (cdr form)) (cadr form)))
+            (clauses (cddr form)))
+        (when (and name (symbolp name) (not (eq name 'dylan))
+                   (not (assoc name pending))
+                   (every (lambda (clause)
+                            (and (consp clause) (null (cdr (cl:last clause)))))
+                          clauses))
+          (push (cons name clauses) pending))))
+    (setf pending (nreverse pending))
+    (flet ((ready-p (entry)
+             (every (lambda (clause)
+                      (or (not (eq (car clause) 'use))
+                          (let ((used (cadr clause)))
+                            (and (symbolp used)
+                                 (not (assoc used pending))
+                                 (gethash used *dylan-modules*)))))
+                    (cdr entry))))
+      (loop for entry = (find-if #'ready-p pending)
+            while entry
+            do (setf pending (remove entry pending))
+               (handler-case (dylan%define-module (car entry) (cdr entry))
+                 (error () nil))))))
+
+(defun read-module-forms (stream)
+  "The top-level define-module forms of what STREAM has left, read ahead
+without recording the spellings of their symbols (chapter 15: the forms
+are read again, each when it runs).  A form that cannot be read ends the
+reading."
+  (let ((*symbol-spellings* (make-hash-table :test #'eq))
+        (eof (list 'eof))
+        (forms '()))
+    (handler-case (loop for form = (dylan-read stream nil eof)
+                        until (eq form eof)
+                        do (push form forms))
+      (error () nil))
+    (top-level-module-forms (nreverse forms))))
+
+(defun predefine-file-modules (stream)
+  "DYLAN%PREDEFINE-MODULES for the forms of STREAM, a file, after its
+header, read ahead; STREAM is then put back where it was.  A stream that
+cannot be put back, a terminal's or a pipe's, is left alone."
+  (let ((start (ignore-errors (file-position stream))))
+    (when start
+      (unwind-protect
+           (dylan%predefine-modules
+            (and (ignore-errors (read-source-header stream) t)
+                 (read-module-forms stream)))
+        (file-position stream start)))))
+
 (defun compile-define-module-form (forms module-vars bound-vars really-compile
                                    multiple-values? continue)
   (declare (ignore really-compile multiple-values?))

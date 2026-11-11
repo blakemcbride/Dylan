@@ -81,6 +81,12 @@ at a terminal to use the debugger."
   (when batch
     (setf dylan::*batch* t
           sb-ext:*invoke-debugger-hook* #'dylan::end-batch-run)
+    ;; A file's modules are defined before its first form runs, as the
+    ;; compiler to C defines a program's (chapter 12): the file named, or
+    ;; the standard input if it is a file.
+    (dylan::predefine-file-modules (if (typep *standard-input* 'file-stream)
+                                       *standard-input*
+                                       sb-sys:*stdin*))
     ;; A file's header names the module its forms are compiled in
     (multiple-value-bind (module rest) (dylan::read-stream-header *standard-input*)
       (setf *standard-input* rest)

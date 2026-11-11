@@ -341,9 +341,17 @@ options.
 \section{Modules in the interactive implementation}\label{sec:modules-lisp}
 
 \index{interactive implementation!modules}
-The Common Lisp implementation compiles one form at a time, so a module
-must be declared before any code that uses it is compiled, and a module
-must be declared after the modules it uses:
+The Common Lisp implementation runs a file as the compiler to C runs a
+program: before the file's first form runs, it defines every module the
+file's top-level \code{define-module} forms declare (those in a top-level
+\code{begin} too), each after the modules it uses, so their order does
+not matter, and the header may name a module the file defines. Each
+\code{define-module} form defines its module again, from the same
+clauses, when it is reached. This holds for \cmd{bin/dylan} reading a
+file, named or as its standard input, and for \code{dylan:compile-file}.
+
+At the \code{?} prompt, and from a pipe, forms are compiled one at a time
+as they arrive, so a module must be declared after the modules it uses:
 
 \begin{repl}
 ? (define-module m1 (use dylan) (use m2))
@@ -353,8 +361,7 @@ debugger invoked on a DYLAN::DYLAN-CONDITION ...
 \end{repl}
 
 \noindent
-Declaring the modules in order is enough. Redefining a module with
-\code{define-module} replaces its clauses, and every module that uses it
+Redefining a module with \code{define-module} replaces its clauses, and every module that uses it
 is brought up to date at once, as \dylanbook{chapter 5} asks: variables
 newly exported become visible immediately in the modules that import
 them. A redefinition that would make a module use itself, directly or
@@ -411,10 +418,11 @@ Module \code{client} can call \code{next-count} but cannot see
 the module it names. Names are resolved to variables as the file is
 compiled, so the compiled Lisp needs no module information to run, and a
 compiled \code{define-module} form defines its module again when the
-file is loaded. To
-compile a program of several files, compile them in one Lisp session in
-the order a reader would need them, the file of \code{define-module}
-forms first, and then load the results in the same order:
+file is loaded; the file's modules are defined first, as
+above, both when it is compiled and when it is loaded. To compile a
+program of several files, compile them in one Lisp session in the order
+a reader would need them, the file of \code{define-module} forms first,
+and then load the results in the same order:
 
 \begin{shell}
 $ sbcl --non-interactive --eval '(load "src/load-compiler.lisp")' \

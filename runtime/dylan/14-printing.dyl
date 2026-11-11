@@ -67,7 +67,8 @@ module: dylan
            stream)
           (else: (error "not a stream: ~s" stream)))))
 
-;;; print-object
+;;; print-object.  The library's methods answer the object, as the Common
+;;; Lisp implementation's do.
 
 (define-generic-function print-object (object stream escape?))
 
@@ -82,9 +83,12 @@ module: dylan
 (define-method print-object ((x <object>) stream escape?)
   (%put stream "{instance of ")
   (print-object (%class-name (%object-class x)) stream #f)
-  (%put stream #\}))
+  (%put stream #\})
+  x)
 
-(define-method print-object ((x <number>) stream escape?) (%put stream (%number->string x)))
+(define-method print-object ((x <number>) stream escape?)
+  (%put stream (%number->string x))
+  x)
 ;;; An instance of a program's subclass of one of the classes whose
 ;;; instances the runtime makes itself -- <symbol>, <keyword>,
 ;;; <character>, <class>, <generic-function>, <method>, <singleton> and
@@ -93,15 +97,21 @@ module: dylan
 (define-method print-object ((x <symbol>) stream escape?)
   (if (id? (%object-class x) <symbol>)
       (%put stream (%symbol-name x))
-      (next-method)))
+      (next-method))
+  x)
 (define-method print-object ((x <keyword>) stream escape?)
   (if (id? (%object-class x) <keyword>)
       (begin
         (%put stream (%symbol-name x))
         (%put stream #\:))
-      (next-method)))
-(define-method print-object ((x <boolean>) stream escape?) (%put stream (if x "#t" "#f")))
-(define-method print-object ((x <empty-list>) stream escape?) (%put stream "()"))
+      (next-method))
+  x)
+(define-method print-object ((x <boolean>) stream escape?)
+  (%put stream (if x "#t" "#f"))
+  x)
+(define-method print-object ((x <empty-list>) stream escape?)
+  (%put stream "()")
+  x)
 
 (define %character-names
   (list (cons #\space "space") (cons #\newline "newline") (cons (as <character> 9) "tab")
@@ -115,7 +125,8 @@ module: dylan
          (%put stream "#\\")
          (bind ((name (find-pair x %character-names)))
            (%put stream (if name (cdr name) x))))
-        (else: (%put stream x))))
+        (else: (%put stream x)))
+  x)
 
 (define-method print-object ((x <string>) stream escape?)
   (if escape?
@@ -125,7 +136,8 @@ module: dylan
           (when (or (id? c #\") (id? c #\\)) (%put stream #\\))
           (%put stream c))
         (%put stream #\"))
-      (%put stream x)))
+      (%put stream x))
+  x)
 
 ;;; A list prints in full: ''+ is (quote +) (chapter 8).
 (define-method print-object ((x <pair>) stream escape?)
@@ -138,12 +150,14 @@ module: dylan
                          ((id? l '()) #f)
                          (else: (%put stream " . ") (print-object l stream escape?)))))
     (loop x #t))
-  (%put stream #\)))
+  (%put stream #\))
+  x)
 
 (define-method print-object ((x <simple-object-vector>) stream escape?)
   (%put stream "#(")
   (%print-elements x stream escape?)
-  (%put stream #\)))
+  (%put stream #\))
+  x)
 
 ;;; Other sequences: their class and their elements
 (define-method print-object ((x <sequence>) stream escape?)
@@ -154,7 +168,8 @@ module: dylan
     (if (%library-size x)
         (%print-elements x stream escape?)
         (%put stream "...")))
-  (%put stream #\}))
+  (%put stream #\})
+  x)
 
 ;;; An array: <array> and its elements, in row-major order
 (define-method print-object ((x <%general-array>) stream escape?)
@@ -162,7 +177,8 @@ module: dylan
   (unless (empty? x)
     (%put stream #\space)
     (%print-elements x stream escape?))
-  (%put stream #\}))
+  (%put stream #\})
+  x)
 
 (define-method print-object ((x <range>) stream escape?)
   (%put stream "{range ")
@@ -172,7 +188,8 @@ module: dylan
   (when (%size x)
     (%put stream " size ")
     (print-object (%size x) stream escape?))
-  (%put stream #\}))
+  (%put stream #\})
+  x)
 
 (define-method print-object ((x <table>) stream escape?)
   (%put stream "{table")
@@ -182,7 +199,8 @@ module: dylan
     (print-object (current-key x state) stream escape?)
     (%put stream " => ")
     (print-object (current-element x state) stream escape?))
-  (%put stream #\}))
+  (%put stream #\})
+  x)
 
 (define-method print-object ((x <class>) stream escape?)
   (if (id? (%object-class x) <class>)
@@ -190,7 +208,8 @@ module: dylan
         (%put stream "{the class ")
         (print-object (%class-name x) stream #f)
         (%put stream #\}))
-      (next-method)))
+      (next-method))
+  x)
 
 ;;; Generic functions and methods print as the manual's examples show them
 ;;; (chapters 3, 8, 10 and 11).
@@ -203,7 +222,8 @@ module: dylan
               (print-object name stream #f)
               (%put stream #\}))
             (%put stream "{an anonymous generic function}")))
-      (next-method)))
+      (next-method))
+  x)
 
 (define-method print-object ((x <method>) stream escape?)
   (if (id? (%object-class x) <method>)
@@ -221,7 +241,8 @@ module: dylan
                (print-object name stream #f)
                (%put stream #\}))
               (else: (%put stream "{an anonymous method}"))))
-      (next-method)))
+      (next-method))
+  x)
 
 (define-method print-object ((x <singleton>) stream escape?)
   (if (id? (%object-class x) <singleton>)
@@ -229,9 +250,12 @@ module: dylan
         (%put stream "{singleton ")
         (print-object (%singleton-object x) stream #t)
         (%put stream #\}))
-      (next-method)))
+      (next-method))
+  x)
 
-(define-method print-object ((x <thread>) stream escape?) (%put stream "{thread}"))
+(define-method print-object ((x <thread>) stream escape?)
+  (%put stream "{thread}")
+  x)
 
 (define-method print-object ((x <slot-descriptor>) stream escape?)
   (if (id? (%object-class x) <slot-descriptor>)
@@ -239,13 +263,17 @@ module: dylan
         (%put stream "{slot ")
         (print-object (%generic-name (%slot-raw-getter x)) stream #f)
         (%put stream #\}))
-      (next-method)))
+      (next-method))
+  x)
 
-(define-method print-object ((x <stream>) stream escape?) (%put stream "{stream}"))
+(define-method print-object ((x <stream>) stream escape?)
+  (%put stream "{stream}")
+  x)
 
 ;;; A condition prints as its message (chapter 13).
 (define-method print-object ((c <condition>) stream escape?)
-  (%put stream (%condition-message c)))
+  (%put stream (%condition-message c))
+  c)
 
 ;;; A condition as display prints it, through any print-object method of
 ;;; its class: what the debugger of last resort reports.

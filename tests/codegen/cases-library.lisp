@@ -3229,4 +3229,80 @@ abc
 (1 2 9)
 \"ERR: keyword argument not accepted: bad:\"
 ")
+ ;; The library's print-object methods answer the object they print, as in
+ ;; the Common Lisp implementation (Bugs04 B11).
+ (print-object-answers-object
+  "(define-class <pt> (<object>))
+(define-class <mysym> (<symbol>))
+(define-class <pt2> (<object>))
+(define-method print-object ((p <pt2>) stream escape?) (format stream \"{pt2}\") 'mine)
+(define s (make <string-stream>))
+(for-each ((x (list 'sym foo: 5 1.5 \"str\" #\\a '(1 2) '() #t #f (vector 1) (range from: 0 size: 3)
+                    (make <table>) <pt> (make <pt>) car print (singleton 3) (make <simple-error> format-string: \"e\")
+                    (as <deque> '(1)) (make <array> dimensions: '(1 1)) 1/2 *standard-output*
+                    (make <mysym>) (make <pt2>) (first (slot-descriptors <pt2>) default: 'none)
+                    (as <stretchy-vector> '(1)) (make <generic-function> required: 1) (method (x) x))))
+          ()
+  (bind ((a (print-object x s #t)) (b (print-object x s #f)) (c (print-object x *standard-output* #t)))
+    (newline)
+    (print (list (id? a x) (id? b x) (id? c x) (if (id? a x) 'same a)))))"
+  "sym
+(#t #t #t same)
+foo:
+(#t #t #t same)
+5
+(#t #t #t same)
+1.5
+(#t #t #t same)
+\"str\"
+(#t #t #t same)
+#\\a
+(#t #t #t same)
+(1 2)
+(#t #t #t same)
+()
+(#t #t #t same)
+#t
+(#t #t #t same)
+#f
+(#t #t #t same)
+#(1)
+(#t #t #t same)
+{range 0 by 1 size 3}
+(#t #t #t same)
+{table}
+(#t #t #t same)
+{the class <pt>}
+(#t #t #t same)
+{instance of <pt>}
+(#t #t #t same)
+{method car}
+(#t #t #t same)
+{the generic function print}
+(#t #t #t same)
+{singleton 3}
+(#t #t #t same)
+e
+(#t #t #t same)
+{<deque> 1}
+(#t #t #t same)
+{<array> #f}
+(#t #t #t same)
+1/2
+(#t #t #t same)
+{stream}
+(#t #t #t same)
+{instance of <mysym>}
+(#t #t #t same)
+{pt2}
+(#f #f #f mine)
+none
+(#t #t #t same)
+{<stretchy-vector> 1}
+(#t #t #t same)
+{an anonymous generic function}
+(#t #t #t same)
+{an anonymous method}
+(#t #t #t same)
+")
 )

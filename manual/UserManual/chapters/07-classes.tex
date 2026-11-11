@@ -383,10 +383,24 @@ Instances that already exist gain the slot then, each given its initial
 value. \code{slot-descriptors} lists the slot after the ones the class
 had, or in the place of the one with the same getter that it replaces,
 and \code{make} takes its init-keyword; before the \code{define-slot}
-runs, neither does. The compiler to C requires a class owner to be a
-class the program itself defines, known when compiling, rather than a
-built-in class or a value computed at run time; a singleton owner may be
-any object.
+runs, neither does. The compiler to C requires a class owner to be known
+when compiling, rather than a value computed at run time; a singleton
+owner may be any object.
+
+The owner may be a built-in class too, unless it is sealed
+(Section~\ref{sec:classes-sealing}). Every object of the class then has
+the slot, symbols, characters, numbers and functions included. Such
+objects have no storage of their own, so each one takes the slot's initial
+value when the slot is first read.
+
+\begin{dylan}
+(define-slot <symbol> label init-value: "none")
+(label 'red)                   ; => "none"
+(set! (label 'red) "a color")  ; => "a color"
+(label 'red)                   ; => "a color"
+(label 'blue)                  ; => "none"
+(define-slot <integer> size)   ; => error: the class is read-only
+\end{dylan}
 
 \section{Examining classes and objects}\label{sec:classes-reflection}
 

@@ -3467,4 +3467,122 @@ wg
 (abc #t)
 {singleton #<tagged x>}
 ")
+ ;; Chapter 6: define-slot on a built-in class gives each of its objects the
+ ;; slot -- library instances at once, symbols, characters, numbers and
+ ;; functions when first read -- and on a sealed class is an error when run.
+ (define-slot-on-built-in-classes
+  "(define-method msg (thunk)
+  (handler-case (thunk)
+    ((<simple-error> condition: c) (condition-format-string c))
+    ((<error>) 'other-error)))
+(define-class <bag> (<collection>) (items init-value: '()))
+(define-class <tagged> (<symbol>))
+(define b1 (make <bag>))
+(define g1 (make <tagged>))
+(define t1 (make <table>))
+(define counter 0)
+; A library class and the program's: instances made before have it now
+(define-slot <collection> serial init-keyword: serial:
+  init-function: (method () (set! counter (+ counter 1)) counter))
+(print counter)
+(print (list (serial b1) (serial t1)))
+; An object with no storage of its own takes it when first read
+(print (list (serial \"abc\") (serial \"abc\") counter))
+(define b2 (make <bag> serial: 100))
+(print (list (serial b2) (items b2)))
+(print (map slot-getter (slot-descriptors <bag>)))
+(print (map slot-getter (slot-descriptors <collection>)))
+(print (map slot-getter (slot-descriptors <byte-string>)))
+(define-slot <table> label init-value: \"none\")
+(define t2 (make <table>))
+(set! (label t1) \"one\")
+(print (list (label t1) (label t2)))
+(define-slot <deque> dq-note init-function: (method () (list 1)))
+(define d1 (make <deque>))
+(print (id? (dq-note d1) (dq-note d1)))
+(define-slot <error> severity init-value: 3)
+(print (handler-case (error \"x\") ((<error> condition: c) (severity c))))
+(define-slot <symbol> tag init-value: \"sym\")
+(print (list (tag 'a) (tag g1)))
+(set! (tag g1) \"tagged\")
+(set! (tag 'c) \"c\")
+(print (list (tag g1) (tag 'b) (tag 'c)))
+(define-slot <character> ch-note init-function: (method () (list 2)))
+(print (list (id? (ch-note #\\a) (ch-note #\\a)) (id? (ch-note #\\a) (ch-note #\\b))))
+(define-slot <generic-function> gf-note)
+(print (msg (method () (gf-note print))))
+(set! (gf-note print) 'p)
+(print (gf-note print))
+(define-slot <object> anything init-value: 0)
+(print (list (anything 1) (anything 2.5) (anything b1) (anything t1) (anything #t)))
+(set! (anything 5) 50)
+(print (list (anything 5) (anything 6)))
+(define-slot <symbol> anything init-value: 's)
+(print (list (anything 'q) (anything 1)))
+(define-slot <collection> shared allocation: class init-value: 'shared)
+(set! (shared #(1 2)) 'changed)
+(print (list (shared b1) (shared \"x\") (shared t1)))
+(define-slot <collection> per allocation: each-subclass init-value: 'per)
+(set! (per b1) 'bag)
+(print (list (per b1) (per b2) (per t1) (per \"s\") (per '(1))))
+(define-slot <number> n-each allocation: each-subclass init-value: 'each)
+(set! (n-each 1) 'int)
+(print (list (n-each 7) (n-each 1/2)))
+(define-method descriptor (class getter)
+  (bind ((all (slot-descriptors class)))
+    (element all (find-key all (method (s) (id? (slot-getter s) getter))))))
+(print (slot-value t1 (descriptor <table> serial)))
+(print (slot-value 'zz (descriptor <symbol> tag)))
+(set! (slot-value 'qq (descriptor <symbol> tag)) \"qq\")
+(print (tag 'qq))
+(print (msg (method () (slot-value 'zz (descriptor <table> serial)))))
+(define-slot <keyword> kw-a)
+(define-slot <keyword> kw-b init-value: 1)
+(print (list (slot-initialized? foo: kw-a) (slot-initialized? foo: kw-b)))
+(set! (kw-a foo:) 3)
+(print (list (slot-initialized? foo: kw-a) (slot-initialized? bar: kw-a) (kw-a foo:)))
+(define-slot <collection> typed type: <integer> init-value: 1)
+(print (msg (method () (set! (typed \"abc\") 'x))))
+(print (typed \"abc\"))
+; A sealed class is read-only
+(print (msg (method () (define-slot <integer> i-note))))
+(print (msg (method () (i-note 1))))
+(define-class <p> (<object>))
+(make-read-only <p>)
+(print (msg (method () (define-slot <p> p-note))))
+(print (msg (method () (p-note (make <p>)))))"
+  "2
+(1 2)
+(3 4 4)
+(100 ())
+#({the generic function items} {the generic function serial})
+#({the generic function serial})
+#()
+(\"one\" \"none\")
+#t
+3
+(\"sym\" \"sym\")
+(\"tagged\" \"sym\" \"c\")
+(#t #f)
+\"the slot gf-note is not initialized\"
+p
+(0 0 0 0 0)
+(50 0)
+(s 0)
+(changed changed changed)
+(bag bag per per per)
+(int each)
+2
+\"sym\"
+\"qq\"
+\"slot-value: the object does not have the slot: ~s\"
+(#f #t)
+(#t #f 3)
+other-error
+1
+\"define-slot: the class is read-only: ~s\"
+\"no applicable method for i-note\"
+\"define-slot: the class is read-only: ~s\"
+\"no applicable method for p-note\"
+")
 )

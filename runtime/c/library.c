@@ -922,9 +922,24 @@ static D *slot_place(D instance, DySlotDescriptor *sd) {
     }
 }
 
+/* Is the slot SD of INSTANCE one define-slot gave a built-in class that
+ * INSTANCE, having no storage of its own, keeps in SD's table? */
+static bool native_slot_p(D instance, DySlotDescriptor *sd) {
+    if (sd->one_object || sd->kind != 0 || !sd->cell) return false;
+    DyClass *owner = DY_PTR(sd->owner);
+    if (!dy_instance_p(instance, owner->instance_wrapper))
+        dy_error("slot-value: the object does not have the slot", instance);
+    return !dy_instance_slot(instance, (int32_t)sd->number);
+}
+
 PRIMITIVE(slot_value) {
     need(self, argc, 2, 2);
     DySlotDescriptor *sd = as_descriptor(a1);
+    if (native_slot_p(a0, sd)) {
+        D value = dy_native_slot(sd->cell, a0, a1);
+        if (value == DY_UNBOUND) dy_error("slot-value: the slot is not initialized", a0);
+        return value;
+    }
     D *place = slot_place(a0, sd);
     /* An instance made before define-slot added the slot takes its initial
      * value now, as its getter gives it (chapter 6). */
@@ -943,6 +958,11 @@ PRIMITIVE(slot_value_setter) {
     need(self, argc, 3, 3);
     DySlotDescriptor *sd = as_descriptor(a1);
     if (sd->kind == 3) dy_error("slot-value: a constant slot cannot be set", a0);
+    if (native_slot_p(a0, sd)) {
+        if (sd->type != DY_UNBOUND) dy_check_type(a2, sd->type);
+        dy_set_native_slot(sd->cell, a0, a2);
+        return a2;
+    }
     D *place = slot_place(a0, sd);
     if (sd->type != DY_UNBOUND) dy_check_type(a2, sd->type);
     return *place = a2;

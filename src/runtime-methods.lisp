@@ -429,10 +429,13 @@ than the default accepts."
                                    (cdr data-loc))))
                   ((each-subclass) (aref (class.class-data class)
                                          (slot.data-location the-slot)))
-                  ((instance) (aref (if singleton-slot
-                                        (singleton.extra-slot-values singleton)
-                                        (instance.data instance))
-                                    (slot.data-location the-slot)))
+                  ((instance)
+                   (if (or singleton-slot (instance? instance))
+                       (aref (if singleton-slot
+                                 (singleton.extra-slot-values singleton)
+                                 (instance.data instance))
+                             (slot.data-location the-slot))
+                       (native-slot-initialized instance getter the-slot)))
                   (t (dylan-call dylan/error
                                  "slot-initialized? -- bad allocation"
                                  (slot.allocation the-slot)

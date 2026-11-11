@@ -1283,25 +1283,81 @@ superclasses."
 ;;; that subclass.
 
 (defmacro with-slot-offset ((var obj class offset getter) &body body)
-  `(let ((,var (if (eq (instance.class ,obj) ,class)
+  `(let ((,var (if (eq (get-type ,obj) ,class)
                    ,offset
-                   (storage-location (instance.class ,obj) ,getter))))
+                   (storage-location (get-type ,obj) ,getter))))
      ,@body))
+
+;;; The instance slots define-slot gives a built-in class (chapter 6)
+;;; that are those of objects that are not instances -- symbols,
+;;; characters, numbers, functions and the rest, which have no storage of
+;;; their own: these tables keep each object's, by getter, an extended
+;;; float's by its value (being id? to any other of its value).  An
+;;; object's slot takes its initial value when first read.
+
+(defvar *native-slot-values* (make-hash-table :test 'eql :weakness :key)
+  "An object that is not an instance -> an alist (getter . value).")
+
+(defvar *extended-float-slot-values* (make-hash-table :test 'eql)
+  "The value of an extended float -> an alist (getter . value).")
+
+(defun native-slot-place (obj)
+  "The table that keeps OBJ's alist, and its key there."
+  (if (extended-float? obj)
+      (values *extended-float-slot-values* (extended-float-value obj))
+      (values *native-slot-values* obj)))
+
+(defun native-slot-cell (obj getter initialize)
+  "The cons whose cdr is OBJ's value of the slot GETTER reads.  Made, if
+OBJ has none yet, with the slot's initial value if INITIALIZE, else
+uninitialized."
+  (multiple-value-bind (table key) (native-slot-place obj)
+    (or (assoc getter (gethash key table) :test #'eq)
+        (let ((value (if initialize
+                         (let ((slot (same-slot-getter-in-slot-vector->slot
+                                      getter (class.slots (get-type obj)))))
+                           (if slot
+                               (get-initial-slot-value (or (slot-storage slot) slot))
+                               *the-uninitialized-slot-value*))
+                         *the-uninitialized-slot-value*)))
+          ;; An init-function may have given OBJ the slot already
+          (or (assoc getter (gethash key table) :test #'eq)
+              (let ((cell (cons getter value)))
+                (push cell (gethash key table))
+                cell))))))
+
+(defun native-slot-initialized (obj getter slot)
+  "For slot-initialized?: OBJ's value of the slot SLOT, that GETTER reads,
+or, if it has not taken one yet, whether it will: 'INITIALIZED if SLOT
+has an initial value."
+  (multiple-value-bind (table key) (native-slot-place obj)
+    (let ((cell (assoc getter (gethash key table) :test #'eq)))
+      (cond (cell (cdr cell))
+            ((or (slot.init-function slot) (slot.has-initial-value? slot))
+             'initialized)
+            (t *the-uninitialized-slot-value*)))))
 
 (defun make-each-subclass-getter (class offset name getter)
   (dylan%function->method
    (make-getter-param-list class)
    (lambda (obj)
      (with-slot-offset (offset obj class offset getter)
-       (let ((class (instance.class obj)))
+       (let ((class (get-type obj)))
          (object-ref (class.class-data class) offset class name))))))
 
 (defun make-instance-getter (class offset name getter)
   (dylan%function->method
    (make-getter-param-list class)
    (lambda (obj)
-     (with-slot-offset (offset obj class offset getter)
-       (object-ref (instance.data obj) offset obj name)))))
+     (if (instance? obj)
+         (with-slot-offset (offset obj class offset getter)
+           (object-ref (instance.data obj) offset obj name))
+         (let ((value (cdr (native-slot-cell obj getter t))))
+           (if (eq value *the-uninitialized-slot-value*)
+               (dylan-call dylan/error
+                           (format nil "the slot ~a is not initialized"
+                                   (dylan-symbol->string name)))
+               value))))))
 
 (defun make-singleton-getter (class singleton offset name)
   (dylan%function->method
@@ -1330,7 +1386,7 @@ superclasses."
      (unless (eq type <object>)
        (dylan-call dylan/check-type value type))
      (with-slot-offset (offset obj class offset getter)
-       (setf (aref (class.class-data (instance.class obj)) offset) value)))))
+       (setf (aref (class.class-data (get-type obj)) offset) value)))))
 
 (defun make-instance-setter (class offset type getter)
   (dylan%function->method
@@ -1338,8 +1394,10 @@ superclasses."
    (lambda (obj value)
      (unless (eq type <object>)
        (dylan-call dylan/check-type value type))
-     (with-slot-offset (offset obj class offset getter)
-       (setf (aref (instance.data obj) offset) value)))))
+     (if (instance? obj)
+         (with-slot-offset (offset obj class offset getter)
+           (setf (aref (instance.data obj) offset) value))
+         (setf (cdr (native-slot-cell obj getter nil)) value)))))
 
 (defun make-singleton-setter (class singleton offset type)
   (dylan%function->method

@@ -357,6 +357,7 @@ D dy_find_slot_descriptor(D slots, D getter) {
 
 /* SLOTS with D in the place of the one with its getter, or after the rest */
 static D put_slot(D slots, D d) {
+    if (slots == DY_UNBOUND) slots = dy_make_vector(0, DY_FALSE);
     intptr_t n = DY_VECTOR_SIZE(slots);
     intptr_t at = slot_position(DY_VECTOR_DATA(slots), n, descriptor(d)->getter);
     D v = dy_make_vector((size_t)(at < 0 ? n + 1 : n), DY_FALSE);
@@ -405,9 +406,14 @@ static const DyProgramClass **queue_subclasses(const DyProgramClass **queue, int
     return queue;
 }
 
+void dy_check_slot_owner(D class) {
+    DyClass *c = DY_PTR(class);
+    /* A sealed class is read-only too (chapter 11) */
+    if (c->read_only || c->sealed) dy_error("define-slot: the class is read-only", class);
+}
+
 void dy_define_class_slot(const DyProgramClass *owner, D d) {
-    if (((DyClass *)DY_PTR(owner->class))->read_only)
-        dy_error("define-slot: the class is read-only", owner->class);
+    dy_check_slot_owner(owner->class);
     D getter = descriptor(d)->getter;
     bool instance = descriptor(d)->kind == 0;
     /* The slot replaced, if any, which the subclasses that inherit it
@@ -452,6 +458,127 @@ void dy_define_slot_done(const DyProgramClass *k) {
         *k->early = DY_EMPTY;
     }
     pthread_mutex_unlock(&early_lock);
+}
+
+/* -------------------------------------------- Slots of native objects */
+
+/* The instance slots define-slot gives a built-in class (chapter 6) that
+ * are those of objects that are not instances -- symbols, characters,
+ * numbers, functions and the rest, which have no storage of their own.
+ * Each slot's getter has a table of them: a <simple-object-vector> of the
+ * count and then each object and its value, placed by the object's
+ * identity (id?).  An object's slot takes its initial value when first
+ * read. */
+
+static pthread_mutex_t native_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/* A hash of X: the same for objects id? to each other */
+static size_t identity_hash(D x) {
+    uint64_t h;
+    if (DY_IS_INT(x)) h = (uint64_t)DY_INT_VALUE(x);
+    else if (DY_IS_POINTER(x) && dy_number_p(x)) {
+        /* Numbers of a value are one object (dy_identical) */
+        double v = dy_float_value(x);
+        memcpy(&h, &v, sizeof h);
+    } else {
+#ifdef DY_MPS
+        h = (uint64_t)DY_INT_VALUE(dy_object_hash(x));
+#else
+        h = (uint64_t)x;
+#endif
+    }
+    return (size_t)((h * 0x9E3779B97F4A7C15u) >> 16);
+}
+
+static intptr_t native_capacity(D table) { return (DY_VECTOR_SIZE(table) - 1) / 2; }
+
+/* The index in TABLE of X's pair, or of the empty one where it would go */
+static intptr_t native_find(D table, D x) {
+    intptr_t capacity = native_capacity(table);
+    D *data = DY_VECTOR_DATA(table);
+    for (intptr_t i = (intptr_t)(identity_hash(x) & (size_t)(capacity - 1));;
+         i = (i + 1) & (capacity - 1)) {
+        D key = data[1 + 2 * i];
+        if (key == DY_UNBOUND || dy_identical(key, x)) return i;
+    }
+}
+
+static D make_native_table(intptr_t capacity) {
+    D table = dy_make_vector((size_t)(1 + 2 * capacity), DY_UNBOUND);
+    DY_VECTOR_DATA(table)[0] = DY_INT(0);
+    return table;
+}
+
+/* *TABLE with X's value VALUE.  NATIVE_LOCK is held. */
+static void native_put(D *table, D x, D value) {
+    if (*table == DY_UNBOUND) *table = make_native_table(8);
+    intptr_t count = DY_INT_VALUE(DY_VECTOR_DATA(*table)[0]);
+    if ((count + 1) * 2 > native_capacity(*table)) {
+        D old = *table;
+        intptr_t capacity = native_capacity(old);
+        D new = make_native_table(capacity * 2);
+        for (intptr_t i = 0; i < capacity; i++) {
+            D key = DY_VECTOR_DATA(old)[1 + 2 * i];
+            if (key == DY_UNBOUND) continue;
+            intptr_t j = native_find(new, key);
+            DY_VECTOR_DATA(new)[1 + 2 * j] = key;
+            DY_VECTOR_DATA(new)[2 + 2 * j] = DY_VECTOR_DATA(old)[2 + 2 * i];
+        }
+        DY_VECTOR_DATA(new)[0] = DY_INT(count);
+        *table = new;
+    }
+    intptr_t i = native_find(*table, x);
+    D *data = DY_VECTOR_DATA(*table);
+    if (data[1 + 2 * i] == DY_UNBOUND) {
+        data[1 + 2 * i] = x;
+        data[0] = DY_INT(count + 1);
+    }
+    data[2 + 2 * i] = value;
+}
+
+/* X's pair in *TABLE: true, with its value in *VALUE, if X has one */
+static bool native_get(D *table, D x, D *value) {
+    pthread_mutex_lock(&native_lock);
+    bool found = false;
+    if (*table != DY_UNBOUND) {
+        intptr_t i = native_find(*table, x);
+        if (DY_VECTOR_DATA(*table)[1 + 2 * i] != DY_UNBOUND) {
+            *value = DY_VECTOR_DATA(*table)[2 + 2 * i];
+            found = true;
+        }
+    }
+    pthread_mutex_unlock(&native_lock);
+    return found;
+}
+
+D dy_native_slot(D *table, D x, D d) {
+    D value;
+    if (native_get(table, x, &value)) return value;
+    DySlotDescriptor *s = descriptor(d);
+    value = s->init_function != DY_UNBOUND ? DY_CALL(s->init_function, 0, 0, 0, 0, 0)
+                                           : s->init_value;
+    if (value != DY_UNBOUND && s->type != DY_UNBOUND) dy_check_type(value, s->type);
+    /* The init-function may have given X the slot already */
+    D had;
+    if (native_get(table, x, &had)) return had;
+    if (value == DY_UNBOUND) return value;
+    pthread_mutex_lock(&native_lock);
+    native_put(table, x, value);
+    pthread_mutex_unlock(&native_lock);
+    return value;
+}
+
+void dy_set_native_slot(D *table, D x, D value) {
+    pthread_mutex_lock(&native_lock);
+    native_put(table, x, value);
+    pthread_mutex_unlock(&native_lock);
+}
+
+bool dy_native_slot_initialized(D *table, D x, D d) {
+    D value;
+    if (native_get(table, x, &value)) return value != DY_UNBOUND;
+    DySlotDescriptor *s = descriptor(d);
+    return s->init_function != DY_UNBOUND || s->init_value != DY_UNBOUND;
 }
 
 /* The slot whose storage D, one of K's slots, initializes: D, or for a

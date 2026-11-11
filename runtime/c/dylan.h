@@ -902,8 +902,19 @@ D dy_combine_slots(const D *supers, intptr_t n, const D *own, intptr_t m);
 D dy_reported_slots(D slots);
 /* The descriptor in SLOTS with GETTER, or #f. */
 D dy_find_slot_descriptor(D slots, D getter);
+/* A define-slot on CLASS runs: an error if it is read-only or sealed. */
+void dy_check_slot_owner(D class);
 /* A define-slot of the slot DESCRIPTOR on the class OWNER runs. */
 void dy_define_class_slot(const DyProgramClass *owner, D descriptor);
+/* The instance slot DESCRIPTOR of X, an object with no storage of its own
+ * (a symbol, a character...), its getter's objects' values in *TABLE: its
+ * value, which it takes now from the slot's initial value if it has none
+ * yet (DY_UNBOUND if there is none). */
+D dy_native_slot(D *table, D x, D descriptor);
+/* X, such an object, takes VALUE as its value of the slot of *TABLE. */
+void dy_set_native_slot(D *table, D x, D value);
+/* For slot-initialized?: has X a value of that slot, or will it have? */
+bool dy_native_slot_initialized(D *table, D x, D descriptor);
 /* A define-slot that gives K's instances a slot can run no more: one
  * fewer is pending, and with none, the early instances are let go. */
 void dy_define_slot_done(const DyProgramClass *k);

@@ -376,9 +376,13 @@ a descriptor of a class INSTANCE is not an instance of is an error."
        (let ((value
                (case allocation
                  ((instance)
-                  (aref (or (singleton-slot-values instance slot-desc)
-                            (instance.data instance))
-                        loc))
+                  (let ((values (or (singleton-slot-values instance slot-desc)
+                                    (and (instance? instance) (instance.data instance)))))
+                    (if values
+                        (aref values loc)
+                        ;; Not an instance: a slot define-slot gave its
+                        ;; built-in class
+                        (cdr (native-slot-cell instance (slot.getter slot-desc) t)))))
                  ((class) (aref (class.class-data (car loc)) (cdr loc)))
                  ((each-subclass)
                   (aref (class.class-data (get-type instance)) loc))
@@ -414,10 +418,12 @@ a descriptor of a class INSTANCE is not an instance of is an error."
            (loc (slot.data-location slot-desc)))
        (case allocation
          ((instance)
-          (setf (aref (or (singleton-slot-values instance slot-desc)
-                          (instance.data instance))
-                      loc)
-                new-value))
+          (let ((values (or (singleton-slot-values instance slot-desc)
+                            (and (instance? instance) (instance.data instance)))))
+            (if values
+                (setf (aref values loc) new-value)
+                (setf (cdr (native-slot-cell instance (slot.getter slot-desc) nil))
+                      new-value))))
          ((class)
           (setf (aref (class.class-data (car loc)) (cdr loc)) new-value))
          ((each-subclass)

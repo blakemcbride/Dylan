@@ -235,7 +235,7 @@ or apply of %make to it."
 (defun known-made-class (a)
   "The class A is, if %make of it makes a direct instance of it."
   (let ((class (known-class a)))
-    (and class (class-gclass class) class)))
+    (and class (defined-gclass class) class)))
 
 ;;; Inference
 

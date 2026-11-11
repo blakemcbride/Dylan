@@ -120,6 +120,14 @@ define-module forms before the first other form, which define it."
                           (copy-list (generic-function-data.methods
                                       (generic-function-data generic-function)))))))
 
+(defvar *library-class-slots*
+  (mapcar (lambda (class)
+            (list class (class.slots class) (copy-seq (class.class-data class))
+                  (class.instance-data-size class)))
+          (cons <object> (class-descendants <object>)))
+  "Each class of the library, with its slots as they are before any
+program: a define-slot on it (chapter 6) changes them.")
+
 (defvar *fast-path-guards*
   (let ((guards '()))
     (maphash (lambda (variable symbols)
@@ -151,6 +159,16 @@ longer, and the library's generic functions lose the methods it added."
                      (generic-function-data.cache data) nil))))
   (loop for (guard . value) in *fast-path-guards*
         do (setf (symbol-value guard) value))
+  ;; The library's classes lose the slots the program gave them, and
+  ;; objects with no storage of their own their values of them
+  (loop for (class slots class-data size) in *library-class-slots*
+        do (unless (eq (class.slots class) slots)
+             (setf (class.slots class) slots
+                   (class.class-data class) (copy-seq class-data)
+                   (class.instance-data-size class) size
+                   (class.required-init-keywords class) nil)))
+  (clrhash *native-slot-values*)
+  (clrhash *extended-float-slot-values*)
   (dolist (name *program-variables*)
     (let ((variable (name->module-variable name)))
       (makunbound variable)

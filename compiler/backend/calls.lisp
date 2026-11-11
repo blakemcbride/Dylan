@@ -671,7 +671,7 @@ maker -- applies to it, that class."
   (when (and (eq (gfun-var g) (dylan-var "make")) args)
     (let* ((class (known-class (first args)))
            (metaclass (find-class-info "<class>" *classes*)))
-      (when (and class (class-gclass class)
+      (when (and class (defined-gclass class)
                  (every (lambda (m)
                           (let ((spec (first (gmethod-specs m))))
                             (cond ((runtime-spec-p spec) nil)

@@ -86,14 +86,16 @@ module: dylan
   (%put stream #\})
   x)
 
-(define-method print-object ((x <number>) stream escape?)
-  (%put stream (%number->string x))
-  x)
 ;;; An instance of a program's subclass of one of the classes whose
-;;; instances the runtime makes itself -- <symbol>, <keyword>,
+;;; instances the runtime makes itself -- <number>, <symbol>, <keyword>,
 ;;; <character>, <class>, <generic-function>, <method>, <singleton> and
 ;;; <slot-descriptor> -- has none of their contents: it prints as any
 ;;; other instance does, unless its class has a method of its own.
+(define-method print-object ((x <number>) stream escape?)
+  (if (%number? x)
+      (%put stream (%number->string x))
+      (next-method))
+  x)
 (define-method print-object ((x <symbol>) stream escape?)
   (if (id? (%object-class x) <symbol>)
       (%put stream (%symbol-name x))

@@ -3348,4 +3348,20 @@ none
 \"ERR: the variable x@y@dylan-user has no value\"
 \"ERR: the variable (setter q@r)@dylan-user has no value\"
 ")
+ ;; An instance of a program's subclass of <number> is not a number the
+ ;; runtime made: it prints as any other instance does, in an error's
+ ;; message too.
+ (number-subclass-instance-printed
+  "(define-class <v2> (<number>))
+(define-class <v3> (<number>))
+(print (make <v2>))
+(print (handler-case (+ 1 (make <v2>)) ((<error> condition: c) (format #f \"~a\" c))))
+(define-method print-object ((x <v3>) s e) (format s \"v3!\") x)
+(print (make <v3>))
+(print (list 1 1/2 2.5 -7))"
+  "{instance of <v2>}
+\"not a number: {instance of <v2>}\"
+v3!
+(1 1/2 2.5 -7)
+")
 )

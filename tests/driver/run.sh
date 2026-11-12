@@ -204,6 +204,13 @@ EOF
 check "bin/dylan file: an unprintable error's status is 1" test "$status" = 1
 check "bin/dylan file: an unprintable error stops the run" sh -c 'grep -q "^2" batch.out && ! grep -q "^3" batch.out'
 check "bin/dylan file: the error printing it causes reported" grep -q "^Dylan error: not a list: 5" batch.err
+# A header in a file with CRLF line ends
+printf 'module: dylan-user\r\nauthor: me \r\n \r\n(define x\r\n  3)\r\n(print x)\r\n' > crlf.dyl
+"$dylan" crlf.dyl > batch.out 2>&1 < /dev/null
+check "bin/dylan file: CRLF header" grep -q "^3" batch.out
+printf 'author: me\r\n\r\n(print 2)\r\n' > crlf2.dyl
+"$dylan" crlf2.dyl > batch.out 2>&1 < /dev/null
+check "bin/dylan file: CRLF header without module:" grep -q "^2" batch.out
 # bin/dylan FILE reads the file as it reads the standard input
 "$dylan" batch.dyl > batch.out 2> batch.err < /dev/null; status=$?
 check "bin/dylan file: an error's status is 1" test "$status" = 1

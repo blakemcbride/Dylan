@@ -477,16 +477,21 @@ cannot be put back, a terminal's or a pipe's, is left alone."
          (every (lambda (c) (or (alphanumericp c) (char= c #\-)))
                 (subseq line 0 colon)))))
 
+;;; What a header line's value and a blank line may have around them: a
+;;; file with CRLF line ends has a return at the end of each line.
+(defparameter *header-blanks* '(#\Space #\Tab #\Return))
+
 (defun read-header-rest (stream first-line)
   "The module the header that begins with FIRST-LINE names (or NIL),
 reading the rest of it from STREAM, through its blank line."
   (let ((module nil))
     (loop for line = first-line then (read-line stream nil "")
-          until (string= (string-trim " 	" line) "")
+          until (string= (string-trim *header-blanks* line) "")
           do (when (header-keyword-line-p line)
                (let ((colon (position #\: line)))
                  (when (string-equal (subseq line 0 colon) "module")
-                   (setf module (string-trim " 	" (subseq line (1+ colon))))))))
+                   (setf module (string-trim *header-blanks*
+                                             (subseq line (1+ colon))))))))
     module))
 
 (defun read-source-header (stream)

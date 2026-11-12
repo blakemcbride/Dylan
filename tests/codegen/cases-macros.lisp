@@ -343,4 +343,12 @@ FreSh
 (print (m))"
   "(1 \"a\" #\\b c d: 2.5 1/2 #t #f () #(1 2))
 ")
+ ;; break in a macro's body, or in define-for-macros, reports its message
+ ;; and carries on, as in a program that runs with no one at a terminal.
+ (break-in-macro-body
+  "(define-for-macros (break \"c ~a\" 2))
+(define-macro m (x) (break \"b\") x)
+(print (m 1))"
+  "1
+")
 )

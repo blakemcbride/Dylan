@@ -535,6 +535,8 @@ value.  An error in it is a compile error, its message beginning with WHAT."
   (handler-case
       (let ((dylan::*current-module* (dylan::compile-time-module))
             (*standard-output* *error-output*)
+            ;; No one is at a debugger: break reports and carries on
+            (dylan::*batch* t)
             (result nil))
         (dylan::compile-expression
          form nil *compile-time-variables*
@@ -589,7 +591,8 @@ value.  An error in it is a compile error, its message beginning with WHAT."
       (compile-error "macro ~a: wrong number of arguments in ~a"
                      (car macro) (dylan-form-string form)))
     (let ((expansion
-            (handler-case (apply (cdr macro) nil dylan::next-method/not-generic (cdr form))
+            (handler-case (let ((dylan::*batch* t))   ; as in COMPILE-TIME-EVAL
+                            (apply (cdr macro) nil dylan::next-method/not-generic (cdr form)))
               (compile-error (e) (error e))
               (error (e)
                 (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))

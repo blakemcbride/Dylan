@@ -596,6 +596,7 @@ Its faults are worded as the compiler to C words them."
   (declare (ignore multiple-values?))   ; No reductions
   (must-have-syntax e 2 "define-class")
   (require-variable-name (car e) "define-class")
+  (check-not-imported (car e) "DEFINE-CLASS")
   (unless (proper-list? (cadr e))
     (syntax-error "define-class" "bad superclass list ~a" (cadr e)))
   (let ((superclasses (cadr e))

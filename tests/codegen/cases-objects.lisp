@@ -3663,6 +3663,16 @@ other-error
 (define-slot <x> <integer> init-value: 1)"
   ""
   :compile-error "<integer> is defined both as a variable and as a generic function")
+ ;; A module may not define a variable it imports (chapter 5): not the
+ ;; library's classes, nor another module's.
+ (define-class-of-library-class
+  "(define-class <list> (<object>))"
+  ""
+  :compile-error "define-class of <list>: the variable is imported from module dylan")
+ (define-class-of-library-condition-class
+  "(define-class <simple-error> (<error>) (my init-value: 1))"
+  ""
+  :compile-error "define-class of <simple-error>: the variable is imported from module dylan")
  ;; An instance with no instance slots is one word; the collector moves
  ;; it and writes a forwarding record of two words or more over it.
  (slotless-instances-moved

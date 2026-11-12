@@ -3472,4 +3472,30 @@ last
 \"ERR: 5 is not an instance of {the class <list>}\"
 (1 2)
 ")
+ ;; An unbounded range converts to no other collection.
+ (as-from-unbounded-range
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define r (range from: 0))
+(for-each ((c (list <vector> <simple-object-vector> <stretchy-vector> <array> <list> <pair>
+                    <string> <byte-string> <unicode-string> <deque> <table>)))
+          ()
+  (print (try (method () (as c r)))))
+(print (list (id? (as <range> r) r) (id? (as <collection> r) r) (id? (as <sequence> r) r)))
+(print (as <vector> (range from: 1 up-to: 4)))
+(print (size (as <table> (range from: 1 up-to: 4))))"
+  "\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+(#t #t #t)
+#(1 2 3)
+3
+")
 )

@@ -129,6 +129,12 @@ module: dylan
   (unless (%size r) (error "concatenate: the range is unbounded"))
   (next-method))
 
+;;; An unbounded range as another collection would have no end.
+(define-method as ((class <class>) (r <range>))
+  (if (or (%size r) (%instance? r class))
+      (next-method)
+      (error "as: the range is unbounded")))
+
 ;;; A collection as a range: its numbers must go up or down by one step.
 (define-method as ((class (singleton <range>)) (c <collection>))
   (if (%instance? c <range>)

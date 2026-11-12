@@ -53,6 +53,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
+    (check-as-bounded collection)
     (if (true? (dylan-call dylan/instance? collection <byte-string>))
         collection
         (let* ((size (collection-size collection))
@@ -77,6 +78,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
+    (check-as-bounded collection)
     (if (unicode-string? collection)
         collection
         ;; Its characters directly, not by way of a <byte-string>, which
@@ -133,6 +135,7 @@ above 255."
   (make-param-list `((class ,(dylan%make-singleton <string>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
+    (check-as-bounded collection)
     (if (true? (dylan-call dylan/instance? collection <string>))
         collection
         (let ((elements (iterate->list #'identity collection)))

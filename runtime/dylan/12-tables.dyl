@@ -110,13 +110,15 @@ module: dylan
 
 ;;; as a table: the collection's keys, each with its element (chapter 11).
 (define-method as ((class (singleton <table>)) (c <collection>))
-  (if (%instance? c <table>)
-      c
-      (bind ((t (make <table>)))
-        (for-each ((key (key-sequence c)))
-                  ()
-          (%library-element-setter t key (%library-element c key %no-default)))
-        t)))
+  (cond ((%instance? c <table>) c)
+        ((and (%instance? c <range>) (not (size c)))
+         (error "as: the range is unbounded"))
+        (else:
+         (bind ((t (make <table>)))
+           (for-each ((key (key-sequence c)))
+                     ()
+             (%library-element-setter t key (%library-element c key %no-default)))
+           t))))
 
 ;;; map-into a table: the keys of the sources, which the table gains if it
 ;;; lacks them (chapter 12).

@@ -144,6 +144,7 @@
       (dylan-call dylan/error
                   "as -- cannot convert a non-collection to a collection"
                   class object (dylan-call dylan/object-class object)))
+    (check-as-bounded object)
     ;; Chapter 11: an object already a deque is returned unchanged.
     (if (subclass? (dylan-call dylan/object-class object) <deque>)
         object

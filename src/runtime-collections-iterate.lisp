@@ -231,6 +231,13 @@ size, element and (setter element)."
 answers #f (an unbounded collection)."
   (false->nil (library-size collection)))
 
+(defun check-as-bounded (collection)
+  "Signal, as a compiled program does, if COLLECTION is an unbounded range:
+as cannot make another collection of it, which would have no end."
+  (when (and (true? (dylan-call dylan/instance? collection <range>))
+             (null (collection-size collection)))
+    (dylan-call dylan/error "as: the range is unbounded")))
+
 ;;
 ;; INITIAL-STATE
 ;;

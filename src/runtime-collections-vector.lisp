@@ -71,6 +71,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
+    (check-as-bounded collection)
     (if (true? (dylan-call dylan/instance? collection <simple-object-vector>))
         collection
         (let* ((size (collection-size collection))
@@ -89,6 +90,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
+    (check-as-bounded collection)
     (if (true? (dylan-call dylan/instance? collection <stretchy-vector>))
         collection
         (let* ((size (collection-size collection))

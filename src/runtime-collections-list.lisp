@@ -72,6 +72,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
+    (check-as-bounded collection)
     (if (true? (dylan-call dylan/instance? collection <list>))
         collection
         (iterate->list #'identity collection)))))
@@ -82,6 +83,7 @@
   (make-param-list `((class ,(dylan%make-singleton <pair>))
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
+    (check-as-bounded collection)
     (cond ((true? (dylan-call dylan/instance? collection <pair>)) collection)
           ;; Chapter 11: the result is of the class, and no <pair> is empty.
           ((true? (dylan-call dylan/empty? collection))

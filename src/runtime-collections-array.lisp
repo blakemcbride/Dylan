@@ -73,6 +73,7 @@
                      (collection ,<collection>)) nil nil nil)
   (lambda (class collection)
     (declare (ignore class))
+    (check-as-bounded collection)
     (if (true? (dylan-call dylan/instance? collection <array>))
         collection
         (let* ((size (collection-size collection))

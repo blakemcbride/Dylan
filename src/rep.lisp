@@ -89,13 +89,28 @@ program reports it."
            (dylan-format-message message irritants))))
     (t (princ-to-string condition))))
 
+(defun batch-error-text (condition)
+  "BATCH-ERROR-MESSAGE of CONDITION; or, if making it signals an error --
+a program's print-object that fails on an object the message names --
+that error's, as a compiled program reports the error its report of an
+error causes.  The handler runs inside the error, so a report that fails
+each time ends as a recursion too deep does."
+  (block report
+    (handler-bind ((stack-exhausted
+                     (lambda (e) (return-from report (princ-to-string e))))
+                   (error
+                     (lambda (e) (return-from report (batch-error-text e)))))
+      (dylan%check-stack)
+      (dylan%check-binding-stack)
+      (batch-error-message condition))))
+
 (defun end-batch-run (condition hook)
   "The debugger when the loop reads a file (*BATCH*): report CONDITION as
 a compiled program reports an unhandled error, and exit with status 1."
   (declare (ignore hook))
   ;; The error may be the standard output's own
   (ignore-errors (finish-output *standard-output*))
-  (format *error-output* "~&Dylan error: ~a~%" (batch-error-message condition))
+  (format *error-output* "~&Dylan error: ~a~%" (batch-error-text condition))
   (finish-output *error-output*)
   #+sbcl (sb-ext:exit :code 1 :abort t)
   #-sbcl (abort))

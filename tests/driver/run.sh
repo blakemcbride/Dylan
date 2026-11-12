@@ -191,6 +191,19 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# An error whose message cannot be printed: the error printing it causes
+# is reported, as in a compiled program
+cat > badprint.dyl <<'EOF'
+(define-class <a> (<object>))
+(define-method print-object ((a <a>) s e) (car 5))
+(print 2)
+(error "bad ~a" (make <a>))
+(print 3)
+EOF
+"$dylan" badprint.dyl > batch.out 2> batch.err < /dev/null; status=$?
+check "bin/dylan file: an unprintable error's status is 1" test "$status" = 1
+check "bin/dylan file: an unprintable error stops the run" sh -c 'grep -q "^2" batch.out && ! grep -q "^3" batch.out'
+check "bin/dylan file: the error printing it causes reported" grep -q "^Dylan error: not a list: 5" batch.err
 # bin/dylan FILE reads the file as it reads the standard input
 "$dylan" batch.dyl > batch.out 2> batch.err < /dev/null; status=$?
 check "bin/dylan file: an error's status is 1" test "$status" = 1

@@ -51,6 +51,20 @@
 
 (defvar rep-module-variables '())
 
+(defparameter *dylan-version*
+  ;; The first line of ../VERSION, read as the system is loaded (and so
+  ;; kept in bin/dylan when make builds it)
+  (let ((line (ignore-errors
+               (with-open-file (in (make-pathname
+                                    :directory (butlast (pathname-directory
+                                                         cl-user::*dylan-directory*))
+                                    :name "VERSION" :type nil :version nil
+                                    :defaults cl-user::*dylan-directory*))
+                 (string-trim '(#\Space #\Tab #\Return) (read-line in))))))
+    (and line (plusp (length line)) line))
+  "The version of this Dylan system, which the read-eval-print loop shows
+when it starts; NIL, and none shown, if there is no VERSION file.")
+
 (defvar rep-eof (list 'eof)
   "What DYLAN-READ returns at the end of the input.")
 
@@ -216,6 +230,8 @@ are written, then throws to LIMITED-OUTPUT."))
 (defun rep ()
   "Start a Dylan read-eval-print loop."
   (terpri)
+  (when *dylan-version*
+    (format t "Dylan version ~a~%" *dylan-version*))
   (write-line "Entering Dylan read-eval-print-loop.")
   (write-line "Leave by typing \"(exit)\"")
   (find-stack)

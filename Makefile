@@ -11,7 +11,7 @@
 #                 files (not its PDF, which is kept in the repository)
 #                 (realclean is the same)
 
-bin/dylan: src/*.lisp
+bin/dylan: src/*.lisp $(wildcard VERSION)
 	sbcl --script src/build-dylan.lisp
 
 BENCH_SCALE ?= 10

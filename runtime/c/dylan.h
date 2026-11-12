@@ -258,6 +258,9 @@ typedef struct DyClass {
                                       classes, or one seal has sealed    */
     int read_only;                 /* make-read-only or seal has made it
                                       read-only: no slot can be added    */
+    const struct DyProgramClass *program;  /* its DyProgramClass, once an
+                                      instance is made while a define-slot
+                                      may still give it a slot; or NULL  */
 } DyClass;
 
 /* ------------------------------------------------------------- Objects */
@@ -932,6 +935,9 @@ void dy_define_slot_done(const DyProgramClass *k);
  * A0... (from index 1) as make does; answer them, as a list. */
 D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
                 D a2, D a3);
+/* COPY, a shallow copy of an instance, is to gain the slots a define-slot
+ * gives its class later, as the instance copied is. */
+void dy_note_copy(D copy);
 
 typedef struct DySingleton {       /* (singleton object)                */
     DyWrapper *wrapper;

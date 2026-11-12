@@ -639,8 +639,21 @@ D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
     }
     if (__atomic_load_n(k->pending, __ATOMIC_RELAXED) > 0) {
         pthread_mutex_lock(&early_lock);
-        if (*k->pending > 0) *k->early = dy_weak_add(*k->early, x);
+        if (*k->pending > 0) {
+            *k->early = dy_weak_add(*k->early, x);
+            /* For a copy of X (dy_note_copy) */
+            DyClass *c = DY_PTR(dy_object_class(x));
+            if (c == DY_PTR(k->class)) c->program = k;
+        }
         pthread_mutex_unlock(&early_lock);
     }
     return keys;
+}
+
+void dy_note_copy(D copy) {
+    const DyProgramClass *k = ((DyClass *)DY_PTR(dy_object_class(copy)))->program;
+    if (!k || __atomic_load_n(k->pending, __ATOMIC_RELAXED) == 0) return;
+    pthread_mutex_lock(&early_lock);
+    if (*k->pending > 0) *k->early = dy_weak_add(*k->early, copy);
+    pthread_mutex_unlock(&early_lock);
 }

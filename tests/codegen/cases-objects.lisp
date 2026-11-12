@@ -3673,6 +3673,19 @@ other-error
   "(define-class <simple-error> (<error>) (my init-value: 1))"
   ""
   :compile-error "define-class of <simple-error>: the variable is imported from module dylan")
+ ;; A shallow copy of an instance made before a define-slot runs gains
+ ;; the slot, as the instance does.
+ (shallow-copy-gains-later-slot
+  "(define-class <a> (<object>) (x init-value: 1))
+(define-class <b> (<a>))
+(define i (make <a>))
+(define j (shallow-copy i))
+(define k (shallow-copy (make <b>)))
+(define kk (shallow-copy k))
+(define-slot <a> w init-value: 'w)
+(print (list (w i) (w j) (w k) (w kk) (x j)))"
+  "(w w w w 1)
+")
  ;; A define-slot whose accessor cannot take its method changes nothing.
  (define-slot-refused-leaves-class
   "(define-method try (f)

@@ -755,6 +755,7 @@ PRIMITIVE(shallow_copy) {
     case DY_KIND_INSTANCE: {
         DyInstance *copy = dy_alloc(w, DY_INSTANCE_BYTES(w->size));
         memcpy(copy, DY_PTR(a0), sizeof(DyInstance) + w->size * sizeof(D));
+        dy_note_copy(DY_OBJ(copy));
         return DY_OBJ(copy);
     }
     default: cannot_copy(a0);

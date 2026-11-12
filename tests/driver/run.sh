@@ -75,6 +75,9 @@ check "run" output_is "$expected" ./greet
 check "no C left" test ! -e greet.c -a ! -e greet.h -a ! -e greet-dylan.c
 check "-o" "$dylanc" -o hello greet.dyl main.dyl
 check "-o runs" output_is "$expected" ./hello
+# Its header is dylan.h, which the C must not take for the runtime's
+check "-o dylan" "$dylanc" -k -o dylan greet.dyl main.dyl
+check "-o dylan runs" output_is "$expected" ./dylan
 check "-k" "$dylanc" -k -o kept greet.dyl main.dyl
 check "-k keeps the C" test -f kept.c -a -f kept.h -a -f kept-dylan.c -a -f kept-dylan-user.c
 check "#line to the source" grep -q '#line 1 ".*greet.dyl"' kept-dylan-user.c

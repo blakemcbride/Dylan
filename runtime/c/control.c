@@ -100,6 +100,7 @@ static D exit_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 }
 
 D dy_call_with_exit(D body) {
+    DY_CHECK_STACK();
     DyFrame f;
     push_frame(&f, DY_FRAME_EXIT);
     D exit = dy_make_closure(exit_entry, 2);
@@ -118,6 +119,7 @@ D dy_call_with_exit(D body) {
 }
 
 D dy_unwind_protect(D protected, D cleanup) {
+    DY_CHECK_STACK();
     DyFrame f;
     f.a = cleanup;
     push_frame(&f, DY_FRAME_CLEANUP);
@@ -129,6 +131,7 @@ D dy_unwind_protect(D protected, D cleanup) {
 }
 
 D dy_handler_bind(D type, D function, D test, D description, D thunk) {
+    DY_CHECK_STACK();
     /* Chapter 13: evaluated before the forms are, and checked then, so
      * that no search for a handler meets a bad one */
     if (!dy_kind_p(type, DY_KIND_CLASS) && !dy_kind_p(type, DY_KIND_SINGLETON))
@@ -211,6 +214,7 @@ static DyFunction always_true = { &dy_wrapper_method, always_true_entry, DY_FALS
 /* (do-handlers funarg): funarg on each active handler's type, test,
  * function and description, the most recent first. */
 PRIMITIVE(do_handlers) {
+    DY_CHECK_STACK();
     need(self, argc, 1, 1);
     for (DyFrame *f = dy_thread->frames; f; f = f->prev)
         if (f->kind == DY_FRAME_HANDLER)

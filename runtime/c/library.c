@@ -932,6 +932,7 @@ static bool native_slot_p(D instance, DySlotDescriptor *sd) {
 }
 
 PRIMITIVE(slot_value) {
+    DY_CHECK_STACK();
     need(self, argc, 2, 2);
     DySlotDescriptor *sd = as_descriptor(a1);
     if (native_slot_p(a0, sd)) {

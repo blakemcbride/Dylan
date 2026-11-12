@@ -2417,6 +2417,8 @@ by code that the compiler has found does not let it escape."
                                         append (mapcar (lambda (key) (cons key flag)) keys)))
                           any any-flags)
       (emit-object "D ~a(D x, D self, D a0, D a1, D a2, D a3, intptr_t argc) {" filler)
+      ;; Init functions and initialize may make another instance
+      (emit-object "    DY_CHECK_STACK();")
       (let ((readies (loop for c in (class-info-cpl info)
                            for cg = (defined-gclass c)
                            when cg collect (gclass-ready-c cg))))
@@ -2430,6 +2432,7 @@ by code that the compiler has found does not let it escape."
       (return-from emit-maker))
     (emit-object "D ~a(D x, D self, D a0, D a1, D a2, D a3, intptr_t argc) {" filler)
     (emit-object "    (void)self;")
+    (emit-object "    DY_CHECK_STACK();")
     ;; As the interpreter makes an instance: the required init-keywords
     ;; first, then each slot in the order slot-descriptors answers them,
     ;; then the keywords nothing takes.

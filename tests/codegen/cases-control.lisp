@@ -628,6 +628,20 @@ ok
 inner
 after
 ")
+ ;; The same, when each round goes through the runtime: an init-function
+ ;; that makes an instance of its class, and do-handlers calling itself.
+ (stack-exhausted-through-the-runtime
+  "(define-class <c> (<object>) (s init-function: (method () (make <c>))))
+(print (handler-case (make <c>) ((<error> condition: c) (format #f \"caught: ~a\" c))))
+(define-class <e> (<object>))
+(define-slot <e> s2 init-function: (method () (make <e>)))
+(print (handler-case (make <e>) ((<error> condition: c) (format #f \"caught: ~a\" c))))
+(define f (method (#rest r) (do-handlers f)))
+(handler-bind (<error> (method (c n) 1)) (f))"
+  "\"caught: the stack is exhausted\"
+\"caught: the stack is exhausted\"
+"
+  :error "a handler returned from error: the stack is exhausted")
  ;; A condition's message prints its arguments through print-object, ~a as
  ;; display and ~s as write, and a condition prints through its class's
  ;; print-object, or as its class if it has no message.

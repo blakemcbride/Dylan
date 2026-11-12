@@ -263,6 +263,7 @@ D dy_find_keyword(D pairs, D keyword) {
 }
 
 D dy_call_list(D f, D first, D list) {
+    DY_CHECK_STACK();
     intptr_t n = 1;
     for (D l = list; l != DY_EMPTY; l = dy_tail(l)) n++;
     dy_reserve_arguments(n);
@@ -373,6 +374,7 @@ static pthread_mutex_t early_lock = PTHREAD_MUTEX_INITIALIZER;
 /* Give each instance of K made early, and alive, the initial value of the
  * slot D */
 static void initialize_early(const DyProgramClass *k, D d) {
+    DY_CHECK_STACK();
     pthread_mutex_lock(&early_lock);
     D early = dy_weak_members(*k->early);
     pthread_mutex_unlock(&early_lock);
@@ -552,6 +554,7 @@ static bool native_get(D *table, D x, D *value) {
 }
 
 D dy_native_slot(D *table, D x, D d) {
+    DY_CHECK_STACK();
     D value;
     if (native_get(table, x, &value)) return value;
     DySlotDescriptor *s = descriptor(d);
@@ -595,6 +598,7 @@ static DySlotDescriptor *storage_of(const DyProgramClass *k, D d) {
  * then each slot in order, then the keywords nothing takes */
 D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
                 D a2, D a3) {
+    DY_CHECK_STACK();
     D slots = *k->slots;
     intptr_t n = DY_VECTOR_SIZE(slots);
     dy_check_keywords(self, argc, 1, a0, a1, a2, a3, NULL, 0);

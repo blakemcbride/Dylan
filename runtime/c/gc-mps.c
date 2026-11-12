@@ -116,7 +116,7 @@ FORMAT_FUNCTION size_t object_size(mps_addr_t base) {
     DyWrapper *w = ((DyHeader *)base)->wrapper;
     switch (w->kind) {
     case DY_KIND_INSTANCE:
-        return DY_ALIGN(sizeof(DyInstance) + w->size * sizeof(D));
+        return DY_ALIGN(DY_INSTANCE_BYTES(w->size));
     case DY_KIND_PAIR: return DY_ALIGN(sizeof(DyPair));
     case DY_KIND_RATIO: return DY_ALIGN(sizeof(DyRatio));
     case DY_KIND_SINGLE_FLOAT: return DY_ALIGN(sizeof(DySingleFloat));

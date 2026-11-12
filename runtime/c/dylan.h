@@ -235,6 +235,11 @@ typedef struct DyInstance {
     D slots[];
 } DyInstance;
 
+/* The bytes of an instance in the heap with N slots.  An instance with
+ * none still takes two words: a moving collector writes a forwarding
+ * record of at least two words over an object it moves. */
+#define DY_INSTANCE_BYTES(n) (sizeof(DyInstance) + ((n) ? (size_t)(n) : 1) * sizeof(D))
+
 typedef struct DyClass {
     DyWrapper *wrapper;            /* <class>'s                          */
     DyWrapper *instance_wrapper;   /* the wrapper of its instances       */

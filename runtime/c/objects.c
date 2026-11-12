@@ -251,7 +251,7 @@ D dy_capture_next(D next, intptr_t argc, D a0, D a1, D a2, D a3) {
 /* ---------------------------------------------------------- Instances */
 
 D dy_make_instance(DyWrapper *wrapper) {
-    DyInstance *x = dy_alloc(wrapper, sizeof(DyInstance) + wrapper->size * sizeof(D));
+    DyInstance *x = dy_alloc(wrapper, DY_INSTANCE_BYTES(wrapper->size));
     for (uint32_t i = 0; i < wrapper->size; i++) x->slots[i] = DY_UNBOUND;
     return DY_OBJ(x);
 }

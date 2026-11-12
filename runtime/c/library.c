@@ -753,9 +753,8 @@ PRIMITIVE(shallow_copy) {
         return copy;
     }
     case DY_KIND_INSTANCE: {
-        size_t bytes = sizeof(DyInstance) + w->size * sizeof(D);
-        DyInstance *copy = dy_alloc(w, bytes);
-        memcpy(copy, DY_PTR(a0), bytes);
+        DyInstance *copy = dy_alloc(w, DY_INSTANCE_BYTES(w->size));
+        memcpy(copy, DY_PTR(a0), sizeof(DyInstance) + w->size * sizeof(D));
         return DY_OBJ(copy);
     }
     default: cannot_copy(a0);

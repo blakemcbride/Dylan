@@ -3644,4 +3644,20 @@ other-error
   "(define-slot (singleton 1) z allocation: class)"
   ""
   :compile-error "slot z: the slot of a singleton must be instance, constant or virtual")
+ ;; An instance with no instance slots is one word; the collector moves
+ ;; it and writes a forwarding record of two words or more over it.
+ (slotless-instances-moved
+  "(define-class <e> (<object>))
+(define-class <v> (<object>) (k allocation: class init-value: 1))
+(define keep '())
+(dotimes (i 200000)
+  (make <vector> size: 100)
+  (set! keep (cons (make <e>) keep))
+  (set! keep (cons (shallow-copy (make <v>)) keep))
+  (set! keep (cons (list i) keep)))
+(print (size keep))
+(print (list (object-class (first (cdr keep))) (k (second keep))))"
+  "600000
+({the class <v>} 1)
+")
 )

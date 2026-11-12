@@ -173,7 +173,17 @@ module: dylan
                          (else: (walk (cdr l))))))
     (walk l)))
 
-(define-method add ((l <list>) new-element) (cons new-element l))
+;;; Chapter 12: add's result shares no structure with the list.
+(define-method add ((l <list>) new-element)
+  (bind ((head (cons new-element '())))
+    (bind-methods ((copy (last l)
+                     (if (%pair? l)
+                         (bind ((next (cons (car l) '())))
+                           (%set-cdr! last next)
+                           (copy next (cdr l)))
+                         (%set-cdr! last l))))
+      (copy head l))
+    head))
 (define-method add! ((l <list>) new-element) (cons new-element l))
 
 (define-method remove! ((l <list>) value #key (test id?) count)

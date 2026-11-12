@@ -3427,4 +3427,25 @@ v3!
 (2 3)
 last
 ")
+ ;; Chapter 12: add's result shares no structure with the list; add-new
+ ;; answers the list itself when the element is there.
+ (add-to-list-copies
+  "(define l (list 3 4 5))
+(define r (add l 1))
+(print r)
+(print (id? (cdr r) l))
+(print (id? (cdr (add-new l 9)) l))
+(print (id? (add-new l 4) l))
+(print (add '() 1))
+(print (add (cons 1 2) 0))
+(set! (second r) 'x)
+(print l)"
+  "(1 3 4 5)
+#f
+#f
+#t
+(1)
+(0 1 . 2)
+(3 4 5)
+")
 )

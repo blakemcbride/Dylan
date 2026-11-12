@@ -183,7 +183,9 @@
  dylan/add
  (dylan%function->method one-list-and-an-object
                          (lambda (the-list new-element)
-                           (cons new-element the-list))))
+                           ;; Chapter 12: the result shares no structure
+                           ;; with the list.
+                           (cons new-element (copy-list the-list)))))
 
 (add-method
  dylan/add!

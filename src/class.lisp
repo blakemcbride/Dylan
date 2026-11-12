@@ -999,7 +999,9 @@ that holds it; or NIL."
           ((not (class? owner))
            (dylan-call dylan/error
                        "remove-slot -- owner not a singleton or class" owner))
-          ((class.read-only? owner)
+          ;; A sealed class, a built-in one sealed from the start
+          ;; included, is read-only too (as for add-slot).
+          ((or (class.read-only? owner) (class.sealed? owner))
            (dylan-call dylan/error "remove-slot -- class is read-only" owner))
           (t
            (let ((slot (same-slot-getter-in-slot-vector->slot
@@ -1219,7 +1221,9 @@ superclasses."
   (let ((supers (dylan-call dylan/as <list> new-superclasses)))
     (cond ((not (class? class))
            (dylan-call dylan/error "not a class: ~s" class))
-          ((class.read-only? class)
+          ;; A sealed class, a built-in one sealed from the start
+          ;; included, is read-only too (as for add-slot).
+          ((or (class.read-only? class) (class.sealed? class))
            (dylan-call dylan/error
                        "(setter direct-superclasses) -- class is read-only"
                        class))

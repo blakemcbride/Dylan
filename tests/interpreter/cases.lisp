@@ -68,4 +68,25 @@
 ({the class <c>})
 (3 2 \"something\" #f #t)
 ")
+ ;; A sealed class is read-only (chapter 11), the built-in classes sealed
+ ;; from the start included: its superclasses and slots cannot be changed.
+ (sealed-class-not-remade
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>))
+(print (try (method () (set! (direct-superclasses <integer>) (list <a>)))))
+(print (instance? 5 <number>))
+(print (try (method () (set! (direct-superclasses <pair>) (list <object>)))))
+(define-class <e> (<object>) (s init-value: 1))
+(define sd (aref (slot-descriptors <e>) 0))
+(seal <e>)
+(print (try (method () (remove-slot <e> sd))))
+(print (try (method () (set! (direct-superclasses <e>) (list <a>)))))
+(print (s (make <e>)))"
+  "\"ERR: (setter direct-superclasses) -- class is read-only {the class <integer>}\"
+#t
+\"ERR: (setter direct-superclasses) -- class is read-only {the class <pair>}\"
+\"ERR: remove-slot -- class is read-only {the class <e>}\"
+\"ERR: (setter direct-superclasses) -- class is read-only {the class <e>}\"
+1
+")
 )

@@ -149,6 +149,15 @@ ALLOWED and given at most once."
 
 (defun all-p (x) (and (symbolp x) (string-equal (symbol-name x) "ALL")))
 
+(defun option-list (value)
+  "VALUE, the list a use clause's option gives, if it is a proper list;
+otherwise the error the interactive implementation gives, which names
+what ends it."
+  (loop for tail = value then (cdr tail)
+        while (consp tail)
+        finally (when tail (compile-error "not a list: ~a" tail)))
+  value)
+
 (defun process-use-clause (module clause)
   "Import into MODULE what the use CLAUSE says; answer the names it
 exports again."
@@ -161,9 +170,9 @@ exports again."
              (exports (module-exports used))
              (import (if (assoc :import alist) (cdr (assoc :import alist)) 'all))
              (import-all (all-p import))
-             (exclude (cdr (assoc :exclude alist)))
+             (exclude (option-list (cdr (assoc :exclude alist))))
              (prefix (if (assoc :prefix alist) (cdr (assoc :prefix alist)) ""))
-             (renames (mapcar #'rename-pair (cdr (assoc :rename alist))))
+             (renames (mapcar #'rename-pair (option-list (cdr (assoc :rename alist)))))
              (export (cdr (assoc :export alist)))
              (pairs '()))               ; (old . new)
         (when (eq used module)
@@ -189,7 +198,7 @@ exports again."
               (dolist (old exports)
                 (unless (or (member old exclude) (assoc old renames))
                   (add old (prefixed old))))
-              (dolist (spec import)
+              (dolist (spec (option-list import))
                 (cond ((module-name-p spec)
                        (unless (assoc spec renames)
                          (add spec (prefixed spec))))
@@ -211,7 +220,7 @@ exports again."
           (cond ((null export) '())
                 ((all-p export) imported)
                 ((listp export)
-                 (dolist (name export)
+                 (dolist (name (option-list export))
                    (unless (member name imported)
                      (compile-error "define-module: export: of ~a, which is not imported"
                                     name)))

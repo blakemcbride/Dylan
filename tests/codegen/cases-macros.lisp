@@ -287,6 +287,23 @@ FreSh
   "(define-module m5 (frob))"
   ""
   :compile-error "define-module: unknown clause (frob)")
+ ;; A use clause's option lists must be lists, and proper
+ (define-module-rename-not-a-list
+  "(define-module m5 (use dylan rename: x))"
+  ""
+  :compile-error "not a list: x")
+ (define-module-import-improper
+  "(define-module m5 (use dylan import: (car . cdr)))"
+  ""
+  :compile-error "not a list: cdr")
+ (define-module-exclude-not-a-list
+  "(define-module m5 (use dylan exclude: 5))"
+  ""
+  :compile-error "not a list: 5")
+ (define-module-export-improper
+  "(define-module m5 (use dylan import: (car) export: (car . x)))"
+  ""
+  :compile-error "not a list: x")
  (define-module-unknown-module
   "(define-module m5 (use nosuch))"
   ""

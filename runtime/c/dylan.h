@@ -1042,8 +1042,17 @@ extern _Thread_local char *dy_stack_guard;
 _Noreturn void dy_stack_exhausted(void);
 /* The stack pointer, read from its register where that can be done:
  * taking a frame's address would cost the function its frame pointer
- * register. */
-#if defined(__GNUC__) && defined(__x86_64__)
+ * register.  The C compiler's builtin first: around an asm statement GCC
+ * writes the C file's name into the assembly unescaped, which a " in the
+ * name, as a program's may have, makes the assembler misread. */
+#ifdef __has_builtin
+#if __has_builtin(__builtin_stack_address)
+#define DY_HAVE_STACK_ADDRESS
+#endif
+#endif
+#ifdef DY_HAVE_STACK_ADDRESS
+#define DY_STACK_POINTER(sp) ((sp) = (char *)__builtin_stack_address())
+#elif defined(__GNUC__) && defined(__x86_64__)
 #define DY_STACK_POINTER(sp) __asm__("movq %%rsp, %0" : "=r"(sp))
 #elif defined(__GNUC__) && defined(__aarch64__)
 #define DY_STACK_POINTER(sp) __asm__("mov %0, sp" : "=r"(sp))

@@ -20,7 +20,8 @@
 (in-package #:dylan-compiler)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (require :sb-md5))
+  (require :sb-md5)
+  (require :sb-posix))
 
 (defparameter *runtime-directory*
   (merge-pathnames "../runtime/" cl-user::*dylanc-directory*))
@@ -216,6 +217,11 @@ is compiled once (LIBRARY-OBJECT)."
 (defparameter *library-cache-size* 40
   "How many objects of the library's C are kept: the newest.")
 
+(defparameter *library-cache-grace* 600
+  "How many seconds an object of the library's C, or a C file of the
+cache's, is kept after it was last written or used, whatever the size of
+the cache: a build linking one runs in that time.")
+
 (defun library-c-file-p (file main)
   "Is FILE the library's C file, of the program whose C file is MAIN?"
   (equal (pathname-name (native-pathname file))
@@ -263,7 +269,9 @@ compile."
                                   :external-format :latin-1)
                                  'list)))
          (object (merge-pathnames (format nil "~a.o" digest) *library-cache-directory*)))
-    (if (probe-file object)
+    ;; An object used is marked used now, so that no build running at the
+    ;; same time prunes it before this one links it
+    (if (touch-file object)
         object
         ;; The C and the object are written under names of this process's
         ;; own and renamed whole, the C first, so that a build running at
@@ -288,10 +296,29 @@ compile."
                    (ignore-errors (delete-file temporary))
                    nil))))))
 
+(defun touch-file (file)
+  "Give FILE, if it exists, the time now as its write date; true if it
+does."
+  (let ((now (sb-ext:get-time-of-day)))
+    (ignore-errors (sb-posix:utimes (native-name file) now now) t)))
+
 (defun prune-library-cache ()
-  "Keep the newest *LIBRARY-CACHE-SIZE* objects in the cache, and their C."
+  "Keep the newest *LIBRARY-CACHE-SIZE* objects in the cache, and their C,
+and any written or used in the last *LIBRARY-CACHE-GRACE* seconds; and
+delete the C left without an object (by a build killed while it
+compiled) after a day."
   (let ((objects (sort (directory (merge-pathnames "*.o" *library-cache-directory*))
                        #'> :key #'file-write-date)))
-    (dolist (old (nthcdr *library-cache-size* objects))
-      (ignore-errors (delete-file old))
-      (ignore-errors (delete-file (make-pathname :type "c" :defaults old))))))
+    (flet ((stale-p (file seconds)
+             ;; Its date read again: another build may have used it since
+             (let ((date (ignore-errors (file-write-date file))))
+               (and date (< date (- (get-universal-time) seconds))))))
+      (dolist (old (nthcdr *library-cache-size* objects))
+        (when (stale-p old *library-cache-grace*)
+          (ignore-errors (delete-file old))
+          (ignore-errors (delete-file (make-pathname :type "c" :defaults old)))))
+      (dolist (c (directory (merge-pathnames "*.c" *library-cache-directory*)))
+        ;; A day: a build may be compiling it still
+        (when (and (not (probe-file (make-pathname :type "o" :defaults c)))
+                   (stale-p c (* 24 3600)))
+          (ignore-errors (delete-file c)))))))

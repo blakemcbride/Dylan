@@ -324,4 +324,23 @@ FreSh
   "(define-module m5 (use dylan rename: ((car => kar))) (use dylan rename: ((cdr => kar))))"
   ""
   :compile-error "define-module: two variables named kar in m5")
+ ;; A macro's expansion may quote only what a compiled program can have
+ ;; as a constant: not an object the macro made, as a table or a function.
+ (macro-quotes-an-object
+  "(define-macro m () (list 'quote (list 1 (make <table>))))
+(print (m))"
+  ""
+  :compile-error "a compiled program cannot have {table} as a constant"
+  :compiler-only t)
+ (macro-quotes-a-function
+  "(define-macro m () (list 'quote (vector print)))
+(print (m))"
+  ""
+  :compile-error "a compiled program cannot have {the generic function print} as a constant"
+  :compiler-only t)
+ (macro-quotes-constants
+  "(define-macro m () (list 'quote (list 1 \"a\" #\\b 'c d: 2.5 1/2 #t #f '() (vector 1 2))))
+(print (m))"
+  "(1 \"a\" #\\b c d: 2.5 1/2 #t #f () #(1 2))
+")
 )

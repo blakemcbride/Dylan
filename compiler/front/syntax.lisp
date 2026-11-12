@@ -80,7 +80,8 @@ the program can make one (MAKES-EXTENDED-FLOATS-P).")
 
 (defun check-literal (x)
   "Signal an error if X, a literal or quoted datum, holds a number this
-version cannot represent."
+version cannot represent, or an object a compiled program cannot have as
+a constant: one a macro made, such as a table or a function."
   (let ((seen (make-hash-table :test #'eq)))
     (labels ((walk (x)
                (cond ((integerp x) (check-integer-literal x))
@@ -97,7 +98,11 @@ version cannot represent."
                       (walk (car x)) (walk (cdr x)))
                      ((and (vectorp x) (not (stringp x)))
                       (setf (gethash x seen) t)
-                      (map nil #'walk x)))))
+                      (map nil #'walk x))
+                     ((not (or (numberp x) (characterp x) (stringp x) (symbolp x)
+                               (false-p x)))
+                      (compile-error "a compiled program cannot have ~a as a constant"
+                                     (dylan-form-string x))))))
       (walk x))))
 
 (defun self-evaluating-p (x)

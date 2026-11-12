@@ -193,6 +193,11 @@ are written, then throws to LIMITED-OUTPUT."))
       "Return to the read-eval-print loop."
       thunk))))
 
+(defun discard-rest-of-line (stream)
+  "Read what is left of the line STREAM is in, as far as it has come."
+  (loop for c = (read-char-no-hang stream nil nil)
+        until (or (null c) (eql c #\Newline))))
+
 (defun rep ()
   "Start a Dylan read-eval-print loop."
   (terpri)
@@ -205,7 +210,13 @@ are written, then throws to LIMITED-OUTPUT."))
        (terpri)
        (write-string "? ")
        (finish-output)
-       (let ((input (dylan-read *standard-input* nil rep-eof)))
+       (let ((input (handler-bind
+                        ((error (lambda (c)
+                                  (declare (ignore c))
+                                  ;; At a terminal, what is left of the line
+                                  ;; is not read as the next form.
+                                  (unless *batch* (discard-rest-of-line *standard-input*)))))
+                      (dylan-read *standard-input* nil rep-eof))))
          (terpri)
          (cond
            ((or (eq input rep-eof) (rep-done-p input)) (return '|DYLAN:DONE|))

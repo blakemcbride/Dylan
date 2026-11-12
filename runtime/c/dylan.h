@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 23
+#define DY_ABI_VERSION 24
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -256,6 +256,8 @@ typedef struct DyClass {
                                    /* make for the class, or NULL        */
     int sealed;                    /* sealed: one of the manual's sealed
                                       classes, or one seal has sealed    */
+    const int *ready;              /* nonzero once its define-class has
+                                      run, or NULL for a built-in class  */
     int read_only;                 /* make-read-only or seal has made it
                                       read-only: no slot can be added    */
     const struct DyProgramClass *program;  /* its DyProgramClass, once an

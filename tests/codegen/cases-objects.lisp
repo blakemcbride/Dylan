@@ -3686,6 +3686,27 @@ other-error
 (print (list (w i) (w j) (w k) (w kk) (x j)))"
   "(w w w w 1)
 ")
+ ;; direct-subclasses names the subclasses whose define-class has run
+ ;; and finished: not one still to run, never run, or failed.
+ (direct-subclasses-defined-so-far
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-generic-function ro1 (x))
+(make-read-only ro1)
+(define-class <g> (<object>) (y init-value: 1))
+(print (direct-subclasses <g>))
+(define-method never () (define-class <never> (<g>)))
+(print (try (method () (define-class <bad> (<g>) (ok init-value: 1) (ro1 init-value: 2)) 'done)))
+(define-class <h> (<g>))
+(print (direct-subclasses <g>))
+(print (size (direct-subclasses <error>)))
+(define-class <z> (<error>))
+(print (size (direct-subclasses <error>)))"
+  "()
+\"ERR: the generic function is read-only: {the generic function ro1}\"
+({the class <h>})
+3
+4
+")
  ;; A define-slot whose accessor cannot take its method changes nothing.
  (define-slot-refused-leaves-class
   "(define-method try (f)

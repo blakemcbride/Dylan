@@ -180,9 +180,16 @@ PRIMITIVE(direct_superclasses) {
     return c->sealed ? DY_EMPTY : list_of_vector(c->direct_superclasses);
 }
 
+/* The subclasses whose define-class has run, and finished */
 PRIMITIVE(direct_subclasses) {
     need(self, argc, 1, 1);
-    return list_of_vector(as_class(a0)->direct_subclasses);
+    DyVector *v = DY_PTR(as_class(a0)->direct_subclasses);
+    D result = DY_EMPTY;
+    for (intptr_t i = DY_INT_VALUE(v->size); i-- > 0; ) {
+        DyClass *c = DY_PTR(v->data[i]);
+        if (!c->ready || *c->ready) result = dy_pair(v->data[i], result);
+    }
+    return result;
 }
 
 /* Making instances, and the operations the static program makes no-ops */

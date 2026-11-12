@@ -119,7 +119,7 @@ hand, a branch of an if that tested it (types.lisp).")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 23 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 24 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -1478,7 +1478,12 @@ each of its Dylan functions -> the name of the module it was written in."
                                           (fn-info-c (cfun-fn cfun)))))))
         (finish-object-system)
         (emit-program-data *classes* *cdata* stream :prelude (reverse *object-decls*)
-                           :thread-variable-count (hash-table-count *thread-variables*))
+                           :thread-variable-count (hash-table-count *thread-variables*)
+                           :ready (let ((ready (make-hash-table :test 'eq)))
+                                    (loop for g being the hash-values of *gclasses*
+                                          do (setf (gethash (gclass-info g) ready)
+                                                   (gclass-ready-c g)))
+                                    ready))
         (format stream "~%/* Program */~%~%")
         (format stream "_Static_assert(DY_ABI_VERSION == ~d, \"dylan.h is not the runtime this compiler generates C for\");~%~%"
                 +abi-version+)

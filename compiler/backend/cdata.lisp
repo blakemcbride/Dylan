@@ -268,11 +268,13 @@ there; equal ones of the compiler's own are one object."
               (logior (aref bytes (floor id 8)) (ash 1 (mod id 8))))))
     (coerce bytes 'list)))
 
-(defun emit-program-data (classes data stream &key prelude (thread-variable-count 0))
+(defun emit-program-data (classes data stream &key prelude (thread-variable-count 0)
+                                                   (ready (make-hash-table)))
   "Write to STREAM the C file defining CLASSES (prepared by
 PREPARE-CLASSES) and every constant DATA holds.  PRELUDE is a list of C
 declarations to put before the data, which may refer to what they
-declare."
+declare.  READY maps each class a define-class defines to the C name of
+the flag its define-class sets when it has run."
   (let ((count (length classes))
         (class-text '()))
     ;; Every symbol and keyword the program spells, a variable's name too,
@@ -299,7 +301,7 @@ declare."
                                         (class-info-cpl c)))))
         (push (format nil "static const uint8_t dy_ancestors_~a[] = { ~{~d~^, ~} };~%~
                            ~a~
-                           DyClass ~a = { &dy_wrapper_class, &~a, ~a, ~a, ~a, ~a, ~a, ~d };~%~
+                           DyClass ~a = { &dy_wrapper_class, &~a, ~a, ~a, ~a, ~a, ~a, ~d, ~a };~%~
                            DyWrapper ~a = { DY_OBJ(&~a), ~d, ~d, ~d, DY_KIND_~a, ~a, dy_ancestors_~a, ~a };"
                       (class-info-c-name c) (ancestor-bytes c count)
                       (if (class-info-slot-offsets c)
@@ -316,6 +318,9 @@ declare."
                       ;; (chapter 11: all-superclasses and the rest answer
                       ;; an empty sequence)
                       (if (class-info-sealed-p c) 1 0)
+                      ;; Its define-class has run (direct-subclasses)
+                      (let ((flag (gethash c ready)))
+                        (if flag (format nil "&~a" flag) "NULL"))
                       (wrapper-c-name c) (class-c-name c)
                       (class-info-id c) (class-info-subtree-end c) (class-info-size c)
                       (substitute #\_ #\- (string-upcase (class-info-kind c)))

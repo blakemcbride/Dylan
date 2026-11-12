@@ -311,7 +311,8 @@ module: dylan
 
 ;;; Searching: the index of the COUNTth place PATTERN occurs in BIG.  BIG
 ;;; is read as the search goes, keeping only the elements a match at INDEX
-;;; may need, so that an unbounded sequence is searched too (chapter 12).
+;;; may need, so that an unbounded sequence is searched too (chapter 12);
+;;; PATTERN is read as far as BIG goes, so that it may be unbounded too.
 
 (define-generic-function subsequence-position (big pattern #key test count))
 (define-method subsequence-position ((big <sequence>) (pattern <sequence>)
@@ -319,16 +320,31 @@ module: dylan
   ;; The countth place, counting from 1: there is none before the first.
   (unless (%instance? count <integer>)
     (error "subsequence-position: count: must be an integer: ~s" count))
-  (bind ((p (%elements pattern))
-         (m (size p))
+  (bind (;; The elements of PATTERN read so far, M of them, the last in
+         ;; the pair PTAIL; PSTATE is #f once they are all read
+         (p '())
+         (ptail #f)
+         (m 0)
+         (pstate (initial-state pattern))
          (state (initial-state big))
          ;; The elements of BIG read from INDEX on, HAVE of them, the last
          ;; in the pair TAIL
          (window '())
          (tail #f)
          (have 0))
-    (bind-methods ((fill ()
-                     (when (and state (binary< have m))
+    (bind-methods ((longer? ()
+                     ;; Has PATTERN more than HAVE elements?
+                     (cond ((binary< have m) #t)
+                           (pstate
+                            (bind ((cell (list (current-element pattern pstate))))
+                              (if (id? p '()) (set! p cell) (%set-cdr! ptail cell))
+                              (set! ptail cell)
+                              (set! m (binary+ m 1))
+                              (set! pstate (next-state pattern pstate))
+                              #t))
+                           (else: #f)))
+                   (fill ()
+                     (when (and state (longer?))
                        (bind ((cell (list (current-element big state))))
                          (if (id? window '()) (set! window cell) (%set-cdr! tail cell))
                          (set! tail cell)
@@ -341,7 +357,7 @@ module: dylan
                            (else: #f)))
                    (search (index left)
                      (fill)
-                     (cond ((binary< have m) #f)
+                     (cond ((longer?) #f)
                            ((matches? window p)
                             (if (= left 1) index (advance index (binary- left 1))))
                            (else: (advance index left))))

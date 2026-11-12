@@ -3388,4 +3388,26 @@ v3!
 #()
 #(10 20 30)
 ")
+ ;; subsequence-position reads its pattern as far as the sequence goes:
+ ;; an unbounded pattern is not in a bounded sequence.
+ (subsequence-position-unbounded-pattern
+  "(print (subsequence-position '(1 2) (range from: 0)))
+(print (subsequence-position \"ab\" (range from: 0)))
+(print (subsequence-position #(1 2) (range from: 0)))
+(print (subsequence-position '() (range from: 0)))
+(print (subsequence-position (range from: 0) '(5 6 7)))
+(print (subsequence-position \"hello world\" \"o\" count: 2))
+(print (subsequence-position \"hello\" \"hellox\"))
+(print (subsequence-position \"hello\" \"\" count: 6))
+(print (subsequence-position \"hello\" \"\" count: 7))"
+  "#f
+#f
+#f
+#f
+5
+7
+#f
+5
+#f
+")
 )

@@ -3410,4 +3410,21 @@ v3!
 5
 #f
 ")
+ ;; An array keeps a list of its own dimensions: changing the caller's,
+ ;; or what dimensions answers, changes nothing.
+ (array-dimensions-not-shared
+  "(define dims (list 2 3))
+(define a (make <array> dimensions: dims fill: 0))
+(set! (aref a 1 2) 'last)
+(set! (first dims) 3) (set! (second dims) 2)
+(print (dimensions a))
+(print (handler-case (aref a 2 1) ((<error> condition: c) (format #f \"~a\" c))))
+(set! (first (dimensions a)) 99)
+(print (dimensions a))
+(print (aref a 1 2))"
+  "(2 3)
+\"aref: the index 2 is out of bounds\"
+(2 3)
+last
+")
 )

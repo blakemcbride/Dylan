@@ -18,7 +18,8 @@ module: dylan
                        dimensions))
     (error "make: the dimensions of an <array> are not non-negative integers: ~s"
            dimensions))
-  (bind ((dims (as <list> dimensions)))
+  ;; A list of the array's own: as may answer the caller's
+  (bind ((dims (copy-sequence (as <list> dimensions))))
     (if (and (%pair? dims) (id? (cdr dims) '()))
         (%make-vector (car dims) fill)
         (%make <%general-array> dimensions: dims
@@ -31,8 +32,9 @@ module: dylan
 
 (define dimensions
   (method ((array <array>))
+    ;; A copy: the array's own list is what it checks indices against
     (if (%instance? array <%general-array>)
-        (%dimensions array)
+        (copy-sequence (%dimensions array))
         (list (%library-size array)))))
 
 (define %row-major

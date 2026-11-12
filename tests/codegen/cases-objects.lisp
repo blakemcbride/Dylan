@@ -3644,6 +3644,25 @@ other-error
   "(define-slot (singleton 1) z allocation: class)"
   ""
   :compile-error "slot z: the slot of a singleton must be instance, constant or virtual")
+ ;; A slot's getter or setter named after one of the library's functions
+ ;; that is not generic, or after a class: the library's own was replaced.
+ (slot-named-after-library-function
+  "(define-class <x> (<object>) (list init-value: 7))"
+  ""
+  :compile-error "list is defined both as a variable and as a generic function")
+ (slot-setter-named-after-library-function
+  "(define-class <x> (<object>) (s init-value: 7 setter: car))"
+  ""
+  :compile-error "car is defined both as a variable and as a generic function")
+ (slot-named-after-class
+  "(define-class <q> (<object>) (<q> init-value: 1))"
+  ""
+  :compile-error "<q> is defined both as a variable and as a generic function")
+ (define-slot-named-after-library-class
+  "(define-class <x> (<object>))
+(define-slot <x> <integer> init-value: 1)"
+  ""
+  :compile-error "<integer> is defined both as a variable and as a generic function")
  ;; An instance with no instance slots is one word; the collector moves
  ;; it and writes a forwarding record of two words or more over it.
  (slotless-instances-moved

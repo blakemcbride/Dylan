@@ -1285,6 +1285,17 @@ own."
                ((or (atom ka) (atom kb)) (and (atom ka) (atom kb)))
                (t (and (subsetp ka kb) (subsetp kb ka)))))))
 
+(defun check-accessor-variable (var)
+  "A slot's getter or setter VAR becomes a generic function when its
+define-class or define-slot runs: refuse a class, or one of the library's
+functions that is not a generic function, which the program would
+otherwise replace for the library too.  (A program's variable that a
+define gives a value is checked when the definitions run.)"
+  (when (or (gethash var *gclasses*)
+            (and (module-var-predefined-p var) (predefined-c-value var *classes*)))
+    (compile-error "~a is defined both as a variable and as a generic function"
+                   (name-string (module-var-name var)))))
+
 (defun build-generics (definitions)
   (dolist (d definitions)
     (at-node (d)
@@ -1308,8 +1319,10 @@ own."
              (when (and setter (not (gfun-required setter)))
                (setf (gfun-required setter) 2))))
          (dolist (sd (gethash d *sdef-of-node*))
+           (check-accessor-variable (sdef-getter sd))
            (push (list :accessor sd :getter) (gethash (sdef-getter sd) *generic-declarations*))
            (when (sdef-setter sd)
+             (check-accessor-variable (sdef-setter sd))
              (push (list :accessor sd :setter) (gethash (sdef-setter sd) *generic-declarations*)))))
         (ir-define-method
          (let* ((fn (ir-define-method-fn d))

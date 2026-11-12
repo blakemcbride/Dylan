@@ -410,6 +410,10 @@ unbounded range, which has no end to stop at."
   (lambda (multiple-values next-method mutable insert &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:start))
+    ;; No target holds an unbounded INSERT's elements
+    (unless (collection-size insert)
+      (dylan-call dylan/error
+                  "replace-subsequence!: the sequence is too short"))
     (let* ((size (collection-size mutable))
            (inserted (sequence->list insert))
            (start (let ((start (dylan%find-keyword rest :start (lambda () 0))))

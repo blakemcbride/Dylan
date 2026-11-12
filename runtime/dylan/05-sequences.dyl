@@ -173,9 +173,12 @@ module: dylan
 
 (define-generic-function replace-subsequence! (mutable-sequence insert-sequence #key start))
 ;;; The error for too short a target is signalled before anything is
-;;; written; INSERT's elements are taken first, as it may be TARGET.
+;;; written; INSERT's elements are taken first, as it may be TARGET.  No
+;;; target holds an unbounded INSERT's.
 (define-method replace-subsequence! ((target <mutable-sequence>) (insert <sequence>)
                                      #key (start 0))
+  (unless (size insert)
+    (error "replace-subsequence!: the sequence is too short"))
   (bind ((elements (%elements insert))
          (state (for ((state (initial-state target) (next-state target state))
                       (index 0 (binary+ index 1)))

@@ -3498,4 +3498,17 @@ last
 #(1 2 3)
 3
 ")
+ ;; No target holds the elements of an unbounded insert sequence.
+ (replace-subsequence-unbounded-insert
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define v (vector 1 2 3))
+(print (try (method () (replace-subsequence! v (range from: 0)))))
+(print (try (method () (replace-subsequence! (make <stretchy-vector>) (range from: 5)))))
+(print v)
+(print (replace-subsequence! v (range from: 7 size: 2) start: 1))"
+  "\"ERR: replace-subsequence!: the sequence is too short\"
+\"ERR: replace-subsequence!: the sequence is too short\"
+#(1 2 3)
+#(1 7 8)
+")
 )

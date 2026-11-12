@@ -42,6 +42,11 @@ other arguments are refused with a usage message."
   ;; Writing to a closed pipe ends the run, as it ends a compiled program,
   ;; not in an error reported on the same output.
   (sb-sys:enable-interrupt sb-unix:sigpipe :default)
+  ;; SIGTERM ends the run at once, as it ends a compiled program (status
+  ;; 143), even in the middle of a computation: SBCL's handler unwinds to
+  ;; exit, and a second TERM arriving meanwhile (GNU timeout signals the
+  ;; process, then its group) left it waiting on a lock for ever.
+  (sb-sys:enable-interrupt sb-unix:sigterm :default)
   (let* ((arguments (rest sb-ext:*posix-argv*))
          (file (and arguments (null (rest arguments))
                     (plusp (length (first arguments)))

@@ -204,6 +204,14 @@ EOF
 check "bin/dylan file: an unprintable error's status is 1" test "$status" = 1
 check "bin/dylan file: an unprintable error stops the run" sh -c 'grep -q "^2" batch.out && ! grep -q "^3" batch.out'
 check "bin/dylan file: the error printing it causes reported" grep -q "^Dylan error: not a list: 5" batch.err
+# SIGTERM ends a run at once, twice over too (GNU timeout signals the
+# process, then its group); KILL, 10 s later, would give 137
+echo '(while #t 1)' > loop.dyl
+timeout -k 10 2 "$dylan" loop.dyl > /dev/null 2>&1 < /dev/null; status=$?
+check "bin/dylan file: SIGTERM ends it" test "$status" = 124
+"$dylan" loop.dyl > /dev/null 2>&1 < /dev/null & pid=$!
+sleep 2; kill -TERM $pid; wait $pid; status=$?
+check "bin/dylan file: SIGTERM's status is 143" test "$status" = 143
 # A header in a file with CRLF line ends
 printf 'module: dylan-user\r\nauthor: me \r\n \r\n(define x\r\n  3)\r\n(print x)\r\n' > crlf.dyl
 "$dylan" crlf.dyl > batch.out 2>&1 < /dev/null

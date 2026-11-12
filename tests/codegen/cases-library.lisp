@@ -3448,4 +3448,28 @@ last
 (0 1 . 2)
 (3 4 5)
 ")
+ ;; append takes any number of lists, in a loop.
+ (append-many-lists
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define ls (map list (as <list> (range from: 0 up-to: 200000))))
+(print (size (apply append ls)))
+(print (append '()))
+(define t3 (list 9))
+(define a (append '(1) '() '(2 3) t3))
+(print a)
+(print (id? (cdddr a) t3))
+(print (append '(1) 5))
+(print (try (method () (append '(1) 5 '(2)))))
+(define src (list 1 2))
+(define b (append src '(3)))
+(set! (first b) 'x)
+(print src)"
+  "200000
+()
+(1 2 3 9)
+#t
+(1 . 5)
+\"ERR: 5 is not an instance of {the class <list>}\"
+(1 2)
+")
 )

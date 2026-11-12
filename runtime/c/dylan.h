@@ -225,8 +225,13 @@ typedef struct DyWrapper {
                                       or -1; NULL if it has none          */
 } DyWrapper;
 
-/* Every heap and static object begins with this. */
-typedef struct DyHeader {
+/* Every heap and static object begins with this.  An object is made
+ * through its own type (DyInstance, DyFunction, DyPair, ...) and its
+ * wrapper read through this one, so a read through this one may alias
+ * any object: otherwise C's aliasing rules let the C compiler drop the
+ * stores that make an object on the stack, as it can once link-time
+ * optimization brings maker and reader together. */
+typedef struct __attribute__((may_alias)) DyHeader {
     DyWrapper *wrapper;
 } DyHeader;
 

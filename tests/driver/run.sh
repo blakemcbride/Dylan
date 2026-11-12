@@ -100,6 +100,19 @@ for c in gcc clang; do
     check "--lto --cc $c" "$dylanc" --lto --cc $c -o lto greet.dyl main.dyl
     check "--lto --cc $c runs" output_is "$expected" ./lto
 done
+# Instances made on the stack: link-time optimization once dropped the
+# stores that made them (C's aliasing rules).
+cat > stack.dyl <<'EOF'
+(define-class <pt> (<object>) (x init-keyword: x:))
+(define-class <pt3> (<pt>) (z init-keyword: z:))
+(define-method f () (if (instance? (make <pt3> x: 1 z: 3) <real>) 1 2))
+(print (f))
+(define-method g (n) (bind ((p (make <pt3> x: n z: 3))) (if (instance? p <pt>) (x p) 2)))
+(print (g 5))
+EOF
+check "--lto, instances on the stack" "$dylanc" --lto -o ltostack stack.dyl
+check "--lto, instances on the stack, run" output_is "2
+5" ./ltostack
 check "--whole" "$dylanc" --whole -o whole greet.dyl main.dyl
 check "--whole runs" output_is "$expected" ./whole
 check "the library's object kept" sh -c "ls '$here/../../runtime/build/library/'*.o"

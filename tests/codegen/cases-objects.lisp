@@ -3673,6 +3673,23 @@ other-error
   "(define-class <simple-error> (<error>) (my init-value: 1))"
   ""
   :compile-error "define-class of <simple-error>: the variable is imported from module dylan")
+ ;; A define-slot whose accessor cannot take its method changes nothing.
+ (define-slot-refused-leaves-class
+  "(define-method try (f)
+  (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-generic-function (setter ro2) (x v))
+(make-read-only (setter ro2))
+(define-generic-function g3 (x y))
+(define-class <e> (<object>) (y init-value: 1))
+(print (try (method () (define-slot <e> ro2 init-value: 1) 'done)))
+(print (try (method () (define-slot <e> g3 init-value: 1) 'done)))
+(print (map slot-getter (slot-descriptors <e>)))
+(print (y (make <e>)))"
+  "\"ERR: the generic function is read-only: {the generic function (setter ro2)}\"
+\"ERR: the parameter list of a method of g3 is not congruent with its generic function\"
+#({the generic function y})
+1
+")
  ;; An instance with no instance slots is one word; the collector moves
  ;; it and writes a forwarding record of two words or more over it.
  (slotless-instances-moved

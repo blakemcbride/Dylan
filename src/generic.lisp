@@ -308,6 +308,23 @@ whose DATA is given, or NIL."
     (t nil)))
 
 (defun add-method (generic-function method &rest multi-value-receiver)
+  (check-method-addable generic-function method)
+  (let ((old-method (find-method generic-function
+                                 (method.specializers method)))
+        (data (generic-function-data generic-function)))
+    (when old-method
+      (delete-method! generic-function old-method))
+    (push method (generic-function-data.methods data))
+    (oned-table/put! *method-owners* method generic-function)
+    (setf (generic-function-data.cache data) nil)
+    (check-fast-path data method)
+    (if multi-value-receiver
+        (funcall (car multi-value-receiver) method old-method)
+        old-method)))
+
+(defun check-method-addable (generic-function method)
+  "Signal the error ADD-METHOD gives when METHOD cannot be added to
+GENERIC-FUNCTION."
   (let ((data (generic-function-data generic-function))
         (param-list (method.param-list method)))
     (cond ((generic-function-data.read-only? data)
@@ -328,18 +345,7 @@ whose DATA is given, or NIL."
                                (mapcar (lambda (key)
                                          (with-output-to-string (out) (dylan-write key out)))
                                        (missing-keys data param-list))))))
-    (check-not-frozen generic-function method "add-method")
-    (let ((old-method (find-method generic-function
-                                   (method.specializers method))))
-      (when old-method
-        (delete-method! generic-function old-method))
-      (push method (generic-function-data.methods data))
-      (oned-table/put! *method-owners* method generic-function)
-      (setf (generic-function-data.cache data) nil)
-      (check-fast-path data method)
-      (if multi-value-receiver
-          (funcall (car multi-value-receiver) method old-method)
-          old-method))))
+    (check-not-frozen generic-function method "add-method")))
 
 (defun dylan%generic-function? (obj)
   (and (oned-table/get *generic-function-data* obj nil) t))

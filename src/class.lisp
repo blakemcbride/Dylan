@@ -891,6 +891,18 @@ slots.")
                       "slot ~a: a class slot takes only an init-value:"
                       "slot ~a: an each-subclass slot takes only an init-value:")
                   debug-name))
+    ;; The accessors' generic functions must take the methods the slot
+    ;; gives them, as add-method checks, before anything is changed: an
+    ;; error part way would leave the class with half a slot.
+    (unless (eq allocation 'virtual)
+      (check-method-addable getter
+                            (dylan%function->method
+                             (make-getter-param-list owner) #'identity))
+      (when (and setter (not (eq allocation 'constant)))
+        (check-method-addable setter
+                              (dylan%function->method
+                               (make-setter-param-list owner)
+                               (lambda (obj value) (declare (ignore obj)) value)))))
     (let ((new-slot (make-slot debug-name getter setter type init-value
                                has-init-value? init-function init-keyword
                                required-init-keyword allocation nil

@@ -3364,4 +3364,28 @@ none
 v3!
 (1 1/2 2.5 -7)
 ")
+ ;; map-into stops when the target or a source runs out (chapter 12), the
+ ;; procedure called once for each element replaced: the sources may all
+ ;; be unbounded.
+ (map-into-unbounded-sources
+  "(define n 0)
+(define-method f (x) (set! n (+ n 1)) x)
+(print (map-into (vector 1 2 3) f (range from: 0)))
+(print n)
+(print (map-into (list 1 2 3) + (range from: 0) (range from: 100)))
+(print (map-into \"abc\" (method (i) (as <character> (+ i 65))) (range from: 0)))
+(print (map-into (as <deque> (list 1 2)) - (range from: 5)))
+(print (map-into (as <stretchy-vector> (list 1 2)) - (range from: 5)))
+(print (map-into (vector) - (range from: 5)))
+(define v (vector 1 2 3))
+(print (map-into v (method (a) (* a 10)) v))"
+  "#(0 1 2)
+3
+(100 102 104)
+\"ABC\"
+{<deque> -5 -6}
+{<stretchy-vector> -5 -6}
+#()
+#(10 20 30)
+")
 )

@@ -270,10 +270,19 @@ module: dylan
   (bind ((collections (cons c more)))
     (if (and (%instance? target <sequence>)
              (%list-every? (method (c) (%instance? c <sequence>)) collections))
-        ;; The values first: TARGET may be one of the collections.
-        (bind ((results '()))
-          (%each-group collections
-                       (method (arguments) (set! results (cons (apply f arguments) results))))
+        ;; The values first: TARGET may be one of the collections.  As
+        ;; many as TARGET has elements, at most: the sources may be
+        ;; unbounded.
+        (bind ((results '())
+               (room (size target)))
+          (unless (id? room 0)
+            (bind-exit (done)
+              (%each-group collections
+                           (method (arguments)
+                             (set! results (cons (apply f arguments) results))
+                             (when room
+                               (set! room (- room 1))
+                               (when (id? room 0) (done #f)))))))
           (for ((state (initial-state target) (next-state target state))
                 (l (%list-reverse results) (cdr l)))
                ((or (not state) (id? l '())) target)

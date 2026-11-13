@@ -188,13 +188,29 @@ which <, = and > answer as #t (chapter 9)."
                         (gfun-methods g)))))
          '("binary<" "binary=")))
 
+(defun own-arithmetic-call-p (e)
+  "Is the call E the library's own counting or comparing, which methods a
+program adds must not change (Bugs04 C6): a call in the library's own code,
+or one a library macro's expansion makes, as dotimes counts with < and +?"
+  (case (ir-call-own e)
+    ;; Copied by inlining: as the call it was copied from
+    (:yes t)
+    (:no nil)
+    (t (or (library-ref-atom-p (ir-call-function e))
+           (library-own-site-p (ir-call-site e))))))
+
 (defun call-callee (e)
-  "What E calls, if known: (values :generic gfun swap?), (values :fold
-gfun), (values :primitive c-name), or NIL."
+  "What E calls, if known: (values :generic gfun swap? own original),
+(values :fold gfun), (values :primitive c-name), or NIL.  OWN is true for
+the library's own arithmetic (OWN-ARITHMETIC-CALL-P) rewritten as a call of
+a binary generic function; ORIGINAL is then the module variable whose
+function a case not done inline calls instead, when that is <, = or > and
+the program has methods on binary< or binary=: those answer #t for any
+true value (chapter 9)."
   (let ((v (static-value (ir-call-function e)))
         (n (length (ir-call-arguments e))))
     (when (eq (car v) :global)
-      (let ((var (second v)) (swap nil))
+      (let ((var (second v)) (swap nil) (own nil) (original nil))
         ;; A variable the program assigns holds what it will when the
         ;; call runs.
         (when (and (variable-global-p var (ir-call-site e))
@@ -208,15 +224,20 @@ gfun), (values :primitive c-name), or NIL."
         (when (eq (module-var-module var) (dylan-module))
           (loop for (name count target swap?) in *variadic-rewrites*
                 when (and (= n count) (eq var (dylan-var name))
-                          (gethash (dylan-var target) *gfuns*)
-                          (or *library-comparisons*
-                              (not (member name '("<" "=" ">") :test #'string=))))
-                  do (setf var (dylan-var target) swap swap?)
+                          (gethash (dylan-var target) *gfuns*))
+                  do (let ((comparison (member name '("<" "=" ">") :test #'string=)))
+                       (setf own (own-arithmetic-call-p e))
+                       (when (or own *library-comparisons* (not comparison))
+                         (when (and own comparison (not *library-comparisons*))
+                           (setf original var))
+                         (setf var (dylan-var target) swap swap?)))
                      (return)))
         (let ((g (gethash var *gfuns*)))
           (cond ((and g (primitive-generic-c-name var g))
                  (values :primitive (primitive-generic-c-name var g)))
-                (g (values :generic g swap))
+                (g (values :generic g swap
+                           (or own (and (library-arithmetic-gfun-p g) (own-arithmetic-call-p e)))
+                           original))
                 ((and (module-var-predefined-p var) (null (module-var-definitions var)))
                  (let ((c (predefined-c-value var *classes*)))
                    (when (and c (search "dy_prim_" c))
@@ -301,14 +322,26 @@ makes it a tail call, used when TAIL."
          (when (dest-label dest) (emit "goto ~a;" (dest-label dest))))
         (t (deliver dest call))))
 
+(defvar *own-call* nil
+  "Is the call being typed or compiled the library's own arithmetic, by
+OWN-ARITHMETIC-CALL-P?")
+
+(defvar *original-function* nil
+  "The module variable whose function the call being compiled calls when
+it is not done inline, in place of the generic function's dispatch; see
+CALL-CALLEE.")
+
 (defun gen-known-call (e dest tail)
   "Generate the call E if its function is known; answer whether it was."
-  (multiple-value-bind (kind what swap) (call-callee e)
+  (multiple-value-bind (kind what swap own original) (call-callee e)
     (when kind
       (let ((args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e))))
         (ecase kind
           (:primitive (gen-primitive-call what args dest tail))
-          (:generic (gen-generic-call what args dest tail))
+          (:generic (let ((*own-call* own)
+                          (*original-function* (and original
+                                                    (cons original (ir-call-arguments e)))))
+                      (gen-generic-call what args dest tail)))
           (:fold
            ;; ((a op b) op c) ...: each step's value in a temporary
            (let ((acc (first args)))
@@ -545,7 +578,8 @@ known not to be (:NO), or neither (:MAYBE)?"
 code of *CFUN*.")
 
 (defparameter *library-arithmetic*
-  '("binary+" "binary-" "binary*" "binary/" "binary<" "binary=" "unary-")
+  '("binary+" "binary-" "binary*" "binary/" "binary<" "binary=" "unary-"
+    "zero?" "positive?" "negative?" "even?" "odd?" "modulo" "remainder")
   "The generic functions whose integer and float methods the library's own
 arithmetic and comparisons keep, whatever methods the program adds.")
 
@@ -558,23 +592,36 @@ operators (chapter 14), the comparison of collections by their elements,
 and the comparison of the elements and keys a program gives the
 library.")
 
+(defun library-arithmetic-gfun-p (g)
+  "Is G one of *LIBRARY-ARITHMETIC*?"
+  (let ((var (gfun-var g)))
+    (and (eq (module-var-module var) (dylan-module))
+         (not (consp (module-var-name var)))
+         (member (dylan::dylan-symbol->string (name-symbol (module-var-name var)))
+                 *library-arithmetic* :test #'string=))))
+
+(defun library-own-site-p (site)
+  "Is SITE, an IR-FN, the library's own code, whose arithmetic is its own?
+The library's operators, which may call a program's methods, are not."
+  (and site
+       (ir-fn-library-p site)
+       (let ((top site))
+         (loop while (ir-fn-parent top) do (setf top (ir-fn-parent top)))
+         (let ((var (defined-variable top)))
+           (not (and var (eq (module-var-module var) (dylan-module))
+                     (not (setter-name-p (module-var-name var)))
+                     (member (dylan::dylan-symbol->string
+                              (name-symbol (module-var-name var)))
+                             *operator-definitions* :test #'string=)))))))
+
 (defun library-arithmetic-p (entry)
   "Is the call of ENTRY's generic function, being typed or compiled, the
-library's own arithmetic?  The library counts and indexes with + and <:
-methods a program adds to them, even for two integers, must not change
-that.  Its operators, which may call a program's methods, are not its own."
-  (let ((site (or *call-site* (and *cfun* (cfun-fn *cfun*)))))
-    (and site
-         (member (first entry) *library-arithmetic* :test #'string=)
-         (ir-fn-library-p site)
-         (let ((top site))
-           (loop while (ir-fn-parent top) do (setf top (ir-fn-parent top)))
-           (let ((var (defined-variable top)))
-             (not (and var (eq (module-var-module var) (dylan-module))
-                       (not (setter-name-p (module-var-name var)))
-                       (member (dylan::dylan-symbol->string
-                                (name-symbol (module-var-name var)))
-                               *operator-definitions* :test #'string=))))))))
+library's own arithmetic?  The library counts and indexes with + and <, and
+tests with zero? and negative?: methods a program adds to them, even for
+two integers, must not change that (OWN-ARITHMETIC-CALL-P)."
+  (and (member (first entry) *library-arithmetic* :test #'string=)
+       (or *own-call*
+           (library-own-site-p (or *call-site* (and *cfun* (cfun-fn *cfun*)))))))
 
 (defun inline-cases (g args)
   "The cases of G's inline methods that might apply to ARGS, each (CASE
@@ -810,7 +857,7 @@ of a call of G on ARGS."
     (return-from gen-generic-call))
   (let ((cases (inline-cases g args)))
     (cond
-      ((null cases) (gen-dispatched-call g args dest tail))
+      ((null cases) (gen-fallback-call g args dest tail))
       ((and (certain-case-p (first cases)) (fold-call (car (first cases)) args))
        (deliver-pure dest (c-constant *cdata* (first (fold-call (car (first cases)) args)))))
       ((certain-case-p (first cases))
@@ -830,8 +877,23 @@ of a call of G on ARGS."
                until covered)
          (unless covered
            (emit "} else {")
-           (indented (gen-dispatched-call g args dest tail))))
+           (indented (gen-fallback-call g args dest tail))))
        (emit "}")))))
+
+(defun gen-fallback-call (g args dest tail)
+  "The call of G on ARGS not done inline: by G's dispatch, or, for the
+library's own comparison when the program has methods on binary< or
+binary=, by the function <, = or > it was written as (*ORIGINAL-FUNCTION*),
+which answers #t for any true value."
+  (if *original-function*
+      (destructuring-bind (var . original-args) *original-function*
+        (multiple-value-bind (as n) (call-arguments-c original-args)
+          (let ((f (format nil "dy_check_bound(~a, ~a)" (library-global-c-name var)
+                           (c-utf8-literal (module-var-string var)))))
+            (emit-call dest tail
+                       (format nil "DY_CALL(~a, ~{~a, ~}~d)" f as n)
+                       (format nil "DY_TAIL_CALL(~a, ~{~a, ~}~d)" f as n)))))
+      (gen-dispatched-call g args dest tail)))
 
 (defun uses-next-method-p (fn)
   (let ((next (ir-fn-next fn)))

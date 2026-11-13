@@ -15,7 +15,7 @@ module: dylan
   (unless (and (%instance? size <integer>) (not (negative? size)))
     (error "make: size: must be a non-negative integer: ~s" size))
   (bind ((d (%make <deque>)))
-    (set! (%data d) (%make-vector (max size 8) fill))
+    (set! (%data d) (%make-vector (%max size 8) fill))
     (set! (%count d) size)
     d))
 
@@ -24,7 +24,7 @@ module: dylan
 (define-method initialize ((d <deque>) #key (size 0) (fill #f))
   (unless (and (%instance? size <integer>) (not (negative? size)))
     (error "make: size: must be a non-negative integer: ~s" size))
-  (set! (%data d) (%make-vector (max size 8) fill))
+  (set! (%data d) (%make-vector (%max size 8) fill))
   (set! (%first d) 0)
   (set! (%count d) size)
   (next-method))

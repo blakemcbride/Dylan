@@ -65,6 +65,11 @@ module: dylan
 (define %element= (method (x y) (binary= x y)))
 (define %element< (method (x y) (binary< x y)))
 
+;;; The larger and the smaller of two numbers in the library's own
+;;; counting: max and min (chapter 14) call a program's methods.
+(define %max (method (x y) (if (binary< x y) y x)))
+(define %min (method (x y) (if (binary< y x) y x)))
+
 ;;; =hash: = objects hash alike (chapter 9).  More methods with the
 ;;; collections.
 

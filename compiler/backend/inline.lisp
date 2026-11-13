@@ -272,8 +272,10 @@ in order."
              (inlinable-fn-p global bodies (size-limit (ir-call-arguments e)))
              (inline-allowed-p e global)
              (values global (ir-call-arguments e))))))
-  (multiple-value-bind (kind g swap) (call-callee e)
-    (when (eq kind :generic)
+  (multiple-value-bind (kind g swap own) (call-callee e)
+    ;; Not the library's own arithmetic, which a program's method must not
+    ;; replace.
+    (when (and (eq kind :generic) (not own))
       (let* ((args (if swap (reverse (ir-call-arguments e)) (ir-call-arguments e)))
              (n (length args))
              (m (and (not (resolved-make-class g args))
@@ -415,7 +417,8 @@ does."
                    (ir-call (let ((new (make-ir-call (atom* (ir-call-function e))
                                                      (mapcar #'atom* (ir-call-arguments e)))))
                               (setf (gethash new *inline-chains*) chain
-                                    (ir-call-site new) binder)
+                                    (ir-call-site new) binder
+                                    (ir-call-own new) (if (own-arithmetic-call-p e) :yes :no))
                               new))
                    (ir-prim (make-ir-prim (ir-prim-name e) (mapcar #'atom* (ir-prim-arguments e))))
                    (ir-global-ref (let ((ref (make-ir-global-ref (ir-global-ref-var e))))

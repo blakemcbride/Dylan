@@ -52,11 +52,11 @@ module: dylan
       (when up-to
         (cond ((zero? by) (unless (binary< from up-to) (limit 0)))
               ((%integers? up-to from by) (limit (%range-steps 1 up-to from by)))
-              (else: (limit (max 0 (ceiling/ (binary- up-to from) by))))))
+              (else: (limit (%max 0 (ceiling/ (binary- up-to from) by))))))
       (when through
         (cond ((zero? by) (when (binary< through from) (limit 0)))
               ((%integers? through from by) (limit (%range-steps 2 through from by)))
-              (else: (limit (max 0 (binary+ (floor/ (binary- through from) by) 1))))))
+              (else: (limit (%max 0 (binary+ (floor/ (binary- through from) by) 1))))))
       (bind ((r (%make <range>)))
         (set! (%from r) from)
         (set! (%by r) by)
@@ -278,7 +278,7 @@ module: dylan
                            (and n (binary< n end)))))
       (error "copy-sequence: bad start: or end: for ~s: ~s ~s" r start end)))
   (bind ((stop (or end (%size r))))
-    (%sub-range r start 1 (and stop (max 0 (binary- stop start))))))
+    (%sub-range r start 1 (and stop (%max 0 (binary- stop start))))))
 
 (define-method reverse ((r <range>))
   (unless (%size r) (error "reverse: the range is unbounded"))
@@ -426,8 +426,8 @@ module: dylan
                              (return p))))))))
       (bind ((lo1 hi1 (%range-interval x))
              (lo2 hi2 (%range-interval y)))
-        (bind ((lo (if (and lo1 lo2) (max lo1 lo2) (or lo1 lo2)))
-               (hi (if (and hi1 hi2) (min hi1 hi2) (or hi1 hi2))))
+        (bind ((lo (if (and lo1 lo2) (%max lo1 lo2) (or lo1 lo2)))
+               (hi (if (and hi1 hi2) (%min hi1 hi2) (or hi1 hi2))))
           (bind ((first (and common lo (%grid-first common period lo hi)))
                  (last (and common hi (%grid-last common period hi lo))))
             (cond ((not common) (%empty-range))

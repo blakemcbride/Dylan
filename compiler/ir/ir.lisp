@@ -158,7 +158,10 @@ keywords (NIL, :ANY, or a list)."
   (tail-p nil)
   (kind :unknown)                       ; :unknown, :known (a fn whose call
                                         ; sites are tracked) or :exit
-  (site nil))                           ; the IR-FN whose code it is in
+  (site nil)                            ; the IR-FN whose code it is in
+  ;; Copied by inlining (inline.lisp): :yes from the library's own code,
+  ;; whose arithmetic it keeps, else :no (OWN-ARITHMETIC-CALL-P).
+  (own nil))
 
 (defstruct (ir-prim (:include ir-node) (:constructor make-ir-prim (name arguments)))
   name arguments)

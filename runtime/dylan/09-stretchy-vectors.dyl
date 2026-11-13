@@ -14,7 +14,7 @@ module: dylan
   (unless (and (%instance? size <integer>) (not (negative? size)))
     (error "make: size: must be a non-negative integer: ~s" size))
   (bind ((v (%make <stretchy-vector>)))
-    (set! (%data v) (%make-vector (max size 8) fill))
+    (set! (%data v) (%make-vector (%max size 8) fill))
     (set! (%count v) size)
     v))
 
@@ -23,7 +23,7 @@ module: dylan
 (define-method initialize ((v <stretchy-vector>) #key (size 0) (fill #f))
   (unless (and (%instance? size <integer>) (not (negative? size)))
     (error "make: size: must be a non-negative integer: ~s" size))
-  (set! (%data v) (%make-vector (max size 8) fill))
+  (set! (%data v) (%make-vector (%max size 8) fill))
   (set! (%count v) size)
   (next-method))
 
@@ -31,7 +31,7 @@ module: dylan
   (method (v n)
     (bind ((data (%data v)))
       (when (binary< (%vector-size data) n)
-        (bind ((new (%make-vector (max n (binary* 2 (%vector-size data))) #f)))
+        (bind ((new (%make-vector (%max n (binary* 2 (%vector-size data))) #f)))
           (%replace-vector! new 0 data 0 (%count v))
           (set! (%data v) new))))))
 

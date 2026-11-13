@@ -2627,6 +2627,32 @@ after
 \"bad 7\"
 (3 #t #f (1 2 3) #f)
 ")
+ ;; So for the library's comparisons with <, = and >, its zero? and
+ ;; negative?, the max of its sizes, its methods inlined into the
+ ;; program's code, and dotimes, which counts as chapter 8 says (Bugs06
+ ;; C2).  Switched off at the end.
+ (library-comparisons-not-the-programs
+  "(define on #t)
+(define count 0)
+(define-method binary< ((a <integer>) (b <integer>)) (if on (next-method b a) (next-method)))
+(define-method zero? ((i <integer>)) (if on (begin (set! count (+ count 1)) #f) (next-method)))
+(define-method negative? ((i <integer>)) (if on (begin (set! count (+ count 1)) #t) (next-method)))
+(define t1 (make <table>))
+(for ((i 0 (+ i 1))) ((binary= i 50)) (set! (element t1 (* i 7)) i))
+(define d (make <deque> size: 2))
+(for ((i 0 (+ i 1))) ((binary= i 20)) (push-last d i))
+(define n 0)
+(dotimes (i 3) (set! n (+ n 1)))
+(print (list (size t1) (element t1 21 default: 'missing) (size d) (last d)
+             (reverse (vector 1 2 3)) n (empty? (vector)) (empty? \"\")
+             (element (list 10 20 30) 2) (map identity (vector))))
+(print (list count (< 1 2) (zero? 0) (negative? 5)))
+(set! on #f)
+(print (list (< 1 2) (zero? 0) (negative? 5)))"
+  "(50 3 22 19 #(3 2 1) 3 #t #t 30 #())
+(0 #f #f #t)
+(#t #t #f)
+")
  ;; Chapter 12: as-lowercase of a string is (map as-lowercase string), and
  ;; as-lowercase! (map-into string as-lowercase string); so for upper case.
  (string-case-by-characters

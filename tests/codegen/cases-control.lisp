@@ -65,6 +65,29 @@
 inside
 "
   :error "called after its bind-exit returned")
+ ;; So is the exit of a handler-case, cerror or break, a handler called
+ ;; after the form that established it has returned (Bugs06 L1).
+ (stale-handler-exits
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define saved #f)
+(print (handler-case (do-handlers (method (type test fn desc) (unless saved (set! saved fn))))
+         ((<error>) 'h)))
+(print (try (method () (saved (make <simple-error>) (method () #f)))))
+(set! saved #f)
+(print (try (method ()
+              (handler-bind (<error> (method (c n)
+                                       (do-handlers (method (type test fn desc)
+                                                      (when (= desc \"go on\") (set! saved fn))))
+                                       (signal (make <simple-restart>))))
+                (cerror \"go on\" \"bad\")))))
+(print (try (method () (saved (make <simple-restart>) #f))))
+(print 'after)"
+  "#f
+\"ERR: an exit procedure was called after its bind-exit returned\"
+#f
+\"ERR: an exit procedure was called after its bind-exit returned\"
+after
+")
 
  ;; unwind-protect: the cleanup runs on the way out, normally or by an
  ;; exit, innermost first; the protected form's values are returned.

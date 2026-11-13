@@ -233,11 +233,22 @@ can vanish while a caller walks it."
 ;;; harness.  A CATCH/THROW pair provides exactly that, and it composes
 ;;; correctly with UNWIND-PROTECT (which is what DYNAMIC-WIND became).
 
+(declaim (ftype function dylan%stale-exit))   ; runtime-internal.lisp
+
 (defun call-with-escape-continuation (receiver)
-  (let ((tag (list '#:escape)))
-    (catch tag
-      (funcall receiver
-               (lambda (&optional value) (throw tag value))))))
+  "Call RECEIVER with an escape procedure, which may be called only while
+RECEIVER runs (chapter 8): one called after is the Dylan error that an
+exit procedure called after its bind-exit returned gives, whatever the
+form or function it escapes from."
+  (let ((tag (list '#:escape))
+        (live t))
+    (unwind-protect
+         (catch tag
+           (funcall receiver
+                    (lambda (&optional value)
+                      (unless live (dylan%stale-exit))
+                      (throw tag value))))
+      (setf live nil))))
 
 (defmacro dynamic-wind (before thunk after)
   "The Scheme DYNAMIC-WIND, restricted to escaping continuations."

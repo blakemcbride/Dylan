@@ -191,6 +191,11 @@ congruent with it: DEFINE-METHOD gave it only what its first method had."
                     (format nil "define-generic-function: ~a is inconsistent with the existing generic function"
                             (definition-name-string name)))))))
 
+(defun dylan%stale-exit ()
+  "Signal that an escape was called after its form returned
+(CALL-WITH-ESCAPE-CONTINUATION), as a compiled program does."
+  (dylan-call dylan/error "an exit procedure was called after its bind-exit returned"))
+
 (defun dylan%call/cc (receiver)
   "Used for BIND-EXIT and HANDLER-CASE.  Dylan only ever escapes with its
 continuations, so a CATCH/THROW pair suffices."

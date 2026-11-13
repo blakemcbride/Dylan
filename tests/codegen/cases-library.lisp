@@ -1096,6 +1096,25 @@ Zip:
 \"ERR: concatenate: the range is unbounded\"
 \"ERR: concatenate: the range is unbounded\"
 ")
+ ;; So do apply, and as to <mutable-sequence>, <empty-list> or a
+ ;; program's own sequence class (Bugs06 L2)
+ (apply-and-as-unbounded-range
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define u (range from: 1))
+(define-class <my-seq> (<mutable-sequence>))
+(print (try (method () (apply list u))))
+(print (try (method () (apply + 1 2 u))))
+(print (try (method () (as <mutable-sequence> u))))
+(print (try (method () (as <empty-list> u))))
+(print (try (method () (as <my-seq> u))))
+(print (apply list 0 (range from: 1 size: 3)))"
+  "\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+(0 1 2 3)
+")
 
  ;; A collection of numbers in steps as a range
  (as-range

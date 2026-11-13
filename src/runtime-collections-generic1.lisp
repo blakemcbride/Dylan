@@ -151,6 +151,7 @@
   (lambda (class collection)
     (cond ((true? (dylan-call dylan/instance? collection class)) collection)
           ((subclass? class <mutable-sequence>)
+           (check-as-bounded collection)
            (let* ((elements (iterate->list #'identity collection))
                   (result (dylan-call dylan/make class :size (length elements)))
                   (state (initial-state result)))

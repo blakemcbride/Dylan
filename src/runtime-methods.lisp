@@ -1040,6 +1040,9 @@ slot-descriptors leaves them out, as a compiled program does.")
                    (dylan-call dylan/error
                                "apply: the last argument is not a sequence: ~s"
                                sequence))
+                 ;; Its elements are as <list> answers them, as in the
+                 ;; compiled library: an unbounded range has no end.
+                 (check-as-bounded sequence)
                  (append early (iterate->list #'identity sequence)))))))
       (unless (functionp fn)
         (dylan-call dylan/error "not a function: ~s" fn))

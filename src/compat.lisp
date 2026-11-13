@@ -1195,6 +1195,7 @@ itself."
              (when (char= c #\~) (write-char #\~ out)))))
 
 (declaim (ftype function iterate->list))   ; runtime-collections-iterate.lisp
+(declaim (ftype function check-as-bounded)) ; runtime-collections-iterate.lisp
 
 (defun dylan-format-message (control arguments)
   "CONTROL with ARGUMENTS as a condition's message: ~a and ~d an argument

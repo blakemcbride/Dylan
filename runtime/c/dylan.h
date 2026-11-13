@@ -614,6 +614,22 @@ D dy_weak_add(D list, D x);
 D dy_weak_members(D list);
 void dy_weak_drop(D list);
 
+/* Weak key arrays (gc-mps.c; object.c with the Boehm collector): places
+ * for objects in the heap, held without keeping them alive -- a place is
+ * 0 again once its object has died.  Whoever uses one serializes the
+ * calls on it.
+ *
+ * dy_in_heap          is X an object in the heap (which may die)?
+ * dy_weak_keys        an array of N places, each 0
+ * dy_weak_key         the object in place I of KEYS, or 0
+ * dy_set_weak_key     X, an object in the heap, in place I of KEYS
+ * dy_weak_keys_drop   KEYS is no longer used (before it is let go) */
+bool dy_in_heap(D x);
+D dy_weak_keys(intptr_t n);
+D dy_weak_key(D keys, intptr_t i);
+void dy_set_weak_key(D keys, intptr_t i, D x);
+void dy_weak_keys_drop(D keys);
+
 /* ------------------------------------------------- Classes of objects */
 
 static inline DyWrapper *dy_wrapper_of(D x) {

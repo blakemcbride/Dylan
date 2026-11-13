@@ -118,6 +118,43 @@ void dy_weak_drop(D list) {
         GC_unregister_disappearing_link(&l->objects[i]);   /* if still there */
     l->used = 0;
 }
+
+/* Weak key arrays (dylan.h): memory the collector does not scan, each key
+ * in it registered as a disappearing link, as in a weak list */
+typedef struct {
+    intptr_t size;
+    void *keys[];
+} WeakKeys;
+
+bool dy_in_heap(D x) {
+    return DY_IS_POINTER(x) && GC_base(DY_PTR(x)) != NULL;
+}
+
+D dy_weak_keys(intptr_t n) {
+    WeakKeys *k = GC_MALLOC_ATOMIC(sizeof(WeakKeys) + (size_t)n * sizeof(void *));
+    if (!k) dy_error("out of memory", 0);
+    memset(k, 0, sizeof(WeakKeys) + (size_t)n * sizeof(void *));
+    k->size = n;
+    return DY_OBJ(k);
+}
+
+D dy_weak_key(D keys, intptr_t i) {
+    return DY_OBJ(((WeakKeys *)DY_PTR(keys))->keys[i]);
+}
+
+void dy_set_weak_key(D keys, intptr_t i, D x) {
+    void **link = &((WeakKeys *)DY_PTR(keys))->keys[i];
+    GC_unregister_disappearing_link(link);   /* if there is one */
+    *link = DY_PTR(x);
+    if (GC_general_register_disappearing_link(link, DY_PTR(x)) == GC_NO_MEMORY)
+        dy_error("out of memory", 0);
+}
+
+void dy_weak_keys_drop(D keys) {
+    WeakKeys *k = DY_PTR(keys);
+    for (intptr_t i = 0; i < k->size; i++)
+        if (k->keys[i]) GC_unregister_disappearing_link(&k->keys[i]);
+}
 #endif
 
 void dy_init(void) {

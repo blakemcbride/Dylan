@@ -3585,6 +3585,37 @@ other-error
 \"define-slot: the class is read-only: ~s\"
 \"no applicable method for p-note\"
 ")
+ ;; Such a slot does not keep its objects alive (Bugs06 C6): those kept
+ ;; alive keep their values through the collections that free many more
+ ;; that had the slot; a number's value is every number of its value's.
+ (define-slot-objects-live-and-die
+  "(define-slot <object> tag init-value: 0)
+(define keep (make <vector> size: 2000))
+(dotimes (i 2000)
+  (bind ((p (list i)))
+    (set! (tag p) (* i 10))
+    (set! (element keep i) p)))
+(set! (tag 1.5) 'f)
+(set! (tag 'sym) 's)
+(set! (tag 7) 'seven)
+(set! (tag #\\a) 'a)
+(define-method churn (n)
+  (dotimes (i n) (set! (tag (vector i)) i) (tag (list i 'x))))
+(churn 200000)
+(define-method ok? ()
+  (bind ((ok #t))
+    (dotimes (i 2000)
+      (unless (= (tag (element keep i)) (* i 10)) (set! ok #f)))
+    ok))
+(print (ok?))
+(print (list (tag (/ 3.0 2)) (tag 'sym) (tag 7) (tag #\\a) (tag (list 1))))
+(set! (tag (element keep 5)) 'five)
+(churn 200000)
+(print (list (tag (element keep 5)) (tag (element keep 6)) (tag (element keep 1999))))"
+  "#t
+(f s seven a 0)
+(five 60 19990)
+")
  ;; A bad class or slot definition is reported in the same words by both
  ;; implementations.
  (define-class-not-a-variable

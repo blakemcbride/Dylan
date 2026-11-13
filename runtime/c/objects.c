@@ -467,10 +467,16 @@ void dy_define_slot_done(const DyProgramClass *k) {
 /* The instance slots define-slot gives a built-in class (chapter 6) that
  * are those of objects that are not instances -- symbols, characters,
  * numbers, functions and the rest, which have no storage of their own.
- * Each slot's getter has a table of them: a <simple-object-vector> of the
- * count and then each object and its value, placed by the object's
- * identity (id?).  An object's slot takes its initial value when first
- * read. */
+ * Each slot's getter has a table of them, placed by the object's identity
+ * (id?): a <simple-object-vector> of the count of places used, weak keys
+ * (dy_weak_keys), and each place's strong key and value.  A place's value
+ * is DY_UNBOUND while it is unused.  An object in the heap is held by the
+ * weak keys only, its strong key DY_UNBOUND, so that its slot does not
+ * keep it alive: when it dies its place is dead, and is dropped when the
+ * table is next rebuilt.  Any other object -- an integer, a character, an
+ * object outside the heap, or a number, which is id? to every number of
+ * its value -- is its place's strong key.  An object's slot takes its
+ * initial value when first read. */
 
 static pthread_mutex_t native_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -492,60 +498,94 @@ static size_t identity_hash(D x) {
     return (size_t)((h * 0x9E3779B97F4A7C15u) >> 16);
 }
 
-static intptr_t native_capacity(D table) { return (DY_VECTOR_SIZE(table) - 1) / 2; }
+static intptr_t native_capacity(D table) { return (DY_VECTOR_SIZE(table) - 2) / 2; }
 
-/* The index in TABLE of X's pair, or of the empty one where it would go */
+/* Place I of TABLE: its strong key, then its value */
+static D *native_place(D table, intptr_t i) { return &DY_VECTOR_DATA(table)[2 + 2 * i]; }
+
+/* Is X held by the weak keys? */
+static bool weakly_held(D x) { return dy_in_heap(x) && !dy_number_p(x); }
+
+/* The key of the used place P, I of TABLE: 0 if its object has died */
+static D native_key(D table, intptr_t i, D *p) {
+    return p[0] != DY_UNBOUND ? p[0] : dy_weak_key(DY_VECTOR_DATA(table)[1], i);
+}
+
+/* The index in TABLE of X's place, or of the unused one where it would go */
 static intptr_t native_find(D table, D x) {
     intptr_t capacity = native_capacity(table);
-    D *data = DY_VECTOR_DATA(table);
     for (intptr_t i = (intptr_t)(identity_hash(x) & (size_t)(capacity - 1));;
          i = (i + 1) & (capacity - 1)) {
-        D key = data[1 + 2 * i];
-        if (key == DY_UNBOUND || dy_identical(key, x)) return i;
+        D *p = native_place(table, i);
+        if (p[1] == DY_UNBOUND) return i;
+        D key = native_key(table, i, p);
+        if (key && dy_identical(key, x)) return i;
     }
 }
 
 static D make_native_table(intptr_t capacity) {
-    D table = dy_make_vector((size_t)(1 + 2 * capacity), DY_UNBOUND);
+    D keys = dy_weak_keys(capacity);
+    D table = dy_make_vector((size_t)(2 + 2 * capacity), DY_UNBOUND);
     DY_VECTOR_DATA(table)[0] = DY_INT(0);
+    DY_VECTOR_DATA(table)[1] = keys;
     return table;
+}
+
+/* X in place I of TABLE, unused, with VALUE */
+static void native_fill(D table, intptr_t i, D x, D value) {
+    D *p = native_place(table, i);
+    if (weakly_held(x)) dy_set_weak_key(DY_VECTOR_DATA(table)[1], i, x);
+    else p[0] = x;
+    p[1] = value;
+    D *count = &DY_VECTOR_DATA(table)[0];
+    *count = DY_INT(DY_INT_VALUE(*count) + 1);
+}
+
+/* OLD's places whose objects are alive, in a new table, twice the size
+ * if they fill more than a quarter of it */
+static D rebuild_native_table(D old) {
+    intptr_t capacity = native_capacity(old);
+    intptr_t alive = 0;
+    for (intptr_t i = 0; i < capacity; i++) {
+        D *p = native_place(old, i);
+        if (p[1] != DY_UNBOUND && native_key(old, i, p)) alive++;
+    }
+    D new = make_native_table((alive + 1) * 4 > capacity ? capacity * 2 : capacity);
+    for (intptr_t i = 0; i < capacity; i++) {
+        D *p = native_place(old, i);
+        if (p[1] == DY_UNBOUND) continue;
+        D key = native_key(old, i, p);  /* on the stack: alive while it moves */
+        if (key) native_fill(new, native_find(new, key), key, p[1]);
+    }
+    dy_weak_keys_drop(DY_VECTOR_DATA(old)[1]);
+    return new;
 }
 
 /* *TABLE with X's value VALUE.  NATIVE_LOCK is held. */
 static void native_put(D *table, D x, D value) {
     if (*table == DY_UNBOUND) *table = make_native_table(8);
-    intptr_t count = DY_INT_VALUE(DY_VECTOR_DATA(*table)[0]);
-    if ((count + 1) * 2 > native_capacity(*table)) {
-        D old = *table;
-        intptr_t capacity = native_capacity(old);
-        D new = make_native_table(capacity * 2);
-        for (intptr_t i = 0; i < capacity; i++) {
-            D key = DY_VECTOR_DATA(old)[1 + 2 * i];
-            if (key == DY_UNBOUND) continue;
-            intptr_t j = native_find(new, key);
-            DY_VECTOR_DATA(new)[1 + 2 * j] = key;
-            DY_VECTOR_DATA(new)[2 + 2 * j] = DY_VECTOR_DATA(old)[2 + 2 * i];
-        }
-        DY_VECTOR_DATA(new)[0] = DY_INT(count);
-        *table = new;
-    }
     intptr_t i = native_find(*table, x);
-    D *data = DY_VECTOR_DATA(*table);
-    if (data[1 + 2 * i] == DY_UNBOUND) {
-        data[1 + 2 * i] = x;
-        data[0] = DY_INT(count + 1);
+    D *p = native_place(*table, i);
+    if (p[1] != DY_UNBOUND) {
+        p[1] = value;
+        return;
     }
-    data[2 + 2 * i] = value;
+    /* A new place: the dead dropped first if the table is half used */
+    if ((DY_INT_VALUE(DY_VECTOR_DATA(*table)[0]) + 1) * 2 > native_capacity(*table)) {
+        *table = rebuild_native_table(*table);
+        i = native_find(*table, x);
+    }
+    native_fill(*table, i, x, value);
 }
 
-/* X's pair in *TABLE: true, with its value in *VALUE, if X has one */
+/* X's place in *TABLE: true, with its value in *VALUE, if X has one */
 static bool native_get(D *table, D x, D *value) {
     pthread_mutex_lock(&native_lock);
     bool found = false;
     if (*table != DY_UNBOUND) {
-        intptr_t i = native_find(*table, x);
-        if (DY_VECTOR_DATA(*table)[1 + 2 * i] != DY_UNBOUND) {
-            *value = DY_VECTOR_DATA(*table)[2 + 2 * i];
+        D *p = native_place(*table, native_find(*table, x));
+        if (p[1] != DY_UNBOUND) {
+            *value = p[1];
             found = true;
         }
     }

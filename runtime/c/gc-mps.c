@@ -632,6 +632,35 @@ void dy_weak_drop(D list) {
     (void)list;                    /* the collector frees it */
 }
 
+/* ----------------------------------------------------- Weak key arrays */
+
+bool dy_in_heap(D x) {
+    return DY_IS_POINTER(x) && mps_arena_has_addr(arena, (mps_addr_t)x);
+}
+
+/* In AWL, as the identity hash table's keys: a key that dies is replaced
+ * by dead_key */
+D dy_weak_keys(intptr_t n) {
+    pthread_mutex_lock(&shared_lock);
+    WeakKeys *k = reserve_commit(weak_ap, &wrapper_weak_keys,
+                                 sizeof(WeakKeys) + (size_t)n * sizeof(D), DY_INT(n), true);
+    pthread_mutex_unlock(&shared_lock);
+    return DY_OBJ(k);
+}
+
+D dy_weak_key(D keys, intptr_t i) {
+    D x = ((WeakKeys *)DY_PTR(keys))->keys[i];
+    return x == DY_OBJ(&dead_key) ? 0 : x;
+}
+
+void dy_set_weak_key(D keys, intptr_t i, D x) {
+    ((WeakKeys *)DY_PTR(keys))->keys[i] = x;
+}
+
+void dy_weak_keys_drop(D keys) {
+    (void)keys;                    /* the collector frees it */
+}
+
 /* ------------------------------------------------------------- Start */
 
 /* How much memory a moving pool takes at once: a little at a time, the

@@ -443,6 +443,19 @@ made-specially
 (print (list x (f 3) (g 3) (h 3) (+ (h 1) 10)))"
   "(3 4 ((4 3)) 3 13)
 ")
+ ;; A cond of hundreds of clauses and an and of hundreds of forms, nested
+ ;; deeper than the C is indented (Bugs06 C4): returned, and as an argument.
+ (long-cond-and-and
+  #.(format nil "(define-method f (x)
+  (cond ~{((= x ~d) ~:*~d)~^ ~}
+        ((instance? x <integer>) (+ x 1))
+        (else: 'none)))
+(define-method g (x) (list (and ~{(< ~d x)~^ ~})))
+(print (list (f 0) (f 150) (f 299) (f 1000) (f 'a) (g 300) (g 299)))"
+            (loop for i below 300 collect i)
+            (loop for i below 300 collect i))
+  "(0 150 299 1001 none (#t) (#f))
+")
  (exit-from-loop
   ;; An exit called in a local loop function is a jump
   "(define find (method (l limit)

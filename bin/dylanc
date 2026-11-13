@@ -2,5 +2,9 @@
 # Copyright 2026 Blake McBride.  See ../LICENSE.
 #
 # The Dylan-to-C compiler: dylanc [options] file.dyl ...  (dylanc -h)
+#
+# A control stack of 1 GB, as bin/dylan has, in place of SBCL's 2 MB: the
+# compiler walks a program's forms recursively, and a cond of thousands of
+# clauses nests that deep.  Only the part used is memory.
 here=$(dirname "$(readlink -f "$0")")
-exec sbcl --script "$here/../compiler/dylanc.lisp" "$@"
+exec sbcl --control-stack-size 1024MB --script "$here/../compiler/dylanc.lisp" "$@"

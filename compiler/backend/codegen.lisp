@@ -162,9 +162,15 @@ stays: every statement keeps its own Dylan line."
 and newline, which C compilers copy unescaped into the assembler."
   (c-name-string (substitute-if #\_ (lambda (c) (member c '(#\" #\\ #\Newline))) name)))
 
+(defparameter *deepest-indent* 16
+  "The most levels a line of C is indented: code nested deeper, as a cond
+of a thousand clauses is, is not indented further, so that the C does not
+grow with the square of the depth.")
+
 (defun emit (control &rest arguments)
   (note-line)
-  (push (concatenate 'string (make-string (* 4 *indent*) :initial-element #\Space)
+  (push (concatenate 'string
+                     (make-string (* 4 (min *indent* *deepest-indent*)) :initial-element #\Space)
                      (apply #'format nil control arguments))
         *lines*))
 
@@ -391,6 +397,19 @@ signals if the result is too large (chapter 8), and nothing is allocated."
            ((never-false-p test)
             ;; Known to be of a class #f is not an instance of
             (gen (ir-if-then e) dest))
+           ((>= *indent* *deepest-indent*)
+            ;; Nested this deep, as in a cond of a thousand clauses: the
+            ;; branches by labels, not blocks, which C compilers would nest
+            ;; as deep, past Clang's limit and slowly in GCC.
+            (multiple-value-bind (then else) (if *debug* (values '() '()) (if-refinements e))
+              (let ((else-label (new-label "else"))
+                    (end-label (new-label "endif")))
+                (emit "if (~a == DY_FALSE) goto ~a;" (atom-c test) else-label)
+                (with-refinements (then) (gen (ir-if-then e) dest))
+                (emit "goto ~a;" end-label)
+                (emit "~a:;" else-label)
+                (with-refinements (else) (gen (ir-if-else e) dest))
+                (emit "~a:;" end-label))))
            (t
              (multiple-value-bind (then else) (if *debug* (values '() '()) (if-refinements e))
                (emit "if (~a != DY_FALSE) {" (atom-c test))

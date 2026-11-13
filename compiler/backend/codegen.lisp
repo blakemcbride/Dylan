@@ -918,7 +918,12 @@ applicable-method?)."
                (record-specializers (var-read var) (cfun-fn cfun))))
     (if (null group)
         (gen (ir-letrec-body e) dest)
-        (let ((end (and (not (eq (dest-kind dest) :return)) (new-label "end"))))
+        ;; A destination with a label already -- an enclosing group's, as
+        ;; when this letrec is in tail position in one of its functions --
+        ;; is the group's own: a call of the enclosing group's functions
+        ;; from here then has the destination it expects.
+        (let ((end (and (not (eq (dest-kind dest) :return)) (null (dest-label dest))
+                        (new-label "end"))))
           (when (eq (group-mode group) :tail)
             (setf (group-dest group) (if end (with-label dest end) dest)))
           (gen (ir-letrec-body e) (if (eq (group-mode group) :tail) (group-dest group) dest))

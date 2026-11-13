@@ -417,6 +417,32 @@ made-specially
 ((1 2) (9))
 (a b)
 ")
+ ;; Local loops, one in tail position in the other, which it jumps back
+ ;; to: their value bound, an argument, in a list, or returned (Bugs06 C3).
+ (nested-contified-loops
+  "(define x
+  (bind-methods ((outer (i)
+                   (bind-methods ((inner (j) (if (> j 2) j (inner (+ j 1)))))
+                     (if (> i 3) (inner 0) (outer (+ i 1))))))
+    (outer 0)))
+(define-method f (n)
+  (+ 1 (bind-methods ((outer (i)
+                         (bind-methods ((inner (j) (if (> j 2) j (inner (+ j 1)))))
+                           (if (> i n) (inner 0) (outer (+ i 1))))))
+          (outer 0))))
+(define-method g (n)
+  (bind-methods ((outer (i)
+                   (bind-methods ((inner (j) (if (> j 2) (list i j) (inner (+ j 1)))))
+                     (if (> i n) (inner 0) (outer (+ i 1))))))
+    (list (outer 0))))
+(define-method h (n)
+  (bind-methods ((outer (i)
+                   (bind-methods ((inner (j) (if (> j 2) j (inner (+ j 1)))))
+                     (if (> i n) (inner 0) (outer (+ i 1))))))
+    (outer 0)))
+(print (list x (f 3) (g 3) (h 3) (+ (h 1) 10)))"
+  "(3 4 ((4 3)) 3 13)
+")
  (exit-from-loop
   ;; An exit called in a local loop function is a jump
   "(define find (method (l limit)

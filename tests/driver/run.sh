@@ -318,6 +318,18 @@ EOF2
 "$dylanc" -o deeper deeper.dyl >/dev/null 2>&1; ./deeper > deeper.out 2> deeper.err; status=$?
 check "the stack exhausted in a handler: status 1" test "$status" = 1
 check "the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deeper.out && ! grep -q after deeper.out && grep -q "^Dylan error: the stack is exhausted" deeper.err'
+# With no limit on the stack, a runaway recursion is still the error, in
+# a stack of 1 GB, not one as large as memory (where it can be raised)
+cat > down.dyl <<'EOF2'
+(define-method down (n) (if (< n 0) 0 (+ 1 (down (+ n 1)))))
+(print (handler-case (down 0) ((<error> condition: c) (format #f "ERR: ~a" c))))
+(print 'after)
+EOF2
+"$dylanc" -o down down.dyl >/dev/null 2>&1
+if (ulimit -s unlimited) 2>/dev/null; then
+    (ulimit -s unlimited; ulimit -v 3145728; ./down) > down.out 2>&1; status=$?
+    check "the stack exhausted with no stack limit" sh -c "test $status = 0 && grep -q 'ERR: the stack is exhausted' down.out && grep -q '^after' down.out"
+fi
 "$dylan" < deeper.dyl > deeper.out 2> deeper.err; status=$?
 check "bin/dylan: the stack exhausted in a handler: status 1" test "$status" = 1
 check "bin/dylan: the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deeper.out && ! grep -q after deeper.out && grep -q "^Dylan error: the stack is exhausted" deeper.err'

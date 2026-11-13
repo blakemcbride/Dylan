@@ -24,6 +24,7 @@
 #include "primitive.h"
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 
 static D error_hook, type_error_hook, default_handler;
 
@@ -264,6 +265,13 @@ static _Noreturn void report(const char *kind, const char *message, D irritant) 
 #define DY_HARD_RESERVE (64 * 1024)
 #define DY_SOFT_RESERVE (192 * 1024)
 
+/* With no limit on the stack (ulimit -s unlimited), the main thread's
+ * stack is reported as all the address space below it, terabytes, which
+ * a runaway recursion would fill with all of memory before it reached
+ * the limits.  It is taken to be this much instead, the stack the
+ * interactive implementation has. */
+#define DY_UNLIMITED_STACK ((size_t)1 << 30)
+
 _Thread_local char *dy_stack_guard;
 
 void dy_find_stack(void) {
@@ -283,6 +291,12 @@ void dy_find_stack(void) {
     if (found != 0) return;
     low = base;
 #endif
+    struct rlimit limit;
+    if (size > DY_UNLIMITED_STACK && getrlimit(RLIMIT_STACK, &limit) == 0
+        && limit.rlim_cur == RLIM_INFINITY) {
+        low += size - DY_UNLIMITED_STACK;
+        size = DY_UNLIMITED_STACK;
+    }
     size_t eighth = size / 8;
     size_t hard = eighth < DY_HARD_RESERVE ? eighth : DY_HARD_RESERVE;
     size_t soft = eighth < DY_SOFT_RESERVE ? eighth : DY_SOFT_RESERVE;

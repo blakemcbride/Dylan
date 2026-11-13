@@ -212,6 +212,26 @@ check "bin/dylan file: SIGTERM ends it" test "$status" = 124
 "$dylan" loop.dyl > /dev/null 2>&1 < /dev/null & pid=$!
 sleep 2; kill -TERM $pid; wait $pid; status=$?
 check "bin/dylan file: SIGTERM's status is 143" test "$status" = 143
+# So it ends dylanc, in a macro that never returns, or while the C
+# compiler runs, which it ends too; its temporary directory is removed
+mkdir tmp
+echo '(define-macro m () (while #t 1) 1) (print (m))' > macro-loop.dyl
+TMPDIR="$work/tmp" timeout -k 10 2 "$dylanc" -o macro-loop macro-loop.dyl > /dev/null 2>&1; status=$?
+check "SIGTERM ends dylanc" test "$status" = 124
+check "SIGTERM: dylanc's temporary directory removed" sh -c '[ -z "$(ls tmp)" ]'
+printf '#!/bin/sh\n[ "$1" = --version ] && exit 0\necho $$ > cc.pid\nexec sleep 60\n' > slowcc; chmod +x slowcc
+echo '(print 1)' > one.dyl
+TMPDIR="$work/tmp" "$dylanc" --cc "$work/slowcc" -o one one.dyl > /dev/null 2>&1 & pid=$!
+while [ ! -s cc.pid ] && kill -0 $pid 2>/dev/null; do sleep 0.1; done
+kill -TERM $pid; wait $pid; status=$?
+check "SIGTERM in the C compiler: dylanc's status is 143" test "$status" = 143
+sleep 0.5
+check "SIGTERM in the C compiler: it is ended" sh -c '! kill -0 "$(cat cc.pid)"'
+check "SIGTERM in the C compiler: the temporary directory removed" sh -c '[ -z "$(ls tmp)" ]'
+printf '#!/bin/sh\nkill -9 $$\n' > killedcc; chmod +x killedcc
+"$dylanc" --cc "$work/killedcc" -o one one.dyl > killed.out 2>&1; status=$?
+check "a C compiler a signal ends: status 1" test "$status" = 1
+check "a C compiler a signal ends: reported" grep -q "was ended by signal 9" killed.out
 # A header in a file with CRLF line ends
 printf 'module: dylan-user\r\nauthor: me \r\n \r\n(define x\r\n  3)\r\n(print x)\r\n' > crlf.dyl
 "$dylan" crlf.dyl > batch.out 2>&1 < /dev/null

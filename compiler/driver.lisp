@@ -52,14 +52,28 @@ PROGRAM.  Answer the list of C files, or NIL after reporting why not."
 (defun compile-files (files c-file)
   (compile-program (front-end files :library t) c-file))
 
+(defvar *child* nil
+  "The program RUN is waiting for, if any, which a signal that ends dylanc
+ends too: it runs in a process group of its own, which the signal sent to
+dylanc's group does not reach.")
+
 (defun run (program arguments)
   "Run PROGRAM; answer its exit code.  Its output goes to ours.  A program
-that cannot be run is reported, and answers 127, as the shell's would."
+that cannot be run is reported, and answers 127, as the shell's would; one
+a signal ends is reported, and answers 128 plus the signal's number."
   (handler-case
-      (sb-ext:process-exit-code
-       (sb-ext:run-program program arguments :search t
-                                             :output *standard-output*
-                                             :error *error-output*))
+      (let ((process (sb-sys:without-interrupts
+                       (setf *child* (sb-ext:run-program program arguments
+                                                         :search t :wait nil
+                                                         :output *standard-output*
+                                                         :error *error-output*)))))
+        (unwind-protect (sb-ext:process-wait process)
+          (setf *child* nil))
+        (let ((code (sb-ext:process-exit-code process)))
+          (cond ((eq (sb-ext:process-status process) :signaled)
+                 (format *error-output* "dylanc: ~a was ended by signal ~d.~%" program code)
+                 (+ 128 code))
+                (t code))))
     (error (e)
       (format *error-output* "dylanc: ~a~%" e)
       127)))

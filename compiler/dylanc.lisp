@@ -140,7 +140,49 @@ deleted but the executable."
     (finish-output)
     (sb-ext:exit :code (if (program-errors program) 1 0) :abort (program-errors program))))
 
+(defvar *c-directory* nil
+  "The directory of dylanc's own that the C is written in, while it
+exists.")
+
+(defun remove-c-directory ()
+  (let ((directory *c-directory*))
+    (when directory
+      (setf *c-directory* nil)
+      (ignore-errors (sb-ext:delete-directory directory :recursive t)))))
+
+(defvar *ending* nil
+  "True once a signal has begun to end dylanc.")
+
+(defun end-on-signals ()
+  "Have SIGTERM and SIGINT end dylanc at once, with the status a shell
+gives a process they end (128 plus the signal's number), as they end a
+compiled program and bin/dylan: the C compiler it is running ended too,
+and the directory of the C removed.  SBCL's own handlers unwind to exit,
+and a second TERM arriving meanwhile (GNU timeout signals the process,
+then its group) left it waiting until KILL.  The two may arrive in two
+threads, the main one and SBCL's finalizer: the first ends dylanc, and the
+other waits for it."
+  (dolist (signal (list sb-unix:sigterm sb-unix:sigint))
+    (sb-sys:enable-interrupt
+     signal
+     (lambda (signal info context)
+       (declare (ignore info context))
+       (sb-sys:without-interrupts
+         (when (sb-ext:compare-and-swap (symbol-value '*ending*) nil t)
+           (loop (sleep 1)))
+         (let ((child *child*))
+           (when child
+             (ignore-errors (sb-ext:process-kill child sb-unix:sigterm :process-group))))
+         (remove-c-directory)
+         (sb-ext:exit :code (+ 128 signal) :abort t))))))
+
 (defun main (arguments)
+  (end-on-signals)
+  (unwind-protect (compile-command-line arguments)
+    ;; Left by an internal error, which ends the run by unwinding
+    (remove-c-directory)))
+
+(defun compile-command-line (arguments)
   (let* ((options (parse-command-line arguments))
          (*gc* (or (getf options :gc) *gc*))
          (files (getf options :files))
@@ -151,21 +193,21 @@ deleted but the executable."
          (keep-c (or (getf options :keep) (getf options :c-only)))
          ;; The C is written beside the executable only when it is kept;
          ;; otherwise in a directory of dylanc's own, removed afterwards
-         (c-directory (unless keep-c (temporary-directory)))
+         (c-directory (unless keep-c
+                        (sb-sys:without-interrupts
+                          (setf *c-directory* (temporary-directory)))))
          (c-file (if c-directory
                      (concatenate 'string (native-name c-directory) (file-basename output) ".c")
                      (concatenate 'string output ".c")))
          (*separate-library* (separate-library-p (getf options :size) (getf options :whole))))
     (flet ((finish (code)
-             (when c-directory
-               (sb-ext:delete-directory c-directory :recursive t))
+             (remove-c-directory)
              (finish-output)
              (sb-ext:exit :code code :abort (/= code 0))))
       (unless (getf options :c-only)
         (let ((existing (probe-file (native-pathname output))))
           (when (and existing (member existing *protected-files* :test #'equal))
-            (when c-directory
-              (sb-ext:delete-directory c-directory :recursive t))
+            (remove-c-directory)
             (refuse "the executable ~a would replace the input of that name; name another with -o"
                     output))))
       (let ((c-files (handler-case

@@ -232,6 +232,22 @@ caught
 caught
 ")
 
+ ;; A method inlined into itself: a keyword argument that names one of
+ ;; its own parameters passes the caller's value, not the copy's
+ ;; (Bugs06 C1); so through a second method inlined first.
+ (self-inlined-keyword-arguments
+  "(define-method f (x #key (acc 0))
+  (if (= x 0) acc (f (- x 1) acc: x)))
+(define-method sw (n #key a b)
+  (if (= n 0) (list a b) (sw (- n 1) a: b b: a)))
+(define-method g (x y #key k)
+  (if (= x 0) (list y k) (g (- x 1) 'new k: y)))
+(define-method ping (x #key (acc '())) (if (= x 0) acc (pong (- x 1) acc: (cons x acc))))
+(define-method pong (x #key (acc '())) (ping x acc: acc))
+(print (list (f 3) (f 1) (sw 1 a: 'x b: 'y) (sw 2 a: 'x b: 'y) (g 1 'old) (ping 3)))"
+  "(1 1 (y x) (x y) (new old) (1 2 3))
+")
+
  ;; Doubles passed to the specialized entry unboxed
  (spec-doubles
   "(define norm (method (x y) (sqrt (+ (* x x) (* y y)))))

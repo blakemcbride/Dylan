@@ -437,14 +437,18 @@ does."
                    (setf (gethash var map) a)))
       (when (ir-fn-next fn)
         (setf (gethash (ir-fn-next fn) map) (make-const dylan::dylan%false)))
-      ;; The keyword parameters: the leftmost value given, else the default
+      ;; The keyword parameters: the leftmost value given, else the default.
+      ;; A value given is an atom of the caller's code, as the required
+      ;; arguments are, never mapped: when FN calls itself, the map
+      ;; already holds FN's own parameters, and an argument that names one
+      ;; of them means the caller's value, not the copy's.
       (when (listp (ir-fn-keys fn))
         (let ((pairs (nthcdr (length (ir-fn-required fn)) args)))
           (dolist (k (ir-fn-keys fn))
             (let ((given (loop for (key value) on pairs by #'cddr
                                when (eql (const-value (constant-atom* key)) (ir-key-keyword k))
                                  return value)))
-              (let ((value (if given (atom* given) (copy (ir-key-default k)))))
+              (let ((value (if given given (copy (ir-key-default k)))))
                 (push (cons (fresh (ir-key-var k)) value) bindings))))))
       (let ((body (copy (ir-fn-body fn))))
         (labels ((bind (bindings)

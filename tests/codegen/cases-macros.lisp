@@ -338,6 +338,31 @@ FreSh
   ""
   :compile-error "a compiled program cannot have {the generic function print} as a constant"
   :compiler-only t)
+ ;; Nor a list or vector that holds itself, though it may share parts.
+ (macro-quotes-a-circular-vector
+  "(define-macro m () (bind ((v (vector 1 2))) (set! (element v 0) v) (list 'quote v)))
+(print (size (m)))"
+  ""
+  :compile-error "a compiled program cannot have a circular vector as a constant"
+  :compiler-only t)
+ (macro-quotes-a-circular-list
+  "(define-macro m () (bind ((l (list 1 2))) (set! (cdr (cdr l)) l) (list 'quote l)))
+(print (car (m)))"
+  ""
+  :compile-error "a compiled program cannot have a circular list as a constant"
+  :compiler-only t)
+ (macro-quotes-shared-parts
+  "(define-macro m ()
+  (bind ((l (list 1 2)) (v (vector l l)))
+    (list 'quote (list v v (as <list> (range from: 0 size: 100000))))))
+(bind ((x (m)))
+  (print (id? (first x) (second x)))
+  (print (element (first x) 1))
+  (print (size (third x))))"
+  "#t
+(1 2)
+100000
+")
  (macro-quotes-constants
   "(define-macro m () (list 'quote (list 1 \"a\" #\\b 'c d: 2.5 1/2 #t #f '() (vector 1 2))))
 (print (m))"

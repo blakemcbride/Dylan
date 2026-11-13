@@ -81,8 +81,9 @@ the program can make one (MAKES-EXTENDED-FLOATS-P).")
 (defun check-literal (x)
   "Signal an error if X, a literal or quoted datum, holds a number this
 version cannot represent, or an object a compiled program cannot have as
-a constant: one a macro made, such as a table or a function."
-  (let ((seen (make-hash-table :test #'eq)))
+a constant: one a macro made, such as a table or a function, or a list or
+vector that holds itself, which a macro can make too."
+  (let ((seen (make-hash-table :test #'eq)))  ; :active while its parts are walked
     (labels ((walk (x)
                (cond ((integerp x) (check-integer-literal x))
                      ((dylan::extended-float? x)
@@ -92,13 +93,25 @@ a constant: one a macro made, such as a table or a function."
                       (check-integer-literal (denominator x)))
                      ((complexp x)
                       (compile-error "complex numbers are not supported: ~a" x))
+                     ((eq (gethash x seen) :active)
+                      (compile-error "a compiled program cannot have a circular ~a as a constant"
+                                     (if (vectorp x) "vector" "list")))
                      ((gethash x seen))
                      ((consp x)
-                      (setf (gethash x seen) t)
-                      (walk (car x)) (walk (cdr x)))
+                      ;; Down the list by a loop, so that a long one does not
+                      ;; exhaust the stack
+                      (let ((pairs '()))
+                        (loop for tail = x then (cdr tail)
+                              while (and (consp tail) (not (gethash tail seen)))
+                              do (setf (gethash tail seen) :active)
+                                 (push tail pairs)
+                                 (walk (car tail))
+                              finally (walk tail))
+                        (dolist (p pairs) (setf (gethash p seen) :done))))
                      ((and (vectorp x) (not (stringp x)))
-                      (setf (gethash x seen) t)
-                      (map nil #'walk x))
+                      (setf (gethash x seen) :active)
+                      (map nil #'walk x)
+                      (setf (gethash x seen) :done))
                      ((not (or (numberp x) (characterp x) (stringp x) (symbolp x)
                                (false-p x)))
                       (compile-error "a compiled program cannot have ~a as a constant"

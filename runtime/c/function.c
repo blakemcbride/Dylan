@@ -131,7 +131,25 @@ _Noreturn void dy_wrong_argument_count(D f, intptr_t argc) {
     dy_error(message, 0);
 }
 
+/* NAME is the variable's name@module, as the compiler spelled it.  The
+ * name is spelled as its symbol is now, as the Common Lisp implementation
+ * spells it: as may have spelled it first (chapter 15). */
 _Noreturn void dy_unbound_variable(const char *name) {
+    const char *at = strrchr(name, '@');
+    bool ascii = at != NULL;
+    for (const char *c = name; ascii && c < at; c++)
+        if ((unsigned char)*c >= 128) ascii = false;
+    if (ascii) {
+        D symbol = dy_find_symbol(name, (size_t)(at - name));
+        if (symbol != DY_FALSE) {
+            const char *spelled = dy_symbol_utf8(symbol);
+            size_t n = strlen(spelled), rest = strlen(at);
+            char *full = dy_alloc_bytes(n + rest + 1);
+            memcpy(full, spelled, n);
+            memcpy(full + n, at, rest + 1);
+            name = full;
+        }
+    }
     dy_error_naming("the variable ", name, " has no value", 0);
 }
 

@@ -803,6 +803,7 @@ D dy_pair(D head, D tail);
  * spelling is kept (chapter 15).  These answer the one symbol (keyword) of
  * that name, making it if need be.  Safe to call from any thread. */
 D dy_intern_symbol(const char *name, size_t size);
+D dy_find_symbol(const char *name, size_t size);
 D dy_intern_keyword(const char *name, size_t size);
 /* STRING is a <byte-string> or <unicode-string>; AS, for as (string.c) */
 D dy_intern_symbol_string(D string, bool as);

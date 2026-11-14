@@ -48,13 +48,14 @@
   (format nil "~:[s~;k~]:~a" (keywordp symbol)
           (string-downcase (dylan::dylan-symbol->string symbol))))
 
-(defun note-form-symbols (form number table)
+(defun note-form-symbols (form number table &optional (entered-p (constantly t)))
   "Record in TABLE that the symbols FORM spells are made by the top-level
-form NUMBER, unless an earlier form made them."
+form NUMBER, unless an earlier form made them -- those ENTERED-P is true
+of."
   (labels ((walk (x)
              (cond ((and (symbolp x) x (not (eq x t)))
                     (let ((key (form-symbol-key x)))
-                      (unless (gethash key table)
+                      (unless (or (gethash key table) (not (funcall entered-p x)))
                         (setf (gethash key table) number))))
                    ((consp x) (walk (car x)) (walk (cdr x)))
                    ((and (vectorp x) (not (stringp x))) (map nil #'walk x)))))
@@ -70,7 +71,16 @@ STARTS.  Answer the last number given."
       (let ((n (if library 0 (incf number))))
         (when (cdr entry)
           (push (cons (location-index (cdr entry)) n) positions))
-        (note-form-symbols (car entry) n table)))
+        ;; The library's symbols entered before the program are its
+        ;; keywords and the implementation's own names, as in the Common
+        ;; Lisp implementation; its other names -- a local variable's --
+        ;; are its own business, and the program enters them (chapter 15).
+        (note-form-symbols (car entry) n table
+                           (if library
+                               (lambda (symbol)
+                                 (or (keywordp symbol)
+                                     (gethash symbol dylan::*symbol-spellings*)))
+                               (constantly t)))))
     (setf (gethash file starts) (coerce (nreverse positions) 'vector))
     number))
 

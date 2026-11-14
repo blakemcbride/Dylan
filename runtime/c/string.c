@@ -246,6 +246,17 @@ D dy_intern_symbol(const char *name, size_t size) {
     return intern(&symbols, &n, false);
 }
 
+/* The symbol named NAME, SIZE bytes as for dy_intern_symbol, if there is
+ * one yet; else #f */
+D dy_find_symbol(const char *name, size_t size) {
+    Name n = { (const unsigned char *)name, NULL, size };
+    uint64_t hash = name_hash(&n);
+    pthread_mutex_lock(&symbols.lock);
+    DySymbol *s = table_find(&symbols, &n, hash);
+    pthread_mutex_unlock(&symbols.lock);
+    return s ? DY_OBJ(s) : DY_FALSE;
+}
+
 D dy_intern_keyword(const char *name, size_t size) {
     Name n = { (const unsigned char *)name, NULL, size };
     return intern(&keywords, &n, false);

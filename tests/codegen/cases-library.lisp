@@ -3895,4 +3895,30 @@ none
   "(#t #t #f #t #t #t #t (2 3))
 (#f #f #f #f #f #f)
 ")
+ ;; Chapter 15: a symbol keeps the case it was first entered in.  The
+ ;; library's own local names are not entered before the program -- as
+ ;; may spell one first -- and an unbound variable's name is spelled as
+ ;; its symbol is (Bugs05 B9).
+ (symbol-spelling-library-local-names
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (as <symbol> \"LATER\"))
+(print 'later)
+(print 'Later)
+(print (as <symbol> \"THROUGH\"))
+(print (as <symbol> \"Each-Subclass\"))
+(define-class <a> (<object>) (s) (t allocation: each-subclass))
+(print (map slot-allocation (slot-descriptors <a>)))
+(print (as <symbol> \"Print\"))
+(print (as <symbol> \"UNDEF\"))
+(print (try (method () undef)))"
+  "LATER
+LATER
+LATER
+THROUGH
+Each-Subclass
+#(instance Each-Subclass)
+print
+UNDEF
+\"ERR: the variable UNDEF@dylan-user has no value\"
+")
 )

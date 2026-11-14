@@ -52,13 +52,16 @@ module: dylan
                                   (else: default)))
                            ((zero? k) (car l))
                            (else: (walk (cdr l) (binary- k 1))))))
-      (if (negative? index)
-          (walk '() 0)
-          (walk l index)))))
+      ;; A key that denotes no index (%INDEX-KEY) has no element, with no
+      ;; walk of the list.
+      (bind ((i (%index-key index)))
+        (if (or (not i) (negative? i))
+            (walk '() 0)
+            (walk l i))))))
 
-(define-method element ((l <list>) (index <integer>) #key (default %no-default))
+(define-method element ((l <list>) index #key (default %no-default))
   (%list-element l index default))
-(define-method %library-element ((l <list>) (index <integer>) default)
+(define-method %library-element ((l <list>) index default)
   (%list-element l index default))
 
 (define %list-element-setter
@@ -70,11 +73,14 @@ module: dylan
                                 (%improper-list-tail l)))
                            ((zero? k) (%set-car! l new-value))
                            (else: (walk (cdr l) (binary- k 1))))))
-      (walk l index))))
+      (bind ((i (%index-key index)))
+        (if (or (not i) (negative? i))
+            (walk '() 0)
+            (walk l i))))))
 
-(define-method (setter element) ((l <list>) (index <integer>) new-value)
+(define-method (setter element) ((l <list>) index new-value)
   (%list-element-setter l index new-value))
-(define-method %library-element-setter ((l <list>) (index <integer>) new-value)
+(define-method %library-element-setter ((l <list>) index new-value)
   (%list-element-setter l index new-value))
 
 (define-method make ((class (singleton <list>)) #key (size 0) (fill #f))

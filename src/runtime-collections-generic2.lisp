@@ -466,7 +466,8 @@ unbounded range, which has no end to stop at."
 
 (defun merge-sort-list (list test)
   "The elements of LIST sorted by TEST, a Lisp predicate, in a new list."
-  (let* ((n (length list))
+  (let* ((n (loop for tail = list then (list-rest (cdr tail)) ; An improper
+                  while tail count t))                       ; list's error
          (from (coerce list 'simple-vector))
          (to (make-array n)))
     (loop for width = 1 then (* width 2)
@@ -710,7 +711,8 @@ unbounded range, which has no end to stop at."
                      (key ,<integer>) (new-value ,<object>))
                    nil nil nil)
   (lambda (mut-seq key new-value)
-    (do ((state (initial-state mut-seq)
+    ;; No negative key is among them, as for element.
+    (do ((state (if (minusp key) nil (initial-state mut-seq))
                 (next-state mut-seq state))
          (k 0 (+ k 1)))
         ((or (not state) (= k key))

@@ -86,13 +86,17 @@ module: dylan
               ((id? default %no-default) (error "element: there is no element for the key ~s" key))
               (else: default)))))
 
+;;; A key that denotes no index (%INDEX-KEY), or a negative one, has no
+;;; element, with no walk of the sequence.
 (define-method element ((c <sequence>) key #key (default %no-default))
-  (for ((state (initial-state c) (next-state c state))
-        (k 0 (binary+ k 1)))
-       ((or (not state) (= k key))
-        (cond (state (current-element c state))
-              ((id? default %no-default) (error "element: there is no element at the index ~s" key))
-              (else: default)))))
+  (bind ((index (%index-key key)))
+    (for ((state (and index (not (negative? index)) (initial-state c))
+                 (next-state c state))
+          (k 0 (binary+ k 1)))
+         ((or (not state) (binary= k index))
+          (cond (state (current-element c state))
+                ((id? default %no-default) (error "element: there is no element at the index ~s" key))
+                (else: default))))))
 
 (define-generic-function (setter element) (collection key new-value))
 
@@ -104,12 +108,14 @@ module: dylan
             (error "element: there is no element for the key ~s" key)))))
 
 (define-method (setter element) ((c <mutable-sequence>) key new-value)
-  (for ((state (initial-state c) (next-state c state))
-        (k 0 (binary+ k 1)))
-       ((or (not state) (= k key))
-        (if state
-            (set! (current-element c state) new-value)
-            (error "element: there is no element at the index ~s" key)))))
+  (bind ((index (%index-key key)))
+    (for ((state (and index (not (negative? index)) (initial-state c))
+                 (next-state c state))
+          (k 0 (binary+ k 1)))
+         ((or (not state) (binary= k index))
+          (if state
+              (set! (current-element c state) new-value)
+              (error "element: there is no element at the index ~s" key))))))
 
 ;;; Size and the like
 
@@ -325,19 +331,23 @@ module: dylan
 
 (define-generic-function reduce (procedure initial-value collection))
 
+;;; F is called on each element before the next state is found, as each
+;;; iteration of the library does.
 (define-method reduce ((f <function>) initial-value (c <collection>))
-  (for ((state (initial-state c) (next-state c state))
-        (value initial-value (f value (current-element c state))))
-       ((not state) value)))
+  (bind ((value initial-value))
+    (for ((state (initial-state c) (next-state c state)))
+         ((not state) value)
+      (set! value (f value (current-element c state))))))
 
 (define-generic-function reduce1 (procedure collection))
 
 (define-method reduce1 ((f <function>) (c <collection>))
   (bind ((state (initial-state c)))
     (unless state (error "reduce1: the collection is empty"))
-    (for ((state (next-state c state) (next-state c state))
-          (value (current-element c state) (f value (current-element c state))))
-         ((not state) value))))
+    (bind ((value (current-element c state)))
+      (for ((state (next-state c state) (next-state c state)))
+           ((not state) value)
+        (set! value (f value (current-element c state)))))))
 
 (define-generic-function member? (value collection #key test))
 

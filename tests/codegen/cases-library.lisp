@@ -4069,4 +4069,45 @@ UNDEF
 (\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
 (\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
 ")
+ ;; An improper list's tail is a <type-error> in sort as elsewhere;
+ ;; reduce calls its function before it finds the next state, as each
+ ;; iteration does; a key that denotes no index, or a negative one, has no
+ ;; element, with no walk of the sequence (Bugs05 B16).
+ (improper-list-errors
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(print (try (method () (sort (cons 2 (cons 1 3))))))
+(print (try (method () (sort! (cons 2 (cons 1 3))))))
+(print (try (method () (reduce + 0 (cons 'a 'g)))))
+(print (try (method () (reduce1 (method (v a) (print a)) (cons 1 (cons 2 'g))))))
+(print (try (method () (element (cons 1 'g) 'g))))
+(print (try (method () (element (cons 1 'g) 1.5 default: 5))))
+(print (try (method () (element (cons 1 (cons 2 'g)) 1.0))))
+(print (try (method () (set! (element (cons 1 'g) 'g) 2))))
+(print (try (method () (set! (element (cons 1 'g) -1) 2))))
+(define-class <s> (<mutable-sequence>) (v init-function: (method () (vector 0 10 20))))
+(define-method initial-state ((s <s>)) (print 'init) 0)
+(define-method next-state ((s <s>) st) (if (< st 2) (+ st 1) #f))
+(define-method current-element ((s <s>) st) (element (v s) st))
+(define-method (setter current-element) ((s <s>) st x) (set! (element (v s) st) x))
+(print (try (method () (element (make <s>) 1.0))))
+(print (try (method () (element (make <s>) 'g))))
+(print (try (method () (set! (element (make <s>) -1) 3))))
+(bind ((s (make <s>))) (set! (element s 2.0) 7) (print (v s)))"
+  "\"3 is not an instance of {the class <list>}\"
+\"3 is not an instance of {the class <list>}\"
+\"no applicable method for binary+\"
+2
+\"g is not an instance of {the class <list>}\"
+\"element: there is no element at the index g\"
+5
+2
+\"element: there is no element at the index g\"
+\"element: there is no element at the index -1\"
+init
+10
+\"element: there is no element at the index g\"
+\"element: there is no element at the index -1\"
+init
+#(0 10 7)
+")
 )

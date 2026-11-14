@@ -137,3 +137,15 @@ NIL if it has none yet."
     "(setter direct-superclasses)")
   "Functions of the manual that change classes or generic functions, which
 a static program cannot do (CompilerPlan.md), by NAME-STRING.")
+
+(defparameter *static-program-exclusion-shapes*
+  '(("add-method" 2 nil) ("remove-method" 2 nil) ("remove-slot" 2 nil)
+    ("add-slot" 1 nil ("getter" "setter" "type" "init-value" "init-function"
+                       "init-keyword" "required-init-keyword" "debug-name"
+                       "allocation"))
+    ("freeze-methods" 1 t)
+    ("(setter direct-superclasses)" 2 nil))
+  "The parameter lists the manual gives the *STATIC-PROGRAM-EXCLUSIONS*, as
+(name required rest-p keys): they are the dylan module's generic
+functions, so a program's method on one must be congruent with it
+(chapter 6), as in the interactive implementation.")

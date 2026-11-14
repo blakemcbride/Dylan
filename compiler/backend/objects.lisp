@@ -1353,6 +1353,11 @@ define gives a value is checked when the definitions run.)"
 (defparameter +not-congruent+
   (cons "the parameter list of a method of " " is not congruent with its generic function"))
 
+(defun method-key-list (m)
+  "The keys M names after #key: none for a bare #key (:ANY)."
+  (let ((keys (gmethod-keys m)))
+    (if (consp keys) keys '())))
+
 (defun method-congruence-error (m required variable-p declared)
   "The error, as (before-name . after-name), that adding M signals when its
 generic function takes REQUIRED arguments, more if VARIABLE-P, and
@@ -1360,9 +1365,10 @@ declares the keys DECLARED (chapter 6); or NIL."
   (multiple-value-bind (r v) (method-shape m)
     (cond ((or (/= r required) (not (eq (and v t) (and variable-p t))))
            +not-congruent+)
+          ;; A bare #key (:ANY) accepts no keys (chapter 6).
           ((and (consp declared) (eq (gmethod-kind m) :ir)
-                (not (gmethod-rest-p m)) (listp (gmethod-keys m)))
-           (let ((missing (remove-if (lambda (k) (member k (gmethod-keys m))) declared)))
+                (not (gmethod-rest-p m)) (gmethod-keys m))
+           (let ((missing (remove-if (lambda (k) (member k (method-key-list m))) declared)))
              (and missing
                   (cons "a method of "
                         (format nil " does not accept the keys its generic function names: ~{~a~^ ~}"
@@ -1410,6 +1416,22 @@ left as they are."
                         (setf (gethash m *incongruent*) err
                               (gfun-methods g) (remove m (gfun-methods g)))
                         (push m (gfun-incongruent g)))))))
+      ;; One of the manual's functions a static program cannot call is
+      ;; still the dylan module's generic function: its parameter list
+      ;; comes first.
+      (let ((shape (and (module-var-predefined-p (gfun-var g))
+                        (assoc (name-string (module-var-name (gfun-var g)))
+                               *static-program-exclusion-shapes*
+                               :test #'string-equal))))
+        (when shape
+          (destructuring-bind (required rest &optional keys) (cdr shape)
+            (if keys
+                (fix required rest
+                     (mapcar (lambda (k)
+                               (intern (dylan::canonicalize-string-for-symbol k) :keyword))
+                             keys)
+                     t)
+                (fix required rest nil nil)))))
       (dolist (e events)
         (cond
           ((ir-define-generic-p e)
@@ -1713,8 +1735,8 @@ congruent with that one, the error then."
       ;; must accept them, by naming them after #key or by #rest.
       (let ((declared (gfun-declared-keys g)))
         (when (and (consp declared) (eq (gmethod-kind m) :ir)
-                   (not (gmethod-rest-p m)) (listp (gmethod-keys m)))
-          (let ((missing (remove-if (lambda (k) (member k (gmethod-keys m))) declared)))
+                   (not (gmethod-rest-p m)) (gmethod-keys m))
+          (let ((missing (remove-if (lambda (k) (member k (method-key-list m))) declared)))
             (when missing
               (let ((*location* (or (gmethod-location m) *location*)))
                 (compile-error "a method of ~a does not accept the keys its generic function names: ~a"

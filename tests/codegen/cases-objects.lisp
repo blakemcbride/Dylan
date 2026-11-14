@@ -3959,4 +3959,51 @@ after
 \"ERR: not a class or singleton: 9\"
 \"ERR: not a class or singleton: 9\"
 ")
+ ;; Chapter 6: a program's methods on the library's add-slot, add-method,
+ ;; remove-method, remove-slot, freeze-methods and (setter
+ ;; direct-superclasses) must be congruent with them, slot getters
+ ;; included (Bugs05 B14).
+ (library-generic-getter-not-congruent
+  "(define-class <a> (<object>) (add-slot init-value: 1)) (print (add-slot (make <a>)))"
+  ""
+  :error "the parameter list of a method of add-slot is not congruent with its generic function")
+ (library-generic-method-not-congruent
+  "(print 1) (define-method add-method (x) x) (print 2)"
+  "1
+"
+  :error "the parameter list of a method of add-method is not congruent with its generic function")
+ (library-generic-bare-key-not-congruent
+  "(print 1) (define-method remove-method (x #key) x) (print 2)"
+  "1
+"
+  :error "the parameter list of a method of remove-method is not congruent with its generic function")
+ (library-generic-keys-not-accepted
+  "(define-method add-slot ((o <integer>) #key getter) getter) (print (add-slot 1 getter: 2))"
+  ""
+  :error "a method of add-slot does not accept the keys its generic function names: setter: type: init-value: init-function: init-keyword: required-init-keyword: debug-name: allocation:")
+ (library-generic-congruent-methods
+  "(define-method add-method ((g <integer>) m) 7)
+(print (add-method 1 2))
+(define-method freeze-methods ((x <integer>) #rest r) (list x r))
+(print (freeze-methods 4))
+(define-method add-slot ((o <integer>) #rest r) r)
+(print (add-slot 1 getter: 2))
+(define-method remove-slot ((o <integer>) s) s)
+(print (remove-slot 1 2))
+(define-method (setter direct-superclasses) ((x <integer>) (y <integer>)) 5)
+(print (set! (direct-superclasses 2) 3))"
+  "7
+(4 ())
+(getter: 2)
+2
+3
+")
+ ;; Chapter 6: a method accepts only the keys it names, so a bare #key
+ ;; accepts none of those its generic function names (Bugs05 B14).
+ (generic-keys-not-accepted-bare-key
+  "(define-generic-function g (x #key a))
+(define-method g (x #key) x)
+(print (g 3))"
+  ""
+  :error "a method of g does not accept the keys its generic function names: a:")
 )

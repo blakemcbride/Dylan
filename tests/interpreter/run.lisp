@@ -154,7 +154,11 @@ longer, and the library's generic functions lose the methods it added."
         do (let ((data (generic-function-data generic-function)))
              (unless (equal methods (generic-function-data.methods data))
                (setf (generic-function-data.methods data) (copy-list methods)
-                     (generic-function-data.cache data) nil))))
+                     (generic-function-data.cache data) nil)
+               ;; A method the program replaced is the generic function's
+               ;; again, and prints so
+               (dolist (method methods)
+                 (oned-table/put! *method-owners* method generic-function)))))
   (loop for (guard . value) in *fast-path-guards*
         do (setf (symbol-value guard) value))
   ;; The library's classes lose the slots the program gave them, and

@@ -153,9 +153,10 @@ module: dylan
   (unless (%size r) (error "as: the range is unbounded"))
   (next-method))
 
-;;; An unbounded range as another collection would have no end.
+;;; An unbounded range as another collection would have no end.  As a
+;;; class that is no collection, it cannot be converted, bounded or not.
 (define-method as ((class <class>) (r <range>))
-  (if (or (%size r) (%instance? r class))
+  (if (or (%size r) (%instance? r class) (not (%subclass? class <collection>)))
       (next-method)
       (error "as: the range is unbounded")))
 

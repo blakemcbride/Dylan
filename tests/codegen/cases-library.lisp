@@ -3666,4 +3666,21 @@ last
   "(#t #t #t #t #t #f #f)
 (#f #t #f #t #t #f #t)
 ")
+ ;; An unbounded range is refused as a collection of another class, which
+ ;; would have no end; as a class that is not a collection, it cannot be
+ ;; converted, bounded or not.
+ (as-unbounded-range-non-collection
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <my> (<object>))
+(print (try (method () (as <integer> (range from: 0)))))
+(print (try (method () (as <my> (range from: 0)))))
+(print (try (method () (as <integer> (range from: 0 up-to: 2)))))
+(print (try (method () (as <table> (range from: 0)))))
+(print (try (method () (as <deque> (range from: 0)))))"
+  "\"ERR: as: {range 0 by 1} cannot be converted to {the class <integer>}\"
+\"ERR: as: {range 0 by 1} cannot be converted to {the class <my>}\"
+\"ERR: as: {range 0 by 1 size 2} cannot be converted to {the class <integer>}\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+")
 )

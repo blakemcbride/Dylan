@@ -2411,6 +2411,29 @@ error
 (40000 3 3 40000 3)
 (#t #t #t)
 ")
+ ;; Strings and lists spread over a table's buckets too: their =hashes
+ ;; mostly differ (Bugs06 L3).  Collections that are = hash alike.
+ (hash-of-strings-and-lists
+  "(define-method distinct-hashes (keyf)
+  (bind ((seen (make <table>)))
+    (for ((i 0 (+ i 1))) ((= i 40000)) (set! (element seen (=hash (keyf i))) #t))
+    (size seen)))
+(print (> (distinct-hashes (method (i) (format #f \"k~a\" i))) 39000))
+(print (> (distinct-hashes (method (i) (list i i))) 39000))
+(define-method fill-table (n keyf)
+  (bind ((tb (make <table>)))
+    (for ((i 0 (+ i 1))) ((= i n)) (set! (element tb (keyf i)) i))
+    tb))
+(define ts (fill-table 40000 (method (i) (format #f \"k~a\" i))))
+(define tl (fill-table 40000 (method (i) (list i i))))
+(print (list (size ts) (element ts \"k123\") (size tl) (element tl (vector 7 7))))
+(print (list (= (=hash \"ab\") (=hash (vector #\\a #\\b))) (= (=hash '(1 2)) (=hash (vector 1 2)))
+             (= (=hash '(1 . 2)) (=hash (cons 1 2)))))"
+  "#t
+#t
+(40000 123 40000 7)
+(#t #t #t)
+")
  ;; rationalize answers the least integer, -2^62, for the float equal to it.
  (rationalize-least-integer
   "(print (rationalize -4.611686018427387904e18))

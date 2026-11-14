@@ -735,6 +735,26 @@ slot-descriptors leaves them out, as a compiled program does.")
 (defun combine-hash (hash1 hash2)
   (logand (+ (* 31 hash1) hash2) most-positive-fixnum))
 
+(declaim (inline mix64))
+(defun mix64 (x)
+  "X's 64 bits mixed, each bit of the result depending on all of X's (the
+MurmurHash3 finalizer, as mix64 in runtime/c/library.c)."
+  (declare (type (unsigned-byte 64) x))
+  (setf x (logxor x (ash x -33)))
+  (setf x (ldb (byte 64 0) (* x #xFF51AFD7ED558CCD)))
+  (setf x (logxor x (ash x -33)))
+  (setf x (ldb (byte 64 0) (* x #xC4CEB9FE1A85EC53)))
+  (logxor x (ash x -33)))
+
+(defun entry-hash (key-hash element-hash)
+  "A key and its element's part of a collection's =hash: their hashes
+mixed, below 2^56, as entry_hash in the compiled library mixes them.  A
+sum of these spreads over a table's buckets; terms that combine the two
+linearly cancel, as those of (i i) do."
+  (ldb (byte 56 0)
+       (mix64 (logxor (ldb (byte 64 0) (* (ldb (byte 64 0) key-hash) #x9E3779B97F4A7C15))
+                      (ldb (byte 64 0) element-hash)))))
+
 ;;; The final cdr of LIST when it is a dotted list; NIL when it is a
 ;;; proper or circular one.
 (defun dotted-list-tail (list)
@@ -783,44 +803,32 @@ slot-descriptors leaves them out, as a compiled program does.")
                ;; with = elements and final tail, so it hashes as though
                ;; its tail were one more element.
                (dylan%check-runtime-stack)
-               (if (and (consp collection) (dotted-list-tail collection))
-                   (let ((hash 0) (index 0))
-                     (loop for rest = collection then (cdr rest)
-                           while (consp rest)
-                           do (setf hash
-                                    (logxor hash
-                                            (combine-hash
-                                             (dylan-call dylan/=hash index)
-                                             (dylan-call dylan/=hash
-                                                         (car rest)))))
-                              (incf index)
-                           finally (return
-                                     (logxor hash
-                                             (combine-hash
-                                              (dylan-call dylan/=hash index)
-                                              (dylan-call dylan/=hash
-                                                          rest))))))
-               (let ((hash 0)
-                     (index 0)
-                     (sequence? (true? (dylan-call dylan/instance? collection
-                                            <sequence>)))
-                     (limit (if (collection-size collection) nil 2)))
-                 (loop for state = (initial-state collection)
-                         then (next-state collection state)
-                       while (and state (or (null limit) (< index limit)))
-                       do (let ((key (if sequence?
-                                         index
-                                         (current-key
-                                                     collection state))))
-                            (setf hash
-                                  (logxor hash
-                                          (combine-hash
-                                           (dylan-call dylan/=hash key)
-                                           (dylan-call dylan/=hash
-                                                       (current-element
-                                                        collection state)))))
-                            (incf index)))
-                 hash)))))
+               (flet ((entry (key element)
+                        (entry-hash (dylan-call dylan/=hash key)
+                                    (dylan-call dylan/=hash element))))
+                 (if (and (consp collection) (dotted-list-tail collection))
+                     (let ((hash 0) (index 0))
+                       (loop for rest = collection then (cdr rest)
+                             while (consp rest)
+                             do (setf hash (ldb (byte 56 0) (+ hash (entry index (car rest)))))
+                                (incf index)
+                             finally (return (ldb (byte 56 0) (+ hash (entry index rest))))))
+                     (let ((hash 0)
+                           (index 0)
+                           (sequence? (true? (dylan-call dylan/instance? collection
+                                                         <sequence>)))
+                           (limit (if (collection-size collection) nil 2)))
+                       (loop for state = (initial-state collection)
+                               then (next-state collection state)
+                             while (and state (or (null limit) (< index limit)))
+                             do (let ((key (if sequence?
+                                               index
+                                               (current-key collection state))))
+                                  (setf hash (ldb (byte 56 0)
+                                                  (+ hash (entry key (current-element
+                                                                      collection state)))))
+                                  (incf index)))
+                       hash))))))
 
 (defparameter dylan/floor (dylan%generic-fn 'floor one-real nil))
 

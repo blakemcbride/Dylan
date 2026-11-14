@@ -167,21 +167,25 @@ LITERAL-KEY."
         (t (error "No C representation for the constant ~s." value))))
 
 (defun c-string (data string &optional key)
-  "The C name of a static string object holding STRING: a <byte-string>
-if every character fits in a byte, else a <unicode-string>.  KEY, if not
-NIL, makes it the object of the literal written there."
-  (or (gethash (cons string key) (cdata-strings data))
-      (setf (gethash (cons string key) (cdata-strings data))
-            (let* ((codes (map 'list #'char-code string))
-                   (name (content-name data "dy_string_"
-                                       (format nil "~{~d~^ ~}~@[ @~a~]" codes key))))
-              (if (every (lambda (c) (< c 256)) codes)
-                  (define-c data "static struct { DyWrapper *wrapper; D size; char data[~d]; } ~a =~%  { &dy_wrapper_byte_string, DY_INT(~d), ~a };"
-                            (1+ (length codes)) name (length codes)
-                            (c-string-literal codes))
-                  (define-c data "static struct { DyWrapper *wrapper; D size; uint32_t data[~d]; } ~a =~%  { &dy_wrapper_unicode_string, DY_INT(~d), { ~{~du~^, ~} } };"
-                            (max 1 (length codes)) name (length codes) codes))
-              name))))
+  "The C name of a static string object holding STRING: a <unicode-string>
+if STRING is one (as a macro may make), or holds a character that does not
+fit in a byte, else a <byte-string>.  KEY, if not NIL, makes it the object
+of the literal written there."
+  (let* ((codes (map 'list #'char-code string))
+         (unicode (or (dylan::unicode-string? string) (notevery (lambda (c) (< c 256)) codes)))
+         (entry (list string key unicode)))
+    (or (gethash entry (cdata-strings data))
+        (setf (gethash entry (cdata-strings data))
+              (let ((name (content-name data "dy_string_"
+                                        (format nil "~{~d~^ ~}~@[ @~a~]~:[~; unicode~]"
+                                                codes key unicode))))
+                (if (not unicode)
+                    (define-c data "static struct { DyWrapper *wrapper; D size; char data[~d]; } ~a =~%  { &dy_wrapper_byte_string, DY_INT(~d), ~a };"
+                              (1+ (length codes)) name (length codes)
+                              (c-string-literal codes))
+                    (define-c data "static struct { DyWrapper *wrapper; D size; uint32_t data[~d]; } ~a =~%  { &dy_wrapper_unicode_string, DY_INT(~d), { ~{~du~^, ~} } };"
+                              (max 1 (length codes)) name (length codes) codes))
+                name)))))
 
 (defvar *symbol-forms* nil
   "The program's SYMBOL-FORMS: which top-level form first spells each

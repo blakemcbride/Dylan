@@ -363,6 +363,23 @@ FreSh
 (1 2)
 100000
 ")
+ ;; A <unicode-string> it quotes stays one, though its characters fit in
+ ;; a byte (Bugs06 C15).
+ (macro-quotes-a-unicode-string
+  "(define-macro m () (list 'quote (as <unicode-string> \"ab\")))
+(define s (m))
+(print (object-class s))
+(set! (element s 0) (as <character> 955))
+(print (as <integer> (element s 0)))
+(define-macro m2 () (list 'quote (list \"ab\" (as <unicode-string> \"ab\") (vector (as <unicode-string> \"\")))))
+(define l (m2))
+(print (map object-class (list (first l) (second l) (element (third l) 0))))
+(print (list (id? (first l) (second l)) (= (first l) (second l))))"
+  "{the class <unicode-string>}
+955
+({the class <byte-string>} {the class <unicode-string>} {the class <unicode-string>})
+(#f #t)
+")
  (macro-quotes-constants
   "(define-macro m () (list 'quote (list 1 \"a\" #\\b 'c d: 2.5 1/2 #t #f '() (vector 1 2))))
 (print (m))"

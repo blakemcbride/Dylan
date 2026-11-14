@@ -442,6 +442,14 @@ module: dylan
                       72057594037927935)))
        ((not state) h)))
 
+;;; The elements of the collection C in the order its iteration gives
+;;; them, as a list.
+(define %iterated-elements
+  (method (c)
+    (for ((state (initial-state c) (next-state c state))
+          (l '() (cons (current-element c state) l)))
+         ((not state) (%list-reverse l)))))
+
 ;;; Conversion of collections by as: to a sequence class, the elements in
 ;;; their natural order.  The result must be of the class (chapter 11): no
 ;;; <empty-list> holds elements, and no <pair> is empty.
@@ -451,8 +459,11 @@ module: dylan
         ((%subclass? class <mutable-sequence>)
          ;; A list is made as a <list>, so that the error names C: map-as
          ;; refuses an <empty-list> with elements and an empty <pair>.
+         ;; The elements as the collection's iteration gives them, as do
+         ;; and shallow-copy see them, not as element finds them by key.
          (bind ((result (map-as (if (%subclass? class <list>) <list> class)
-                                identity c)))
+                                identity
+                                (if (%instance? c <sequence>) c (%iterated-elements c)))))
            (if (%instance? result class)
                result
                (error "as: ~s cannot be converted to ~s" c class))))

@@ -3706,4 +3706,23 @@ last
 ((stored probe))
 ((stored probe))
 ")
+ ;; A table's elements as as and shallow-copy see them are those its
+ ;; iteration gives; map-as aligns it by its keys, through element.
+ (table-subclass-own-element
+  "(define-class <ttb> (<table>))
+(define-method element ((tb <ttb>) key #key default) (list 'el key))
+(define tb (make <ttb>))
+(set! (element tb 'a) 1)
+(define-method elements (c) (bind ((r '())) (do (method (x) (set! r (cons x r))) c) r))
+(print (elements tb))
+(print (as <list> tb))
+(print (as <vector> tb))
+(print (elements (shallow-copy tb)))
+(print (map-as <list> identity tb))"
+  "(1)
+(1)
+#(1)
+(1)
+((el a))
+")
 )

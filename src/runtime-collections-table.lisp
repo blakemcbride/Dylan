@@ -142,12 +142,13 @@
        (or (realp key) (characterp key) (and key (symbolp key)))))
 
 (defun dylan-assoc (key alist)
-  "Use DYLAN/BINARY= to compare keys."
+  "Use DYLAN/BINARY= to compare keys: the stored key first, then KEY, as
+chapter 12's element compares (= (current-key c state) key)."
   (cond ((not (fast-key? key))
          (loop for rest-alist = alist then (cdr rest-alist)
                do (if rest-alist
-                      (when (true? (dylan-call dylan/binary= key
-                                               (caar rest-alist)))
+                      (when (true? (dylan-call dylan/binary= (caar rest-alist)
+                                               key))
                         (return (car rest-alist)))
                       (return nil))))
         ((realp key)

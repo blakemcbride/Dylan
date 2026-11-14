@@ -3683,4 +3683,27 @@ last
 \"ERR: as: the range is unbounded\"
 \"ERR: as: the range is unbounded\"
 ")
+ ;; A table compares a stored key with the key given, the stored key
+ ;; first, as chapter 12's element does (= (current-key c state) key).
+ (table-key-comparison-order
+  "(define *calls* '())
+(define-class <key> (<object>) (name init-keyword: name:))
+(define-method binary= ((a <key>) (b <key>))
+  (set! *calls* (cons (list (name a) (name b)) *calls*))
+  (id? (name a) (name b)))
+(define-method =hash ((a <key>)) 0)
+(define tb (make <table>))
+(set! (element tb (make <key> name: 'stored)) 1)
+(element tb (make <key> name: 'probe) default: #f)
+(print *calls*)
+(set! *calls* '())
+(remove-key! tb (make <key> name: 'probe))
+(print *calls*)
+(set! *calls* '())
+(set! (element tb (make <key> name: 'probe)) 2)
+(print *calls*)"
+  "((stored probe))
+((stored probe))
+((stored probe))
+")
 )

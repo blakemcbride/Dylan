@@ -579,7 +579,11 @@ every use of VAR has instead, or something without effect no one uses?"
        (not (gethash var *closed-over*))
        (or (const-p value)
            (and (zerop (ivar-ref-count var))
-                (or (atom-p value) (ir-lambda-p value)
+                (or (atom-p value)
+                    ;; Making a method checks its specializers.
+                    (and (ir-lambda-p value)
+                         (notany (lambda (spec) (and spec (not (known-class spec))))
+                                 (ir-fn-specializers (ir-lambda-fn value))))
                     (and (ir-global-ref-p value)
                          (gethash (ir-global-ref-var value) *constant-globals*)
                          (known-bound-p (ir-global-ref-var value) (ivar-binder var))))))))
@@ -853,8 +857,18 @@ STACK, with its environment yet to fill."
               (stack-buffer "DyFunction" (length (cfun-env cfun))) (cfun-c-name cfun))
       (format nil "dy_make_closure(~a, ~d)" (cfun-c-name cfun) (length (cfun-env cfun)))))
 
+(defun check-specializers (fn)
+  "Check, as FN, a method made by method, is made now, that each of its
+specializers not known to be a class is a class or a singleton (chapter
+6: they are evaluated when the method is made)."
+  (unless (gethash fn *method-of-fn*)
+    (dolist (spec (ir-fn-specializers fn))
+      (when (and spec (not (known-class spec)))
+        (emit "dy_check_specializer(~a);" (atom-c spec))))))
+
 (defun closure-c (fn &optional stack)
   "A C expression for a closure of FN made now, on the stack if STACK."
+  (check-specializers fn)
   (let ((cfun (gethash fn *cfuns*)))
     (cond ((null (cfun-env cfun))
            (format nil "DY_OBJ(&~a_closure)" (cfun-c-name cfun)))
@@ -937,6 +951,8 @@ applicable-method?)."
       (loop for (var . cfun) in (reverse pending)
             do (fill-env (var-read var) cfun)
                (record-specializers (var-read var) (cfun-fn cfun))))
+    ;; Each method is made now, whether or not a closure of it is.
+    (mapc #'check-specializers fns)
     (if (null group)
         (gen (ir-letrec-body e) dest)
         ;; A destination with a label already -- an enclosing group's, as

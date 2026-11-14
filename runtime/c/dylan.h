@@ -1315,6 +1315,10 @@ bool dy_identical(D x, D y);
 /* Does X match the specializer SPEC, a class or a singleton? */
 bool dy_specializer_matches(D x, D spec);
 
+/* Chapter 6: a method's specializers are evaluated when it is made, each
+ * to a class or a singleton -- an error then, not when it is called. */
+void dy_check_specializer(D spec);
+
 /* For the method F: how many arguments it requires; *FIRST is set to the
  * first one's specializer, for a method that records none. */
 intptr_t dy_method_required(D f, D *first);

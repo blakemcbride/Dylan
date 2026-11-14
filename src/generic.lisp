@@ -69,14 +69,15 @@
                       (guarantee-keys keys))))
 
 (defun guarantee-symbol-and-specializer-list (original-list)
-  (if (all? (lambda (elt)
-              (and (consp elt) (consp (cdr elt)) (null (cddr elt))
-                   (symbolp (car elt))
-                   (or (class? (cadr elt)) (singleton? (cadr elt)))))
-            original-list)
-      original-list
-      (guarantee-symbol-and-specializer-list
-       (dylan-call dylan/error "invalid param-list" original-list))))
+  ;; Chapter 6: each specializer, evaluated when the method is made, is a
+  ;; class or a singleton -- worded as the compiled program words it.
+  (dolist (elt original-list original-list)
+    (unless (and (consp elt) (consp (cdr elt)) (null (cddr elt))
+                 (symbolp (car elt)))
+      (return (guarantee-symbol-and-specializer-list
+               (dylan-call dylan/error "invalid param-list" original-list))))
+    (unless (or (class? (cadr elt)) (singleton? (cadr elt)))
+      (dylan-call dylan/error "not a class or singleton: ~s" (cadr elt)))))
 
 (defun guarantee-keys (keys)
   "A parameter list's keywords: NIL without #key; :ANY for the runtime's

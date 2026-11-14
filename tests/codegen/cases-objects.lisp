@@ -3920,4 +3920,31 @@ after
 2
 (1 2 3)
 ")
+ ;; Chapter 6: an anonymous method's specializers are evaluated when the
+ ;; method is made, each to a class or a singleton -- the error is then,
+ ;; whether or not the method is used or called (Bugs05 B1).
+ (method-specializer-checked-when-made
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (method ((x 5)) x))))
+(print (try (method () ((method ((x 5)) x) 5))))
+(define-method mk (s) (method ((x s)) x))
+(print (try (method () (mk 7))))
+(print (try (method () (mk \"a\"))))
+(print (try (method () ((mk <integer>) 3))))
+(print (try (method () ((mk (singleton 3)) 3))))
+(print (try (method () (bind ((y 2)) (method ((x y)) (+ x y))))))
+(print (try (method () (bind ((m (method ((x 9)) x))) 1))))
+(print (try (method () (bind-methods ((m ((x 9)) x)) 1))))
+(print (try (method () (bind-methods ((m ((x 9)) x)) (m 1)))))"
+  "\"ERR: not a class or singleton: 5\"
+\"ERR: not a class or singleton: 5\"
+\"ERR: not a class or singleton: 7\"
+\"ERR: not a class or singleton: \\\"a\\\"\"
+3
+3
+\"ERR: not a class or singleton: 2\"
+\"ERR: not a class or singleton: 9\"
+\"ERR: not a class or singleton: 9\"
+\"ERR: not a class or singleton: 9\"
+")
 )

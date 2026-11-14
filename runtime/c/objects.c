@@ -34,6 +34,11 @@ bool dy_specializer_matches(D x, D spec) {
     dy_error("not a class or singleton", spec);
 }
 
+void dy_check_specializer(D spec) {
+    if (!dy_kind_p(spec, DY_KIND_CLASS) && !dy_kind_p(spec, DY_KIND_SINGLETON))
+        dy_error("not a class or singleton", spec);
+}
+
 static const char *generic_name(D generic) {
     D symbol = ((DyGeneric *)DY_PTR(generic))->name;
     if (symbol == DY_FALSE) return "an anonymous generic function";

@@ -243,10 +243,13 @@ are written, then throws to LIMITED-OUTPUT."))
        (finish-output)
        (let ((input (handler-bind
                         ((error (lambda (c)
-                                  (declare (ignore c))
                                   ;; At a terminal, what is left of the line
-                                  ;; is not read as the next form.
-                                  (unless *batch* (discard-rest-of-line *standard-input*)))))
+                                  ;; is not read as the next form.  After
+                                  ;; the end of the input nothing is left,
+                                  ;; and a read would wait for the next line.
+                                  (unless (or *batch*
+                                              (typep c '(or dylan-end-of-file end-of-file)))
+                                    (discard-rest-of-line *standard-input*)))))
                       (dylan-read *standard-input* nil rep-eof))))
          (terpri)
          (cond

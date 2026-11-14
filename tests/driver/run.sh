@@ -336,6 +336,39 @@ cat > redefine.dyl <<'EOF2'
 EOF2
 "$dylan" < redefine.dyl > redefine.out 2> redefine.err
 check "bin/dylan: a module redefined over a user's own variable" grep -q "^Dylan error: define-module: client defines g, which it would import from module m1" redefine.err
+# At a terminal (a pseudo-terminal python3 drives): each line is sent once
+# the output has paused
+if command -v python3 > /dev/null; then
+    cat > tty.py <<'EOF2'
+import os, pty, select, sys, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(sys.argv[1], sys.argv[1:2])
+out = b""
+def drain():
+    global out
+    quiet, end = time.time() + 1.5, time.time() + 60
+    while time.time() < min(quiet, end):
+        if select.select([fd], [], [], 0.1)[0]:
+            try:
+                data = os.read(fd, 4096)
+            except OSError:
+                return
+            if not data:
+                return
+            out += data
+            quiet = time.time() + 1.5
+drain()
+for line in sys.stdin.read().split("\n")[:-1]:
+    os.write(fd, line.replace("^D", "\x04").encode() + (b"" if line == "^D" else b"\n"))
+    drain()
+os.kill(pid, 9)
+sys.stdout.write(out.decode("utf-8", "replace"))
+EOF2
+    # Ctrl-D inside a form: the error at once, and the next line kept
+    printf '(+ 1\n^D\n(+ 3 4)\n' | python3 -I tty.py "$dylan" > eof.out 2>&1
+    check "bin/dylan at a terminal: Ctrl-D in a form reported at once" sh -c 'sed -n "/End of file inside a Dylan list/,\$p" eof.out | grep -q "^7"'
+fi
 # A # that ends the standard input, after a form, is an end of file there
 # as at the end of a file
 printf '(print 1)\n#' | "$dylan" > hash-end.out 2>&1

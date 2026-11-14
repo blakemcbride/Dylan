@@ -870,17 +870,23 @@ consuming it, or NIL at end of file."
         (as-unicode-string string)
         string)))
 
+;;; The end of the input met inside a form.  The read-eval-print loop
+;;; reads no further after it (rep.lisp).
+(define-condition dylan-end-of-file (simple-error) ())
+
 (defun read-dylan-string-characters (stream)
   (read-char stream)                    ; the opening quote
   (with-output-to-string (out)
     (loop for ch = (read-char stream nil nil)
           do (cond ((null ch)
-                    (error "End of file inside a Dylan string constant."))
+                    (error 'dylan-end-of-file
+                           :format-control "End of file inside a Dylan string constant."))
                    ((char= ch #\") (return))
                    ((char= ch #\\)
                     (let ((next (read-char stream nil nil)))
                       (when (null next)
-                        (error "End of file inside a Dylan string constant."))
+                        (error 'dylan-end-of-file
+                               :format-control "End of file inside a Dylan string constant."))
                       ;; Chapter 3: a backslash quotes the next character.
                       (write-char next out)))
                    (t (write-char ch out))))))
@@ -1047,7 +1053,8 @@ introduces the tail of a dotted list."
     (loop
       (let ((ch (skip-dylan-whitespace stream)))
         (cond
-          ((null ch) (error "End of file inside a Dylan list."))
+          ((null ch) (error 'dylan-end-of-file
+                            :format-control "End of file inside a Dylan list."))
           ((char= ch close) (read-char stream) (return head))
           ((and (char= ch #\.)
                 (dylan-delimiter-char-p (peek-dylan-second-char stream)))
@@ -1073,7 +1080,8 @@ introduces the tail of a dotted list."
   "Skip the rest of a #| ... |# comment, which may nest (chapter 3)."
   (loop with depth = 1
         for ch = (read-char stream nil nil)
-        do (cond ((null ch) (error "End of file inside a #| comment."))
+        do (cond ((null ch) (error 'dylan-end-of-file
+                                   :format-control "End of file inside a #| comment."))
                  ((and (char= ch #\|) (eql (peek-char nil stream nil nil) #\#))
                   (read-char stream)
                   (when (zerop (decf depth)) (return)))

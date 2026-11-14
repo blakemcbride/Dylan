@@ -3908,4 +3908,16 @@ other-error
 \"ERR: slot x: the new slot type <string> is not a subtype of the inherited type <integer>\"
 after
 ")
+ ;; An instance made while a slot's options are computed has the slots
+ ;; before it, whose options are stored as each is computed (Bugs05 C15).
+ (instance-made-while-slot-options-computed
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <self3> (<object>) (a init-value: 1)
+  (b init-function: (begin (print (try (method () (a (make <self3>))))) (method () 2)))
+  (c init-value: (begin (print (try (method () (b (make <self3>))))) 3)))
+(print (list (a (make <self3>)) (b (make <self3>)) (c (make <self3>))))"
+  "1
+2
+(1 2 3)
+")
 )

@@ -506,7 +506,9 @@ signals if the result is too large (chapter 8), and nothing is allocated."
                (own)))
          (deliver dest (definition-value var))))
       (ir-define-class-start
-       (gen-class-definition (ir-define-class-start-class e) :start)
+       (if (ir-define-class-start-slot e)
+           (gen-slot-store (ir-define-class-start-class e) (ir-define-class-start-slot e))
+           (gen-class-definition (ir-define-class-start-class e) :start))
        (deliver dest "DY_FALSE"))
       (ir-define-class
        (gen-class-definition e (if (ir-define-class-start e) :options :all))

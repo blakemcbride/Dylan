@@ -168,9 +168,13 @@ makes of the list of them."
        ;; A slot option computed by more than a constant, a variable or a
        ;; method is computed once the class's variable has its value
        ;; (chapter 6): after an IR-DEFINE-CLASS-START.
+       ;; Each slot's options are then stored as soon as they are
+       ;; computed, before the next slot's: an instance made while one is
+       ;; computed has the slots before it.
        (let* ((var (define-class-node-var node))
               (start (and (some #'computed-slot-option-p (define-class-node-slots node))
-                          (make-ir-define-class-start var))))
+                          (make-ir-define-class-start var)))
+              (stores '()))
          (norm-atoms (define-class-node-superclasses node)
                      (lambda (supers)
                        (let ((rest (norm-slots (define-class-node-slots node)
@@ -178,8 +182,15 @@ makes of the list of them."
                                                  (let ((d (make-ir-define-class var supers slots)))
                                                    (when start
                                                      (setf (ir-define-class-start d) start
-                                                           (ir-define-class-start-class start) d))
-                                                   d)))))
+                                                           (ir-define-class-start-class start) d)
+                                                     (dolist (store stores)
+                                                       (setf (ir-define-class-start-class store) d)))
+                                                   d))
+                                               (and start
+                                                    (lambda (i)
+                                                      (let ((store (make-ir-define-class-start var i)))
+                                                        (push store stores)
+                                                        store))))))
                          (if start (make-ir-seq (list start rest)) rest))))))
       (define-slot-node
        (norm-atom (define-slot-node-owner node)
@@ -195,8 +206,10 @@ than a constant, a variable or a method?"
         (list (slot-spec-type slot) (slot-spec-init-value slot)
               (slot-spec-init-function slot))))
 
-(defun norm-slots (slots k)
-  "SLOTS with their type, init-value and init-function made atoms."
+(defun norm-slots (slots k &optional store (index 0))
+  "SLOTS with their type, init-value and init-function made atoms.  With
+STORE, a function of a slot's index answering a node that stores that
+slot's options, the node follows the computation of each slot's."
   (if (null slots)
       (funcall k '())
       (let ((slot (car slots)))
@@ -208,8 +221,13 @@ than a constant, a variable or a method?"
              (setf (slot-spec-type new) (first atoms)
                    (slot-spec-init-value new) (second atoms)
                    (slot-spec-init-function new) (third atoms))
-             (norm-slots (cdr slots)
-                         (lambda (rest) (funcall k (cons new rest))))))))))
+             ;; The store first: the class's node, made last, is then
+             ;; given to it.
+             (let* ((node (and store (funcall store index)))
+                    (rest (norm-slots (cdr slots)
+                                      (lambda (rest) (funcall k (cons new rest)))
+                                      store (1+ index))))
+               (if node (make-ir-seq (list node rest)) rest))))))))
 
 ;;; Methods.  The specializers are evaluated where the method is made, so
 ;;; they are atoms of the enclosing function; the parameters, the keyword

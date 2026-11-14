@@ -952,10 +952,18 @@ one that takes slots, not read-only or sealed (chapter 11)."
                 (address (class-c-name sealed)))
           (emit "dy_check_slot_owner(~a);" (address (class-c-name (sdef-class sd))))))))
 
+(defun gen-slot-store (node index)
+  "Code storing the options of the slot INDEX of the define-class NODE,
+computed after the class was made (IR-DEFINE-CLASS-START)."
+  (gen-slot-initialization (nth index (gethash node *sdef-of-node*))))
+
 (defun gen-slot-options (node)
   (when (ir-define-slot-p node)
     (gen-class-slot-owner-check node))
-  (dolist (sd (gethash node *sdef-of-node*))
+  ;; Of a define-class whose slots' options are computed after the class
+  ;; is made, each slot's are stored as soon as computed (GEN-SLOT-STORE).
+  (dolist (sd (and (not (and (ir-define-class-p node) (ir-define-class-start node)))
+                   (gethash node *sdef-of-node*)))
     (when (null (sdef-class sd))
       ;; The owner: its object is the one with the slot from now on.
       (let ((owner (atom-c (ir-define-slot-owner node))))

@@ -213,10 +213,13 @@ keywords (NIL, :ANY, or a list)."
 ;;; The define-class of CLASS (an IR-DEFINE-CLASS) has run up to its slots'
 ;;; options, which are computed after it: its variable has its value
 ;;; (chapter 6, "after the variable containing the class is defined").
+;;; With SLOT, an index, the options of that slot have been computed and
+;;; are stored now, before the next slot's are computed.
 (defstruct (ir-define-class-start (:include ir-node)
-                                  (:constructor make-ir-define-class-start (var)))
+                                  (:constructor make-ir-define-class-start (var &optional slot)))
   var
-  (class nil))
+  (class nil)
+  (slot nil))
 
 (defstruct (ir-define-slot (:include ir-node)
                            (:constructor make-ir-define-slot (owner slot)))
@@ -301,7 +304,9 @@ separate compilation).")
     (ir-unwind `(unwind-protect ,(ir-unparse (ir-unwind-protected x))
                   ,(ir-unparse (ir-unwind-cleanup x))))
     (ir-define-class-start `(dylan::%define-class-start
-                             ,(word (module-var-string (ir-define-class-start-var x)))))
+                             ,(word (module-var-string (ir-define-class-start-var x)))
+                             ,@(and (ir-define-class-start-slot x)
+                                    (list (ir-define-class-start-slot x)))))
     (ir-define-variable `(dylan::define ,(word (module-var-string (ir-define-variable-var x)))
                            ,(ir-unparse (ir-define-variable-value x))))
     (ir-define-generic `(dylan::define-generic-function

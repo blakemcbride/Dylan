@@ -119,4 +119,32 @@
 \"out of memory\"
 (0 1 -1 1267650600228229401496703205376)
 ")
+ ;; The library's classes keep their superclasses and the slots the
+ ;; library gave them, on which its own errors depend; a program's class,
+ ;; and a slot a program added, may still change (Bugs05 L6).  (The
+ ;; compiler to C rejects these operations when compiling.)
+ (library-classes-not-remade
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>))
+(print (try (method () (set! (direct-superclasses <simple-error>) (list <a>)))))
+(print (try (method () (remove-slot <simple-error> (aref (slot-descriptors <simple-error>) 0)))))
+(print (try (method () (error \"still ~a\" 'catchable))))
+(define-class <my-error> (<simple-error>))
+(print (try (method () (set! (direct-superclasses <my-error>) (list <error>)))))
+(print (instance? (make <my-error>) <simple-error>))
+(define-generic-function extra (x))
+(define sd (add-slot <simple-error> getter: extra init-value: 5))
+(print (extra (make <simple-error>)))
+(remove-slot <simple-error> sd)
+(print (try (method () (extra (make <simple-error>)))))
+(print (try (method () (error \"and ~a\" 'again))))"
+  "\"ERR: (setter direct-superclasses) -- cannot remake a class of the library {the class <simple-error>}\"
+\"ERR: remove-slot -- cannot remove a slot of the library {the class <simple-error>} {slot condition-format-string}\"
+\"ERR: still catchable\"
+({the class <error>})
+#f
+5
+\"ERR: no applicable method for extra\"
+\"ERR: and again\"
+")
 )

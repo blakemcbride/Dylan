@@ -80,7 +80,7 @@ Name & Description & \\
 \code{(object-class object)}\index{object-class} & The class of which \code{object} is a direct instance. &  \\
 \code{(all-superclasses class)}\index{all-superclasses} & The class and all its superclasses, in precedence order. &  \\
 \code{(direct-superclasses class)}\index{direct-superclasses} & The class's direct superclasses. &  \\
-\code{((setter direct-superclasses) class superclasses)} & Changes the class's direct superclasses. & \textsc{l} \\
+\code{((setter direct-superclasses) class superclasses)} & Changes the class's direct superclasses (not a library class's). & \textsc{l} \\
 \code{(direct-subclasses class)}\index{direct-subclasses} & The class's direct subclasses. &  \\
 \code{(as class object)}\index{as} & Converts \code{object} to an instance of \code{class}, for example a list to a vector or a character to an integer. &  \\
 \code{(shallow-copy object)}\index{shallow-copy} & A new object like \code{object}, sharing its contents. &  \\
@@ -89,7 +89,7 @@ Name & Description & \\
 \code{(make-read-only object)}\index{make-read-only} & Makes a class or generic function read-only, so that its slots or methods cannot change; answers it. &  \\
 \code{(slot-descriptors class)}\index{slot-descriptors} & The descriptors of the class's slots. &  \\
 \code{(add-slot owner \#key getter setter type init-value init-function init-keyword required-init-keyword debug-name allocation)}\index{add-slot} & Adds a slot to a class (or singleton) that may already have instances. & \textsc{l} \\
-\code{(remove-slot owner slot-descriptor)}\index{remove-slot} & Removes a slot. & \textsc{l} \\
+\code{(remove-slot owner slot-descriptor)}\index{remove-slot} & Removes a slot (not one the library gave its class). & \textsc{l} \\
 \code{(slot-descriptor instance getter)}\index{slot-descriptor} & The descriptor of the slot of \code{instance} that \code{getter} reads. &  \\
 \code{(slot-getter slot-descriptor)}\index{slot-getter} & The slot's getter, or \code{\#f}. &  \\
 \code{(slot-setter slot-descriptor)}\index{slot-setter} & The slot's setter, or \code{\#f}. &  \\

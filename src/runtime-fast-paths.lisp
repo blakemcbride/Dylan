@@ -79,3 +79,6 @@
 
 ;;; ... and the program's copies of its variables (runtime-internal.lisp)
 (make-program-variables)
+
+;;; ... and its classes, whose superclasses and slots are its own (class.lisp)
+(record-library-classes)

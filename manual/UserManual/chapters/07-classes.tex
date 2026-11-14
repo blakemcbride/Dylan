@@ -602,7 +602,11 @@ new superclasses; and \code{(make <class> superclasses: \meta{classes}
 debug-name: \meta{name})} creates a new class. Existing instances are
 updated to the new definition before they are next used.
 
-All of this works in the Common Lisp implementation. A program for the
+All of this works in the Common Lisp implementation, on the program's
+classes; the library's classes keep their superclasses and the slots the
+library gave them, on which its own functions depend, so
+\code{(setter direct-superclasses)} of one, or \code{remove-slot} of
+such a slot, is an error. A program for the
 compiler to C is static: its classes and their slots are fixed when it is
 compiled. There \code{add-slot}, \code{remove-slot} and
 \code{(setter direct-superclasses)} are errors when compiling, \code{make} of \code{<class>} is an error when run, and

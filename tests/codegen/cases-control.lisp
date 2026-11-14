@@ -1235,4 +1235,17 @@ is-g
 3
 \"\"
 ")
+ ;; A handler's option may be given once.
+ (handler-case-option-twice
+  "(print (handler-case (error \"x\") ((<error> test: (method (c) #f) test: (method (c) #t)) 1) ((<error>) 2)))"
+  ""
+  :compile-error "handler-case: option test: given twice")
+ (handler-case-condition-twice
+  "(print (handler-case (error \"x\") ((<error> condition: a condition: b) 1)))"
+  ""
+  :compile-error "handler-case: option condition: given twice")
+ (handler-bind-option-twice
+  "(print (handler-bind (<error> (method (c n) 1) description: \"a\" description: \"b\") 3))"
+  ""
+  :compile-error "handler-bind: option description: given twice")
 )

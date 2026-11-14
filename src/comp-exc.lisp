@@ -69,6 +69,15 @@
                     (lambda () ,compiled-form))
                   module-vars))))))
 
+(defun check-options-once (options what)
+  "Refuse OPTIONS, keyword/value pairs already checked, if one keyword is
+given twice, as the compiler does: neither would be the one meant."
+  (loop for rest on options by #'cddr
+        do (loop for later on (cddr rest) by #'cddr
+                 when (eq (car later) (car rest))
+                   do (dylan%error (format nil "~a: option ~~a given twice" what)
+                                   (car rest)))))
+
 (defun compile-handler-bind-form (e module-vars bound-vars really-compile
                                   multiple-values? continue)
   (must-have-syntax e 1 "handler-bind")
@@ -77,6 +86,7 @@
     (must-have-syntax handler-spec 2 "handler-bind handler")
     (let ((keywords (cddr handler-spec)))
       (validate-keywords keywords '(:test :description) #'dylan%error)
+      (check-options-once keywords "handler-bind")
       (let ((type (car handler-spec))
             (func (cadr handler-spec)))
         (compile-forms
@@ -112,7 +122,8 @@
                    (dylan%error "handler-case: unknown option" key))
                  (when (and (eq key :condition) (not (variable-name? value)))
                    (dylan%error "handler-case condition:: ~s is not a variable name"
-                                value)))))
+                                value)))
+        (check-options-once options "handler-case")))
     (funcall
      really-compile protected-form module-vars bound-vars multiple-values?
      (lambda (compiled-form module-vars)

@@ -331,6 +331,8 @@ same."
                                     (slot-storage slot)))))
                        (when k (push k keywords))))
                (class.slots class))
+          ;; In the slots' order, so that the first missing is named
+          (setf keywords (nreverse keywords))
           (setf (class.required-init-keywords class)
                 (list* *class-structure-epoch* (class.slots class) keywords))
           keywords))))

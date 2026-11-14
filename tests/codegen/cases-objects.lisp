@@ -3866,4 +3866,19 @@ other-error
 <<the-unassigned-value>>
 "
   :error "g is defined both as a variable and as a generic function")
+ ;; Of two missing required init-keywords, the first slot's is named
+ ;; (Bugs05 C25).
+ (required-init-keywords-first-missing
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <c0> (<object>) (s1 required-init-keyword: s1:) (s3 required-init-keyword: s3:))
+(print (try (method () (make <c0>))))
+(print (try (method () (make <c0> s1: 1))))
+(define-class <c1> (<c0>) (s4 required-init-keyword: s4:))
+(print (try (method () (make <c1> s3: 3))))
+(print (try (method () (make <c1> s1: 1 s3: 3))))"
+  "\"ERR: make: the required init-keyword is missing: s1:\"
+\"ERR: make: the required init-keyword is missing: s3:\"
+\"ERR: make: the required init-keyword is missing: s1:\"
+\"ERR: make: the required init-keyword is missing: s4:\"
+")
 )

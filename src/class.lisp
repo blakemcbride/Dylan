@@ -899,12 +899,15 @@ slots.")
                    required-init-keyword))
       (dylan-call dylan/error "slot ~a: a virtual slot cannot be initialized"
                   debug-name))
-    (when (and (member allocation '(class each-subclass))
+    ;; Chapter 6: a constant slot's value is its init-value, not an init
+    ;; argument's
+    (when (and (member allocation '(class each-subclass constant))
                (or init-function required-init-keyword init-keyword))
       (dylan-call dylan/error
-                  (if (eq allocation 'class)
-                      "slot ~a: a class slot takes only an init-value:"
-                      "slot ~a: an each-subclass slot takes only an init-value:")
+                  (case allocation
+                    (class "slot ~a: a class slot takes only an init-value:")
+                    (each-subclass "slot ~a: an each-subclass slot takes only an init-value:")
+                    (t "slot ~a: a constant slot takes only an init-value:"))
                   debug-name))
     ;; The accessors' generic functions must take the methods the slot
     ;; gives them, as add-method checks, before anything is changed: an

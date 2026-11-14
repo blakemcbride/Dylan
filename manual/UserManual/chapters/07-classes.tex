@@ -209,7 +209,8 @@ slot uninitialized again.
   instances, and each subclass has a value of its own, shared by the
   subclass's direct instances.
 \item[\code{constant}] The value is the init-value, which must be given,
-  and it cannot be changed: the slot has no setter.
+  and it cannot be changed: the slot has no setter, and takes no other
+  initialization option.
 \item[\code{virtual}] No storage is allocated. The program defines methods
   on the getter, and on the setter if it wants one, that compute the value;
   \code{define-class} only makes sure the generic functions exist.

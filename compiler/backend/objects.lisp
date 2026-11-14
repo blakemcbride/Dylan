@@ -482,7 +482,11 @@ variable's value (chapter 6's slot types and initial values may name it)."
                           name (if (eq allocation :class) "a class" "an each-subclass"))))
         (:constant
          (unless (slot-spec-init-value spec)
-           (compile-error "slot ~a: a constant slot needs an init-value:" name)))
+           (compile-error "slot ~a: a constant slot needs an init-value:" name))
+         ;; Chapter 6: its value is the init-value, not an init argument's
+         (when (or (slot-spec-init-function spec) (slot-spec-init-keyword spec)
+                   (slot-spec-required-init-keyword spec))
+           (compile-error "slot ~a: a constant slot takes only an init-value:" name)))
         (:virtual
          (when (or (slot-spec-init-value spec) (slot-spec-init-function spec)
                    (slot-spec-init-keyword spec) (slot-spec-required-init-keyword spec))

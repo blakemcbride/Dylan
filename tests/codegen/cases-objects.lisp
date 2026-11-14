@@ -3723,6 +3723,18 @@ other-error
   "(define-class <a> (<object>) (s allocation: each-subclass init-keyword: s:))"
   ""
   :compile-error "slot s: an each-subclass slot takes only an init-value:")
+ ;; Chapter 6: a constant slot's value is its init-value, which an init
+ ;; argument cannot replace (Bugs05 B5).
+ (constant-slot-init-keyword
+  "(define-class <x> (<object>) (s allocation: constant init-value: 1 init-keyword: s:))
+(print (s (make <x> s: 5)))"
+  ""
+  :compile-error "slot s: a constant slot takes only an init-value:")
+ (constant-slot-init-keyword-define-slot
+  "(define-class <x> (<object>))
+(define-slot <x> s allocation: constant init-value: 1 init-keyword: s:)"
+  ""
+  :compile-error "slot s: a constant slot takes only an init-value:")
  (constant-slot-without-value
   "(define-class <a> (<object>) (s allocation: constant))"
   ""

@@ -4054,4 +4054,19 @@ UNDEF
 (x (#(0 0) #(0 1) #(0 2) #(1 0) #(1 1) #(1 2)))
 (0 7 #f #())
 ")
+ ;; Dividing by zero with floor/ and its family is a division by zero,
+ ;; a float or not (Bugs05 B15).
+ (division-family-zero-by-zero
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(for-each ((f (list floor/ ceiling/ round/ truncate/ modulo remainder)))
+  ()
+  (print (list (try (method () (f 0.0 0))) (try (method () (f 0 0.0)))
+               (try (method () (f 1.5 0))) (try (method () (f 0 0))))))"
+  "(\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
+(\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
+(\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
+(\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
+(\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
+(\"division by zero\" \"division by zero\" \"division by zero\" \"division by zero\")
+")
 )

@@ -591,6 +591,14 @@ irrational functions; an exact real stays exact."
                                     (real-domain-function #'sqrt #'minusp
                                                           "sqrt: the result would be complex: ~s"))))
 
+(defun real-quotient (real1 real2)
+  "REAL1 divided by REAL2 for floor/ and its family: a division by zero
+when REAL2 is zero, a float or not, as in the compiler to C -- not the
+host's invalid operation for zero by zero."
+  (if (zerop real2)
+      (error 'division-by-zero :operation '/ :operands (list real1 real2))
+      (/ real1 real2)))
+
 (defparameter dylan/modulo
   (dylan%generic-fn
    'modulo two-reals
@@ -602,7 +610,7 @@ irrational functions; an exact real stays exact."
 (defparameter dylan/remainder
   (dylan%generic-fn 'remainder two-reals
                     (lambda (real1 real2)
-                      (- real1 (* real2 (truncate (/ real1 real2)))))))
+                      (- real1 (* real2 (truncate (real-quotient real1 real2)))))))
 
 (defparameter dylan/unary- (dylan%generic-fn 'unary- one-number #'-))
 (defparameter dylan/unary/ (dylan%generic-fn 'unary/ one-number #'/))
@@ -917,7 +925,7 @@ linearly cancel, as those of (i i) do."
   two-reals
   (lambda (multiple-values next-method real1 real2)
     (declare (ignore next-method))
-    (let ((floor-div-result (floor (/ real1 real2))))
+    (let ((floor-div-result (floor (real-quotient real1 real2))))
       (dylan-mv-call dylan/values multiple-values
                      floor-div-result
                      (- real1 (* real2 floor-div-result)))))))
@@ -930,7 +938,7 @@ linearly cancel, as those of (i i) do."
   two-reals
   (lambda (multiple-values next-method real1 real2)
     (declare (ignore next-method))
-    (let ((ceiling-div-result (ceiling (/ real1 real2))))
+    (let ((ceiling-div-result (ceiling (real-quotient real1 real2))))
       (dylan-mv-call dylan/values multiple-values
                      ceiling-div-result
                      (- real1 (* real2 ceiling-div-result)))))))
@@ -943,7 +951,7 @@ linearly cancel, as those of (i i) do."
   two-reals
   (lambda (multiple-values next-method real1 real2)
     (declare (ignore next-method))
-    (let ((truncate-div-result (truncate (/ real1 real2))))
+    (let ((truncate-div-result (truncate (real-quotient real1 real2))))
       (dylan-mv-call dylan/values multiple-values
                      truncate-div-result
                      (- real1 (* real2 truncate-div-result)))))))
@@ -956,7 +964,7 @@ linearly cancel, as those of (i i) do."
   two-reals
   (lambda (multiple-values next-method real1 real2)
     (declare (ignore next-method))
-    (let ((round-div-result (round (/ real1 real2))))
+    (let ((round-div-result (round (real-quotient real1 real2))))
       (dylan-mv-call dylan/values multiple-values
                      round-div-result
                      (- real1 (* real2 round-div-result)))))))

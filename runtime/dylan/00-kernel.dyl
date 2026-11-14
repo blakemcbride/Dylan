@@ -27,37 +27,49 @@ module: dylan
 (define-method binary< ((x <character>) (y <character>))
   (%number< (%character->integer x) (%character->integer y)))
 
+;;; Each compares its arguments pair by pair, left to right, until a
+;;; pair fails: a loop down the #rest list, which is not copied.
 (define =
   (method (x y #rest more)
-    (if (binary= x y)
-        (if (id? more '()) #t (apply = y more))
-        #f)))
+    (bind-methods ((through (a l)
+                     (cond ((id? l '()) #t)
+                           ((binary= a (car l)) (through (car l) (cdr l)))
+                           (else: #f))))
+      (if (binary= x y) (through y more) #f))))
 
 (define /= (method (x y) (not (binary= x y))))
 
 (define <
   (method (x y #rest more)
-    (if (binary< x y)
-        (if (id? more '()) #t (apply < y more))
-        #f)))
+    (bind-methods ((through (a l)
+                     (cond ((id? l '()) #t)
+                           ((binary< a (car l)) (through (car l) (cdr l)))
+                           (else: #f))))
+      (if (binary< x y) (through y more) #f))))
 
 (define >
   (method (x y #rest more)
-    (if (binary< y x)
-        (if (id? more '()) #t (apply > y more))
-        #f)))
+    (bind-methods ((through (a l)
+                     (cond ((id? l '()) #t)
+                           ((binary< (car l) a) (through (car l) (cdr l)))
+                           (else: #f))))
+      (if (binary< y x) (through y more) #f))))
 
 (define <=
   (method (x y #rest more)
-    (if (binary< y x)
-        #f
-        (if (id? more '()) #t (apply <= y more)))))
+    (bind-methods ((through (a l)
+                     (cond ((id? l '()) #t)
+                           ((binary< (car l) a) #f)
+                           (else: (through (car l) (cdr l))))))
+      (if (binary< y x) #f (through y more)))))
 
 (define >=
   (method (x y #rest more)
-    (if (binary< x y)
-        #f
-        (if (id? more '()) #t (apply >= y more)))))
+    (bind-methods ((through (a l)
+                     (cond ((id? l '()) #t)
+                           ((binary< a (car l)) #f)
+                           (else: (through (car l) (cdr l))))))
+      (if (binary< x y) #f (through y more)))))
 
 ;;; The library compares the elements and keys a program gives it by
 ;;; these, which call a program's methods, as the operators do.  Its own

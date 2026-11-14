@@ -3655,4 +3655,15 @@ last
 #(1 2 3)
 #(1 7 8)
 ")
+ ;; The comparisons take their arguments pair by pair, in linear time
+ ;; however many there are.
+ (comparisons-of-many-arguments
+  "(define ones (bind ((l '())) (dotimes (i 40000) (set! l (cons 1 l))) l))
+(define up (bind ((l '())) (dotimes (i 40000) (set! l (cons (- 40000 i) l))) l))
+(print (list (apply = ones) (apply < up) (apply <= ones) (apply > (reverse up))
+             (apply >= ones) (apply < ones) (apply > ones)))
+(print (list (= 1 1 2) (= 1 1 1) (< 1 2 3 3) (<= 1 2 3 3) (> 3 2 1) (>= 3 3 4) (>= 3 3 2)))"
+  "(#t #t #t #t #t #f #f)
+(#f #t #f #t #t #f #t)
+")
 )

@@ -429,4 +429,23 @@ FreSh
 (set! m 3)"
   ""
   :compile-error "m is a macro: it cannot be used as a variable")
+ ;; Chapter 16: a macro's body is ordinary Dylan -- an error the host
+ ;; detects in it is the Dylan error, which the body's handlers see
+ ;; first, and is worded as Dylan's (Bugs05 B2).
+ (macro-body-host-error-handled
+  "(define-macro safe-div (a b) (handler-case (/ a b) ((<error> condition: c) 0)))
+(print (safe-div 1 0))
+(define-macro safe-car (a) (handler-case (car a) ((<error> condition: c) (format #f \"~a\" c))))
+(print (safe-car 5))
+(define-macro safe-expt () (handler-case (expt 0 -1) ((<error> condition: c) (format #f \"~a\" c))))
+(print (safe-expt))"
+  "0
+\"not a list: 5\"
+\"division by zero\"
+")
+ (macro-body-host-error-unhandled
+  "(define-macro bad-car (a) (car a))
+(print (bad-car 5))"
+  ""
+  :compile-error "macro bad-car: not a list: 5")
 )

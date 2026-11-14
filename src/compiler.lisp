@@ -852,7 +852,11 @@ call, with the macro's name, as the compiler to C reports it."
       (dylan%error (format nil "macro ~a: wrong number of arguments in ~a" name
                            (with-output-to-string (s)
                              (let ((*standard-output* s)) (dylan-write e))))))
-    (handler-case (apply (cdr macro) nil next-method/not-generic (cdr e))
+    ;; A host error in the body is the Dylan error it reflects, which
+    ;; the body's own handlers see first (chapter 16: a macro's body is
+    ;; ordinary Dylan).
+    (handler-case (dylan%catch-all-conditions
+                   (lambda () (apply (cdr macro) nil next-method/not-generic (cdr e))))
       (error (condition)
         (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
 

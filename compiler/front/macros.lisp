@@ -542,7 +542,12 @@ value.  An error in it is a compile error, its message beginning with WHAT."
          form nil *compile-time-variables*
          (lambda (new preamble output)
            (setf *compile-time-variables* (append new *compile-time-variables*))
-           (setf result (dylan::implementation-specific/eval (append preamble (list output))))))
+           ;; A host error is the Dylan error it reflects, which the
+           ;; form's own handlers see first, as when the program runs.
+           (setf result (dylan::dylan%catch-all-conditions
+                         (lambda ()
+                           (dylan::implementation-specific/eval
+                            (append preamble (list output))))))))
         result)
     (compile-error (e) (error e))
     (error (e) (compile-error "~a: ~a" what (condition-text e)))))
@@ -592,7 +597,13 @@ value.  An error in it is a compile error, its message beginning with WHAT."
                      (car macro) (dylan-form-string form)))
     (let ((expansion
             (handler-case (let ((dylan::*batch* t))   ; as in COMPILE-TIME-EVAL
-                            (apply (cdr macro) nil dylan::next-method/not-generic (cdr form)))
+                            ;; A host error in the body is the Dylan error
+                            ;; it reflects, which the body's own handlers
+                            ;; see first (chapter 16).
+                            (dylan::dylan%catch-all-conditions
+                             (lambda ()
+                               (apply (cdr macro) nil dylan::next-method/not-generic
+                                      (cdr form)))))
               (compile-error (e) (error e))
               (error (e)
                 (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))

@@ -14,7 +14,12 @@ module: dylan
 (define-method make ((class (singleton <table>)) #rest arguments #key) (%make <table>))
 
 (define %bucket-index
-  (method (t key) (modulo (=hash key) (%vector-size (%buckets t)))))
+  (method (t key)
+    (bind ((hash (=hash key)))
+      ;; Chapter 9: =hash answers an integer
+      (unless (%instance? hash <integer>)
+        (error "=hash: the hash code is not an integer: ~s" hash))
+      (modulo hash (%vector-size (%buckets t))))))
 
 (define %table-find
   (method (t key)

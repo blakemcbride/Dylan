@@ -3725,4 +3725,17 @@ last
 (1)
 ((el a))
 ")
+ ;; =hash must answer an integer (chapter 9).
+ (hash-not-an-integer
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <fh> (<object>)) (define-method =hash ((a <fh>)) 1.5)
+(define-class <sh> (<object>)) (define-method =hash ((a <sh>)) 'sym)
+(define-class <rh> (<object>)) (define-method =hash ((a <rh>)) 7/2)
+(print (try (method () (set! (element (make <table>) (make <fh>)) 'a))))
+(print (try (method () (set! (element (make <table>) (make <sh>)) 'a))))
+(print (try (method () (element (make <table>) (make <rh>) default: 0))))"
+  "\"ERR: =hash: the hash code is not an integer: 1.5\"
+\"ERR: =hash: the hash code is not an integer: sym\"
+\"ERR: =hash: the hash code is not an integer: 7/2\"
+")
 )

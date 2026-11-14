@@ -166,7 +166,11 @@ chapter 12's element compares (= (current-key c state) key)."
 REMAINDER, never answers a negative index."
   (mod (if (fast-key? key)
            (if (realp key) (real-hash key) (sxhash key))
-           (dylan-call dylan/=hash key))
+           (let ((hash (dylan-call dylan/=hash key)))
+             ;; Chapter 9: =hash answers an integer
+             (unless (integerp hash)
+               (dylan-call dylan/error "=hash: the hash code is not an integer: ~s" hash))
+             hash))
        (length hash-table)))
 
 (defparameter dylan/remove-key!

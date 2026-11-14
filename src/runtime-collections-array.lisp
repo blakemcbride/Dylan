@@ -204,6 +204,8 @@ simple object vector."
                              dimensions)))
         (unless (subclass? (get-type dimensions) <sequence>)
           (bad-dimensions))
+        ;; An unbounded range has no end to read to
+        (check-as-bounded dimensions)
         (let ((instance (dylan%make-<object> <%general-array>))
               (dim-list
                 (iterate->list

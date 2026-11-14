@@ -1129,6 +1129,17 @@ Zip:
 \"ERR: add: the range is unbounded\"
 (0 1 2 3)
 ")
+ ;; make <array> refuses an unbounded range as dimensions: (Bugs06 B3)
+ (make-array-unbounded-range
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define u (range from: 1))
+(print (try (method () (make <array> dimensions: u))))
+(print (dimensions (make <array> dimensions: (range from: 2 size: 2))))
+(print (try (method () (make <array> dimensions: '(2 -1)))))"
+  "\"ERR: as: the range is unbounded\"
+(2 3)
+\"ERR: make: the dimensions of an <array> are not non-negative integers: (2 -1)\"
+")
  ;; So do apply, and as to <mutable-sequence>, <empty-list> or a
  ;; program's own sequence class (Bugs06 L2)
  (apply-and-as-unbounded-range

@@ -13,13 +13,16 @@ module: dylan
 
 (define-method make ((class (singleton <array>)) #key dimensions (fill #f))
   (unless dimensions (error "make: <array> requires dimensions:"))
-  (unless (and (%instance? dimensions <sequence>)
-               (every? (method (d) (and (%instance? d <integer>) (not (negative? d))))
-                       dimensions))
+  (unless (%instance? dimensions <sequence>)
     (error "make: the dimensions of an <array> are not non-negative integers: ~s"
            dimensions))
-  ;; A list of the array's own: as may answer the caller's
+  ;; A list of the array's own: as may answer the caller's.  Made before
+  ;; the dimensions are checked, so that an unbounded range is refused by
+  ;; as, not read for ever.
   (bind ((dims (copy-sequence (as <list> dimensions))))
+    (unless (every? (method (d) (and (%instance? d <integer>) (not (negative? d)))) dims)
+      (error "make: the dimensions of an <array> are not non-negative integers: ~s"
+             dimensions))
     (if (and (%pair? dims) (id? (cdr dims) '()))
         (%make-vector (car dims) fill)
         (%make <%general-array> dimensions: dims

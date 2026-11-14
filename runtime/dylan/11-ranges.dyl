@@ -129,6 +129,15 @@ module: dylan
   (unless (%size r) (error "concatenate: the range is unbounded"))
   (next-method))
 
+;;; sort and sort! of an unbounded range: as the range as a sequence
+(define-method sort ((r <range>) #key (test <) stable)
+  (unless (%size r) (error "as: the range is unbounded"))
+  (next-method))
+
+(define-method sort! ((r <range>) #key (test <) stable)
+  (unless (%size r) (error "as: the range is unbounded"))
+  (next-method))
+
 ;;; An unbounded range as another collection would have no end.
 (define-method as ((class <class>) (r <range>))
   (if (or (%size r) (%instance? r class))

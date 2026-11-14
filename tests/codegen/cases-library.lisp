@@ -1096,6 +1096,19 @@ Zip:
 \"ERR: concatenate: the range is unbounded\"
 \"ERR: concatenate: the range is unbounded\"
 ")
+ ;; sort and sort! of an unbounded range are as's error (Bugs06 B1)
+ (sort-unbounded-range
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define u (range from: 1))
+(print (try (method () (sort u))))
+(print (try (method () (sort! u))))
+(print (try (method () (sort u test: >))))
+(print (sort (range from: 3 size: 3 by: -1)))"
+  "\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+\"ERR: as: the range is unbounded\"
+(1 2 3)
+")
  ;; So do apply, and as to <mutable-sequence>, <empty-list> or a
  ;; program's own sequence class (Bugs06 L2)
  (apply-and-as-unbounded-range

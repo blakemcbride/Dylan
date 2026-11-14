@@ -5,6 +5,7 @@
  */
 
 #include "dylan.h"
+#include <stdlib.h>
 #include <string.h>
 
 _Thread_local DyThread *dy_thread;
@@ -37,6 +38,7 @@ void dy_end_thread(void) {
     dy_free_root(dy_thread->thread_variables);
     if (dy_thread->more_args) dy_free_root(dy_thread->more_args);
     if (dy_thread->mv != dy_thread->mv_inline) dy_free_root(dy_thread->mv);
+    free(dy_thread->frame_at);
     dy_free_root(dy_thread);
     dy_thread = NULL;
 }

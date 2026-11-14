@@ -1008,6 +1008,9 @@ typedef struct DyThread {
                                       a thread other than the main one   */
     D *thread_variables;           /* its values of the program's thread
                                       variables                          */
+    struct DyFrame **frame_at;     /* the chain's frame at each depth,
+                                      from the bottom (control.c)        */
+    intptr_t frame_at_size;
 #ifdef DY_MPS
     mps_thr_t mps_thread;
     mps_root_t stack_root;
@@ -1028,10 +1031,14 @@ typedef struct DyFrame {
     struct DyFrame *prev;
     int kind;
     uint64_t serial;               /* unique in the thread                */
+    intptr_t depth;                /* how many frames are below it        */
     jmp_buf jump;                  /* DY_FRAME_EXIT                       */
     D a, b, c, d;                  /* CLEANUP: a the cleanup; HANDLER:
                                       type, function, test, description  */
 } DyFrame;
+
+/* Put the frame F, of the kind KIND, on the thread's chain. */
+void dy_push_frame(DyFrame *f, int kind);
 
 /* Leave every frame above TARGET, running cleanups, and jump to it, with
  * the values the thread holds. */

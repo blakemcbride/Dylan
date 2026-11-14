@@ -53,10 +53,7 @@ static void *thread_main(void *arg) {
     pthread_cond_broadcast(DY_THREAD_ENDED(t));
     pthread_mutex_unlock(DY_THREAD_LOCK(t));
     DyFrame top;
-    top.kind = DY_FRAME_EXIT;
-    top.prev = NULL;
-    top.serial = ++dy_thread->frame_serial;
-    dy_thread->frames = &top;
+    dy_push_frame(&top, DY_FRAME_EXIT);
     dy_thread->top_frame = &top;
     if (_setjmp(top.jump) == 0) {
         dy_thread->mv_count = 1;

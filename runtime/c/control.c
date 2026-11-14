@@ -28,18 +28,33 @@
 
 static D error_hook, type_error_hook, default_handler;
 
-static void push_frame(DyFrame *f, int kind) {
+/* The thread keeps the chain's frame at each depth in FRAME_AT, which a
+ * push sets and a pop leaves: the entries up to the top frame's depth are
+ * the chain's.  An exit procedure or a next-handler checks that its frame
+ * is still there in constant time, however long the chain. */
+void dy_push_frame(DyFrame *f, int kind) {
     DyThread *t = dy_thread;
     f->kind = kind;
     f->prev = t->frames;
     f->serial = ++t->frame_serial;
+    f->depth = f->prev ? f->prev->depth + 1 : 0;
+    if (f->depth >= t->frame_at_size) {
+        intptr_t n = t->frame_at_size ? 2 * t->frame_at_size : 256;
+        DyFrame **at = realloc(t->frame_at, (size_t)n * sizeof *at);
+        if (!at) dy_error("out of memory", 0);
+        t->frame_at = at;
+        t->frame_at_size = n;
+    }
+    t->frame_at[f->depth] = f;
     t->frames = f;
 }
 
-static bool in_chain(DyFrame *f, uint64_t serial) {
-    for (DyFrame *g = dy_thread->frames; g; g = g->prev)
-        if (g == f) return g->serial == serial;
-    return false;
+/* Is F, which had the serial number SERIAL at the depth DEPTH, still on
+ * the chain?  F is read only once the chain is known to hold it. */
+static bool in_chain(DyFrame *f, uint64_t serial, intptr_t depth) {
+    DyThread *t = dy_thread;
+    return t->frames && depth <= t->frames->depth && t->frame_at[depth] == f
+        && f->serial == serial;
 }
 
 /* ------------------------------------------------- Values in flight */
@@ -85,11 +100,11 @@ _Noreturn void dy_unwind_to(DyFrame *target) {
     longjmp(target->jump, 1);
 }
 
-/* env[0]: the frame; env[1]: its serial number */
+/* env[0]: the frame; env[1]: its serial number; env[2]: its depth */
 static D exit_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     DyFunction *e = DY_PTR(self);
     DyFrame *target = (DyFrame *)e->env[0];
-    if (!in_chain(target, (uint64_t)DY_INT_VALUE(e->env[1])))
+    if (!in_chain(target, (uint64_t)DY_INT_VALUE(e->env[1]), DY_INT_VALUE(e->env[2])))
         dy_error("an exit procedure was called after its bind-exit returned", 0);
     DyThread *t = dy_thread;
     D in_registers[4] = { a0, a1, a2, a3 };
@@ -103,10 +118,11 @@ static D exit_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 D dy_call_with_exit(D body) {
     DY_CHECK_STACK();
     DyFrame f;
-    push_frame(&f, DY_FRAME_EXIT);
-    D exit = dy_make_closure(exit_entry, 2);
+    dy_push_frame(&f, DY_FRAME_EXIT);
+    D exit = dy_make_closure(exit_entry, 3);
     ((DyFunction *)DY_PTR(exit))->env[0] = (D)&f;
     ((DyFunction *)DY_PTR(exit))->env[1] = DY_INT(f.serial);
+    ((DyFunction *)DY_PTR(exit))->env[2] = DY_INT(f.depth);
     if (_setjmp(f.jump) == 0) {
         D r = DY_CALL(body, exit, 0, 0, 0, 1);
         dy_thread->frames = f.prev;
@@ -123,7 +139,7 @@ D dy_unwind_protect(D protected, D cleanup) {
     DY_CHECK_STACK();
     DyFrame f;
     f.a = cleanup;
-    push_frame(&f, DY_FRAME_CLEANUP);
+    dy_push_frame(&f, DY_FRAME_CLEANUP);
     D r = DY_CALL(protected, 0, 0, 0, 0, 0);
     dy_thread->frames = f.prev;
     Saved s = save_values(r);
@@ -142,7 +158,7 @@ D dy_handler_bind(D type, D function, D test, D description, D thunk) {
         dy_error("handler-bind: the test: is not a function", test);
     DyFrame f;
     f.a = type; f.b = function; f.c = test; f.d = description;
-    push_frame(&f, DY_FRAME_HANDLER);
+    dy_push_frame(&f, DY_FRAME_HANDLER);
     D r = DY_CALL(thunk, 0, 0, 0, 0, 0);
     dy_thread->frames = f.prev;
     return r;
@@ -162,15 +178,16 @@ static DyFrame *find_handler(D condition, DyFrame *start) {
 }
 
 /* env[0]: the condition; env[1]: the frame to search from (0 for none);
- * env[2]: its serial number */
+ * env[2]: its serial number; env[3]: its depth */
 static D next_handler_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc);
 
 static D next_handler(D condition, DyFrame *start) {
-    D next = dy_make_closure(next_handler_entry, 3);
+    D next = dy_make_closure(next_handler_entry, 4);
     DyFunction *n = DY_PTR(next);
     n->env[0] = condition;
     n->env[1] = (D)start;
     n->env[2] = DY_INT(start ? start->serial : 0);
+    n->env[3] = DY_INT(start ? start->depth : 0);
     return next;
 }
 
@@ -193,7 +210,7 @@ static D next_handler_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     if (argc != 0) dy_wrong_argument_count(self, argc);
     DyFunction *n = DY_PTR(self);
     DyFrame *start = (DyFrame *)n->env[1];
-    if (start && !in_chain(start, (uint64_t)DY_INT_VALUE(n->env[2])))
+    if (start && !in_chain(start, (uint64_t)DY_INT_VALUE(n->env[2]), DY_INT_VALUE(n->env[3])))
         dy_error("a next-handler was called outside its handler", 0);
     SIGNAL_FROM(n->env[0], start);
 }

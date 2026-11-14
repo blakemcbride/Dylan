@@ -1193,4 +1193,24 @@ is-g
   "(bind-methods ((5 () 1)) 1)"
   ""
   :compile-error "bind-methods: bad binding (5 () 1)")
+ ;; A signal that passes many nested handlers, each declining, and an
+ ;; exit procedure called after its bind-exit returned, from a frame as
+ ;; deep as its own was.
+ (nested-declines
+  "(define-class <note> (<condition>))
+(define nt (make <note>))
+(define count 0)
+(define-method nest (k)
+  (if (= k 0) (dotimes (i 100) (signal nt))
+      (handler-bind (<note> (method (c nx) (set! count (+ count 1)) (nx)))
+        (nest (- k 1)))))
+(nest 300)
+(print count)
+(define e #f)
+(bind-exit (k) (set! e k))
+(print (bind-exit (k2)
+         (handler-case (e 1) ((<error> condition: c) (format #f \"~a\" c)))))"
+  "30000
+\"an exit procedure was called after its bind-exit returned\"
+")
 )

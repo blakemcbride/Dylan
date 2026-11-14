@@ -190,8 +190,9 @@ module: dylan
                        (cond ((zero? n) result)
                              ((odd? n) (raise b (- n 1) (binary* result b)))
                              (else: (raise (binary* b b) (%ash n -1) result)))))
+        ;; base^-n as 1 / (base^(n - 1) * base): n - 1 fits in 63 bits.
         (if (negative? power)
-            (unary/ (raise base (unary- power) 1))
+            (unary/ (binary* (raise base (unary- (binary+ power 1)) 1) base))
             (raise base power 1)))
       (%math 16 base power)))
 

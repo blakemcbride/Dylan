@@ -3738,4 +3738,18 @@ last
 \"ERR: =hash: the hash code is not an integer: sym\"
 \"ERR: =hash: the hash code is not an integer: 7/2\"
 ")
+ ;; expt with the power -2^62, when the result fits (Bugs05 C20).
+ (expt-least-power
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (expt 1 -4611686018427387904))))
+(print (try (method () (expt -1 -4611686018427387904))))
+(print (try (method () (expt 0 -4611686018427387904))))
+(print (try (method () (expt 2/3 -2))))
+(print (try (method () (expt 2 -1))))"
+  "1
+1
+\"ERR: division by zero\"
+9/4
+1/2
+")
 )

@@ -238,7 +238,8 @@ exports again."
        (setf (dylan-module-state module) :defining)
        (let ((*location* (or (dylan-module-location module) *location*)))
          (let ((clauses (dylan-module-clauses module))
-               (exports '()))
+               (exports '())
+               (own '()))               ; (clause . variable), exported or created
            (dolist (clause clauses)
              (with-form (clause)
                (unless (and (consp clause) (listp (cdr clause))
@@ -254,14 +255,19 @@ exports again."
                   (dolist (variable (cdr clause))
                     (unless (module-name-p variable)
                       (compile-error "define-module: bad variable name ~a" variable))
-                    (when (gethash variable (dylan-module-imports module))
-                      (compile-error "define-module: cannot ~a ~a, which is imported"
-                                     (string-downcase (symbol-name (car clause)))
-                                     variable))
+                    (push (cons clause variable) own)
                     (when (eq (car clause) 'dylan::create)
                       (pushnew variable (dylan-module-created module)))
                     (push variable exports)))
                  (t (compile-error "define-module: unknown clause ~a" clause)))))
+           ;; Checked once every use clause has imported its names, a use
+           ;; after the export or create included.
+           (dolist (entry (reverse own))
+             (with-form ((car entry))
+               (when (gethash (cdr entry) (dylan-module-imports module))
+                 (compile-error "define-module: cannot ~a ~a, which is imported"
+                                (string-downcase (symbol-name (car (car entry))))
+                                (cdr entry)))))
            (setf (dylan-module-exports module) (remove-duplicates exports))))
        (setf (dylan-module-state module) :defined)
        module))))

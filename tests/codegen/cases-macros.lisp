@@ -275,6 +275,15 @@ FreSh
   "(define-module m4 (use dylan) (create car))"
   ""
   :compile-error "define-module: cannot create car, which is imported")
+ ;; The same with the use after the clause (Bugs05 C22).
+ (define-module-exports-imported-later
+  "(define-module m4 (export car) (use dylan))"
+  ""
+  :compile-error "define-module: cannot export car, which is imported")
+ (define-module-creates-imported-later
+  "(define-module m4 (create kar) (use dylan rename: ((car => kar))))"
+  ""
+  :compile-error "define-module: cannot create kar, which is imported")
  (define-module-dylan
   "(define-module dylan (use dylan))"
   ""

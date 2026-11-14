@@ -853,7 +853,8 @@ x
   :error "wrong number of arguments (2)")
  ;; Errors signalled by handlers, one inside another, end as a recursion
  ;; too deep does: "the stack is exhausted" is signalled, and a handler can
- ;; catch it.
+ ;; catch it.  The 256 KB stack holds about 770 rounds in the trampoline
+ ;; builds at -O0, more in the others.
  (stack-exhausted-in-handlers
   "(define depth 0)
 (define deepest 0)
@@ -865,7 +866,7 @@ x
                                (done (condition-format-string c))
                                (error \"again\"))))
     (error \"e\"))))
-(print (> deepest 1000))
+(print (> deepest 500))
 (print (bind-exit (done)
   (handler-bind (<error> (method (c n)
                            (if (= (condition-format-string c) \"the stack is exhausted\")

@@ -803,7 +803,7 @@ b-slot
 ()
 (1 2)
 \"ab\"
-{range 1 by 1 size 2}
+(1 2)
 {table a => 1}
 ({<array> 0 0 0 0} {<array> 9 0 0 0} #f)
 (#f \"x\")

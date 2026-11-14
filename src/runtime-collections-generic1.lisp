@@ -117,7 +117,13 @@
  dylan/shallow-copy
  (dylan%function->method
   (make-param-list `((sequence ,<sequence>)) nil nil nil)
-  (lambda (seq) (dylan-call dylan/copy-sequence seq))))
+  ;; A copy of the sequence, an instance of its class-for-copy (chapter
+  ;; 11): a range's is a list.
+  (lambda (seq)
+    (let ((class (dylan-call dylan/class-for-copy seq)))
+      (if (true? (dylan-call dylan/instance? seq class))
+          (dylan-call dylan/copy-sequence seq)
+          (dylan-call dylan/as class seq))))))
 
 (add-method
  dylan/as

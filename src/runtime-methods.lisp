@@ -949,15 +949,32 @@ linearly cancel, as those of (i i) do."
   (dylan%generic-fn
    'shallow-copy one-object
    (lambda (obj)
-     ;; Chapter 11: a new object with the same contents -- for an instance
-     ;; of a program's class, the same slot values.  The collections have
-     ;; methods of their own.
-     (if (instance? obj)
-         (let* ((class (instance.class obj))
-                (copy (make-dylan-instance class nil (copy-seq (instance.data obj)))))
-           (add-new-to-population! (class.instances class) copy)
-           copy)
-         (dylan-call dylan/error "shallow-copy: cannot copy: ~s" obj)))))
+     ;; Chapter 11: a new object with the same contents, made by calling
+     ;; make on the class-for-copy of OBJ -- for an instance of a program's
+     ;; class, most often its own class, the same slot values; another
+     ;; class's instance gets the values of the instance slots the two
+     ;; classes share.  The collections have methods of their own.
+     (let ((for-copy (dylan-call dylan/class-for-copy obj)))
+       (cond ((not (eq for-copy (get-type obj)))
+              (copy-shared-slots obj (dylan-call dylan/make for-copy)))
+             ((instance? obj)
+              (let* ((class (instance.class obj))
+                     (copy (make-dylan-instance class nil (copy-seq (instance.data obj)))))
+                (add-new-to-population! (class.instances class) copy)
+                copy))
+             (t (dylan-call dylan/error "shallow-copy: cannot copy: ~s" obj)))))))
+
+(defun copy-shared-slots (from to)
+  "Give TO the values of FROM's initialized instance slots that TO's
+class has too: TO."
+  (let ((shared (coerce (dylan-call dylan/slot-descriptors (get-type to)) 'list)))
+    (loop for sd across (dylan-call dylan/slot-descriptors (get-type from))
+          when (and (eq (slot.allocation sd) 'instance)
+                    (member sd shared)
+                    (true? (dylan-call dylan/slot-initialized? from
+                                       (dylan-call dylan/slot-getter sd))))
+            do (dylan-call dylan/setter/slot-value/ to sd (dylan-call dylan/slot-value from sd)))
+    to))
 
 (defparameter dylan/binary-gcd (dylan%generic-fn 'binary-gcd two-integers #'gcd))
 (defparameter dylan/binary-lcm (dylan%generic-fn 'binary-lcm two-integers #'lcm))

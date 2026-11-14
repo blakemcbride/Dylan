@@ -377,8 +377,11 @@ module: dylan
                            (else: #f))))
       (if (binary< count 1) #f (search 0 count)))))
 
-;;; A shallow copy of a sequence is a copy of it.
-(define-method shallow-copy ((s <sequence>)) (copy-sequence s))
+;;; A shallow copy of a sequence is a copy of it, an instance of its
+;;; class-for-copy (chapter 11): a range's is a list.
+(define-method shallow-copy ((s <sequence>))
+  (bind ((class (class-for-copy s)))
+    (if (instance? s class) (copy-sequence s) (as class s))))
 
 ;;; apply's last argument may be any sequence (chapter 8); the runtime
 ;;; takes lists and simple vectors itself, and asks for the others' elements.

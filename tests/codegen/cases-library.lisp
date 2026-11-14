@@ -3852,4 +3852,32 @@ none
 \"{instance of <ma>}\"
 \"ERR: no applicable method for initial-state\"
 ")
+ ;; Chapter 11: shallow-copy makes the copy by calling make on the
+ ;; class-for-copy -- a range's copy is a list, and an instance whose
+ ;; class-for-copy is another class is copied into one, with the values
+ ;; of the slots the two share (Bugs05 B4).
+ (shallow-copy-uses-class-for-copy
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (s init-value: 1) (t))
+(define-class <b> (<a>) (u init-value: 3))
+(define-class <w> (<a>) (v init-value: 4))
+(define-method class-for-copy ((x <w>)) <b>)
+(define w (make <w>))
+(set! (s w) 10)
+(define c (shallow-copy w))
+(print (list (object-class c) (s c) (slot-initialized? c t) (u c)))
+(define r (shallow-copy (range from: 1 up-to: 4)))
+(print (list r (object-class r)))
+(print (try (method () (shallow-copy (range from: 0)))))
+(define a (make <a>))
+(set! (t a) 5)
+(define a2 (shallow-copy a))
+(print (list (object-class a2) (s a2) (t a2) (id? a a2)))
+(print (map object-class (map shallow-copy (list '(1) (vector 1) \"x\" (as <deque> '(1))))))"
+  "({the class <b>} 10 #f 3)
+((1 2 3) {the class <pair>})
+\"ERR: as: the range is unbounded\"
+({the class <a>} 1 5 #f)
+({the class <pair>} {the class <simple-object-vector>} {the class <byte-string>} {the class <deque>})
+")
 )

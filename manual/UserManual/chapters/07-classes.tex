@@ -510,10 +510,14 @@ language.)
 \subsection{Copying and converting}
 
 \code{(shallow-copy \meta{object})} returns a new object with the same
-contents. The library has methods for collections; a sequence's copy is
-a new instance of its \code{class-for-copy}, and an array's has its own
-elements. A copy of an instance of any other class has the same slot
-values, which it shares with the original. Any other object, such as a
+contents, made by calling \code{make} on the \code{class-for-copy} of
+\meta{object}. The library has methods for collections; a sequence's copy
+is a new instance of its \code{class-for-copy} (a range's is a list), and
+an array's has its own elements. A copy of an instance of any other class
+has the same slot values, which it shares with the original; if a method
+of \code{class-for-copy} answers another class, the copy is an instance of
+that class with the values of the instance slots the two classes share.
+Any other object, such as a
 number, a symbol, a class or a function, cannot be copied:
 \code{(shallow-copy 5)} signals an error.
 

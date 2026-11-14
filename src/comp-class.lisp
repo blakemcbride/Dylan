@@ -356,6 +356,7 @@ the compiler to C checks it, with its words."
   (declare (ignore compiler multiple-values?)) ; No sub-compilations or
                                         ; reductions
   (must-have-syntax e 2 "define-generic-function")
+  (check-not-macro (car e) "DEFINE-GENERIC-FUNCTION")
   ;; Keyword options after the parameter list are accepted and ignored.
   (check-generic-function-form e)
   (parse-define-generic-function
@@ -596,6 +597,7 @@ Its faults are worded as the compiler to C words them."
   (declare (ignore multiple-values?))   ; No reductions
   (must-have-syntax e 2 "define-class")
   (require-variable-name (car e) "define-class")
+  (check-not-macro (car e) "DEFINE-CLASS")
   (check-not-imported (car e) "DEFINE-CLASS")
   (unless (proper-list? (cadr e))
     (syntax-error "define-class" "bad superclass list ~a" (cadr e)))
@@ -603,6 +605,9 @@ Its faults are worded as the compiler to C words them."
         (slots (expand-slots (cddr e))))
     ;; Two slots with one getter would be one slot (chapter 6).
     (check-names-once "define-class slots" (mapcar #'slot.getter slots))
+    (dolist (slot slots)
+      (check-not-macro-variable (slot.getter slot) bound-vars)
+      (check-not-macro-variable (slot.setter slot) bound-vars))
     (compile-forms
      superclasses mod-vars bound-vars compiler nil
      (lambda (supers mod-vars)
@@ -638,6 +643,8 @@ Its faults are worded as the compiler to C words them."
     ;; Chapter 6: the slot name and options are a define-class slot's;
     ;; define-slot answers the slot's name, its getter.
     (let ((expanded (expand-slot slot)))
+      (check-not-macro-variable (slot.getter expanded) bound-vars)
+      (check-not-macro-variable (slot.setter expanded) bound-vars)
       (funcall compiler owner mod-vars bound-vars nil
                (lambda (compiled-owner mod-vars)
                  (make-add-slot-call

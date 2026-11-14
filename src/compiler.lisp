@@ -566,10 +566,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
        (let* ((name (variable->name e))
               (lexical (name->lexical name))
               (new-mod-vars (add-variable name bound-vars module-vars)))
-         (when (and (not (member lexical bound-vars))
-                    (gethash (name->module-variable name) *dylan-macros*))
-           (dylan%error (format nil "~a is a macro, not a variable"
-                                (dylan-symbol->string e))))
+         (check-not-macro-variable e bound-vars)
          (funcall continue
                   (cond ((member lexical bound-vars)
                          (if (member lexical *unfilled-lexicals*)
@@ -786,6 +783,19 @@ it; the last result form delivers MULTIPLE-VALUES?."
                       *dylan-macros*))
     (dylan%error (format nil "~a of ~a: ~a is a macro" (string-downcase form-name)
                          (dylan-symbol->string dylan-variable)
+                         (dylan-symbol->string dylan-variable)))))
+
+(defun check-not-macro-variable (dylan-variable bound-vars)
+  "A name that is a macro cannot be used as a variable (user manual
+chapter 16): referred to, assigned, or named as a slot's getter or
+setter -- unless a lexical variable of the name hides the macro.  Worded
+as the compiler to C words it."
+  (when (and (symbolp dylan-variable)
+             (variable-name? dylan-variable)
+             (let ((name (variable->name dylan-variable)))
+               (and (not (member (name->lexical name) bound-vars))
+                    (gethash (name->module-variable name) *dylan-macros*))))
+    (dylan%error (format nil "~a is a macro: it cannot be used as a variable"
                          (dylan-symbol->string dylan-variable)))))
 
 (defun macro-call? (e bound-vars)

@@ -60,6 +60,8 @@
                 (and (consp place) (symbolp (car place)) (variable-name? (car place))
                      (null (cdr (cl:last place)))))
       (dylan%error "set!: bad place" place))
+    (when (variable-name? place)
+      (check-not-macro-variable place bound-vars))
     (funcall
      compiler value mod-vars bound-vars nil
      (lambda (value-code module-vars)

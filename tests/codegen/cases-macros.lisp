@@ -402,4 +402,31 @@ FreSh
 (print (m 1))"
   "1
 ")
+ ;; A macro's name cannot be a generic function's, a class's, a slot's
+ ;; getter or setter, nor assigned (Bugs05 L13).
+ (macro-name-as-generic-function
+  "(define-macro m () 1)
+(define-generic-function m (x))"
+  ""
+  :compile-error "define-generic-function of m: m is a macro")
+ (macro-name-as-class
+  "(define-macro m () 1)
+(define-class m (<object>))"
+  ""
+  :compile-error "define-class of m: m is a macro")
+ (macro-name-as-slot-getter
+  "(define-macro m () 1)
+(define-class <z> (<object>) (m init-value: 3))"
+  ""
+  :compile-error "m is a macro: it cannot be used as a variable")
+ (macro-name-as-slot-setter
+  "(define-macro m () 1)
+(define-slot <object> q setter: m init-value: 3)"
+  ""
+  :compile-error "m is a macro: it cannot be used as a variable")
+ (macro-name-assigned
+  "(define-macro m () 1)
+(set! m 3)"
+  ""
+  :compile-error "m is a macro: it cannot be used as a variable")
 )

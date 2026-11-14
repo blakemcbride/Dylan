@@ -648,7 +648,7 @@ it; the last result form delivers MULTIPLE-VALUES?."
     (or             . compile-or-form)
     (quasiquote     . compile-quasiquote-form)
     (unquote        . compile-unquote-form)
-    (unquote-splicing . compile-unquote-form)
+    (unquote-splicing . compile-unquote-splicing-form)
     (quote          . compile-quote-form)
     (select         . compile-select-form)
     (set!           . compile-set!-form)
@@ -872,7 +872,7 @@ call, with the macro's name, as the compiler to C reports it."
                          *dylan-macros*))
          (name (dylan-symbol->string (car macro))))
     (unless (null (cdr (cl:last e)))
-      (dylan%error "a call of a macro must be a proper list" e))
+      (dylan%error (format nil "~a: a call of a macro must be a proper list" name)))
     (when (> (incf *expansions*) +max-expansions+)
       (dylan%error (format nil "macro ~a: macros expanded ~d times in one form -- one never stops?"
                            name +max-expansions+)))
@@ -888,6 +888,13 @@ call, with the macro's name, as the compiler to C reports it."
       (error (condition)
         (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
 
+(defmacro with-compile-time-error-prefix ((prefix) &body body)
+  "BODY, run while compiling; an error in it is reported with PREFIX, as
+the compiler to C reports one: \"define-for-macros: boom\"."
+  `(handler-case (dylan%catch-all-conditions (lambda () ,@body))
+     (error (condition)
+       (dylan%error (format nil "~a: ~a" ,prefix (condition-text condition))))))
+
 (defun compile-define-macro-form (forms module-vars bound-vars really-compile
                                   multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
@@ -897,16 +904,20 @@ call, with the macro's name, as the compiler to C reports it."
         (body (cddr forms)))
     (check-top-level "define-macro" bound-vars)
     (unless (and (symbolp name) (variable-name? name))
-      (dylan%error "define-macro -- bad macro name" name))
-    (unless (listp params)
-      (dylan%error "define-macro -- bad parameter list" name params))
+      (dylan%error (format nil "define-macro: ~a is not a name" (printed-form name))))
+    (unless (proper-list? params)
+      (dylan%error (format nil "define-macro ~a: bad parameter list ~a"
+                           (dylan-symbol->string name) (printed-form params))))
     (check-not-imported name "DEFINE-MACRO")
     (let ((variable (name->module-variable (variable->name name))))
       (when (and (boundp variable)
                  (not (eq (symbol-value variable) the-unassigned-value)))
-        (dylan%error "define-macro -- the name is a variable already" name))
+        (dylan%error (format nil "define-macro: ~a is defined as a variable too"
+                             (dylan-symbol->string name))))
       (let ((code nil))
-        (with-compile-time-module
+        (with-compile-time-error-prefix ((format nil "define-macro ~a"
+                                                 (dylan-symbol->string name)))
+         (with-compile-time-module
           (compile-expression
            `(method ,params ,@body) nil *compile-time-variables*
            (lambda (new-vars preamble output)
@@ -918,7 +929,7 @@ call, with the macro's name, as the compiler to C reports it."
                                   (append preamble (list output))))
              ;; ... and again when the compiled code runs.
              (setf code `(progn (dylan%define-macro ',variable ',name ,output)
-                                ',name)))))
+                                ',name))))))
         (funcall continue code module-vars)))))
 
 (defun compile-define-for-macros-form (forms module-vars bound-vars really-compile
@@ -927,12 +938,13 @@ call, with the macro's name, as the compiler to C reports it."
   (check-top-level "define-for-macros" bound-vars)
   ;; Run now, while compiling, as the compiler to C runs them, and left
   ;; out of the compiled code, as it leaves them out.
-  (with-compile-time-module
-    (compile-expression
-     `(begin ,@forms) nil *compile-time-variables*
-     (lambda (new-vars preamble output)
-       (setf *compile-time-variables* (append new-vars *compile-time-variables*))
-       (implementation-specific/eval (append preamble (list output))))))
+  (with-compile-time-error-prefix ("define-for-macros")
+    (with-compile-time-module
+      (compile-expression
+       `(begin ,@forms) nil *compile-time-variables*
+       (lambda (new-vars preamble output)
+         (setf *compile-time-variables* (append new-vars *compile-time-variables*))
+         (implementation-specific/eval (append preamble (list output)))))))
   (funcall continue 'dylan%false module-vars))
 
 (defun compile-dotimes-form (forms module-vars bound-vars really-compile
@@ -1092,7 +1104,7 @@ call, with the macro's name, as the compiler to C reports it."
                           (list 'unquote (walk (cadr x) (- depth 1)))))
                      ((unquote-form? x 'unquote-splicing)
                       (if (= depth 1)
-                          (dylan%error "QUASIQUOTE: ,@ not in a list" x)
+                          (dylan%error "unquote-splicing (,@) not in a list")
                           (list 'unquote-splicing
                                 (walk (cadr x) (- depth 1)))))
                      ((unquote-form? x 'quasiquote)
@@ -1108,6 +1120,10 @@ call, with the macro's name, as the compiler to C reports it."
                                                   (note (cadr tail)))
                                             result)
                                       (return (nreverse result)))
+                                     ((and (= depth 1)
+                                           (unquote-form? tail 'unquote-splicing))
+                                      ;; `(a . ,@b)
+                                      (dylan%error "unquote-splicing (,@) not in a list"))
                                      ((not (consp tail))
                                       (return (nreconc result tail)))
                                      ((and (= depth 1)
@@ -1140,9 +1156,15 @@ call, with the macro's name, as the compiler to C reports it."
 
 (defun compile-unquote-form (forms module-vars bound-vars really-compile
                              multiple-values? continue)
-  (declare (ignore module-vars bound-vars really-compile multiple-values?
+  (declare (ignore forms module-vars bound-vars really-compile multiple-values?
                    continue))
-  (dylan%error "unquote (, or ,@) outside a backquote" forms))
+  (dylan%error "unquote (,) outside a backquote"))
+
+(defun compile-unquote-splicing-form (forms module-vars bound-vars really-compile
+                                      multiple-values? continue)
+  (declare (ignore forms module-vars bound-vars really-compile multiple-values?
+                   continue))
+  (dylan%error "unquote-splicing (,@) outside a backquote"))
 
 (defun compile-quote-form (forms module-vars bound-vars really-compile
                            multiple-values? continue)

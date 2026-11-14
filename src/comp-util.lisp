@@ -203,8 +203,10 @@ looks like one a name of its own (see DYLAN-USER-SYMBOL)."
 
 (defun syntax-error (what control &rest arguments)
   "Signal a special form's syntax error as the compiler to C words it:
-\"WHAT: \" and CONTROL, a format control of ~a directives."
-  (apply #'dylan%error (concatenate 'string what ": " control) arguments))
+\"WHAT: \" and CONTROL, a format control of ~a directives, each argument
+but a string shown as write writes it."
+  (apply #'dylan%error (concatenate 'string what ": " control)
+         (mapcar (lambda (a) (if (stringp a) a (printed-form a))) arguments)))
 
 (defun check-keyword-options (options allowed what)
   "Check OPTIONS, keyword/value pairs, each keyword one of ALLOWED and

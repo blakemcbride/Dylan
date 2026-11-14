@@ -497,7 +497,11 @@ replaced by the error that the variable has no value."
   (require-list form 3 "define-method")
   (require-variable-name (second form) "define-method")
   ;; A method may be added to an imported generic function.
-  (let* ((var (reference-module-var (second form)))
+  (let* ((var (progn
+                (when (module-var-macro (lookup-module-var *module* (second form)))
+                  (compile-error "define-method of ~a: ~a is a macro"
+                                 (name-string (second form)) (name-string (second form))))
+                (reference-module-var (second form))))
          (node (note-definition var (make-define-method-node var nil))))
     (setf (define-method-node-method node)
           (convert-method (third form) (cdddr form) env

@@ -556,7 +556,7 @@ value.  An error in it is a compile error, its message beginning with WHAT."
   (require-list form 3 "define-macro")
   (destructuring-bind (name parameters &rest body) (cdr form)
     (unless (simple-variable-name-p name)
-      (compile-error "define-macro: ~a is not a name" name))
+      (compile-error "define-macro: ~a is not a name" (dylan-form-string name)))
     (unless (proper-list-p parameters)
       (compile-error "define-macro ~a: bad parameter list ~a" name parameters))
     ;; A second define-macro replaces the macro for the forms after it.
@@ -565,7 +565,7 @@ value.  An error in it is a compile error, its message beginning with WHAT."
         (compile-error "define-macro: ~a is defined as a variable too" name))
       (setf (module-var-macro var)
             (cons name (compile-time-eval `(dylan::method ,parameters ,@body)
-                                          (format nil "define-macro ~a" name)))))))
+                                          (format nil "define-macro ~a" (name-string name))))))))
 
 (defun eval-for-macros (form)
   (dolist (f (cdr form))

@@ -475,4 +475,58 @@ FreSh
 3
 done
 ")
+ ;; Errors in defining and using macros, backquote and handlers, worded
+ ;; alike, each form shown as write writes it (Bugs05 B17).
+ (define-method-of-macro-name
+  "(define-macro m () 1) (define-method m () 3)"
+  ""
+  :compile-error "define-method of m: m is a macro")
+ (define-macro-name-a-variable
+  "(define m 1) (define-macro m () 2)"
+  ""
+  :compile-error "define-macro: m is defined as a variable too")
+ (define-macro-not-a-name
+  "(define-macro \"m\" (x) 1)"
+  ""
+  :compile-error "define-macro: \"m\" is not a name")
+ (define-macro-bad-parameter-list
+  "(define-macro m (x . y) 1)"
+  ""
+  :compile-error "define-macro m: bad parameter list (x . y)")
+ (define-macro-parameter-error-named
+  "(define-macro m (x #rest) x)"
+  ""
+  :compile-error "define-macro m: method: #rest needs a variable name")
+ (macro-call-improper
+  "(define-macro m (x) x) (print (m . 5))"
+  ""
+  :compile-error "m: a call of a macro must be a proper list")
+ (define-for-macros-error-named
+  "(define-for-macros (error \"boom ~a\" 1))"
+  ""
+  :compile-error "define-for-macros: boom 1")
+ (unquote-splicing-outside-backquote
+  ",@x"
+  ""
+  :compile-error "unquote-splicing (,@) outside a backquote")
+ (unquote-splicing-dotted-tail
+  "(print `(1 . ,@(list 2)))"
+  ""
+  :compile-error "unquote-splicing (,@) not in a list")
+ (handler-case-bad-clause
+  "(handler-case 1 (() 1))"
+  ""
+  :compile-error "handler-case: bad clause (() 1)")
+ (handler-bind-bad-options-written
+  "(handler-bind (<error> car \"x\" 2) 1)"
+  ""
+  :compile-error "handler-bind: bad keyword options (\"x\" 2)")
+ (generic-bad-parameter-written
+  "(define-generic-function gf (#\\a))"
+  ""
+  :compile-error "define-generic-function: bad parameter #\\a")
+ (slot-allocation-written
+  "(define-class <a> (<object>) (s allocation: \"instance\"))"
+  ""
+  :compile-error "not \"instance\"")
 )

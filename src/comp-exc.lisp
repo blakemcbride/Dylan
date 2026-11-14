@@ -69,15 +69,6 @@
                     (lambda () ,compiled-form))
                   module-vars))))))
 
-(defun check-options-once (options what)
-  "Refuse OPTIONS, keyword/value pairs already checked, if one keyword is
-given twice, as the compiler does: neither would be the one meant."
-  (loop for rest on options by #'cddr
-        do (loop for later on (cddr rest) by #'cddr
-                 when (eq (car later) (car rest))
-                   do (dylan%error (format nil "~a: option ~~a given twice" what)
-                                   (car rest)))))
-
 (defun compile-handler-bind-form (e module-vars bound-vars really-compile
                                   multiple-values? continue)
   (must-have-syntax e 1 "handler-bind")
@@ -85,8 +76,7 @@ given twice, as the compiler does: neither would be the one meant."
         (form (if (null (cdr e)) dylan%false `(begin ,@(cdr e)))))
     (must-have-syntax handler-spec 2 "handler-bind handler")
     (let ((keywords (cddr handler-spec)))
-      (validate-keywords keywords '(:test :description) #'dylan%error)
-      (check-options-once keywords "handler-bind")
+      (check-keyword-options keywords '(:test :description) "handler-bind")
       (let ((type (car handler-spec))
             (func (cadr handler-spec)))
         (compile-forms
@@ -106,24 +96,17 @@ given twice, as the compiler does: neither would be the one meant."
   (let ((protected-form (car e))
         (protections (cdr e)))
     (dolist (protection protections)
-      (must-be-list-of-at-least-length protection 1
-                                       "HANDLER-CASE: bad protection clause")
-      (must-be-list-of-at-least-length (car protection) 1
-                                       "HANDLER-CASE: bad handler description")
+      (unless (and (list-of-at-least-length? protection 1)
+                   (list-of-at-least-length? (car protection) 1))
+        (syntax-error "handler-case" "bad clause ~a" protection))
       ;; Chapter 13: a clause's options are condition:, a variable, and
       ;; test: and description:, as for handler-bind.
       (let ((options (cdr (car protection))))
-        (unless (and (listp options) (null (cdr (cl:last options)))
-                     (evenp (length options))
-                     (loop for key in options by #'cddr always (keyword? key)))
-          (dylan%error "handler-case: bad keyword options" options))
+        (check-keyword-options options '(:condition :test :description) "handler-case")
         (loop for (key value) on options by #'cddr
-              do (unless (member key '(:condition :test :description))
-                   (dylan%error "handler-case: unknown option" key))
-                 (when (and (eq key :condition) (not (variable-name? value)))
+              do (when (and (eq key :condition) (not (variable-name? value)))
                    (dylan%error "handler-case condition:: ~s is not a variable name"
-                                value)))
-        (check-options-once options "handler-case")))
+                                value)))))
     (funcall
      really-compile protected-form module-vars bound-vars multiple-values?
      (lambda (compiled-form module-vars)

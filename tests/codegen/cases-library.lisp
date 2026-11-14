@@ -1969,6 +1969,12 @@ error
 (print (try (method () (size (make <deque> size: huge)))))
 (define sv (make <stretchy-vector>))
 (print (try (method () (set! (size sv) huge))))
+(define dq (make <deque>))
+(push dq 1)
+(print (try (method () (set! (size dq) huge))))
+(print (list (size dq) (first dq)))
+(set! (size dq) 3)
+(print (as <list> dq))
 (print (size (make <vector> size: 1000000)))"
   "\"ERR: out of memory\"
 \"ERR: out of memory\"
@@ -1977,6 +1983,9 @@ error
 \"ERR: out of memory\"
 \"ERR: out of memory\"
 \"ERR: out of memory\"
+\"ERR: out of memory\"
+(1 1)
+(1 #f #f)
 1000000
 ")
  ;; Walking onto the tail of a dotted list is a <type-error> of the tail

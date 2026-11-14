@@ -114,6 +114,15 @@ module: dylan
 (define-method (setter size) ((d <deque>) n)
   (%check-new-size n)
   (for () ((not (binary< n (%count d)))) (pop-last d))
+  ;; Room for them all first, in one request, as make asks for it: a size
+  ;; too large to allocate is "out of memory", not memory used up one
+  ;; element at a time.
+  (when (binary< (%vector-size (%data d)) n)
+    (bind ((new (%make-vector (%max n (binary* 2 (%vector-size (%data d)))) #f)))
+      (dotimes (i (%count d))
+        (%vector-element-setter new i (%vector-element (%data d) (%deque-slot d i))))
+      (set! (%data d) new)
+      (set! (%first d) 0)))
   (for () ((not (binary< (%count d) n))) (push-last d #f))
   n)
 

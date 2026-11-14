@@ -196,6 +196,14 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
                                 handler multiple-values condition
                                 (lambda (multiple-values next-method)
                                   (declare (ignore multiple-values next-method))
+                                  ;; The handlers it goes on to must still
+                                  ;; be established, as in a compiled
+                                  ;; program (runtime/c/control.c)
+                                  (unless (or (null (cdr frames))
+                                              (tailp (cdr frames)
+                                                     (implementation-specific/get-dylan-handler-frames)))
+                                    (dylan-call dylan/error
+                                                "a next-handler was called outside its handler"))
                                   (frame-loop (cdr frames))))))
                            (frame-loop (cdr frames))))
                      (dylan-mv-call dylan/default-handler multiple-values

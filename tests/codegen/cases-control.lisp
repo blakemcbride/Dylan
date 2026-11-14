@@ -1287,4 +1287,14 @@ plain 1
 \"PO\"
 "
   :error "The file foo was not found")
+ ;; A next-handler called once the handlers it goes on to are gone
+ ;; (Bugs05 L10).
+ (next-handler-called-later
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define saved #f)
+(print (handler-case (handler-bind (<error> (method (c next) (set! saved next) (next))) (error \"x\")) ((<error>) 'done)))
+(print (try (method () (saved))))"
+  "done
+\"ERR: a next-handler was called outside its handler\"
+")
 )

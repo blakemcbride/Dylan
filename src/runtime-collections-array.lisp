@@ -364,11 +364,14 @@ in a compiled program."
                        index-sequence)))
       (setf (aref row index) new-value)))))
 
+;;; A key is a vector of the subscripts, from the row-major index
 (add-method
  dylan/current-key
  (dylan%function->method
-  (make-param-list `((array ,<array>) (state ,<simple-object-vector>)) nil nil nil)
-  (lambda (array state) (declare (ignore array)) state)))
+  (make-param-list `((array ,<array>) (state ,<integer>)) nil nil nil)
+  (lambda (array state)
+    (coerce (row-major-indices (dylan-call dylan/get-array-dimensions array) state)
+            'simple-vector))))
 
 ;;;
 ;;; Mutable Collections
@@ -377,17 +380,11 @@ in a compiled program."
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((array ,<array>) (state ,<simple-object-vector>) (new-value ,<object>))
+  (make-param-list `((array ,<array>) (state ,<integer>) (new-value ,<object>))
                    nil nil nil)
-  ;; The state is the element's subscripts, which may be none.
+  ;; The state is the element's row-major index.
   (lambda (array state new-value)
-    (multiple-value-bind (row index)
-        (locate-array-element
-         array (coerce state 'list)
-         (lambda (message)
-           (dylan-call dylan/error
-                       (concatenate 'string "(setter current-element) -- " message)
-                       array state)))
+    (multiple-value-bind (row index) (array-row-major-place array state)
       (setf (aref row index) new-value)))))
 
 ;;; A copy has its own elements, as in a compiled program

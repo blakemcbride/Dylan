@@ -100,8 +100,8 @@
 ;;; vector or a range (*FAST-ITERATE-LIST*, *FAST-ITERATE-VECTOR* and
 ;;; *FAST-ITERATE-RANGE*, see runtime-fast-paths.lisp), INITIAL-STATE,
 ;;; NEXT-STATE and CURRENT-ELEMENT do for one what its predefined methods
-;;; do, making the same states: the pair itself for a list, a vector of one
-;;; index for a simple vector, and the index for a range.  A range is read
+;;; do, making the same states: the pair itself for a list, and the index
+;;; for a simple vector or a range.  A range is read
 ;;; afresh each time, as the methods do, since ADD! and REVERSE! change it.
 
 (declaim (ftype function range-size range-ref
@@ -111,7 +111,7 @@
   (cond ((and (listp collection) *fast-iterate-list*)
          (if (consp collection) collection nil))
         ((and (simple-vector-p collection) *fast-iterate-vector*)
-         (if (plusp (length collection)) (vector 0) nil))
+         (if (plusp (length collection)) 0 nil))
         ((and *fast-iterate-range* (instance? collection)
               (eq (instance.class collection) <range>))
          (let ((size (range-size collection)))
@@ -126,11 +126,9 @@
   (cond ((and (listp collection) *fast-iterate-list*)
          (and (consp state) (list-rest (cdr state))))
         ((and (simple-vector-p collection) *fast-iterate-vector*
-              (simple-vector-p state) (= (length state) 1)
-              (typep (svref state 0) 'fixnum)
-              (< (svref state 0) (length collection)))
-         (let ((next (1+ (svref state 0))))
-           (if (< next (length collection)) (vector next) nil)))
+              (typep state 'fixnum))
+         (let ((next (1+ state)))
+           (if (< next (length collection)) next nil)))
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
          (let ((size (range-size collection)))
@@ -149,10 +147,9 @@
   (cond ((and (listp collection) *fast-iterate-list*)
          (car state))
         ((and (simple-vector-p collection) *fast-iterate-vector*
-              (simple-vector-p state) (= (length state) 1)
-              (typep (svref state 0) 'fixnum)
-              (< -1 (svref state 0) (length collection)))
-         (svref collection (svref state 0)))
+              (typep state 'fixnum)
+              (< -1 state (length collection)))
+         (svref collection state))
         ((and *fast-iterate-range* (integerp state) (instance? collection)
               (eq (instance.class collection) <range>))
          (range-ref collection state))
@@ -238,6 +235,43 @@ as cannot make another collection of it, which would have no end."
              (null (collection-size collection)))
     (dylan-call dylan/error "as: the range is unbounded")))
 
+;;; Arrays, vectors included: the state is the row-major index of the
+;;; element, as in the compiled library.
+
+(declaim (ftype function general-array-p vector-value locate-array-element))
+
+(defun index-out-of-range (index)
+  (dylan-call dylan/error "element: the index is out of range: ~s" index))
+
+(defun array-count (array)
+  "The number of elements of ARRAY."
+  (cond ((simple-vector-p array) (length array))
+        ((stringp array) (length array))
+        ((general-array-p array)
+         (cl:reduce #'* (dylan-call dylan/get-array-dimensions array)))
+        (t (length (vector-value array)))))
+
+(defun row-major-indices (dimensions index)
+  "The subscripts of the element at the row-major INDEX of an array of
+DIMENSIONS, as the compiled library computes them."
+  (if (null dimensions)
+      '()
+      (let ((inner (cl:reduce #'* (cdr dimensions))))
+        (multiple-value-bind (q r) (truncate index inner)
+          (cons q (row-major-indices (cdr dimensions) r))))))
+
+(defun array-row-major-place (array index)
+  "The row vector holding the element of the general ARRAY at the
+row-major INDEX, and the index in it."
+  (unless (< -1 index (array-count array)) (index-out-of-range index))
+  (locate-array-element
+   array (row-major-indices (dylan-call dylan/get-array-dimensions array) index)
+   (lambda (kind index) (declare (ignore kind)) (index-out-of-range index))))
+
+(defun array-row-major-ref (array index)
+  (multiple-value-bind (row i) (array-row-major-place array index)
+    (aref row i)))
+
 ;;
 ;; INITIAL-STATE
 ;;
@@ -255,13 +289,12 @@ as cannot make another collection of it, which would have no end."
                      (lambda (null) (declare (ignore null)) nil)))
 (add-method dylan/initial-state
             (state-method-1 'list <list> #'identity))
+;;; An array's state, a vector's included, is the row-major index of its
+;;; element, as in the compiled library.
 (add-method dylan/initial-state
             (state-method-1 'array <array>
                      (lambda (array)
-                       (let ((dimensions (dylan-call dylan/dimensions array)))
-                         (if (all? #'plusp (iterate->list #'identity dimensions))
-                             (make-array (length dimensions) :initial-element 0)
-                             nil)))))
+                       (if (plusp (array-count array)) 0 nil))))
 (add-method dylan/initial-state
             (state-method-1 'deque <deque>
                      (lambda (deque)
@@ -296,19 +329,11 @@ as cannot make another collection of it, which would have no end."
 ;;;                      (lambda (string)
 ;;;                        (let ((length (length string)))
 ;;;                          (if (zerop length) nil (- length 1))))))
-;;; Array states are vectors of indices, as INITIAL-STATE and NEXT-STATE
-;;; make them; the Scheme's final states were a list for arrays and an
-;;; integer for simple vectors, which the other state functions could not
-;;; take back.
 (add-method dylan/final-state           ; Not specified in the manual
             (state-method-1 'array <array>
                      (lambda (array)
-                       (if (true? (dylan-call dylan/empty? array))
-                           nil
-                           (map 'simple-vector (lambda (index) (- index 1))
-                                (iterate->list
-                                 #'identity
-                                 (dylan-call dylan/dimensions array)))))))
+                       (let ((count (array-count array)))
+                         (if (plusp count) (- count 1) nil)))))
 (add-method dylan/final-state
             (state-method-1 'range <range>
                      (lambda (range)
@@ -342,30 +367,13 @@ as cannot make another collection of it, which would have no end."
     (declare (ignore list))
     (list-rest (cdr state)))))
 
-(add-method                             ; Array => "Odometer style"
+(add-method                             ; The row-major index
  dylan/next-state
  (state-method
-  (make-param-list `((array ,<array>) (state ,<simple-object-vector>))
-                   nil nil nil)
+  (make-param-list `((array ,<array>) (state ,<integer>)) nil nil nil)
   (lambda (array state)
-    (let ((dimensions (dylan-call dylan/dimensions array))
-          (next-state-indices (copy-seq state)))
-      (loop with dim-index = (- (length dimensions) 1)
-            do (if (minusp dim-index)
-                   (return nil)
-                   (cond ((= (+ (aref next-state-indices dim-index) 1)
-                             (nth dim-index dimensions))
-                          (decf dim-index))
-                         ((> (+ (aref next-state-indices dim-index) 1)
-                             (nth dim-index dimensions))
-                          (dylan-call dylan/error
-                                      "next-state -- invalid state" state))
-                         (t
-                          (loop for i from (+ dim-index 1)
-                                  below (length next-state-indices)
-                                do (setf (aref next-state-indices i) 0))
-                          (incf (aref next-state-indices dim-index))
-                          (return next-state-indices)))))))))
+    (let ((next (+ state 1)))
+      (if (< next (array-count array)) next nil)))))
 
 (add-method
  dylan/next-state
@@ -409,24 +417,13 @@ as cannot make another collection of it, which would have no end."
 (defparameter dylan/previous-state
   (dylan%generic-fn 'previous-state one-collection-and-a-state nil))
 
-(add-method                             ; Array => "Odometer style"
+(add-method                             ; The row-major index
  dylan/previous-state
  (state-method
-  (make-param-list `((array ,<array>) (state ,<simple-object-vector>)) nil nil nil)
-  ;; The odometer run backwards: decrement the last index that can be, and
-  ;; set every index after it to its maximum.  The state passed in is not
-  ;; modified.
+  (make-param-list `((array ,<array>) (state ,<integer>)) nil nil nil)
   (lambda (array state)
-    (let ((dimensions (iterate->list #'identity
-                                     (dylan-call dylan/dimensions array)))
-          (previous (copy-seq state)))
-      (loop for dim-index from (- (length dimensions) 1) downto 0
-            when (plusp (aref previous dim-index))
-              do (decf (aref previous dim-index))
-                 (loop for i from (+ dim-index 1) below (length previous)
-                       do (setf (aref previous i) (- (nth i dimensions) 1)))
-                 (return previous)
-            finally (return nil))))))
+    (declare (ignore array))
+    (if (zerop state) nil (- state 1)))))
 
 (add-method
  dylan/previous-state
@@ -455,21 +452,25 @@ as cannot make another collection of it, which would have no end."
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((array ,<array>) (state ,<simple-object-vector>)) nil nil nil)
-  (lambda (array state) (library-element array state))))
+  (make-param-list `((array ,<array>) (state ,<integer>)) nil nil nil)
+  (lambda (array state) (array-row-major-ref array state))))
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((sov ,<simple-object-vector>) (state ,<simple-object-vector>))
-                   nil nil nil)
-  (lambda (vec state) (aref vec (aref state 0)))))
-;;; Any other vector, such as a stretchy vector: its one index.  (element
-;;; takes only an index of a vector, as for any sequence.)
+  (make-param-list `((sov ,<simple-object-vector>) (state ,<integer>)) nil nil nil)
+  (lambda (vec state)
+    (unless (< -1 state (length vec)) (index-out-of-range state))
+    (aref vec state))))
+;;; Any other vector, such as a stretchy vector: its index
 (add-method
  dylan/current-element
  (dylan%function->method
-  (make-param-list `((vector ,<vector>) (state ,<simple-object-vector>)) nil nil nil)
-  (lambda (vec state) (aref (vector-value vec) (aref state 0)))))
+  (make-param-list `((vector ,<vector>) (state ,<integer>)) nil nil nil)
+  (lambda (vec state)
+    (let ((value (vector-value vec)))
+      (unless (< -1 state (length value))
+        (dylan-call dylan/error "element: there is no element at the index ~s" state))
+      (aref value state)))))
 (add-method
  dylan/current-element
  (dylan%function->method
@@ -481,9 +482,11 @@ as cannot make another collection of it, which would have no end."
   (add-method
    dylan/current-element
    (dylan%function->method
-    (make-param-list `((string ,class) (state ,<simple-object-vector>))
+    (make-param-list `((string ,class) (state ,<integer>))
                      nil nil nil)
-    (lambda (string state) (char string (aref state 0))))))
+    (lambda (string state)
+      (unless (< -1 state (length string)) (index-out-of-range state))
+      (char string state)))))
 (add-method
  dylan/current-element
  (dylan%function->method

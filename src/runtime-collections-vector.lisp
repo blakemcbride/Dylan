@@ -399,8 +399,8 @@
 (add-method
  dylan/current-key
  (dylan%function->method
-  (make-param-list `((vector ,<vector>) (state ,<simple-object-vector>)) nil nil nil)
-  (lambda (vector state) (declare (ignore vector)) (aref state 0))))
+  (make-param-list `((vector ,<vector>) (state ,<integer>)) nil nil nil)
+  (lambda (vector state) (declare (ignore vector)) state)))
 
 ;;;
 ;;; Collection Keys
@@ -456,22 +456,25 @@
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((sov ,<simple-object-vector>) (state ,<simple-object-vector>)
+  (make-param-list `((sov ,<simple-object-vector>) (state ,<integer>)
                      (new-value ,<object>))
                    nil nil nil)
   (lambda (sov state new-value)
-    (setf (aref sov (aref state 0)) new-value)
+    (unless (< -1 state (length sov)) (index-out-of-range state))
+    (setf (aref sov state) new-value)
     new-value)))
 
 (add-method
  dylan/setter/current-element/
  (dylan%function->method
-  (make-param-list `((stretchy-vector ,<stretchy-vector>) (state ,<simple-object-vector>)
+  (make-param-list `((stretchy-vector ,<stretchy-vector>) (state ,<integer>)
                      (new-value ,<object>))
                    nil nil nil)
   (lambda (st-vector state new-value)
-    (setf (aref (dylan-call dylan/get-array-value st-vector) (aref state 0))
-          new-value)
+    (let ((value (dylan-call dylan/get-array-value st-vector)))
+      (unless (< -1 state (length value))
+        (dylan-call dylan/error "element: there is no element at the index ~s" state))
+      (setf (aref value state) new-value))
     new-value)))
 
 (add-method

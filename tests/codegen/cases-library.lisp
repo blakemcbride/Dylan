@@ -1109,6 +1109,26 @@ Zip:
 \"ERR: as: the range is unbounded\"
 (1 2 3)
 ")
+ ;; add-new and add-new! of an unbounded range are add's error, unless the
+ ;; element is a member, which id? and = can tell (Bugs06 B2)
+ (add-new-unbounded-range
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define u (range from: 1))
+(print (try (method () (add-new u 0))))
+(print (try (method () (add-new! u 0))))
+(print (id? (add-new u 5) u))
+(print (id? (add-new! u 7 test: =) u))
+(print (try (method () (add-new u 1.5 test: =))))
+(print (try (method () (add-new u 5 test: (method (a b) (= a b))))))
+(print (add-new (range from: 1 size: 3) 0))"
+  "\"ERR: add: the range is unbounded\"
+\"ERR: add: the range is unbounded\"
+#t
+#t
+\"ERR: add: the range is unbounded\"
+\"ERR: add: the range is unbounded\"
+(0 1 2 3)
+")
  ;; So do apply, and as to <mutable-sequence>, <empty-list> or a
  ;; program's own sequence class (Bugs06 L2)
  (apply-and-as-unbounded-range

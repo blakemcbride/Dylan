@@ -129,6 +129,21 @@ module: dylan
   (unless (%size r) (error "concatenate: the range is unbounded"))
   (next-method))
 
+;;; add-new and add-new! of an unbounded range: the range itself if the
+;;; element is a member, which member? can tell with id? or =; else add's
+;;; error, as add would give (chapter 12), not a search with no end.
+(define %add-new-unbounded
+  (method (r new-element test)
+    (if (and (or (id? test id?) (id? test =)) (member? new-element r test: test))
+        r
+        (error "add: the range is unbounded"))))
+
+(define-method add-new ((r <range>) new-element #key (test id?))
+  (if (%size r) (next-method) (%add-new-unbounded r new-element test)))
+
+(define-method add-new! ((r <range>) new-element #key (test id?))
+  (if (%size r) (next-method) (%add-new-unbounded r new-element test)))
+
 ;;; sort and sort! of an unbounded range: as the range as a sequence
 (define-method sort ((r <range>) #key (test <) stable)
   (unless (%size r) (error "as: the range is unbounded"))

@@ -365,6 +365,25 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
       (dylan-call dylan/error "add: the range is unbounded"))
     (cons new-element (sequence->list the-range)))))
 
+;;; add-new and add-new! of an unbounded range: the range itself if the
+;;; element is a member, which member? can tell with id? or =; else add's
+;;; error, as add would give (chapter 12), not a search with no end.
+(dolist (generic (list dylan/add-new dylan/add-new!))
+  (add-method
+   generic
+   (dylan%dylan-callable->method
+    (make-param-list `((sequence ,<range>) (object ,<object>)) nil nil '(:test))
+    (lambda (multiple-values next-method the-range new-element &rest keys)
+      (declare (ignore multiple-values))
+      (dylan%keyword-validate next-method keys '(:test))
+      (let ((test (dylan%find-keyword keys :test (lambda () dylan/id?))))
+        (cond ((collection-size the-range)
+               (apply next-method nil nil the-range new-element keys))
+              ((and (or (eq test dylan/id?) (eq test dylan/=))
+                    (true? (dylan-call dylan/member? new-element the-range :test test)))
+               the-range)
+              (t (dylan-call dylan/error "add: the range is unbounded"))))))))
+
 (add-method
  dylan/remove!
  (dylan%dylan-callable->method

@@ -4110,4 +4110,35 @@ init
 init
 #(0 10 7)
 ")
+ ;; add! and reverse! on an unbounded range name themselves in their
+ ;; errors, and member?'s and (setter aref)'s errors are worded alike
+ ;; (Bugs05 B17).
+ (unbounded-range-errors-named
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(define u (method () (range from: 0)))
+(print (try (method () (add (u) 1))))
+(print (try (method () (add! (u) 1))))
+(print (try (method () (add-new (u) -1))))
+(print (try (method () (add-new! (u) -1))))
+(print (try (method () (sort (u)))))
+(print (try (method () (sort! (u)))))
+(print (try (method () (reverse (u)))))
+(print (try (method () (reverse! (u)))))
+(print (try (method () (member? 3 (u) test: (method (a b) (= a b))))))
+(print (try (method () ((setter aref) (make <array> dimensions: '(2 2))))))
+(print (add! (range from: 0 size: 2) 5))
+(print (reverse! (range from: 0 size: 3)))"
+  "\"add: the range is unbounded\"
+\"add!: the range is unbounded\"
+\"add: the range is unbounded\"
+\"add: the range is unbounded\"
+\"as: the range is unbounded\"
+\"as: the range is unbounded\"
+\"reverse: the range is unbounded\"
+\"reverse!: the range is unbounded\"
+\"member?: a test: on an unbounded range might not terminate\"
+\"(setter aref): no new value given\"
+(5 0 1)
+{range 2 by -1 size 3}
+")
 )

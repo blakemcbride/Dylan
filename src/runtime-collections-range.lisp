@@ -302,8 +302,7 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
                                   range))
              (dylan-call
               dylan/error
-              "(member? <object> <range>) -- test: on an unbounded range"
-              test)))
+              "member?: a test: on an unbounded range might not terminate")))
         ((not (or (realp val) (extended-float? val))) dylan%false)
         (t
          (let* ((start (dylan-call dylan/get-range-start range))
@@ -364,6 +363,16 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
     (unless (collection-size the-range)
       (dylan-call dylan/error "add: the range is unbounded"))
     (cons new-element (sequence->list the-range)))))
+
+(add-method
+ dylan/add!
+ (dylan%dylan-callable->method
+  one-range-and-an-object
+  (lambda (multiple-values next-method the-range new-element)
+    (declare (ignore multiple-values))
+    (unless (collection-size the-range)
+      (dylan-call dylan/error "add!: the range is unbounded"))
+    (funcall next-method nil nil the-range new-element))))
 
 ;;; add-new and add-new! of an unbounded range: the range itself if the
 ;;; element is a member, which member? can tell with id? or =; else add's
@@ -458,6 +467,8 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
  (dylan%function->method
   one-range
   (lambda (range)
+    (unless (collection-size range)
+      (dylan-call dylan/error "reverse!: the range is unbounded"))
     (let ((reversed (dylan-call dylan/reverse range)))
       (set-range-start! range (range-start reversed))
       (set-range-step! range (range-step reversed))

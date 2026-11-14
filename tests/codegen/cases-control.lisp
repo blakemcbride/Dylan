@@ -963,7 +963,7 @@ after
 (29 \"pop-last: the deque is empty\")
 (30 \"not a stream: 5\")
 (31 \"format: not a string: 5\")
-(35 \"reverse: the range is unbounded\")
+(35 \"reverse!: the range is unbounded\")
 (36 \"not a stream: 5\")
 (37 \"a1b\")
 (38 \"not a stream: y\")

@@ -64,6 +64,8 @@ module: dylan
 
 (define (setter aref)
   (method ((array <array>) #rest indices-and-new-value)
+    (when (id? indices-and-new-value '())
+      (error "(setter aref): no new value given"))
     (bind ((new-value (last indices-and-new-value))
            (indices (copy-sequence indices-and-new-value
                                    end: (binary- (%list-length indices-and-new-value) 1))))

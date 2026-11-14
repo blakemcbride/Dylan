@@ -133,6 +133,10 @@ module: dylan
   (unless (%size r) (error "add: the range is unbounded"))
   (next-method))
 
+(define-method add! ((r <range>) new-element)
+  (unless (%size r) (error "add!: the range is unbounded"))
+  (next-method))
+
 (define-method concatenate ((r <range>) #rest more)
   (unless (%size r) (error "concatenate: the range is unbounded"))
   (next-method))
@@ -327,6 +331,7 @@ module: dylan
       (%sub-range r (binary- (%size r) 1) -1 (%size r))))
 
 (define-method reverse! ((r <range>))
+  (unless (%size r) (error "reverse!: the range is unbounded"))
   (bind ((reversed (reverse r)))
     (set! (%from r) (%from reversed))
     (set! (%by r) (%by reversed))

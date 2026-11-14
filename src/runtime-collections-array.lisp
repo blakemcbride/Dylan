@@ -299,9 +299,7 @@ in a compiled program."
    (lambda (array-instance &rest indices-and-new-value)
      (dylan-call dylan/check-type array-instance <array>)
      (when (null indices-and-new-value)
-       (dylan-call dylan/error
-                   "(setter aref) -- no indices and new-value given"
-                   array-instance))
+       (dylan-call dylan/error "(setter aref): no new value given"))
      (let ((new-value (car (cl:last indices-and-new-value)))
            (indices (butlast indices-and-new-value)))
        (cond ((general-array-p array-instance)

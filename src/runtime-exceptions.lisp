@@ -212,6 +212,10 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
 (defparameter dylan/cerror           ; OK to continue
   (make-dylan-callable
    (lambda (restart-description &rest others)
+     ;; A condition, or a string, must follow the restart's description:
+     ;; the count reported is cerror's own, as in the compiled library
+     (when (null others)
+       (dylan-call dylan/error "wrong number of arguments (~a)" 1))
      (call-with-escape-continuation
       (lambda (continue)
         (dylan%handler-bind

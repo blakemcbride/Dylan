@@ -191,6 +191,17 @@ aborted
 "
   :error "no handler was established for the restart")
 
+ ;; cerror needs a condition, or a format string, after the restart's
+ ;; description.
+ (cerror-one-argument
+  "(define-method try (f)
+     (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+   (print (try (method () (cerror \"x\"))))
+   (print (try (method () (apply cerror '(\"x\")))))"
+  "\"ERR: wrong number of arguments (1)\"
+\"ERR: wrong number of arguments (1)\"
+")
+
  ;; Conditions of the program's own classes.
  (user-conditions
   "(define-class <my-error> (<error>) (code init-keyword: code:))

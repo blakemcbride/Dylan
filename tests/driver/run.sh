@@ -197,6 +197,15 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# What the program wrote comes before a warning, as in a compiled program
+cat > warn.dyl <<'EOF'
+(begin (format #t "before ") (signal "w") (format #t "after~%"))
+EOF
+"$dylan" warn.dyl > batch.out 2>&1 < /dev/null
+check "bin/dylan file: output flushed before a warning" grep -q "^before Dylan warning: w$" batch.out
+# One value returned through values is not numbered
+printf '(values 1)\n' | "$dylan" > batch.out 2>&1
+check "bin/dylan: one value through values" sh -c 'grep -q "^;Value: 1$" batch.out && ! grep -q "^;Value\[1\]: 1$" batch.out'
 # An error whose message cannot be printed: the error printing it causes
 # is reported, as in a compiled program
 cat > badprint.dyl <<'EOF'

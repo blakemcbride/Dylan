@@ -1494,8 +1494,11 @@ handlers."
 (defun implementation-specific/warning (format-string format-args)
   "An unhandled warning's report, on the standard error, as a compiled
 program prints it."
-  (format *error-output* "~&Dylan warning: ~a~%"
-          (dylan-format-message format-string format-args))
+  (let ((message (dylan-format-message format-string format-args)))
+    ;; What the program wrote before comes first, as in a compiled
+    ;; program, whose standard output is flushed before it writes here.
+    (finish-output *standard-output*)
+    (format *error-output* "~&Dylan warning: ~a~%" message))
   (force-output *error-output*))
 
 (defconstant +nested-traps-soft+ 6

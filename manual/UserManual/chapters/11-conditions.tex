@@ -555,9 +555,11 @@ restarts (invokable by number or by possibly-abbreviated name):
   0: [DYLAN-RESTART] Use 10 instead
   1:                 Return to the read-eval-print loop.
   2: [DYLAN-REP    ] Return to the Dylan read-eval-print loop.
-  3: [ABORT        ] Exit debugger, returning to top level.
+  3: [ABORT        ] Return to the Dylan read-eval-print loop.
 
 ((LAMBDA NIL :IN DYLAN::IMPLEMENTATION-SPECIFIC/INDUCE-ERROR))
+   source: (ERROR 'DYLAN-CONDITION :OFFERED T :MESSAGE FORMAT-STRING :IRRITANTS
+                  FORMAT-ARGS)
 0] 0
 
 ;Value: 10

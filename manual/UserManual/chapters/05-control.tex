@@ -141,8 +141,8 @@ or a singleton (Section~\ref{sec:functions-singletons}).
 (bind (((n <integer>) (+ 1 2)))
   n)                      ; => 3
 (bind (((x <integer>) (sqrt 2)))
-  x)                      ; => error: 1.4142135623730951 is not
-                          ;    an instance of <integer>
+  x)                      ; => error: 1.4142135623730951 is not an
+                          ;    instance of {the class <integer>}
 \end{dylan}
 
 \noindent The type is checked when the variable is bound. It is not checked
@@ -366,7 +366,7 @@ signaled.
 (size-name 2)            ; => few
 (size-name 10)           ; => many
 (case 'Red ((red green) 'warm-or-cool) (else: 'other))   ; => warm-or-cool
-(case 9 ((3) 'three))    ; => error: no clause matches 9
+(case 9 ((3) 'three))    ; => error: case: no clause matches 9
 \end{dylan}
 
 \noindent Because the comparison is \code{id?}, matches are normally

@@ -118,10 +118,12 @@ Section~\ref{sec:internals-shaking}) runs between control lowering and
 code generation.
 
 The library itself is Dylan, in module \code{dylan}, in the files of
-\file{runtime/dylan/} read in name order: conditions, numbers,
-characters, collections, sequences, lists, vectors, strings, stretchy
-vectors, deques, ranges, tables, arrays, printing, threads, and the
-names whose meaning only the interactive implementation gives. It is
+\file{runtime/dylan/} read in name order: the kernel (comparison, the
+functional operations, and the generic functions \code{make} and
+\code{as}), conditions, numbers, characters, collections, sequences,
+lists, vectors, strings, stretchy vectors, deques, ranges, tables,
+arrays, printing, threads, and the names whose meaning only the
+interactive implementation gives. It is
 compiled with every program, by the same stages, on top of the
 \code{\%} primitives written in C in \file{runtime/c/library.c} and the
 other files of \file{runtime/c/}.
@@ -306,9 +308,12 @@ singletons, sorts each such set by specificity, and writes a C
 singletons first, by comparing pointers, then a \code{switch} on the
 class id --- and ends at a leaf for each distinct sorted list of
 methods. A leaf checks keyword arguments, if the methods take any, sets
-the thread's next method, and tail-calls the first method. A call that
-no method fits reaches \code{dy\_no\_applicable\_method}, which signals
-the error.
+the thread's next method, and tail-calls the first method. A method of
+the program belongs to its generic function only once its
+\code{define-method} has run, so the leaf first tests a flag that the
+\code{define-method} sets, and passes over a method whose flag is not
+set. A call that no method fits reaches
+\code{dy\_no\_applicable\_method}, which signals the error.
 
 Here is the dispatch function for a generic function \code{area} with
 one method on \code{<square>} and one on \code{<circle>}:
@@ -327,13 +332,19 @@ D dy_gf_area_51a90f52_dispatch(D self, D a0, D a1, D a2, D a3,
     default: goto no_method;
     }
 leaf_0:
-    dy_thread->next_method = DY_FALSE;
-    DY_TAIL_CALL_DIRECT(fn1197_area, DY_OBJ(&dy_method_326),
-                        a0, a1, a2, a3, argc);
+    if (dy_gf_area_51a90f52_on0) {
+        dy_thread->next_method = DY_FALSE;
+        DY_TAIL_CALL_DIRECT(fn1578_area, DY_OBJ(&dy_method_420),
+                            a0, a1, a2, a3, argc);
+    }
+    goto no_method;
 leaf_1:
-    dy_thread->next_method = DY_FALSE;
-    DY_TAIL_CALL_DIRECT(fn1199_area, DY_OBJ(&dy_method_327),
-                        a0, a1, a2, a3, argc);
+    if (dy_gf_area_51a90f52_on1) {
+        dy_thread->next_method = DY_FALSE;
+        DY_TAIL_CALL_DIRECT(fn1580_area, DY_OBJ(&dy_method_421),
+                            a0, a1, a2, a3, argc);
+    }
+    goto no_method;
 no_method:
     dy_no_applicable_method(self);
 }
@@ -516,7 +527,7 @@ one, and an \code{<atomic-integer>} a C11 \code{\_Atomic} integer.
 \section{Separate compilation of the library}\label{sec:internals-separate}
 
 \index{separate compilation}\index{library cache}
-Compiling the library's megabyte of C with every program would double
+Compiling the library's 1.7 MB of C with every program would double
 the time of a small build. So, by default, the compiler compiles the
 library \emph{as if it did not know the program}. Every function the
 \code{dylan} module exports, or that the compiler's expansions name, may

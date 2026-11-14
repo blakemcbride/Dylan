@@ -357,7 +357,7 @@ made-specially
 (11 15)
 (1 1)
 ")
- (float-contagion
+ (known-double-contagion
   ;; One argument a known double: the value is a double, unboxed, whatever
   ;; the other argument turns out to be.
   "(define scale (method (x n) (/ (* 3.0 x) n)))

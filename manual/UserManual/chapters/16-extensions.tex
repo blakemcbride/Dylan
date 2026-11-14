@@ -117,9 +117,12 @@ macro that never stops expanding is reported (``one never stops?'').
 \item A macro must be defined before its first use in the program. A
   call that comes earlier is compiled as a call of a variable that is not
   defined, and fails when it runs; the compiler warns of it.
-\item A name cannot be both a macro and a variable. \code{(define m 2)}
-  after \code{(define-macro m () 1)}, or a use of \code{m} other than as
-  the operator of a call, is an error (``m is a macro''). A second
+\item A name cannot be both a macro and a variable. After
+  \code{(define-macro m () 1)}, \code{(define m 2)} is an error
+  (``define of m: m is a macro''), as is a \code{define-method} of
+  \code{m} (``define-method of m: m is a macro''); a use of \code{m}
+  other than as the operator of a call, \code{set!} included, is an
+  error too (``m is a macro: it cannot be used as a variable''). A second
   \code{define-macro} of a name replaces the macro for the forms after
   it, as a second \code{define} replaces a variable's value.
 \item A call of a macro must be a proper list, and must supply arguments

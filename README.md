@@ -50,25 +50,25 @@ implementation in `src/` — and it has been heavily changed:
 - **Extended**: macros; streams, `format` and `print-object`, printing as
   the compiler to C prints; `<extended-float>`; a standalone executable,
   `bin/dylan`.
-- **Measured**: about half of `src/` (8,900 of 18,400 lines) is still as
-  first translated; the rest was added or rewritten since. The design —
-  Dylan compiled to the host Lisp, a runtime library, the read-eval-print
-  loop — is still Thomas's.
+- **Measured**: about half of `src/` (8,900 of 18,400 lines, when last
+  measured) is still as first translated; the rest was added or
+  rewritten since. The design — Dylan compiled to the host Lisp, a
+  runtime library, the read-eval-print loop — is still Thomas's.
 
 Everything else is new, written for this project, with no Thomas code in
 it:
 
-- **The compiler to C** (`compiler/`, ~12,400 lines) and **its runtime**
-  (`runtime/c`, ~7,300 lines of C; `runtime/dylan`, the library in Dylan,
-  ~3,600 lines): native executables, proper tail calls, type inference,
+- **The compiler to C** (`compiler/`, ~12,900 lines) and **its runtime**
+  (`runtime/c`, ~7,700 lines of C; `runtime/dylan`, the library in Dylan,
+  ~3,800 lines): native executables, proper tail calls, type inference,
   decision-tree dispatch, inlining, unboxed floats, a generational
   collector and threads. It shares only the reader with the Common Lisp
   implementation, which also runs its macros while compiling. Its programs
-  run the benchmarks about 18 times faster than the Common Lisp
+  run the benchmarks about 19 times faster than the Common Lisp
   implementation, and beat plain SBCL on 8 of 11
   ([`SpeedComparison.md`](SpeedComparison.md)).
 - **The tests**: Thomas tested only the book's examples. The suites in
-  `tests/` (~16,700 lines) cover the manual chapter by chapter, the
+  `tests/` (~19,100 lines) cover the manual chapter by chapter, the
   compiler, the runtime, stress, and the sanitizers.
 - **The benchmarks** (`bench/`) and **the user manual**
   (`manual/UserManual/`).
@@ -269,8 +269,8 @@ expansion.
 What a static program cannot do, which the 1992 manual allows:
 
 - **Change its classes or generic functions while running:** `add-method`,
-  `remove-method`, `add-slot`, `remove-slot` and `freeze-methods` are
-  reported when compiling. A `<generic-function>` made by `make` is given
+  `remove-method`, `add-slot`, `remove-slot`, `freeze-methods` and
+  `(setter direct-superclasses)` are reported when compiling. A `<generic-function>` made by `make` is given
   methods only by `define-method` of a variable that holds it.
 - **Specializers known only when running:** each must be a class or
   singleton the compiler can find — a literal, a constant variable,
@@ -365,12 +365,12 @@ Each line gives the best of three runs for each, their ratios, and
 
 | | |
 |---|---|
-| `src/` | the Common Lisp implementation — 41 Lisp files, ~18,300 lines |
+| `src/` | the Common Lisp implementation — 41 Lisp files, ~19,200 lines |
 | `Makefile` | builds `bin/dylan`, the Common Lisp implementation as one executable (`src/build-dylan.lisp`); `make distclean` (or `realclean`) removes everything built |
 | `src/README` | how it works, and which Thomas file each file grew from |
 | `src/reference/` | Thomas's 1992 transcripts of the examples, the baseline its tests compare with |
 | `dylan-examples.dyl` | the examples from the Dylan book |
-| `compiler/` | the compiler to C, in Common Lisp — ~12,400 lines |
+| `compiler/` | the compiler to C, in Common Lisp — ~12,900 lines |
 | `bin/dylanc` | its command line |
 | `runtime/` | its runtime: C (`runtime/c`) and the library in Dylan (`runtime/dylan`) |
 | `tests/` | its tests |

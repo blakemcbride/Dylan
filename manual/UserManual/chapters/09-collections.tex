@@ -760,8 +760,8 @@ empty list is not \code{\#f}: it is a true value.
 (cdr '(4 5 6))              ; => (5 6)
 (car '())                   ; => ()
 (cdr '())                   ; => ()
-(object-class '())          ; => <empty-list>
-(object-class '(1))         ; => <pair>
+(object-class '())          ; => {the class <empty-list>}
+(object-class '(1))         ; => {the class <pair>}
 \end{dylan}
 
 \noindent \code{(setter car)} and \code{(setter cdr)} change a pair. The
@@ -898,7 +898,7 @@ characters. \code{"..."} writes a constant string; \code{make} of
 
 \begin{dylan}
 (make <string> size: 3 fill: #\z)   ; => "zzz"
-(object-class "abc")                ; => <byte-string>
+(object-class "abc")                ; => {the class <byte-string>}
 (as <list> "abc")                   ; => (#\a #\b #\c)
 (as <string> '(#\h #\i))            ; => "hi"
 (size "abc")                        ; => 3

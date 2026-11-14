@@ -18,9 +18,9 @@ files: every header, and the C files that `mps.c` includes, for every
 platform. The MPS is meant to be compiled as that
 one file, with its own compiler flags rather than the program's, and
 `runtime/Makefile` does so into `mps.o` in the library variant's
-directory. The platforms this tree has been built on are Linux on x86-64
-(`lii6ll`) and macOS on Apple silicon (`xca6ll`); the MPS also supports
-FreeBSD, and Windows with Visual C.
+directory. This system has built it only on Linux on x86-64 (`lii6ll`);
+the MPS also supports macOS on Apple silicon (`xca6ll`), FreeBSD, and
+Windows with Visual C.
 
 ## Changes from the release
 

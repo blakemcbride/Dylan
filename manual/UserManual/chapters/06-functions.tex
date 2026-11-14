@@ -152,8 +152,10 @@ that does not match its specializer, is an error:
 
 \begin{dylan}
 ((method ((s <string>)) s) "x")   ; => "x"
-((method ((s <string>)) s) 3)     ; => error: 3 does not match <string>
-((method (a #rest r) a))          ; => error: too few arguments
+((method ((s <string>)) s) 3)     ; => error: 3 is not an instance
+                                  ;    of {the class <string>}
+((method (a #rest r) a))          ; => error: wrong number of
+                                  ;    arguments (0)
 \end{dylan}
 
 \subsection{Rest parameters}

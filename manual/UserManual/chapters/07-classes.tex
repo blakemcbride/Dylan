@@ -139,7 +139,8 @@ and two slots of one \code{define-class} may not have the same getter:
 (top r)                        ; => 50
 (bottom r)                     ; => 100
 (set! (bottom r) 55)           ; => 55
-(set! (bottom r) 'foo)         ; => error: foo is not an instance of <integer>
+(set! (bottom r) 'foo)         ; => error: foo is not an instance of
+                               ;    {the class <integer>}
 \end{dylan}
 
 \noindent The getter and setter options let a slot have accessor names that

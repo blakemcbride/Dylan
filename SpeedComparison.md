@@ -48,7 +48,7 @@ on every benchmark.
 and on the numeric and calling benchmarks much faster.** It beats SBCL
 on tak, next-method, exit, sort, table, stretchy, range and, by a wide
 margin, float; it is slower on string, deque and condition. Against
-hand-written C it is within a factor of 2.2 on all but the string,
+hand-written C it is within a factor of 2.3 on all but the string,
 stretchy, range and condition benchmarks, and is faster on table, exit
 and tak.
 

@@ -88,7 +88,7 @@ Name & Description & \\
 \code{(seal class)}\index{seal} & Makes the class read-only and forbids new subclasses of it; answers it. &  \\
 \code{(make-read-only object)}\index{make-read-only} & Makes a class or generic function read-only, so that its slots or methods cannot change; answers it. &  \\
 \code{(slot-descriptors class)}\index{slot-descriptors} & The descriptors of the class's slots. &  \\
-\code{(add-slot owner \#key getter setter type init-value init-function init-keyword allocation)}\index{add-slot} & Adds a slot to a class (or singleton) that may already have instances. & \textsc{l} \\
+\code{(add-slot owner \#key getter setter type init-value init-function init-keyword required-init-keyword debug-name allocation)}\index{add-slot} & Adds a slot to a class (or singleton) that may already have instances. & \textsc{l} \\
 \code{(remove-slot owner slot-descriptor)}\index{remove-slot} & Removes a slot. & \textsc{l} \\
 \code{(slot-descriptor instance getter)}\index{slot-descriptor} & The descriptor of the slot of \code{instance} that \code{getter} reads. &  \\
 \code{(slot-getter slot-descriptor)}\index{slot-getter} & The slot's getter, or \code{\#f}. &  \\

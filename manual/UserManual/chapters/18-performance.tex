@@ -433,8 +433,11 @@ nearly all the time is spent in it. Other names to recognize: a name
 such as \code{dy\_gf\_tak\_e10c5970\_dispatch} is the dispatch function
 of a generic function, here \code{tak}, which a call goes through when
 the compiler cannot tell its arguments' classes; \code{\_spec} marks a specialized entry, \code{dy\_maker\_}\meta{class}
-a class's maker, and \code{GC\_}\meta{name} the collector; time in the
-collector's functions is time spent allocating and collecting.
+a class's maker, and the collector's functions are named
+\code{mps\_}\meta{name}, \code{Arena}\meta{name},
+\code{Trace}\meta{name} and \code{Pool}\meta{name} (the default
+collector, the MPS) or \code{GC\_}\meta{name} (with \code{--gc
+boehm}); time in them is time spent allocating and collecting.
 \cmd{perf annotate} shows the hot instructions with the Dylan lines they
 came from.
 

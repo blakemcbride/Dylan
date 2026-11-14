@@ -21,8 +21,9 @@ Where they stand (`sbcl --script bench/run-c.lisp`, gcc -O2): tak 1.3×
 the C, float 1.5×, table 1.9×, sort 2.4×, next-method 2.5×, deque 3×,
 string 3.3×, and exit faster than the C (a jump, against `setjmp`);
 range, stretchy and condition run in a few milliseconds where the C takes
-under one. Hello world built `-Os` is about 215 KB (text and data) beyond
-libc and libgc, more than the goal: the shaking is by name and class
+under one. Hello world built `-Os` with `--gc boehm` is about 340 KB
+(text and data) beyond libc and libgc, and about 650 KB with the default
+collector, the MPS, which is linked in; more than the goal: the shaking is by name and class
 (Phase 9), so a call of a generic function such as `print-object`,
 `make` or `as` keeps every method that could apply to a class with
 instances, and those reach much of the library. Getting further needs an
@@ -100,13 +101,14 @@ time.
 
 ```
 compiler/            the compiler (Common Lisp)
-  package.lisp
-  driver.lisp        command line / entry points: dylan->c, build
+  load.lisp, package.lisp
+  driver.lisp        entry points: dylan->c, build
+  dylanc.lisp        the command line, run by bin/dylanc
   front/             reader glue, modules, macros, expansion to core forms
-  ir/                IR definitions, conversion, printers
-  analysis/          CHA, call graph, type inference, escape analysis
-  opt/               inlining, dispatch resolution, unboxing, DCE
-  backend/           closure conversion, lowering, C emission
+  ir/                the IR, conversion to it, analysis, contification,
+                     lowering of exits and cleanups
+  backend/           objects and dispatch, known calls, inlining, type
+                     inference and unboxing, tree shaking, C emission
 runtime/
   c/                 object model, GC glue, threads, dispatch support,
                      numbers, exits, conditions core, printer core, startup
@@ -368,7 +370,7 @@ and `return-query` do nothing. Tests: `tests/codegen/cases-control.lisp`.
 
 ## Phase 7 — Threads
 
-**Status: done.** `runtime/c/thread.c`, `runtime/dylan/threads.dyl`. The API
+**Status: done.** `runtime/c/thread.c`, `runtime/dylan/20-threads.dyl`. The API
 as settled: `make-thread` (a function of no arguments), `join-thread`
 (answers its values), `current-thread`, `thread-yield`; `<lock>` (error
 checking) and `<recursive-lock>` with `acquire-lock`, `release-lock` and the
@@ -439,8 +441,9 @@ in; two unbounded ranges intersect exactly (Chinese remainder theorem).
 Streams, which the manual uses but does not define, are an extension:
 `<stream>`, `*standard-output*`, `*standard-error*`, `<string-stream>` with
 `stream-contents`, and `format`; every printing function takes `stream:`.
-`add-method`, `remove-method`, `add-slot`, `remove-slot` and
-`freeze-methods` are compile errors (the static program). Specializing
+`add-method`, `remove-method`, `add-slot`, `remove-slot`, `freeze-methods`
+and `(setter direct-superclasses)` are compile errors (the static
+program). Specializing
 library code at each use is Phase 9. Tests:
 `tests/codegen/cases-library.lisp`.
 
@@ -521,7 +524,7 @@ against plain SBCL); tests: `tests/codegen/cases-optimize.lisp`.
   `runtime/build/library/`, named for a digest of the text, `dylan.h`,
   the C compiler and its options, and compiles it only when no object
   matches. A program that changes the library's C — a method replacing
-  one of the library's, say — just compiles it. All 320 test programs
+  one of the library's, say — just compiles it. The test programs all
   share one. A build takes about half the time (hello world: 3.3 s to
   1.6 s), and the benchmarks run as fast. `dylanc --whole` (`:whole t`),
   and size builds, compile the library with the program.
@@ -615,7 +618,7 @@ debug builds); the variants of the runtime library are built on demand
 (`compiler/driver.lisp`, `*variants*`; `dylanc --gc-stress`, `--sanitize`).
 
 - `tests/conformance/ch*.lisp`: the manual's examples and specifications,
-  chapter by chapter (236 programs), each citing its section. What a static
+  chapter by chapter (238 programs), each citing its section. What a static
   program cannot do is listed in README.md.
 - `tests/codegen/cases*.lisp`: the features, phase by phase, and
   `cases-optimize.lisp`.

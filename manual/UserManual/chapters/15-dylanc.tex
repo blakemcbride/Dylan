@@ -263,7 +263,7 @@ temporary directory, deleted after the build):
   \file{\meta{name}-a\_2f\_b.c}.
 \item[\file{\meta{name}-dylan.c}] The library's functions: the module
   \code{dylan}, written in Dylan in \file{runtime/dylan/} and compiled
-  with every program. This is the largest file by far, about a megabyte.
+  with every program. This is the largest file by far, about 1.7 MB.
 \item[\file{\meta{name}.h}] What the files share: a declaration of every
   object \file{\meta{name}.c} defines and a prototype of every function.
 \end{description}
@@ -333,7 +333,7 @@ compiler wrote for.
 \section{The library's cache}\label{sec:dylanc-cache}
 
 \index{library cache}
-Every program carries the whole Dylan library, about a megabyte of C. To
+Every program carries the whole Dylan library, about 1.7 MB of C. To
 avoid compiling that with every build, the compiler writes the library's
 C so that it does not depend on the program: \file{\meta{name}-dylan.c}
 is the same text for almost every program. The driver compiles it once
@@ -540,8 +540,9 @@ the environment variable \code{DYLAN\_GC=boehm} makes the Boehm
 collector the default, which is how the test suites
 (Appendix~\ref{app:testing}) are run with it. The MPS's behavior can be
 tuned by environment variables, in Section~\ref{sec:perf-gc}. It has
-been built here on Linux on x86-64 and macOS on Apple silicon, and has
-ports to FreeBSD, to Windows with Visual C, and to Linux on ARM64.
+ports to Linux on x86-64 and ARM64, macOS on Apple silicon, FreeBSD and
+Windows with Visual C; this system has been built and tested with it on
+Linux on x86-64 only.
 
 \section{Calling the compiler from Lisp}\label{sec:dylanc-lisp}
 

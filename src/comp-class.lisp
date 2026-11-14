@@ -511,8 +511,11 @@ Its faults are worded as the compiler to C words them."
                              ((dylan%not (dylan%generic-function? ,ref))
                               ;; As the compiler to C words it
                               (dylan-call dylan/error
-                                          ,(format nil "~a is defined both as a variable and as a generic function"
-                                                   (definition-name-string name)))))
+                                          (if (dylan%class? ,ref)
+                                              ,(format nil "~a is defined both as a class and otherwise"
+                                                       (definition-name-string name))
+                                              ,(format nil "~a is defined both as a variable and as a generic function"
+                                                       (definition-name-string name))))))
                        ,ref)))
                  (funcall continue nil mod-vars))))
     (get-mod-var

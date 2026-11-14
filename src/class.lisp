@@ -743,24 +743,31 @@ answer the class precedence list."
 (defun add-slot-to-class! (class new-slot)
   (case (slot.allocation new-slot)
     ((instance)
-     (map-over-population!
-      (class.instances class)
-      (lambda (instance)
-        (setf (instance.data instance)
-              (grow-vector (instance.data instance)
-                           (get-initial-slot-value new-slot)))))
-     (add-method (slot.getter new-slot)
-                 (make-instance-getter class
-                                       (class.instance-data-size class)
-                                       (slot.debug-name new-slot)
-                                       (slot.getter new-slot)))
-     (when (slot.setter new-slot)
-       (add-method (slot.setter new-slot)
-                   (make-instance-setter class
-                                         (class.instance-data-size class)
-                                         (slot.type new-slot)
-                                         (slot.getter new-slot))))
-     (incf (class.instance-data-size class)))
+     ;; The live instances get the slot, and its accessors their methods,
+     ;; before its initial values are computed, as in a compiled program:
+     ;; an init-function that reads the slot finds it not initialized.
+     (let ((index (class.instance-data-size class)))
+       (map-over-population!
+        (class.instances class)
+        (lambda (instance)
+          (setf (instance.data instance)
+                (grow-vector (instance.data instance)
+                             *the-uninitialized-slot-value*))))
+       (add-method (slot.getter new-slot)
+                   (make-instance-getter class index
+                                         (slot.debug-name new-slot)
+                                         (slot.getter new-slot)))
+       (when (slot.setter new-slot)
+         (add-method (slot.setter new-slot)
+                     (make-instance-setter class index
+                                           (slot.type new-slot)
+                                           (slot.getter new-slot))))
+       (incf (class.instance-data-size class))
+       (map-over-population!
+        (class.instances class)
+        (lambda (instance)
+          (setf (aref (instance.data instance) index)
+                (get-initial-slot-value new-slot))))))
     ((each-subclass)
      (add-method (slot.getter new-slot)
                  (make-each-subclass-getter class
@@ -864,7 +871,7 @@ slots.")
            (dylan-call dylan/error "define-slot: the class is read-only: ~s" owner))
           ((not (class? owner))
            (dylan-call dylan/error
-                       "dylan%add-slot -- owner not a singleton or class"
+                       "define-slot: the owner must be a singleton or a class: ~s"
                        owner)))
     (when (and required-init-keyword
                (or init-keyword has-init-value? init-function))

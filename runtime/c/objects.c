@@ -101,7 +101,9 @@ void dy_remove_methods(D generic, const D *removed, intptr_t n) {
 void dy_check_generic_variable(D value, D generic, const char *name) {
     if (value == generic) return;
     if (!dy_kind_p(value, DY_KIND_GENERIC))
-        dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
+        dy_error_naming("", name, dy_kind_p(value, DY_KIND_CLASS)
+                        ? " is defined both as a class and otherwise"
+                        : " is defined both as a variable and as a generic function", 0);
     dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);
 }
 
@@ -128,7 +130,9 @@ static bool same_keys(D a, D b) {
    function, and the declaration consistent with it. */
 void dy_redeclare_generic(D value, const char *name, intptr_t required, bool rest, D keys) {
     if (!dy_kind_p(value, DY_KIND_GENERIC))
-        dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
+        dy_error_naming("", name, dy_kind_p(value, DY_KIND_CLASS)
+                        ? " is defined both as a class and otherwise"
+                        : " is defined both as a variable and as a generic function", 0);
     DyVector *info = DY_PTR(((DyGeneric *)DY_PTR(value))->info);
     if (DY_INT_VALUE(info->data[0]) != required || (info->data[1] != DY_FALSE) != rest
         || !same_keys(info->data[2], keys))

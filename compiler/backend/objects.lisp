@@ -270,12 +270,41 @@ expression that evaluates to a class or singleton, chapter 6.)"
                       (eq (module-var-module var) (dylan-module)))
                   c))))))
 
+(defun known-function-string (var)
+  "How write writes the value of VAR, if a variable of the library that
+surely holds one function -- a primitive, a method it defines, or a
+generic function -- and that the program does not assign: \"{method
+car}\"; else NIL."
+  (and (library-var-p var)
+       *assigned-globals*
+       (not (gethash var *assigned-globals*))
+       (let ((name (name-string (module-var-name var)))
+             (definitions (module-var-definitions var)))
+         (cond ((and definitions
+                     (every (lambda (d) (or (define-generic-node-p d) (define-method-node-p d)))
+                            definitions))
+                (format nil "{the generic function ~a}" name))
+               ((or (and (null definitions)
+                         (assoc name *primitive-functions* :test #'string-equal))
+                    (and (= (length definitions) 1)
+                         (define-variable-node-p (first definitions))
+                         (method-node-p (define-variable-node-value (first definitions)))))
+                (format nil "{method ~a}" name))))))
+
+(defun static-non-class-string (v)
+  "How write writes the value of V, a STATIC-VALUE, if it is surely not a
+class: a constant or a library function; else NIL."
+  (case (car v)
+    (:constant (dylan-form-string (second v)))
+    (:global (and (not (global-class (second v)))
+                  (known-function-string (second v))))))
+
 (defun resolve-class (atom what)
-  (let ((v (static-value atom)))
+  (let* ((v (static-value atom))
+         (not-class (static-non-class-string v)))
     (or (and (eq (car v) :global) (global-class (second v)))
-        ;; A constant is never a class
-        (and (eq (car v) :constant)
-             (compile-error "not a class: ~a" (dylan-form-string (second v))))
+        ;; A constant or a library function is never a class
+        (and not-class (compile-error "not a class: ~a" not-class))
         (compile-error "~a must be a class known at compile time" what))))
 
 (defun constant-class (value)
@@ -308,7 +337,10 @@ expression that evaluates to a class or singleton, chapter 6.)"
           (:global
            (make-spec :class
                       (or (global-class (second v))
-                          (compile-error "a specializer must be a class or a singleton known at compile time"))))
+                          (let ((not-class (static-non-class-string v)))
+                            (if not-class
+                                (compile-error "not a class or singleton: ~a" not-class)
+                                (compile-error "a specializer must be a class or a singleton known at compile time"))))))
           (:singleton
            (let ((x (second v)))
              (cond ((eq (car x) :constant)
@@ -325,7 +357,10 @@ expression that evaluates to a class or singleton, chapter 6.)"
                       (make-spec :singleton (constant-class g) g
                                  (address (gfun-c-name g)))))
                    (t (compile-error "a singleton specializer must be of a constant, a class or a generic function")))))
-          (t (compile-error "a specializer must be a class or a singleton known at compile time"))))))
+          (t (let ((not-class (static-non-class-string v)))
+               (if not-class
+                   (compile-error "not a class or singleton: ~a" not-class)
+                   (compile-error "a specializer must be a class or a singleton known at compile time"))))))))
 
 (defun fixed-generic-var-p (var)
   "Is VAR the variable of a program's generic function that holds no other
@@ -448,6 +483,7 @@ variable's value (chapter 6's slot types and initial values may name it)."
                    (when (class-info-sealed-p s)
                      (compile-error "~a is sealed: it cannot be subclassed" (class-info-name s))))
                  (setf (class-info-supers (gclass-info g)) supers))))
+    (break-superclass-cycles user)
     ;; An inconsistent precedence is reported at the define-class that
     ;; makes the class, with its file and line.
     (loop for (d . g) in user
@@ -458,6 +494,36 @@ variable's value (chapter 6's slot types and initial values may name it)."
                        (mapcar (lambda (u) (gclass-info (cdr u))) user))))
       (handler-case (setf *classes* (prepare-classes all))
         (error (e) (compile-error "~a" e))))))
+
+(defun break-superclass-cycles (user)
+  "Of USER, the program's (define-class . gclass) in program order, a class
+whose superclasses lead back to it never exists: one define-class of the
+cycle names a class whose define-class has not run, and reading that
+variable is the error, as in L.  So that the program can be compiled,
+each class of a cycle is laid out without its superclasses defined at or
+after it."
+  (let ((order (make-hash-table :test #'eq))
+        (program (make-hash-table :test #'eq)))
+    (loop for (nil . g) in user
+          for i from 0
+          do (setf (gethash (gclass-info g) order) i
+                   (gethash (gclass-info g) program) t))
+    (labels ((reaches-p (from to seen)
+               (loop for s in (class-info-supers from)
+                     thereis (or (eq s to)
+                                 (and (gethash s program)
+                                      (not (member s seen))
+                                      (reaches-p s to (cons s seen)))))))
+      (let ((cyclic (loop for (nil . g) in user
+                          for c = (gclass-info g)
+                          when (reaches-p c c (list c)) collect c)))
+        (dolist (c cyclic)
+          (let ((kept (remove-if (lambda (s)
+                                   (and (gethash s program)
+                                        (>= (gethash s order) (gethash c order))))
+                                 (class-info-supers c))))
+            (setf (class-info-supers c)
+                  (or kept (list (global-class (dylan-var "<object>")))))))))))
 
 (defun built-in-class-infos-of (classes)
   (remove :instance classes :key #'class-info-kind))
@@ -971,8 +1037,10 @@ computed after the class was made (IR-DEFINE-CLASS-START)."
     (when (null (sdef-class sd))
       ;; The owner: its object is the one with the slot from now on.
       (let ((owner (atom-c (ir-define-slot-owner node))))
-        (emit "if (!dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error(\"define-slot: the owner must be a singleton, or a class known when compiling\", ~a);"
-              owner owner)
+        ;; Not a class at all is L's error; a class not known when
+        ;; compiling, the compiler's limit.
+        (emit "if (!dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error(dy_kind_p(~a, DY_KIND_CLASS) ? \"define-slot: the owner must be a singleton, or a class known when compiling\" : \"define-slot: the owner must be a singleton or a class\", ~a);"
+              owner owner owner)
         ;; One object owns the slot: run again, the define-slot must be
         ;; for the same one.
         (emit "if (~a.object != DY_UNBOUND && !dy_identical(~a.object, ((DySingleton *)DY_PTR(~a))->object)) dy_error(~a, ((DySingleton *)DY_PTR(~a))->object);"
@@ -1263,8 +1331,15 @@ otherwise replace for the library too.  (A program's variable that a
 define gives a value is checked when the definitions run.)"
   (when (or (gethash var *gclasses*)
             (and (module-var-predefined-p var) (predefined-c-value var *classes*)))
-    (compile-error "~a is defined both as a variable and as a generic function"
-                   (name-string (module-var-name var)))))
+    (defined-both-error var)))
+
+(defun defined-both-error (var)
+  "The error of a generic function's definition of VAR, which is defined
+otherwise: as a class, or as another variable -- worded as in L."
+  (compile-error (if (or (gethash var *gclasses*) (global-class var))
+                     "~a is defined both as a class and otherwise"
+                     "~a is defined both as a variable and as a generic function")
+                 (name-string (module-var-name var))))
 
 (defun build-generics (definitions)
   (dolist (d definitions)
@@ -1297,10 +1372,10 @@ define gives a value is checked when the definitions run.)"
         (ir-define-method
          (let* ((fn (ir-define-method-fn d))
                 (var (ir-define-method-var d)))
+           ;; A library function that is not a generic function, as in L
            (when (and (module-var-predefined-p var)
                       (predefined-c-value var *classes*))
-             (compile-error "methods cannot be added to ~a (it is not yet a generic function in the runtime)"
-                            (name-string (module-var-name var))))
+             (defined-both-error var))
            (let ((m (make-gmethod
                      :specs (mapcar #'resolve-specializer (ir-fn-specializers fn))
                      :kind :ir :fn fn :var var
@@ -1663,8 +1738,7 @@ congruent with that one, the error then."
                                 (and l (not (library-source-file-p (location-file l))))))
                             (module-var-definitions var))
                    (find-if #'define-variable-node-p (module-var-definitions var))))))
-        (compile-error "~a is defined both as a variable and as a generic function"
-                       (name-string (module-var-name var)))))
+        (defined-both-error var)))
     ;; In program order.  A method with the same specializers as another
     ;; replaces it when its define-method runs (chapters 6 and 10), so the
     ;; program has both, and each of a program's methods a flag set while

@@ -3765,12 +3765,12 @@ other-error
  (slot-named-after-class
   "(define-class <q> (<object>) (<q> init-value: 1))"
   ""
-  :compile-error "<q> is defined both as a variable and as a generic function")
+  :compile-error "<q> is defined both as a class and otherwise")
  (define-slot-named-after-library-class
   "(define-class <x> (<object>))
 (define-slot <x> <integer> init-value: 1)"
   ""
-  :compile-error "<integer> is defined both as a variable and as a generic function")
+  :compile-error "<integer> is defined both as a class and otherwise")
  ;; A module may not define a variable it imports (chapter 5): not the
  ;; library's classes, nor another module's.
  (define-class-of-library-class
@@ -4006,4 +4006,66 @@ after
 (print (g 3))"
   ""
   :error "a method of g does not accept the keys its generic function names: a:")
+ ;; Defining forms given what is not a class, or a name defined
+ ;; otherwise, are worded alike, each object as write writes it; a class
+ ;; whose superclasses lead back to it reads a variable with no value
+ ;; (Bugs05 B17).
+ (define-slot-owner-not-a-class
+  "(define-slot \"x\" b init-value: 2)"
+  ""
+  :error "define-slot: the owner must be a singleton or a class: \"x\"")
+ (specializer-literal-not-a-class
+  "(define-method g ((a \"s\")) 1)"
+  ""
+  :compile-error "not a class or singleton: \"s\"")
+ (specializer-library-function
+  "(define-method g ((a car)) 1)"
+  ""
+  :compile-error "not a class or singleton: {method car}")
+ (superclass-library-generic
+  "(define-class <a> (size))"
+  ""
+  :compile-error "not a class: {the generic function size}")
+ (superclass-cycle
+  "(print 0) (define-class <a> (<b>)) (define-class <b> (<a>) (s init-value: 1)) (define-method f ((x <a>)) (s x)) (print (f (make <b>)))"
+  "0
+"
+  :error "the variable <b>@dylan-user has no value")
+ (superclass-self
+  "(define-class <x> (<x>))"
+  ""
+  :error "the variable <x>@dylan-user has no value")
+ (define-method-library-function
+  "(define-method list ((a <integer>)) 1)"
+  ""
+  :compile-error "list is defined both as a variable and as a generic function")
+ (define-generic-library-class
+  "(define-generic-function <list> (x))"
+  ""
+  :error "<list> is defined both as a class and otherwise")
+ (getter-library-class
+  "(define-class <a> (<object>) (s getter: <list>))"
+  ""
+  :compile-error "<list> is defined both as a class and otherwise")
+ ;; Chapter 6: define-slot gives the live instances the slot and its
+ ;; accessors their methods before their initial values are computed
+ ;; (Bugs05 B17).
+ (define-slot-live-instances
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(define-class <a> (<object>))
+(define a (make <a>))
+(define b (make <a>))
+(define-slot <a> s2 init-function: (method () 7))
+(print (list (s2 a) (s2 b)))
+(define n 0)
+(define-slot <a> s4 init-function: (method () (set! n (+ n 1)) n))
+(print (sort (list (s4 a) (s4 b))))
+(define-slot <a> s5 init-function: (method () (slot-initialized? a s5)))
+(print (s5 a))
+(print (try (method () (define-slot <a> sl init-function: (method () (sl a))))))"
+  "(7 7)
+(1 2)
+#f
+\"the slot sl is not initialized\"
+")
 )

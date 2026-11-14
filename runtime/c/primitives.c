@@ -489,7 +489,9 @@ static D method_copy(D method) {
  * its own.  A closure is made afresh each time. */
 void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     if (!dy_kind_p(generic, DY_KIND_GENERIC))
-        dy_error_naming("", name, " is defined both as a variable and as a generic function", 0);
+        dy_error_naming("", name, dy_kind_p(generic, DY_KIND_CLASS)
+                        ? " is defined both as a class and otherwise"
+                        : " is defined both as a variable and as a generic function", 0);
     DyGeneric *g = DY_PTR(generic);
     if (g->entry != no_methods_entry && g->entry != made_dispatch)
         dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);

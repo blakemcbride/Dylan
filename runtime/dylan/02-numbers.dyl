@@ -306,6 +306,22 @@ module: dylan
       m
       (error "complex numbers are not supported: ~s ~s" m a)))
 
+;;; <complex> is instantiable (chapter 14): its init-keywords give the
+;;; parts to make-rectangular or make-polar, each missing part 0; no other
+;;; combination is legal.  Here only a real can be made.
+(define-method make ((class (singleton <complex>)) #rest arguments)
+  (apply %make-complex arguments))
+
+(define %make-complex
+  (method (#key (real %no-default) (imag %no-default)
+                (magnitude %no-default) (angle %no-default))
+    (bind-methods ((given? (x) (not (id? x %no-default)))
+                   (part (x) (if (id? x %no-default) 0 x)))
+      (cond ((and (or (given? real) (given? imag)) (or (given? magnitude) (given? angle)))
+             (error "make: an invalid combination of init-keywords for <complex>"))
+            ((or (given? magnitude) (given? angle)) (make-polar (part magnitude) (part angle)))
+            (else: (make-rectangular (part real) (part imag)))))))
+
 ;;; gcd and lcm
 
 (define-generic-function binary-gcd (integer1 integer2))

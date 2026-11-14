@@ -3809,4 +3809,22 @@ none
   "(1 2 3 3)
 (#t #f #f)
 ")
+ ;; <complex> is instantiable (chapter 14): its init-keywords give the
+ ;; parts to make-rectangular or make-polar, no other combination being
+ ;; legal (Bugs05 L14).
+ (make-complex-keywords
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (make <complex>))))
+(print (try (method () (make <complex> real: 5))))
+(print (try (method () (make <complex> real: 2.5 imag: 0))))
+(print (try (method () (make <complex> magnitude: 3 angle: 0))))
+(print (try (method () (make <complex> real: 1 angle: 0))))
+(print (try (method () (make <complex> foo: 1))))"
+  "0
+5
+2.5
+3
+\"ERR: make: an invalid combination of init-keywords for <complex>\"
+\"ERR: keyword argument not accepted: foo:\"
+")
 )

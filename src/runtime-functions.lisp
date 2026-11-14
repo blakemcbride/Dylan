@@ -119,8 +119,7 @@
                    nil nil '(:real :imag :magnitude :angle))
   (lambda (class &rest rest)
     ;; Chapter 14: "No other init-keyword combination is legal."
-    (validate-keywords rest '(:real :imag :magnitude :angle)
-                       (lambda (&rest args) (dylan-apply dylan/error args)))
+    (validate-keywords rest '(:real :imag :magnitude :angle) #'keyword-error)
     (let ((real (dylan%find-keyword rest :real (lambda () nil)))
           (imag (dylan%find-keyword rest :imag (lambda () nil)))
           (mag (dylan%find-keyword rest :magnitude (lambda () nil)))
@@ -140,8 +139,7 @@
             ((and (not real) (not imag) mag angle)
              (dylan-call dylan/make-polar mag angle))
             (t (dylan-call dylan/error
-                           "(make (singleton <complex>)) -- invalid keyword combination"
-                           class rest)))))))
+                           "make: an invalid combination of init-keywords for <complex>")))))))
 
 ;;;
 ;;; Misc Generic Functions

@@ -162,7 +162,9 @@ instance, a pair, a byte string, a double float, and so on), and the set
 of the class's ancestors. Pairs are a header and two words; strings a
 header, a length and the bytes; a \code{<double-float>} a header and a C
 \code{double}; an instance of a class the program defines a header and
-one word per slot.
+one word per slot --- two words for an instance with no slots, since the
+moving collector writes a forwarding record of two words over an object
+it moves (\code{DY\_INSTANCE\_BYTES}).
 
 \code{\#t}, \code{\#f} and \code{()} are three static objects, compared
 by address. \code{\#t} and \code{\#f} are instances of an internal class
@@ -419,8 +421,14 @@ back into that Dylan code, so the error is an ordinary
 \index{stack, exhausted}
 A function that may call another other than in tail position --- only
 such a call can deepen a recursion --- begins with
-\code{DY\_CHECK\_STACK}, which compares the stack pointer with the
-thread's \code{dy\_stack\_guard}: one load, at a fixed offset from the
+\code{DY\_CHECK\_STACK}. So do each class's filler, which calls its
+slots' init functions, and the runtime functions that call back into
+Dylan code: \code{dy\_fill\_slots}, \code{dy\_call\_list} (a maker's
+call of \code{initialize}), \code{dy\_native\_slot},
+\code{slot-value}, \code{do-handlers}, \code{dy\_call\_with\_exit},
+\code{dy\_unwind\_protect} and \code{dy\_handler\_bind}; a tail call
+made through one of them is not a jump, and does deepen a recursion. The check compares the stack pointer
+with the thread's \code{dy\_stack\_guard}: one load, at a fixed offset from the
 thread pointer, a compare and a branch. Each thread finds its stack's
 bounds as it starts (\code{dy\_find\_stack}), and keeps two reserves at
 its end, an eighth of the stack each, at most 64~KB and 192~KB. Reaching
@@ -452,8 +460,9 @@ floats, ratios), which the collector never scans; AMS, which does not
 move, for \code{<thread>} objects, since a thread's state points to its
 own; LO, which is neither moved nor protected, for objects holding a
 mutex or condition variable the kernel uses; and AWL, weak, for the
-table of identity hashes and for the list of a class's instances made
-while a \code{define-slot} on it may still run. Each thread has its own \emph{allocation
+table of identity hashes and for the list of a class's instances, and
+of their shallow copies, made while a \code{define-slot} on it may still
+run. Each thread has its own \emph{allocation
 points} in AMC and AMCZ, from which it allocates by bumping a pointer;
 the slow path, when the point's buffer is empty, enters the collector.
 An object's fields are filled in before it is committed to the

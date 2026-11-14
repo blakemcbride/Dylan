@@ -345,7 +345,10 @@ would compile the same text the same way uses the object instead. This
 halves the time of a small build.
 
 The newest 40 objects are kept, with the C each was compiled from; older
-ones are deleted. The cache is safe to delete at any time
+ones are deleted, except one written or used in the last ten minutes,
+which a build running at the same time may be about to link. A C file
+left without its object, by a build stopped while it compiled, is deleted
+after a day. The cache is safe to delete at any time
 (\cmd{rm -r runtime/build/library}); it is rebuilt as needed. Builds
 running at the same time share it safely.
 

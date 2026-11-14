@@ -244,10 +244,11 @@ as cannot make another collection of it, which would have no end."
 (defparameter dylan/initial-state
   (dylan%generic-fn
    'initial-state one-collection
+   ;; A collection with no iteration protocol: the compiled library's
+   ;; error, which names no collection -- printing one iterates it.
    (lambda (collection)
-     (dylan-call dylan/error
-                 "initial-state -- not specialized for this type of collection"
-                 collection))))
+     (declare (ignore collection))
+     (dylan-call dylan/error "no applicable method for initial-state"))))
 
 (add-method dylan/initial-state
             (state-method-1 'null <empty-list>

@@ -523,3 +523,37 @@
                    (fill vector dylan%false :start size)))
         (set-stretchy-dimensions! s-vector (list n)))
       n))))
+
+;;; An instance of a program's subclass of <array> or <vector> that
+;;; inherits no storage from the library -- not a <stretchy-vector> nor an
+;;; array MAKE makes -- has no iteration protocol of its own: as in a
+;;; compiled program, whose library reaches its elements by INITIAL-STATE,
+;;; asking for them is the error that no initial-state method applies, not
+;;; the elements of an empty vector.  Such a class's methods for the
+;;; library's storage readers say so.
+
+(defun storage-less-class-p (class)
+  "Is CLASS a program's subclass of <array> with no storage from the
+library?"
+  (and *library-classes*
+       (not (gethash class *library-classes*))
+       (subclass? class <array>)
+       (not (subclass? class <stretchy-vector>))
+       (not (subclass? class <%general-array>))))
+
+(defun storage-less-array-p (object)
+  "Is OBJECT an instance of a program's subclass of <array> with no
+storage from the library?"
+  (and (instance? object) (storage-less-class-p (instance.class object))))
+
+(setf *instance-getter-filter*
+      (lambda (class getter method)
+        (if (and (or (eq getter dylan/get-array-value)
+                     (eq getter dylan/get-array-dimensions))
+                 (storage-less-class-p class))
+            (dylan%function->method
+             (make-getter-param-list class)
+             (lambda (array)
+               (declare (ignore array))
+               (dylan-call dylan/error "no applicable method for initial-state")))
+            method)))

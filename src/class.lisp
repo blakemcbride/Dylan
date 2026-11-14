@@ -225,6 +225,12 @@ in both -- the options' values id? -- or CLASS must define it."
                        origins)
               (car origins))))))
 
+;;; The collection library's say in the getter method a class gets for an
+;;; instance slot it inherits: a function of the class, the slot's getter
+;;; and the method made, which answers the method to add.
+(defvar *instance-getter-filter*
+  (lambda (class getter method) (declare (ignore class getter)) method))
+
 (defun combine-slots (class superclasses new-getter-fns)
   "Merge the slots CLASS inherits from SUPERCLASSES (in order), and give
 CLASS its own accessor methods for each of them.  Answers a vector of the
@@ -267,9 +273,11 @@ slot vector, the class-data size and the instance-data size."
                   (incf instance-data-index)
                   (when methods?
                     (add-method (slot.getter slot)
-                                (make-instance-getter class instance-data-index
-                                                      (slot.debug-name slot)
-                                                      (slot.getter slot)))
+                                (funcall *instance-getter-filter*
+                                         class (slot.getter slot)
+                                         (make-instance-getter class instance-data-index
+                                                               (slot.debug-name slot)
+                                                               (slot.getter slot))))
                     (when (slot.setter slot)
                       (add-method (slot.setter slot)
                                   (make-instance-setter class instance-data-index

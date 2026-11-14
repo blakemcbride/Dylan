@@ -563,8 +563,11 @@ would exhaust SBCL's binding stack."
                      (out " => ")
                      (rec (dylan-call dylan/current-element object state)))
             (write-char #\} stream))
-           ;; Any other sequence, or an array: its class and its elements
-           ((or (subclass? class <sequence>) (subclass? class <array>))
+           ;; Any other sequence, or an array: its class and its elements.
+           ;; An array with no storage from the library prints as any
+           ;; instance, as in a compiled program.
+           ((or (subclass? class <sequence>)
+                (and (subclass? class <array>) (not (storage-less-array-p object))))
             ;; The internal class of an array prints as <array>.
             (format stream "{~a" (if (eq class <%general-array>)
                                      "<array>"

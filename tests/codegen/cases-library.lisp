@@ -3827,4 +3827,29 @@ none
 \"ERR: make: an invalid combination of init-keywords for <complex>\"
 \"ERR: keyword argument not accepted: foo:\"
 ")
+ ;; A program's subclass of <vector>, <array> or <sequence> with no
+ ;; iteration protocol of its own: using it as a collection is the error
+ ;; that no initial-state method applies, not an empty vector, and an
+ ;; error that names it does not iterate it (Bugs05 L15).
+ (storage-less-collection-subclass
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <my> (<vector>))
+(define-class <ma> (<array>))
+(define-class <ms> (<sequence>))
+(do (method (x)
+      (print (list (try (method () (size x)))
+                   (try (method () (empty? x)))
+                   (try (method () (element x 0)))
+                   (try (method () (as <list> x))))))
+    (list (make <my>) (make <ma>) (make <ms>)))
+(print (try (method () (dimensions (make <ma>)))))
+(print (try (method () (format #f \"~a\" (make <ma>)))))
+(print (try (method () (format #f \"~a\" (make <my>)))))"
+  "(\"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\")
+(\"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\")
+(\"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\" \"ERR: no applicable method for initial-state\")
+\"ERR: no applicable method for initial-state\"
+\"{instance of <ma>}\"
+\"ERR: no applicable method for initial-state\"
+")
 )

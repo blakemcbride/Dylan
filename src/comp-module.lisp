@@ -475,10 +475,9 @@ cannot be put back, a terminal's or a pipe's, is left alone."
 (defun compile-define-module-form (forms module-vars bound-vars really-compile
                                    multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
-  (must-have-syntax forms 1 "define-module")
   ;; A defining form, as the compiler to C makes it (chapter 12)
-  (unless (null bound-vars)
-    (dylan%error "define-module must be at top level"))
+  (check-top-level "define-module" bound-vars)
+  (must-have-syntax forms 1 "define-module")
   ;; The module exists from here on in this compilation, and again
   ;; whenever the compiled code is loaded.
   (dylan%define-module (car forms) (cdr forms))

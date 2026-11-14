@@ -65,6 +65,22 @@ define-macro; see Macros, below.")
 (defvar *expansions* 0
   "Macro expansions so far in the top-level form being compiled.")
 
+;;; Top level, as the compiler to C has it: the form compile-expression is
+;;; given, the forms of a top-level begin, and the expansion of a
+;;; top-level macro call.  define-module, define-macro and
+;;; define-for-macros are allowed there alone -- not in a when, an if or
+;;; a call, though no method encloses them.
+
+(defvar *top-level-forms* '()
+  "The forms being compiled that are at top level.")
+
+(defvar *at-top-level* nil
+  "Whether the special form being compiled is at top level.")
+
+(defun check-top-level (what bound-vars)
+  (unless (and *at-top-level* (null bound-vars))
+    (dylan%error (format nil "~a must be at top level" what))))
+
 (defun compile-expression (e multi-value mod-vars continue)
   "E is a single Dylan expression.  MULTI-VALUE is an expression to be
 passed as the multi-value vector (or NIL) at runtime.  MOD-VARS is a list
@@ -75,6 +91,8 @@ of pre-existing module variables.  CONTINUE is a function that receives:
   ;; DEFVAR, not DEFPARAMETER: a variable some file already loaded has
   ;; defined keeps its value.
   (setf *expansions* 0)
+  (let ((*top-level-forms* (list e))
+        (*at-top-level* nil))
   (flet ((define-module-variable (name)
            `(defvar ,(name->module-variable name) ',the-unassigned-value))
          (define-module-getter (name)
@@ -98,7 +116,7 @@ of pre-existing module variables.  CONTINUE is a function that receives:
                   `(,@(mapcar #'define-module-variable need-definition)
                     ,@(mapcar #'define-module-getter need-getter/setters)
                     ,@(mapcar #'define-module-setter need-getter/setters))
-                  compiled-output))))))
+                  compiled-output)))))))
 
 (defparameter dylan%lisp-names-of-predefined-names
   `((* dylan/*)                                     ; Method
@@ -579,11 +597,21 @@ it; the last result form delivers MULTIPLE-VALUES?."
                   new-mod-vars)))
       ((symbolp e) (dylan%error "~a cannot be used as a variable" e))
       (binding
-       (funcall (cdr binding) (cdr e) module-vars bound-vars
-                #'really-compile multiple-values? continue))
+       ;; Assigned, not bound, so that the calls stay tail calls: the
+       ;; special form's own check reads *AT-TOP-LEVEL* first thing.
+       (let ((top (and (member e *top-level-forms* :test #'eq) t)))
+         (setf *at-top-level* top)
+         (when (and top (eq (car e) 'begin))
+           (loop for f on (cdr e) while (consp f)
+                 do (push (car f) *top-level-forms*)))
+         (funcall (cdr binding) (cdr e) module-vars bound-vars
+                  #'really-compile multiple-values? continue)))
       ((macro-call? e bound-vars)
-       (really-compile (expand-macro-call e) module-vars bound-vars
-                       multiple-values? continue))
+       (let ((top (member e *top-level-forms* :test #'eq))
+             (expansion (expand-macro-call e)))
+         (when top (push expansion *top-level-forms*))
+         (really-compile expansion module-vars bound-vars
+                         multiple-values? continue)))
       ((and (consp e) (null (cdr (cl:last e))))
        (compile-forms e module-vars bound-vars #'really-compile nil
                       (lambda (forms module-vars)
@@ -867,10 +895,9 @@ call, with the macro's name, as the compiler to C reports it."
   (let ((name (car forms))
         (params (cadr forms))
         (body (cddr forms)))
+    (check-top-level "define-macro" bound-vars)
     (unless (and (symbolp name) (variable-name? name))
       (dylan%error "define-macro -- bad macro name" name))
-    (unless (null bound-vars)
-      (dylan%error "define-macro must be at top level"))
     (unless (listp params)
       (dylan%error "define-macro -- bad parameter list" name params))
     (check-not-imported name "DEFINE-MACRO")
@@ -897,8 +924,7 @@ call, with the macro's name, as the compiler to C reports it."
 (defun compile-define-for-macros-form (forms module-vars bound-vars really-compile
                                        multiple-values? continue)
   (declare (ignore really-compile multiple-values?))
-  (unless (null bound-vars)
-    (dylan%error "define-for-macros must be at top level"))
+  (check-top-level "define-for-macros" bound-vars)
   ;; Run now, while compiling, as the compiler to C runs them, and left
   ;; out of the compiled code, as it leaves them out.
   (with-compile-time-module

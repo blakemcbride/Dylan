@@ -448,4 +448,31 @@ FreSh
 (print (bad-car 5))"
   ""
   :compile-error "macro bad-car: not a list: 5")
+ ;; Top level is a top-level form, a form of a top-level begin, or the
+ ;; expansion of a top-level macro call -- not a form in a when, though no
+ ;; method encloses it (Bugs05 B13).
+ (define-module-in-when
+  "(when #t (define-module m1 (use dylan) (export v)))
+(print 1)"
+  ""
+  :compile-error "define-module must be at top level")
+ (define-macro-in-call
+  "(print (define-macro mm () 1))"
+  ""
+  :compile-error "define-macro must be at top level")
+ (define-for-macros-in-if
+  "(if #t (define-for-macros (define zz 1)) #f)"
+  ""
+  :compile-error "define-for-macros must be at top level")
+ (top-level-begin-and-expansion
+  "(begin (define-macro mm () 1) (print (mm)))
+(define-macro dm () '(begin (define-macro m3 () 3) (print (m3))))
+(dm)
+(define-macro dmod () '(define-module m2 (use dylan)))
+(dmod)
+(print 'done)"
+  "1
+3
+done
+")
 )

@@ -1431,10 +1431,96 @@ stream."
                                sb-vm::thread-control-stack-end-slot))))
     (values low (- high low))))
 
+;;; Heap exhaustion.  A copying collection needs room for what it copies,
+;;; so with the heap half full SBCL may find none, and that is fatal: it
+;;; reports "Heap exhausted" and, unless the lossage handler is off, waits
+;;; in its low-level monitor for commands.  bin/dylan turns the handler off
+;;; and keeps a soft limit: after a collection that leaves more of the heap
+;;; in use than 2/5 of its size, or than a quarter of the memory its cgroup
+;;; allows or the machine has (a collection's copying and the pages it
+;;; keeps make the process's memory twice what is in use), the main thread
+;;; is interrupted with the error "out of memory", which a handler can
+;;; catch, as a compiled program's large request that fails is.  Once
+;;; signalled it is not signalled again until the heap is less than half
+;;; that full.  A large request is checked against the limit at once
+;;; (CHECK-ROOM).  Collections come often enough for the limit to be seen
+;;; in time.
+
+(defvar *heap-soft-limit* nil
+  "Bytes of the heap in use past which a collection signals out of memory.")
+(defvar *heap-limit-armed* t)
+(defvar *heap-limit-thread* nil "The thread interrupted with the error.")
+
+(defun read-first-line (file)
+  (ignore-errors
+    (with-open-file (in file) (read-line in nil))))
+
+(defun cgroup-memory-limit ()
+  "The least memory.max of this process's cgroup and those above it, in
+bytes, or NIL if none is set."
+  (let ((line (ignore-errors
+               (with-open-file (in "/proc/self/cgroup")
+                 (loop for line = (read-line in nil)
+                       while line
+                       when (and (> (length line) 3) (string= "0::" line :end2 3))
+                         return (subseq line 3))))))
+    (when line
+      (loop with path = (string-right-trim "/" line)
+            for value = (read-first-line (format nil "/sys/fs/cgroup~a/memory.max" path))
+            when (and value (plusp (length value)) (every #'digit-char-p value))
+              minimize (parse-integer value) into least
+            while (plusp (length path))
+            do (setf path (subseq path 0 (or (position #\/ path :from-end t) 0)))
+            finally (return least)))))
+
+(defun machine-memory ()
+  "The machine's memory in bytes (MemTotal), or NIL."
+  (ignore-errors
+    (with-open-file (in "/proc/meminfo")
+      (loop for line = (read-line in nil)
+            while line
+            when (and (> (length line) 9) (string= "MemTotal:" line :end2 9))
+              return (* 1024 (parse-integer line :start 9 :junk-allowed t))))))
+
+(defun heap-limit-error ()
+  (dylan-call dylan/error "out of memory"))
+
+(defun check-heap-limit ()
+  "After a collection (SB-EXT:*AFTER-GC-HOOKS*, run in any thread)."
+  (let ((used (sb-kernel:dynamic-usage))
+        (limit *heap-soft-limit*))
+    (when limit
+      (cond ((and *heap-limit-armed* (> used limit))
+             (setf *heap-limit-armed* nil)
+             (let ((thread *heap-limit-thread*))
+               (when (and thread (sb-thread:thread-alive-p thread))
+                 (sb-thread:interrupt-thread thread #'heap-limit-error))))
+            ((< used (floor limit 2))
+             (setf *heap-limit-armed* t))))))
+
+(defun implementation-specific/limit-heap ()
+  "Turn off SBCL's low-level monitor and set the soft limit, for the
+current thread, the main one."
+  (sb-alien:alien-funcall
+   (sb-alien:extern-alien "disable_lossage_handler" (function sb-alien:void)))
+  (let ((limit (cl:reduce #'min (cons (floor (* 2 (sb-ext:dynamic-space-size)) 5)
+                                      (mapcar (lambda (bytes) (floor bytes 4))
+                                              (remove nil (list (cgroup-memory-limit)
+                                                                (machine-memory))))))))
+    (setf *heap-soft-limit* limit
+          *heap-limit-armed* t
+          *heap-limit-thread* sb-thread:*current-thread*)
+    ;; A collection at least every 1/8 of the limit, so that the limit is
+    ;; seen in time: SBCL's interval grows with the heap's size.
+    (setf (sb-ext:bytes-consed-between-gcs)
+          (max (* 16 1024 1024) (min (sb-ext:bytes-consed-between-gcs) (floor limit 8)))))
+  (pushnew 'check-heap-limit sb-ext:*after-gc-hooks*))
+
 (defun implementation-specific/heap-room ()
-  "How many bytes of the heap are free, after a full collection."
+  "How many bytes of the heap are free, after a full collection: up to
+the soft limit, if there is one."
   (sb-ext:gc :full t)
-  (- (sb-ext:dynamic-space-size) (sb-kernel:dynamic-usage)))
+  (- (or *heap-soft-limit* (sb-ext:dynamic-space-size)) (sb-kernel:dynamic-usage)))
 
 (declaim (type fixnum *stack-guard* *stack-hard* *stack-floor*))
 (defvar *stack-guard* 0

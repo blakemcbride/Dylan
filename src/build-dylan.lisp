@@ -9,14 +9,15 @@
 
 ;;; A control stack of 1 GB for each thread, the main one too, in place of
 ;;; SBCL's 2 MB, which ends a recursion some 15,000 calls deep: deep
-;;; recursions run as deep as compiled ones.  And a heap of 8 GB at least,
+;;; recursions run as deep as compiled ones.  And a heap of 16 GB at least,
 ;;; in place of SBCL's usual 1 GB, which a list of 40 million elements
-;;; fills: large programs run as compiled ones do.  Only the part used of
-;;; either is memory; the rest is address space.  The executable keeps the
+;;; fills: large programs run as compiled ones do, up to the soft limit of
+;;; 2/5 of it (compat.lisp).  Only the part used of either is memory; the
+;;; rest is address space.  The executable keeps the
 ;;; sizes of the SBCL that builds it, so the build runs again in one
 ;;; started with them.
 (let ((stack (* 1024 1024 1024))
-      (heap (max (sb-ext:dynamic-space-size) (* 8 1024 1024 1024))))
+      (heap (max (sb-ext:dynamic-space-size) (* 16 1024 1024 1024))))
   (when (or (< (extern-alien "thread_control_stack_size" unsigned-long) stack)
             (< (sb-ext:dynamic-space-size) heap))
     (sb-ext:exit
@@ -47,6 +48,9 @@ other arguments are refused with a usage message."
   ;; exit, and a second TERM arriving meanwhile (GNU timeout signals the
   ;; process, then its group) left it waiting on a lock for ever.
   (sb-sys:enable-interrupt sb-unix:sigterm :default)
+  ;; Heap exhaustion is the error "out of memory" while it can be, and
+  ;; else ends the run, not in SBCL's monitor (compat.lisp).
+  (dylan::implementation-specific/limit-heap)
   (let* ((arguments (rest sb-ext:*posix-argv*))
          (file (and arguments (null (rest arguments))
                     (plusp (length (first arguments)))

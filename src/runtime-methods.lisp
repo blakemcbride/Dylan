@@ -46,6 +46,8 @@
 
 (in-package #:dylan)
 
+(declaim (ftype function check-integer-room)) ; runtime-collections.lisp
+
 ;;; Methods (not generically dispatched)
 ;;;
 ;;; DYLAN%FUNCTION->METHOD lives in generic.lisp -- it takes a Lisp
@@ -576,6 +578,11 @@ irrational functions; an exact real stays exact."
                     (host-numbers-2 'expt
                     (lambda (base power)
                       (cond ((and (rationalp base) (integerp power))
+                             ;; |BASE| is at least 2^(B-1)
+                             (let ((b (max (integer-length (numerator base))
+                                           (integer-length (denominator base)))))
+                               (when (> b 1)
+                                 (check-integer-room (* (abs power) (1- b)))))
                              (expt base power))
                             ((and (realp base) (realp power)
                                   (minusp base)

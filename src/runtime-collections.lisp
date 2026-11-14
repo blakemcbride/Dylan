@@ -140,6 +140,11 @@ a compiled program."
 ;;; object needs room of its own, a tenth of the heap's being kept for the
 ;;; collector.
 
+(defun check-integer-room (bits)
+  "Signal out of memory if an integer of BITS bits would not fit, as a
+collection that would not fit does: before the host tries to make it."
+  (check-room (ceiling bits 64) 8))
+
 (defun check-room (count bytes-each)
   "Signal out of memory if COUNT elements of BYTES-EACH would not fit."
   (let ((bytes (* count bytes-each)))

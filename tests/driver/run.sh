@@ -197,6 +197,22 @@ check "bin/dylan < file: the error reported" grep -q "^Dylan error: " batch.err
 check "bin/dylan < file: break reported" grep -q "^Dylan break: look 42" batch.err
 echo '(print 4)' | "$dylan" > batch.out 2>&1; status=$?
 check "bin/dylan < file: status 0 without an error" test "$status" = 0
+# bin/dylan: the heap filling up is the error "out of memory", which a
+# handler catches, within the memory its cgroup allows (where systemd-run
+# can make one)
+if systemd-run --user --scope -q true >/dev/null 2>&1; then
+    cat > fill.dyl <<'EOF'
+(define l '())
+(print (handler-case (while #t (set! l (cons l l)))
+         ((<error> condition: c) (format #f "~a" c))))
+(set! l '())
+(print 'after)
+EOF
+    timeout 120 systemd-run --user --scope -q -p MemoryMax=512M -p MemorySwapMax=0 \
+        "$dylan" fill.dyl > fill.out 2>&1
+    check "bin/dylan: heap exhaustion is out of memory" grep -q '^"out of memory"$' fill.out
+    check "bin/dylan: the program goes on after it" grep -q '^after$' fill.out
+fi
 # What the program wrote comes before a warning, as in a compiled program
 cat > warn.dyl <<'EOF'
 (begin (format #t "before ") (signal "w") (format #t "after~%"))

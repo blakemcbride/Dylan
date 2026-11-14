@@ -103,4 +103,20 @@
 {slot #f}
 #({slot dbg} {slot #f})
 ")
+ ;; An integer too large for the heap is the error "out of memory" at
+ ;; once, which a handler catches (Bugs05 L4).  (The compiler to C has no
+ ;; integers past 63 bits.)
+ (integer-too-large-for-the-heap
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(print (try (method () (ash 1 100000000000))))
+(print (try (method () (expt 3 100000000000))))
+(print (try (method () (ash 1 4611686018427387903))))
+(print (try (method () (expt 2/3 -100000000000))))
+(print (list (ash 1 -100000000000) (expt 1 100000000000) (expt -1 100000000001) (ash 1 100)))"
+  "\"out of memory\"
+\"out of memory\"
+\"out of memory\"
+\"out of memory\"
+(0 1 -1 1267650600228229401496703205376)
+")
 )

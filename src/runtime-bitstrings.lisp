@@ -46,6 +46,8 @@
 
 (in-package #:dylan)
 
+(declaim (ftype function check-integer-room)) ; runtime-collections.lisp
+
 ;;; Chapter 14 of the manual defines these "as in Common Lisp", so they are
 ;;; Common Lisp's own operations on two's-complement integers.  (The Scheme
 ;;; simulated them on lists of bits, and answered 0 for any result of the
@@ -67,7 +69,12 @@
 ;;; DYLAN FUNCTIONS
 ;;;
 
-(defparameter dylan/ash (dylan%generic-fn 'ash two-integers #'ash))
+(defparameter dylan/ash
+  (dylan%generic-fn 'ash two-integers
+                    (lambda (n count)
+                      (when (and (plusp count) (not (zerop n)))
+                        (check-integer-room (+ (integer-length n) count)))
+                      (ash n count))))
 
 (defparameter dylan/logand
   (dylan%generic-fn 'logand only-rest-args

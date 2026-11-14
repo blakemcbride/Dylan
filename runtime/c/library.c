@@ -505,8 +505,21 @@ PRIMITIVE(object_hash) {
 #endif
 }
 
+/* X's bits mixed, each bit of the result depending on all of X's (the
+ * MurmurHash3 finalizer) */
+static uint64_t mix64(uint64_t x) {
+    x ^= x >> 33;
+    x *= 0xFF51AFD7ED558CCDu;
+    x ^= x >> 33;
+    x *= 0xC4CEB9FE1A85EC53u;
+    x ^= x >> 33;
+    return x;
+}
+
 /* (%number-hash x): equal (=) numbers hash alike.  An integral float or
- * ratio hashes as the integer; others by their double's bits. */
+ * ratio hashes as the integer; others by their double's bits, mixed: a
+ * short binary fraction's low bits are all 0, and a table uses the low
+ * bits of a hash. */
 PRIMITIVE(number_hash) {
     need(self, argc, 1, 1);
     if (DY_IS_INT(a0)) return DY_INT(DY_INT_VALUE(a0) & DY_INT_MAX);
@@ -514,7 +527,7 @@ PRIMITIVE(number_hash) {
     if (x == floor(x) && x >= -0x1p62 && x < 0x1p62) return DY_INT((intptr_t)x & DY_INT_MAX);
     uint64_t bits;
     memcpy(&bits, &x, sizeof bits);
-    return DY_INT((intptr_t)((bits * 0x9E3779B97F4A7C15u) >> 4) & DY_INT_MAX);
+    return DY_INT((intptr_t)(mix64(bits) & DY_INT_MAX));
 }
 
 /* A collection's =hash (04-collections.dyl) is a sum, below 2^56, of one
@@ -522,13 +535,7 @@ PRIMITIVE(number_hash) {
 #define ENTRY_HASH_MASK (((uint64_t)1 << 56) - 1)
 
 static uint64_t entry_hash(uint64_t key_hash, uint64_t element_hash) {
-    uint64_t x = key_hash * 0x9E3779B97F4A7C15u ^ element_hash;
-    x ^= x >> 33;
-    x *= 0xFF51AFD7ED558CCDu;
-    x ^= x >> 33;
-    x *= 0xC4CEB9FE1A85EC53u;
-    x ^= x >> 33;
-    return x & ENTRY_HASH_MASK;
+    return mix64(key_hash * 0x9E3779B97F4A7C15u ^ element_hash) & ENTRY_HASH_MASK;
 }
 
 /* (%entry-hash key-hash element-hash) */

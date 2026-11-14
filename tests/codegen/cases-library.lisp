@@ -2388,6 +2388,29 @@ error
              (= (=hash -4611686018427387904) (=hash -4.611686018427387904e18))))"
   "(#t #t)
 ")
+ ;; Floats and ratios that are not integers spread over a table's buckets:
+ ;; the low bits of their hashes differ (Bugs06 C13).  Numbers that are =
+ ;; still hash alike.
+ (hash-of-fractions
+  "(define-method spread (keyf)
+  (bind ((seen (make <table>)))
+    (for ((i 0 (+ i 1))) ((= i 1000)) (set! (element seen (modulo (=hash (keyf i)) 65536)) #t))
+    (size seen)))
+(print (> (spread (method (i) (+ i 0.5))) 900))
+(print (> (spread (method (i) (+ i 1/7))) 900))
+(define-method fill-table (n keyf)
+  (bind ((tb (make <table>)))
+    (for ((i 0 (+ i 1))) ((= i n)) (set! (element tb (keyf i)) i))
+    tb))
+(define tb (fill-table 40000 (method (i) (+ i 0.5))))
+(define tr (fill-table 40000 (method (i) (+ i 1/7))))
+(print (list (size tb) (element tb 3.5) (element tb 7/2) (size tr) (element tr 22/7)))
+(print (list (= (=hash 0.5) (=hash 1/2)) (= (=hash 2.0) (=hash 2)) (= (=hash 4/2) (=hash 2))))"
+  "#t
+#t
+(40000 3 3 40000 3)
+(#t #t #t)
+")
  ;; rationalize answers the least integer, -2^62, for the float equal to it.
  (rationalize-least-integer
   "(print (rationalize -4.611686018427387904e18))

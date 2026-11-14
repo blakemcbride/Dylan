@@ -138,16 +138,6 @@
 
 (add-method
  dylan/as
- (dylan%function->method
-  (make-param-list `((class ,(dylan%make-singleton <explicit-key-collection>))
-                     (collection ,<collection>)) nil nil nil)
-  (lambda (class collection)
-    (if (true? (dylan-call dylan/instance? collection class))
-        collection
-        (dylan-call dylan/as <vector> collection)))))
-
-(add-method
- dylan/as
  ;; A sequence of any other class -- a program's own <mutable-sequence> --
  ;; is made by make with size:, and its elements set in their natural
  ;; order, as the compiled library does.  Chapter 12: the default sequence

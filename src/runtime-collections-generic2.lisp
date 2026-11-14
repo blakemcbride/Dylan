@@ -378,8 +378,10 @@ unbounded range, which has no end to stop at."
                    "concatenate-as: the class is not a mutable sequence: ~s"
                    class))
      (check-bounded "concatenate-as" (cons seq-1 rest))
-     (dylan-call dylan/as class
-                 (mapcan #'sequence->list (cons seq-1 rest))))))
+     ;; A new instance of CLASS, made as map-as makes one: an abstract
+     ;; class cannot be made, though the elements' list is an instance
+     ;; of it.
+     (sequence-of-class class (mapcan #'sequence->list (cons seq-1 rest))))))
 
 (defparameter dylan/concatenate
   (dylan%generic-fn

@@ -3963,4 +3963,27 @@ UNDEF
 \"ERR: not a number: {instance of <v2>}\"
 (#t #f #f ({instance of <v2>}))
 ")
+ ;; as answers an object already of the class, and else makes an
+ ;; instance; concatenate-as always makes one -- so neither converts to
+ ;; an abstract collection class the object is not already of
+ ;; (Bugs05 B11).
+ (as-abstract-collection-class
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (as <explicit-key-collection> (list 1 2)))))
+(print (try (method () (as <explicit-key-collection> (vector 1 2)))))
+(print (try (method () (as <mutable-sequence> (list 1 2)))))
+(print (try (method () (concatenate-as <mutable-sequence> '(1) '(2)))))
+(print (try (method () (concatenate-as <list> '(1) #(2)))))
+(print (try (method () (concatenate-as <vector> '(1) '(2)))))
+(print (try (method () (concatenate-as <byte-string> \"a\" '(#\\b)))))
+(print (try (method () (concatenate-as <deque> '(1) '(2)))))"
+  "\"ERR: as: (1 2) cannot be converted to {the class <explicit-key-collection>}\"
+#(1 2)
+(1 2)
+\"ERR: cannot make an instance of this class: {the class <mutable-sequence>}\"
+(1 2)
+#(1 2)
+\"ab\"
+{<deque> 1 2}
+")
 )

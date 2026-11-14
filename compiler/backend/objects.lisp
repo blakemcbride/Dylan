@@ -1979,7 +1979,10 @@ generic function, is how it prints (chapter 11's {a method on double})."
                    (address (gfun-c-name (gethash (gmethod-var m) *gfuns*)))))))
 
 (defparameter *method-reflection-functions*
-  '("generic-function-methods" "find-method" "sorted-applicable-methods"))
+  '("generic-function-methods" "find-method" "sorted-applicable-methods"
+    "applicable-method?")
+  "The functions that read a generic function's methods' specializers: a
+program that uses one has its methods' specializers emitted.")
 
 (defun uses-method-reflection-p (ir)
   "Does the program -- not the library, whose methods of these generic

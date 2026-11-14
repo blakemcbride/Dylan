@@ -978,6 +978,24 @@ before
 #t
 #f
 ")
+ ;; applicable-method? of a program's generic function asks its methods'
+ ;; specializers, in a program that uses no other method reflection
+ ;; (Bugs06 C9): the user manual's own example among them.
+ (applicable-method-of-a-generic
+  "(define-method kind ((x <number>)) 'number)
+(define-method kind ((x <integer>)) 'integer)
+(define-method kind ((x (singleton 5))) 'five)
+(print (applicable-method? kind 1/2))
+(print (applicable-method? kind \"x\"))
+(define-method foo ((x <integer>)) x)
+(define-method foo ((x <string>)) x)
+(print (applicable-method? foo 'a))
+(print (list (applicable-method? foo 1) (applicable-method? foo \"s\") (applicable-method? kind 5)))"
+  "#t
+#f
+#f
+(#t #t #t)
+")
  ;; An instance made before define-slot added a slot has it, initialized
  ;; as make would have, by every way of reading it (chapter 6: no program
  ;; sees an instance without the slot).

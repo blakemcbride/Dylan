@@ -3752,4 +3752,49 @@ last
 9/4
 1/2
 ")
+ ;; Range arithmetic overflows only when a value is beyond 63 bits
+ ;; (Bugs05 C18).
+ (range-arithmetic-fits
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define r (range from: -4611686018427387903 by: 2 up-to: 3))
+(print (try (method () (element r (- (size r) 1)))))
+(print (try (method () (last r))))
+(print (try (method () (as <list> (copy-sequence (range from: 4611686018427387900 through: 4611686018427387903) start: 4)))))
+(print (try (method () (first (reverse (range from: 9007199254740992 by: -7 up-to: -4611686018427387904))))))
+(print (try (method () (as <list> (intersection (range from: 0 by: 3000000000 size: 4) (range from: 0 by: 3000000001 size: 4))))))"
+  "1
+1
+()
+-4611686018427387903
+(0)
+")
+ ;; The intersection of two ranges finds their common point at once,
+ ;; however long the steps' period (Bugs05 C24); last of a range.
+ (range-intersection-common-point
+  "(define-method show (r) (print (if (size r) (list r (as <list> r)) r)))
+(show (intersection (range from: 1 by: 1000000007 size: 3) (range from: 0 by: 998244353 size: 3)))
+(show (intersection (range from: 1 by: 1000000007) (range from: 0 by: 998244353 size: 3)))
+(show (intersection (range from: 18 by: -2) (range from: 0 by: 3 size: 10)))
+(show (intersection (range from: 5 by: 6) (range from: 1 by: 4)))
+(show (intersection (range from: 5 by: -6) (range from: 1 by: -4)))
+(show (intersection (range from: 1/2 by: 1/3 size: 20) (range from: 0 by: 1/4 size: 30)))
+(show (intersection (range from: 1/2 by: -1/3) (range from: 7 by: -1/4)))
+(show (intersection (range from: -7 by: 3 size: 20) (range from: 50 by: -5 size: 30)))
+(show (intersection (range from: 0 by: 999999937 size: 3) (range from: 999999937 by: 999999929)))
+(print (last (range from: 0 size: 300000000)))
+(print (last (range from: 0 size: 0) default: 'none))
+(print (last (range from: 3 by: -2 size: 4)))"
+  "({range 0 by 1 size 0} ())
+({range 0 by 1 size 0} ())
+({range 18 by -6 size 4} (18 12 6 0))
+{range 5 by 12}
+{range -7 by -12}
+({range 1/2 by 1 size 7} (1/2 3/2 5/2 7/2 9/2 11/2 13/2))
+{range 1/2 by -1}
+({range 5 by 15 size 4} (5 20 35 50))
+({range 999999937 by 999999866000004473 size 1} (999999937))
+299999999
+none
+-3
+")
 )

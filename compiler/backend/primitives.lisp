@@ -51,7 +51,7 @@
     ("%number-negate" . "number_negate") ("%number=" . "number_equal")
     ("%number<" . "number_less") ("%number?" . "number_p")
     ("%divide" . "divide") ("%math" . "math") ("%float?" . "float_p")
-    ("%range-steps" . "range_steps")
+    ("%range-steps" . "range_steps") ("%grid-point" . "grid_point")
     ("%float" . "to_float") ("%numerator" . "numerator")
     ("%denominator" . "denominator") ("%rationalize" . "rationalize")
     ("%float-decode" . "float_decode")

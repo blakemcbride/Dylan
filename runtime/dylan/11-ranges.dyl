@@ -71,11 +71,14 @@ module: dylan
 (define-method make ((class (singleton <range>)) #rest arguments)
   (apply range arguments))
 
+;;; Of integers, from + i * by exactly: an integer overflow only if the
+;;; element is beyond 63 bits, not i * by (%range-steps).
 (define %range-element
   (method (r i)
-    (if (%origin r)
-        (binary+ (%origin r) (binary* (binary+ (%base r) (binary* (%stride r) i)) (%origin-by r)))
-        (binary+ (%from r) (binary* i (%by r))))))
+    (cond ((%origin r)
+           (binary+ (%origin r) (binary* (binary+ (%base r) (binary* (%stride r) i)) (%origin-by r))))
+          ((%integers? (%from r) i (%by r)) (%range-steps 4 (%from r) i (%by r)))
+          (else: (binary+ (%from r) (binary* i (%by r)))))))
 
 ;;; Whether R's elements are floats, rounded
 (define %float-range?
@@ -104,7 +107,12 @@ module: dylan
           (set! (%by s) (binary* stride by))
           (set! (%size s) n)
           s)
-        (make <range> from: (%range-element r k0) by: (binary* d (%by r)) size: n))))
+        ;; An empty range starts where it is cut from R, if that fits.
+        (make <range>
+              from: (if (and (id? n 0) (%integers? (%from r) k0 (%by r)))
+                        (or (%range-steps 5 (%from r) k0 (%by r)) (%from r))
+                        (%range-element r k0))
+              by: (binary* d (%by r)) size: n))))
 
 ;;; The index of R whose element is the grid's element K, if any
 (define %grid-index
@@ -196,6 +204,12 @@ module: dylan
   (if (id? (%object-class r) <range>) (%size r) (size r)))
 (define-method %library-element ((r <range>) key default)
   (if (id? (%object-class r) <range>) (%range-ref r key default) (next-method)))
+
+(define-method last ((r <range>) #key (default %no-default))
+  (cond ((not (%size r)) (error "last: the sequence is unbounded"))
+        ((zero? (%size r))
+         (if (id? default %no-default) (error "last: the sequence is empty") default))
+        (else: (%range-element r (binary- (%size r) 1)))))
 
 (define-method initial-state ((r <range>)) (if (%range-index? r 0) 0 #f))
 (define-method next-state ((r <range>) (i <integer>))
@@ -406,60 +420,53 @@ module: dylan
     (bind ((end (and (%size r) (%range-element r (binary- (%size r) 1)))))
       (if (positive? (%by r)) (values (%from r) end) (values end (%from r))))))
 
-;;; The least common multiple of positive rationals
-(define %rational-lcm
+;;; The least common multiple of the positive integers A and B, #f if it
+;;; is beyond 63 bits
+(define %lcm-or-false
   (method (a b)
-    (bind ((d (lcm (denominator a) (denominator b))))
-      (binary/ (lcm (binary* a d) (binary* b d)) d))))
+    (bind ((q (truncate/ a (%gcd a b))))
+      (if (binary< (truncate/ 4611686018427387903 b) q) #f (binary* q b)))))
 
-;;; The first point of the grid COMMON + k PERIOD at or after LO, and the
-;;; last at or before HI.  Of integers, exactly, whatever the distance from
-;;; COMMON: #t if the point is beyond 63 bits and the other end, BOUND, is
-;;; given, which it is then past.
-
-(define %grid-first
-  (method (common period lo bound)
-    (if (%integers? common period lo)
-        (bind ((m (%range-steps 3 common lo period)))
-          (if (and bound (binary< (binary- 4611686018427387903 m) lo)) #t (binary+ lo m)))
-        (binary+ common (binary* period (ceiling/ (binary- lo common) period))))))
-
-(define %grid-last
-  (method (common period hi bound)
-    (if (%integers? common period hi)
-        (bind ((m (%range-steps 3 hi common period)))
-          (if (and bound (binary< hi (binary+ -4611686018427387904 m))) #t (binary- hi m)))
-        (binary- common (binary* period (ceiling/ (binary- common hi) period))))))
+;;; C's integer overflow, for a result beyond 63 bits
+(define %integer-overflow (method () (%range-steps 4 4611686018427387903 1 1)))
 
 (define %grid-intersection
   (method (x y)
-    (bind ((d1 (abs (%by x)))
-           (d2 (abs (%by y)))
-           (period (%rational-lcm d1 d2))
-           (integers? (and (%integers? (%from x) (%from y) period)
-                           (%instance? d1 <integer>) (%instance? d2 <integer>)))
-           ;; A point common to both grids, among one period of the first's:
-           ;; of integers, toward zero, and found exactly (%range-steps).
-           (common (bind-exit (return)
-                     (bind ((step (if (and integers? (not (negative? (%from x)))) (unary- d1) d1)))
-                       (for ((k 0 (binary+ k 1)))
-                            ((not (binary< k (binary/ period d1))) #f)
-                         (bind ((p (binary+ (%from x) (binary* k step))))
-                           (when (if integers?
-                                     (zero? (%range-steps 3 p (%from y) d2))
-                                     (%instance? (binary/ (binary- p (%from y)) d2) <integer>))
-                             (return p))))))))
+    ;; Of rationals, the grids scaled to integers by their common
+    ;; denominator D.  The common points nearest the ends of the interval
+    ;; both ranges cover are found exactly, in 128 bits (%grid-point).
+    (bind ((d (if (every? (method (n) (%instance? n <integer>))
+                          (list (%from x) (%by x) (%from y) (%by y)))
+                  1
+                  (lcm (denominator (%from x)) (denominator (%by x))
+                       (denominator (%from y)) (denominator (%by y)))))
+           (scale (method (n) (if (id? d 1) n (binary* n d))))
+           (unscale (method (n) (if (id? d 1) n (binary/ n d))))
+           (m1 (abs (scale (%by x))))
+           (m2 (abs (scale (%by y))))
+           (point (method (direction v)
+                    (%grid-point direction (scale (%from x)) m1 (scale (%from y)) m2 (scale v)))))
       (bind ((lo1 hi1 (%range-interval x))
              (lo2 hi2 (%range-interval y)))
         (bind ((lo (if (and lo1 lo2) (%max lo1 lo2) (or lo1 lo2)))
-               (hi (if (and hi1 hi2) (%min hi1 hi2) (or hi1 hi2))))
-          (bind ((first (and common lo (%grid-first common period lo hi)))
-                 (last (and common hi (%grid-last common period hi lo))))
-            (cond ((not common) (%empty-range))
-                  ((or (id? first #t) (id? last #t)) (%empty-range))
-                  ((and first last)
-                   (cond ((binary< last first) (%empty-range))
-                         ((positive? (%by x)) (range from: first through: last by: period))
-                         (else: (range from: last through: first by: (unary- period)))))
-                  (first (range from: first by: period))
-                  (else: (range from: last by: (unary- period))))))))))
+               (hi (if (and hi1 hi2) (%min hi1 hi2) (or hi1 hi2)))
+               (first (and lo (point 0 lo)))
+               (last (and hi (point 1 hi))))
+          (cond ((or (and lo (not first)) (and hi (not last))) (%empty-range))
+                ((and lo hi)
+                 ;; #t: beyond 63 bits, and so past the other end
+                 (if (or (id? first #t) (id? last #t) (binary< last first))
+                     (%empty-range)
+                     ;; The step of a single point is the period if it fits.
+                     (bind ((period (if (= first last)
+                                        (or (%lcm-or-false m1 m2) m1)
+                                        (lcm m1 m2))))
+                       (if (positive? (%by x))
+                           (range from: (unscale first) through: (unscale last)
+                                  by: (unscale period))
+                           (range from: (unscale last) through: (unscale first)
+                                  by: (unscale (unary- period)))))))
+                ((id? first #t) (%integer-overflow))
+                (first (range from: (unscale first) by: (unscale (lcm m1 m2))))
+                ((id? last #t) (%integer-overflow))
+                (else: (range from: (unscale last) by: (unscale (unary- (lcm m1 m2)))))))))))

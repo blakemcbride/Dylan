@@ -91,7 +91,7 @@
     "%shallow-copy" "%write-fd" "%slot-value-setter" "%make" "%signal" "%set-error-hooks" "%set-sequence-hook" "%make-generic-function" "%format-message" "%die" "%warn"
     "%break" "%make-thread" "%join-thread" "%thread-condition" "%unhandled"
     "%number-add" "%number-sub" "%number-mul" "%number-div" "%number-negate"
-    "%number=" "%number<" "%number?" "%divide" "%range-steps" "%math"
+    "%number=" "%number<" "%number?" "%divide" "%range-steps" "%grid-point" "%math"
     "%float?" "%float" "%numerator" "%denominator" "%rationalize" "%float-decode" "%logand" "%logior" "%logxor"
     "%lognot" "%logbit?" "%ash" "%gcd" "%character->integer"
     "%integer->character" "%character?" "%char-upcase" "%char-downcase"

@@ -118,9 +118,9 @@ PRIMITIVE(divide) {
     return two_values(quotient, dy_float_remainder(a, b, q));
 }
 
-/* (%range-steps kind a b c), of integers, C not 0: the arithmetic of a
- * range of integers from B by C (chapter 12), done exactly, whatever the
- * size of A - B, which fits in 64 bits:
+/* (%range-steps kind a b c), of integers: for KIND 0 to 3, C not 0, the
+ * arithmetic of a range of integers from B by C (chapter 12), done
+ * exactly, whatever the size of A - B, which fits in 64 bits:
  *   0  the index at which A would be, (A - B) / C, if an integer and not
  *      negative; #f if not; #t if it is one beyond 63 bits
  *   1  the number of elements below the bound A (up-to:),
@@ -128,13 +128,23 @@ PRIMITIVE(divide) {
  *   2  the number not past the bound A (through:),
  *      max(0, floor((A - B) / C) + 1)
  *   3  (A - B) modulo C
- * A count beyond 63 bits is an integer overflow. */
+ * A count beyond 63 bits is an integer overflow.  Of any C:
+ *   4  A + B * C, the element at the index B of a range from A by C: an
+ *      integer overflow only if it is beyond 63 bits, not B * C
+ *   5  the same, #f if it is beyond 63 bits */
 PRIMITIVE(range_steps) {
     need(self, argc, 4, 4);
+    intptr_t kind = int_arg(a0);
     int64_t a = int_arg(a1), b = int_arg(a2), c = int_arg(a3);
+    if (kind >= 4) {
+        __int128 e = (__int128)a + (__int128)b * c;
+        if (e >= DY_INT_MIN && e <= DY_INT_MAX) return DY_INT((intptr_t)e);
+        if (kind == 5) return DY_FALSE;
+        dy_integer_overflow();
+    }
     if (c == 0) dy_division_by_zero();
     int64_t d = a - b, q = d / c, r = d % c;
-    switch (int_arg(a0)) {
+    switch (kind) {
     case 0:
         if (r != 0 || q < 0) return DY_FALSE;
         return q > DY_INT_MAX ? DY_TRUE : DY_INT(q);
@@ -152,6 +162,46 @@ PRIMITIVE(range_steps) {
         if (r != 0 && (r > 0) != (c > 0)) r += c;
         return DY_INT(r);
     }
+}
+
+/* (%grid-point direction a m1 b m2 v), of integers, M1 and M2 positive:
+ * a point common to the grids A + k M1 and B + k M2 (chapter 12's
+ * intersection of two ranges), found by the Chinese remainder theorem in
+ * 128 bits: with DIRECTION 0 the least at or after V, with 1 the greatest
+ * at or before V.  #f if the grids never meet; #t if the point is beyond
+ * 63 bits. */
+static __int128 floor_mod128(__int128 x, __int128 m) {
+    __int128 r = x % m;
+    return r < 0 ? r + m : r;
+}
+
+PRIMITIVE(grid_point) {
+    need(self, argc, 6, 6);
+    intptr_t m2_ = int_arg(*dy_argument_slot(4)), v_ = int_arg(*dy_argument_slot(5));
+    intptr_t direction = int_arg(a0);
+    __int128 a = int_arg(a1), m1 = int_arg(a2), b = int_arg(a3), m2 = m2_, v = v_;
+    if (m1 <= 0 || m2 <= 0) dy_error("%grid-point: a step is not positive", a2);
+    __int128 g = m1, h = m2;
+    while (h) { __int128 t = g % h; g = h; h = t; }
+    __int128 diff = b - a;
+    if (diff % g != 0) return DY_FALSE;
+    /* A + M1 t is the point: t = (diff / g) (M1 / g)^-1 modulo M2 / g. */
+    __int128 n = m2 / g, x = floor_mod128(m1 / g, n), inverse = 1;
+    if (n > 1) {
+        __int128 r0 = n, r1 = x, s0 = 0, s1 = 1;
+        while (r1) {
+            __int128 q = r0 / r1, t;
+            t = r0 - q * r1; r0 = r1; r1 = t;
+            t = s0 - q * s1; s0 = s1; s1 = t;
+        }
+        inverse = floor_mod128(s0, n);
+    }
+    __int128 t = floor_mod128(floor_mod128(diff / g, n) * inverse, n);
+    __int128 common = a + m1 * t, period = m1 * n;
+    __int128 point = direction == 0 ? v + floor_mod128(common - v, period)
+                                    : v - floor_mod128(v - common, period);
+    if (point < DY_INT_MIN || point > DY_INT_MAX) return DY_TRUE;
+    return DY_INT((intptr_t)point);
 }
 
 /* (%math op x [y]): the irrational functions, on floats.  A rational

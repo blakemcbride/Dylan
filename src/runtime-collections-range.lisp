@@ -642,6 +642,25 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
   (let ((d (lcm (denominator a) (denominator b))))
     (/ (lcm (* a d) (* b d)) d)))
 
+(defun grid-common (a m1 b m2)
+  "A point common to the grids of rationals A + k M1 and B + k M2, M1 and M2
+positive, or NIL if they never meet: by the Chinese remainder theorem, on
+the grids scaled to integers by their common denominator."
+  (let* ((d (lcm (denominator a) (denominator m1) (denominator b) (denominator m2)))
+         (a (* a d)) (m1 (* m1 d)) (b (* b d)) (m2 (* m2 d))
+         (g (gcd m1 m2)))
+    (when (zerop (mod (- b a) g))
+      ;; A + M1 t, t = ((B - A) / g) (M1 / g)^-1 modulo M2 / g
+      (let ((n (/ m2 g)) (inverse 0))
+        (when (> n 1)
+          (let ((r0 n) (r1 (mod (/ m1 g) n)) (s0 0) (s1 1))
+            (loop until (zerop r1)
+                  do (let ((q (floor r0 r1)))
+                       (psetf r0 r1 r1 (- r0 (* q r1)))
+                       (psetf s0 s1 s1 (- s0 (* q s1)))))
+            (setf inverse (mod s0 n))))
+        (/ (+ a (* m1 (mod (* (/ (- b a) g) inverse) n))) d)))))
+
 (defun ranges-intersection (range-1 range-2)
   (let* ((start-1 (dylan-call dylan/get-range-start range-1))
          (start-2 (dylan-call dylan/get-range-start range-2))
@@ -649,11 +668,8 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
          (d1 (abs step-1))
          (d2 (abs (dylan-call dylan/get-range-step range-2)))
          (period (rational-lcm d1 d2))
-         ;; A point common to both grids, found among one period of the
-         ;; first grid; there is none if the grids never meet.
-         (common (loop for k from 0 below (/ period d1)
-                       for x = (+ start-1 (* k d1))
-                       when (integerp (/ (- x start-2) d2)) return x)))
+         ;; A point common to both grids; there is none if they never meet.
+         (common (grid-common start-1 d1 start-2 d2)))
     (multiple-value-bind (lo-1 hi-1) (range-interval range-1)
       (multiple-value-bind (lo-2 hi-2) (range-interval range-2)
         (let* ((lo (if (and lo-1 lo-2) (max lo-1 lo-2) (or lo-1 lo-2)))

@@ -321,7 +321,7 @@ args).  Assumes TYPE is a <simple-error> or <simple-warning>."
   (make-param-list `((condition ,<restart>)) nil nil nil)
   (lambda (restart)
     (dylan-call dylan/error
-                "no handler was established for the restart"
+                "no handler was established for the restart ~s"
                 restart))))
 
 ;;; Operators for Interactive Handling

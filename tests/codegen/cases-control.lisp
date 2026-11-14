@@ -202,6 +202,16 @@ aborted
 \"ERR: wrong number of arguments (1)\"
 ")
 
+ ;; The error for an unhandled restart carries the restart as its
+ ;; format argument.
+ (restart-unhandled-format
+  "(print (handler-case (signal (make <simple-restart>))
+            ((<simple-error> condition: c)
+             (list (condition-format-string c)
+                   (size (condition-format-arguments c))))))"
+  "(\"no handler was established for the restart ~s\" 1)
+")
+
  ;; Conditions of the program's own classes.
  (user-conditions
   "(define-class <my-error> (<error>) (code init-keyword: code:))

@@ -157,6 +157,20 @@ void dy_weak_keys_drop(D keys) {
 }
 #endif
 
+#ifndef DY_MPS
+/* The collector's warnings that it could not get the memory asked for:
+ * the allocation answers NULL, which is the Dylan error "out of memory",
+ * a program may handle; the MPS says nothing either.  Others are passed
+ * on. */
+static GC_warn_proc collector_warn;
+
+static void GC_CALLBACK filter_warning(char *message, GC_word argument) {
+    if (strstr(message, "Failed to expand heap") || strstr(message, "Out of Memory"))
+        return;
+    collector_warn(message, argument);
+}
+#endif
+
 void dy_init(void) {
 #ifdef DY_MPS
     dy_gc_init();
@@ -166,6 +180,8 @@ void dy_init(void) {
      * many threads.  GC_MARKERS, if set, says otherwise. */
     if (!getenv("GC_MARKERS")) GC_set_markers_count(2);
     GC_INIT();
+    collector_warn = GC_get_warn_proc();
+    GC_set_warn_proc(filter_warning);
 #ifdef DY_GC_STRESS
     const char *interval = getenv("DYLAN_GC_STRESS");
     if (interval && atol(interval) > 0) gc_stress_interval = atol(interval);

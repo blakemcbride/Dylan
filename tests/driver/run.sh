@@ -93,6 +93,12 @@ check "--gc mps" "$dylanc" --gc mps -o withmps greet.dyl main.dyl
 check "--gc mps runs" output_is "$expected" ./withmps
 check "--gc boehm" "$dylanc" --gc boehm -o withboehm greet.dyl main.dyl
 check "--gc boehm runs" output_is "$expected" ./withboehm
+cat > oom.dyl <<'EOF'
+(print (handler-case (make <vector> size: 576460752303423487)
+         ((<error> condition: c) (format #f "~a" c))))
+EOF
+check "--gc boehm out of memory" "$dylanc" --gc boehm -o oomboehm oom.dyl
+check "--gc boehm out of memory, no warnings" output_is '"out of memory"' ./oomboehm
 for o in -O0 -O1 -O3 -Os -g; do
     check "$o" "$dylanc" $o -o opt greet.dyl main.dyl
     check "$o runs" output_is "$expected" ./opt

@@ -3986,4 +3986,36 @@ UNDEF
 \"ab\"
 {<deque> 1 2}
 ")
+ ;; subsequence-position and sort call a test on the same pairs, in the
+ ;; same order, in both implementations: an inconsistent test orders
+ ;; elements alike (Bugs05 B12).
+ (sequence-test-call-order
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define calls '())
+(define-method logged (a b) (set! calls (cons (list a b) calls)) (= a b))
+(print (try (method () (subsequence-position '(z z) \"hello\" test: >))))
+(print (subsequence-position '(1 2 3 1 2 3) '(2 3) test: logged count: 2))
+(print (reverse calls))
+(print (list (subsequence-position \"abc\" \"\") (subsequence-position \"abc\" \"\" count: 4)
+             (subsequence-position \"abc\" \"\" count: 5) (subsequence-position \"hello\" \"lo\")))
+(define keys '(5 3 5 1 3 2 5 4 1 2 3))
+(print (sort (map (method (k i) (list k i)) keys (range from: 0 size: 11))
+             test: (method (a b) (= (first a) (first b)))))
+(set! calls '())
+(print (sort '(3 1 2 5 4) test: (method (a b) (set! calls (cons (list a b) calls)) (< a b))))
+(print (reverse calls))
+(define d (as <deque> '(3 1 2)))
+(sort! d)
+(define sv (as <stretchy-vector> '(3 1 2)))
+(sort! sv test: >)
+(print (list d sv))"
+  "#f
+4
+((1 2) (2 2) (3 3) (3 2) (1 2) (2 2) (3 3))
+(0 3 #f 3)
+((5 2) (5 0) (3 4) (3 1) (1 8) (1 3) (2 9) (2 5) (5 6) (4 7) (3 10))
+(1 2 3 4 5)
+((1 3) (5 2) (2 1) (2 3) (5 3) (4 1) (4 2) (4 3) (4 5))
+({<deque> 1 2 3} {<stretchy-vector> 3 2 1})
+")
 )

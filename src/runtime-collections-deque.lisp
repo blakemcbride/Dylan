@@ -334,7 +334,7 @@
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :stable))
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/<)))
-           (deque-list (scheme-sort (iterate->list #'identity deque)
+           (deque-list (merge-sort-list (iterate->list #'identity deque)
                                     (lambda (x y) (true? (dylan-call test? x y))))))
       (dylan%find-keyword rest :stable (lambda () nil)) ; Ignored
       (deque-refill deque deque-list)))))

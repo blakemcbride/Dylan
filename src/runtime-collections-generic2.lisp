@@ -458,6 +458,33 @@ unbounded range, which has no end to stop at."
                           (replace-elements! seq-1 (reverse (sequence->list seq-1)))
                           (dylan-call dylan/reverse seq-1)))))
 
+;;; The compiled library's stable merge sort: runs of WIDTH merged into
+;;; runs twice as long, from one vector to the other, an element of the
+;;; first run going first unless the second's is less by TEST, called with
+;;; the second's element first -- so that a test calls on the same pairs,
+;;; in the same order, in both implementations.
+
+(defun merge-sort-list (list test)
+  "The elements of LIST sorted by TEST, a Lisp predicate, in a new list."
+  (let* ((n (length list))
+         (from (coerce list 'simple-vector))
+         (to (make-array n)))
+    (loop for width = 1 then (* width 2)
+          while (< width n)
+          do (loop for low from 0 below n by (* 2 width)
+                   do (let* ((middle (min (+ low width) n))
+                             (high (min (+ middle width) n))
+                             (i low)
+                             (j middle))
+                        (loop for k from low below high
+                              do (if (and (< j high)
+                                          (or (>= i middle)
+                                              (funcall test (svref from j) (svref from i))))
+                                     (progn (setf (svref to k) (svref from j)) (incf j))
+                                     (progn (setf (svref to k) (svref from i)) (incf i))))))
+             (rotatef from to))
+    (coerce from 'list)))
+
 (defparameter dylan/sort
   (dylan%generic-fn
    'sort
@@ -475,7 +502,7 @@ unbounded range, which has no end to stop at."
       (dylan%find-keyword rest :stable (lambda () dylan%false)) ; Ignored
       (dylan-call dylan/as
                   (dylan-call dylan/class-for-copy seq)
-                  (scheme-sort (dylan-call dylan/as <list> seq)
+                  (merge-sort-list (dylan-call dylan/as <list> seq)
                                (lambda (x y) (true? (dylan-call test? x y)))))))))
 
 (defparameter dylan/sort!
@@ -496,7 +523,7 @@ unbounded range, which has no end to stop at."
       ;; A mutable sequence is sorted in place, its elements put back in
       ;; order, with no copy of it made (which its class may not allow).
       (if (mutable-sequence-p seq)
-          (replace-elements! seq (scheme-sort (dylan-call dylan/as <list> seq)
+          (replace-elements! seq (merge-sort-list (dylan-call dylan/as <list> seq)
                                               (lambda (x y)
                                                 (true? (dylan-call test? x y)))))
           (dylan-call dylan/sort seq :test test? :stable stable))))))
@@ -588,23 +615,6 @@ unbounded range, which has no end to stop at."
        (library-element-setter sequence (- size 1) new-value)
        new-value))))
 
-(defun check-subsequence (test? big big-state pattern pattern-state)
-  (labels ((check-loop (big-state pattern-state)
-             (if (not pattern-state)
-                 t
-                 (if (and big-state
-                          (true? (dylan-call test?
-                                             (current-element
-                                                         big big-state)
-                                             (current-element
-                                                         pattern pattern-state))))
-                     (check-loop (next-state big big-state)
-                                 (next-state
-                                             pattern pattern-state))
-                     nil))))
-    (check-loop (copy-state big big-state)
-                (copy-state pattern pattern-state))))
-
 (defparameter dylan/subsequence-position
   (dylan%generic-fn
    'subsequence-position
@@ -617,47 +627,56 @@ unbounded range, which has no end to stop at."
  (dylan%dylan-callable->method
   (make-param-list `((big ,<sequence>) (pattern ,<sequence>))
                    nil nil '(:test :count))
+  ;; As the compiled library searches, calling the test on the same
+  ;; pairs: a window of BIG's elements from INDEX on, as many as PATTERN
+  ;; has, both read only as far as needed; where fewer of BIG's are left
+  ;; than PATTERN has, the search ends without a call.  The test is called
+  ;; with BIG's element first.
   (lambda (multiple-values next-method big pattern &rest rest)
     (declare (ignore multiple-values))
-    (block subsequence-position
-      (dylan%keyword-validate next-method rest '(:test :count))
-      (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-            (count (dylan%find-keyword rest :count (lambda () 1)))
-            (init-state-pattern (initial-state pattern)))
-        ;; The countth place, counting from 1: there is none before the first.
-        (unless (integerp count)
-          (dylan-call dylan/error "subsequence-position: count: must be an integer: ~s"
-                      count))
-        (when (< count 1)
-          (return-from subsequence-position dylan%false))
-        (when (null init-state-pattern)
-          ;; An empty pattern occurs at every index, up to the size of BIG.
-          (return-from subsequence-position
-            (let ((size (collection-size big)))
-              (if (or (null size) (<= count (+ 1 size)))
-                  (- count 1)
-                  dylan%false))))
-        (loop with first-of-pattern = (library-element pattern 0)
-              with state = (initial-state big)
-              with num-found = 0
-              with index = 0
-              do (if state
-                     (if (and (true? (dylan-call test?
-                                                 (current-element
-                                                             big state)
-                                                 first-of-pattern))
-                              (check-subsequence test? big state
-                                                 pattern init-state-pattern))
-                         (if (>= num-found (- count 1))
-                             (return index)
-                             (progn
-                               (setf state (next-state big state))
-                               (incf num-found)
-                               (incf index)))
-                         (progn
-                           (setf state (next-state big state))
-                           (incf index)))
-                     (return dylan%false))))))))   ; not found
+    (dylan%keyword-validate next-method rest '(:test :count))
+    (let ((test (dylan%find-keyword rest :test (lambda () dylan/id?)))
+          (count (dylan%find-keyword rest :count (lambda () 1))))
+      ;; The countth place, counting from 1: there is none before the first.
+      (unless (integerp count)
+        (dylan-call dylan/error "subsequence-position: count: must be an integer: ~s"
+                    count))
+      (if (< count 1)
+          dylan%false
+          (let ((p '()) (ptail nil) (m 0) (pstate (initial-state pattern))
+                (state (initial-state big)) (window '()) (tail nil) (have 0)
+                (index 0) (left count))
+            (flet ((longer-p ()
+                     ;; Has PATTERN more than HAVE elements?
+                     (cond ((< have m) t)
+                           (pstate
+                            (let ((cell (list (current-element pattern pstate))))
+                              (if (null p) (setf p cell) (setf (cdr ptail) cell))
+                              (setf ptail cell)
+                              (incf m)
+                              (setf pstate (next-state pattern pstate))
+                              t))
+                           (t nil))))
+              (loop
+                ;; Fill the window
+                (loop while (and state (longer-p))
+                      do (let ((cell (list (current-element big state))))
+                           (if (null window) (setf window cell) (setf (cdr tail) cell))
+                           (setf tail cell)
+                           (incf have)
+                           (setf state (next-state big state))))
+                (cond ((longer-p) (return dylan%false))
+                      ((loop for pe in p
+                             for we in window
+                             always (true? (dylan-call test we pe)))
+                       (when (= left 1) (return index))
+                       (decf left)))
+                ;; On to the next index; an empty pattern matches at the
+                ;; end too, and no further.
+                (cond (window (setf window (cdr window)) (decf have))
+                      (state (setf state (next-state big state)))
+                      (t (return dylan%false)))
+                (incf index)))))))))
 
 ;;;;
 ;;;; MUTABLE COLLECTIONS (p. 127)

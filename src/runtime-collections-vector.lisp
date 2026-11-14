@@ -386,7 +386,7 @@
       (dylan-call dylan/set-array-value!
                   s-vector
                   (dylan-call dylan/as <simple-object-vector>
-                              (scheme-sort (dylan-call dylan/as <list> s-vector)
+                              (merge-sort-list (dylan-call dylan/as <list> s-vector)
                                            (lambda (x y)
                                              (true? (dylan-call test? x y))))))
       s-vector))))                      ; Not the internal simple vector

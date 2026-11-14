@@ -1360,6 +1360,18 @@ void dy_check_keyword_list(D f, D pairs, const D *accepted, size_t n);
  * within INHERITED, the type of the slot it overrides (not checked while
  * INHERITED is DY_UNBOUND, its definition not yet run). */
 void dy_check_slot_type_within(D type, D inherited, const char *getter);
+/* Chapter 6, as the interpreter checks it when a slot is defined: the
+ * slot DESCRIPTOR, redefining those with its getter in the N slot vectors
+ * SUPERS (the direct superclasses' slots as they are now; DY_UNBOUND for
+ * none), respecifies every feature each of them specifies, with a type
+ * within theirs.  A virtual slot respecifies nothing. */
+void dy_check_slot_respecified(D descriptor, const D *supers, intptr_t n);
+/* The same for the M slots OWN of a class whose define-class runs */
+void dy_check_class_slots(const D *supers, intptr_t n, const D *own, intptr_t m);
+/* The same for a define-slot of DESCRIPTOR on the class OWNER, if the
+ * slot it replaces there is an inherited one */
+void dy_check_define_slot(const struct DyProgramClass *owner, D descriptor, const D *supers,
+                          intptr_t n);
 
 /* A next-method object that, called with no arguments, calls NEXT with
  * the arguments the current method was given. */

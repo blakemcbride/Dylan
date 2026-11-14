@@ -523,7 +523,7 @@ not-a-singleton
    (define-class <b> (<a>) (v type: <string> init-value: \"s\" init-keyword: v:))
    (print (v (make <b>)))"
   ""
-  :compile-error "not a subtype of")
+  :error "not a subtype of")
 
  ;; Chapter 6: a slot's type and initial value are evaluated after the
  ;; class's variable is defined, so they may name the class.
@@ -2750,7 +2750,7 @@ end
 ")
  ;; A subclass's slot of the name of an inherited one, by define-class
  ;; or define-slot, respecifies its type, a subclass of the inherited
- ;; type (chapter 6).
+ ;; type (chapter 6): checked when the definition runs.
  (define-slot-respecify-type
   "(define-class <a> (<object>) (x init-value: 1))
 (define-class <b> (<a>))
@@ -2758,7 +2758,7 @@ end
 (define-slot <b> x init-value: 'bx init-keyword: bx:)
 (print 'after)"
   ""
-  :compile-error "slot x: redefining an inherited slot must respecify its type:")
+  :error "slot x: redefining an inherited slot must respecify its type:")
  (define-slot-type-subclass
   "(define-class <a> (<object>) (x init-value: 1))
 (define-class <b> (<a>))
@@ -2766,19 +2766,19 @@ end
 (define-slot <b> x type: <integer> init-value: 3 init-keyword: bx:)
 (print 'after)"
   ""
-  :compile-error "slot x: the new slot type <integer> is not a subtype of the inherited type <string>")
+  :error "slot x: the new slot type <integer> is not a subtype of the inherited type <string>")
  (class-slot-respecify-type
   "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
 (define-class <b> (<a>) (x init-value: 'bx))
 (print 'after)"
   ""
-  :compile-error "slot x: redefining an inherited slot must respecify its type:")
+  :error "slot x: redefining an inherited slot must respecify its type:")
  (class-slot-type-subclass
   "(define-class <a> (<object>) (x type: <string> init-value: \"s\"))
 (define-class <b> (<a>) (x type: <integer> init-value: 3))
 (print 'after)"
   ""
-  :compile-error "slot x: the new slot type <integer> is not a subtype of the inherited type <string>")
+  :error "slot x: the new slot type <integer> is not a subtype of the inherited type <string>")
  ;; ... the subclass's slot being defined before the inherited one too.
  (define-slot-checks-subclass-slots
   "(define-class <a> (<object>) (x init-value: 1))
@@ -2787,7 +2787,7 @@ end
 (print (x (make <b>)))
 (print 'after)"
   ""
-  :compile-error "slot x: redefining an inherited slot must respecify its type:")
+  :error "slot x: redefining an inherited slot must respecify its type:")
  ;; A subclass's slot that does respecify the type is accepted, and a
  ;; subclass without its own slot takes the new one.
  (redefined-slot-types-accepted
@@ -3880,5 +3880,32 @@ other-error
 \"ERR: make: the required init-keyword is missing: s3:\"
 \"ERR: make: the required init-keyword is missing: s1:\"
 \"ERR: make: the required init-keyword is missing: s4:\"
+")
+ ;; The respecification is checked when a definition runs, against the
+ ;; definitions then in force: a define-slot never run is not one
+ ;; (Bugs05 C16), nor one replaced since; a superclass's define-slot with
+ ;; a type computed when it runs is checked against a subclass's own slot
+ ;; (C17).
+ (slot-respecification-when-run
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <a> (<object>) (y init-value: 10))
+(define-class <b> (<a>))
+(define-slot <b> y init-value: 44)
+(define-method never () (define-slot <a> y init-value: 55 allocation: class))
+(print (y (make <b>)))
+(define-class <p> (<object>) (z init-value: 'z))
+(define-class <q> (<p>))
+(define-slot <p> z allocation: constant init-value: 9)
+(define-slot <q> z init-value: 10 allocation: constant)
+(print (list (z (make <p>)) (z (make <q>))))
+(define-method pick (c) c)
+(define-class <s> (<object>) (x type: <string> init-value: \"s\"))
+(define-class <t> (<s>) (x type: <string> init-value: \"t\"))
+(print (try (method () (define-slot <s> x type: (pick <integer>) init-value: 3) 'done)))
+(print 'after)"
+  "44
+(9 10)
+\"ERR: slot x: the new slot type <string> is not a subtype of the inherited type <integer>\"
+after
 ")
 )

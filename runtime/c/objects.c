@@ -218,6 +218,62 @@ void dy_check_slot_type_within(D type, D inherited, const char *getter) {
     dy_error_format(format, arguments);
 }
 
+/* The name of the slot D, its getter's */
+static const char *slot_name(DySlotDescriptor *s) {
+    D getter = s->getter;
+    if (dy_kind_p(getter, DY_KIND_GENERIC))
+        return dy_symbol_utf8(((DyGeneric *)DY_PTR(getter))->name);
+    return "?";
+}
+
+static DySlotDescriptor *descriptor(D d);
+
+/* The check of dy_check_slot_respecified, against the N descriptors OLDS
+ * (#f for none) */
+static void check_respecified(D d, const D *olds, intptr_t n) {
+    DySlotDescriptor *s = descriptor(d);
+    if (s->kind == 4) return;
+    const char *name = slot_name(s);
+    for (intptr_t i = 0; i < n; i++) {
+        D old = olds[i];
+        if (old == DY_FALSE) continue;
+        DySlotDescriptor *o = descriptor(old);
+        const char *missing = NULL;
+        if (o->type != DY_UNBOUND && s->type == DY_UNBOUND) missing = "type:";
+        else if ((o->init_value != DY_UNBOUND || o->init_function != DY_UNBOUND)
+                 && s->init_value == DY_UNBOUND && s->init_function == DY_UNBOUND)
+            missing = "init-value: or init-function:";
+        else if (o->init_keyword != DY_FALSE && s->init_keyword == DY_FALSE)
+            missing = "init-keyword:";
+        else if (o->kind != 0 && s->kind == 0) missing = "allocation:";
+        else if (o->setter != DY_FALSE && s->setter == DY_FALSE) missing = "setter:";
+        if (missing) {
+            char *format = dy_alloc_bytes(2 * strlen(name) + 80), *out = format;
+            out = add_text(out, "slot ");
+            out = add_text(out, name);
+            out = add_text(out, ": redefining an inherited slot must respecify its ");
+            out = add_text(out, missing);
+            *out = 0;
+            dy_error_format(format, DY_EMPTY);
+        }
+    }
+    if (s->type == DY_UNBOUND) return;
+    for (intptr_t i = 0; i < n; i++)
+        if (olds[i] != DY_FALSE && descriptor(olds[i])->type != DY_UNBOUND)
+            dy_check_slot_type_within(s->type, descriptor(olds[i])->type, name);
+}
+
+void dy_check_slot_respecified(D d, const D *supers, intptr_t n) {
+    D olds[n > 0 ? n : 1];
+    for (intptr_t i = 0; i < n; i++)
+        olds[i] = dy_find_slot_descriptor(supers[i], descriptor(d)->getter);
+    check_respecified(d, olds, n);
+}
+
+void dy_check_class_slots(const D *supers, intptr_t n, const D *own, intptr_t m) {
+    for (intptr_t i = 0; i < m; i++) dy_check_slot_respecified(own[i], supers, n);
+}
+
 /* ------------------------------------------------------- Next methods */
 
 /* env[0] is the next method, env[1] the argument count, env[2..] the
@@ -414,6 +470,12 @@ void dy_check_slot_owner(D class) {
     if (c->read_only || c->sealed) dy_error("define-slot: the class is read-only", class);
 }
 
+void dy_check_define_slot(const DyProgramClass *owner, D d, const D *supers, intptr_t n) {
+    D current = dy_find_slot_descriptor(*owner->slots, descriptor(d)->getter);
+    if (current != DY_FALSE && descriptor(current)->owner != owner->class)
+        dy_check_slot_respecified(d, supers, n);
+}
+
 void dy_define_class_slot(const DyProgramClass *owner, D d) {
     dy_check_slot_owner(owner->class);
     D getter = descriptor(d)->getter;
@@ -444,7 +506,12 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
         seen[seen_size++] = c;
         D slots = *c->slots;
         D had = dy_find_slot_descriptor(slots, getter);
-        if (had != DY_FALSE && had != replaced) continue;
+        if (had != DY_FALSE && had != replaced) {
+            /* The subclass's own redefinition must still respecify what
+             * the new definition specifies */
+            if (descriptor(had)->owner == c->class) check_respecified(had, &d, 1);
+            continue;
+        }
         *c->slots = put_slot(slots, d);
         if (instance) initialize_early(c, d);
         queue = queue_subclasses(queue, &size, &room, c);

@@ -588,71 +588,6 @@ options whose values are compared when the class is defined."
                 (dolist (c comparisons)
                   (when (consp c) (push (cons message c) checks))))))))))
 
-(defun inherited-slot-definitions (class getter)
-  "Every definition of the slot GETTER reads in a proper superclass of
-CLASS that the program defines: a define-slot's as well as its
-define-class's, since either may be the one in force when CLASS's runs."
-  (loop for c in (class-info-cpl class)
-        for cg = (and (not (eq c class)) (class-gclass c))
-        when cg
-          append (remove getter (gclass-sdefs cg) :key #'sdef-getter :test-not #'eq)))
-
-(defun slot-type-class (sd)
-  "The class SD's type: names, if a class known at compile time, or NIL."
-  (let* ((type (slot-spec-type (sdef-spec sd)))
-         (v (and type (static-value type))))
-    (and (eq (car v) :global) (global-class (second v)))))
-
-(defun check-slot-type-redefinition (sd)
-  "Chapter 6: the type of a redefined slot must be within the
-intersection of the types of all the slots it overrides."
-  (let ((new (slot-type-class sd)))
-    (when new
-      (dolist (old (inherited-slot-definitions (sdef-class sd) (sdef-getter sd)))
-        (let ((was (slot-type-class old)))
-          (when (and was (not (subclass-info-p new was)))
-            (let ((*location* (or (sdef-location sd) *location*)))
-              (compile-error "slot ~a: the new slot type ~a is not a subtype of the inherited type ~a"
-                             (name-string (module-var-name (sdef-getter sd)))
-                             (class-info-name new) (class-info-name was)))))))))
-
-(defun gen-slot-type-redefinition-checks (sd)
-  "Code checking, when SD's definition runs, the type of the slot SD
-redefines against the type of each it overrides: what
-CHECK-SLOT-TYPE-REDEFINITION, which sees only the classes known before
-the program is optimized, could not -- a type computed when run, or a
-singleton."
-  (when (and (sdef-class sd) (not (eq (sdef-allocation sd) :virtual)))
-    (dolist (old (inherited-slot-definitions (sdef-class sd) (sdef-getter sd)))
-      (when (slot-spec-type (sdef-spec old))
-        (emit "dy_check_slot_type_within(~a, ~a, ~a);"
-              (sdef-c sd "type") (sdef-c old "type")
-              (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))))))))
-
-(defun check-slot-redefinition (sd old)
-  "Chapter 6: if you redefine an inherited slot, you must respecify all the
-slot features the superior definition specified."
-  (let ((new (sdef-spec sd))
-        (was (sdef-spec old))
-        (name (name-string (module-var-name (sdef-getter sd))))
-        (*location* (or (sdef-location sd) *location*)))
-    (flet ((missing (what)
-             (compile-error "slot ~a: redefining an inherited slot must respecify its ~a"
-                            name what)))
-      (when (and (slot-spec-type was) (not (slot-spec-type new)))
-        (missing "type:"))
-      (when (and (or (slot-spec-init-value was) (slot-spec-init-function was))
-                 (not (or (slot-spec-init-value new) (slot-spec-init-function new))))
-        (missing "init-value: or init-function:"))
-      (when (and (or (slot-spec-init-keyword was) (slot-spec-required-init-keyword was))
-                 (not (or (slot-spec-init-keyword new) (slot-spec-required-init-keyword new))))
-        (missing "init-keyword:"))
-      (when (and (not (eq (sdef-allocation old) :instance))
-                 (eq (sdef-allocation sd) :instance))
-        (missing "allocation:"))
-      (when (and (sdef-setter old) (not (sdef-setter sd)))
-        (missing "setter:")))))
-
 (defun build-slots (definitions)
   (dolist (d definitions)
     (typecase d
@@ -708,18 +643,10 @@ slot features the superior definition specified."
                    (setf (gethash d *sdef-of-node*) (list sd))
                    (push sd *singleton-sdefs*)))))))))
   ;; Chapter 6: a slot redefined in a subclass must respecify what the
-  ;; inherited definition specified.
-  (loop for g in (all-gclasses)
-        do (dolist (sd (gclass-sdefs g))
-             ;; Except a virtual redeclaration, a filtered slot (the
-             ;; manual's <displaced-view>): the inherited slot stays as it
-             ;; was, storage, initialization and all.
-             (unless (eq (sdef-allocation sd) :virtual)
-               (let ((olds (inherited-slot-definitions (gclass-info g) (sdef-getter sd))))
-                 (when olds
-                   (dolist (old olds)
-                     (check-slot-redefinition sd old))
-                   (check-slot-type-redefinition sd))))))
+  ;; inherited definition specified -- checked when the definition runs,
+  ;; against the definitions then in force (dy_check_slot_respecified):
+  ;; which those are depends on the order the define-classes and
+  ;; define-slots run in, and whether they run at all.
   ;; Chapter 6: a slot inherited from two superclasses with different
   ;; definitions must be defined in the class.  What differs when compiling
   ;; is an error now; what may differ is checked where the class is
@@ -957,8 +884,7 @@ is set, a method takes any."
         (emit "~a = ~a;" type (atom-c (slot-spec-type spec)))
         ;; Chapter 6: a slot's type is a class or a singleton.
         (emit "if (!dy_kind_p(~a, DY_KIND_CLASS) && !dy_kind_p(~a, DY_KIND_SINGLETON)) dy_error_naming(\"the type of the slot \", ~a, \" is not a class or singleton\", ~a);"
-              type type (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))) type)
-        (gen-slot-type-redefinition-checks sd)))
+              type type (c-utf8-literal (name-string (module-var-name (sdef-getter sd)))) type)))
     (when (slot-spec-init-value spec)
       (let ((v (atom-c (slot-spec-init-value spec))))
         (emit "~a = ~a;" (sdef-c sd "init") v)
@@ -1045,7 +971,8 @@ one that takes slots, not read-only or sealed (chapter 11)."
               owner)
         (emit "~a.object = ((DySingleton *)DY_PTR(~a))->object;" (owner-c sd) owner)
         (emit "~a.owner = ~a.object;" (sdef-descriptor-c sd) (owner-c sd))))
-    (gen-slot-initialization sd)))
+    (gen-slot-initialization sd))
+  (emit-respecification-check node))
 
 (defun gen-class-definition-rest (node)
   (when (ir-define-class-p node)
@@ -1141,17 +1068,43 @@ no more."
         when (eq (sdef-form-end sd) top)
           append (define-slot-done-c sd)))
 
+(defun super-slots-c (info)
+  "C expressions for the slot vectors of the direct superclasses of the
+class INFO, as they are when its definitions run."
+  (mapcar (lambda (super)
+            (if (dynamic-slots-p super)
+                (class-slots-c super)
+                (address (c-vector *cdata*
+                                   (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
+                                           (reported-slot-definitions super))))))
+          (class-info-supers info)))
+
+(defun emit-respecification-check (node)
+  "Code checking, when the define-class or define-slot NODE runs, that each
+slot it defines respecifies what the slot it redefines specifies, as
+defined then (chapter 6), before anything is changed."
+  (cond ((ir-define-class-p node)
+         (let* ((g (gethash (ir-define-class-var node) *gclasses*))
+                (supers (super-slots-c (gclass-info g)))
+                (own (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
+                             (gethash node *sdef-of-node*))))
+           (when (and supers own)
+             (emit "dy_check_class_slots((const D[]){ ~{~a~^, ~} }, ~d, (const D[]){ ~{~a~^, ~} }, ~d);"
+                   supers (length supers) own (length own)))))
+        ((ir-define-slot-p node)
+         (dolist (sd (gethash node *sdef-of-node*))
+           (when (and (sdef-node sd) (sdef-class sd))
+             (let ((supers (super-slots-c (sdef-class sd))))
+               (when supers
+                 (emit "dy_check_define_slot(&~a, ~a, (const D[]){ ~{~a~^, ~} }, ~d);"
+                       (program-class-c (sdef-class sd)) (address (sdef-descriptor-c sd))
+                       supers (length supers)))))))))
+
 (defun emit-class-slots (g node)
   "Code giving the program's class G, whose define-class NODE runs, its
 slot descriptors: its superclasses' as they are now, then its own."
   (let* ((info (gclass-info g))
-         (supers (mapcar (lambda (super)
-                           (if (dynamic-slots-p super)
-                               (class-slots-c super)
-                               (address (c-vector *cdata*
-                                                  (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
-                                                          (reported-slot-definitions super))))))
-                         (class-info-supers info)))
+         (supers (super-slots-c info))
          (own (mapcar (lambda (sd) (address (sdef-descriptor-c sd)))
                       (gethash node *sdef-of-node*))))
     (emit "{")

@@ -442,10 +442,11 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
     (let ((test (dylan%find-keyword keys :test (lambda () dylan/id?))))
       (call-with-escape-continuation
        (lambda (return-value)
+         ;; Chapter 12: a true value -- #t, as for every collection but a
+         ;; list, whatever true value the test answers
          (iterate! (lambda (obj)
-                     (let ((test-value (dylan-call test value obj)))
-                       (when (true? test-value)
-                         (funcall return-value test-value))))
+                     (when (true? (dylan-call test value obj))
+                       (funcall return-value t)))
                    collection)
          (funcall return-value dylan%false)))))))
 

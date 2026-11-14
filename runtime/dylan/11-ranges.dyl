@@ -230,7 +230,8 @@ module: dylan
 (define-method member? (value (r <range>) #key (test id?))
   (cond ((not (or (id? test id?) (id? test =)))
          (if (%size r)
-             (any? (method (e) (test value e)) (%elements r))
+             ;; #t, whatever true value the test answers
+             (if (any? (method (e) (test value e)) (%elements r)) #t #f)
              (error "member?: a test: on an unbounded range might not terminate")))
         ((not (%instance? value <real>)) #f)
         ((zero? (%by r))

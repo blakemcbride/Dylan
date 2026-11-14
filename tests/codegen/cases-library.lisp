@@ -3880,4 +3880,19 @@ none
 ({the class <a>} 1 5 #f)
 ({the class <pair>} {the class <simple-object-vector>} {the class <byte-string>} {the class <deque>})
 ")
+ ;; Chapter 12: member? answers a true value -- #t for every collection
+ ;; but a list, whose is the tail -- whatever true value the test
+ ;; answers (Bugs05 B8).
+ (member-true-value
+  "(define-method tst (a b) (and (= a b) 'yes))
+(define tb (make <table>))
+(set! (element tb 'k) 2)
+(define a (make <array> dimensions: '(1 2) fill: 2))
+(print (map (method (c) (member? 2 c test: tst))
+            (list #(1 2 3) (range from: 0 up-to: 5) \"a\" (as <deque> '(1 2)) (as <stretchy-vector> '(2)) tb a '(1 2 3))))
+(print (map (method (c) (member? 9 c test: tst))
+            (list #(1 2 3) (range from: 0 up-to: 5) (as <deque> '(1 2)) tb a '(1 2 3))))"
+  "(#t #t #f #t #t #t #t (2 3))
+(#f #f #f #f #f #f)
+")
 )

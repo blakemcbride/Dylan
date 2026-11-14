@@ -502,9 +502,10 @@ as the initial value; it is an error on an empty collection.
 
 \index{member?}
 \code{(member? \meta{value} \meta{collection} test: \meta{test})}
-answers whether the collection has an element that matches the value.
-The test defaults to \code{id?} and is called with the value first and
-an element second.
+answers whether the collection has an element that matches the value:
+\code{\#t} or \code{\#f}, whatever true value the test answers. The test
+defaults to \code{id?} and is called with the value first and an element
+second.
 
 \begin{dylan}
 (define flavors #(chocolate pistachio pumpkin))

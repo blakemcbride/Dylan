@@ -377,7 +377,10 @@ writes (compiler/front/front-end.lisp).")
                          (:print-object print-opaque-object))
   target                                ; :STDOUT, :STDERR, :STRING or a stream
   (output nil)                          ; for :STRING, a string output stream
-  (contents ""))                        ; for :STRING, the characters so far
+  (contents "")                         ; for :STRING, the characters so far
+  (message-of nil))                     ; for :STRING, the condition whose
+                                        ; message print writes to it
+                                        ; (CONDITION-PRINT-TEXT)
 
 (defun dylan-stream-lisp (stream)
   "The Lisp stream that writing to the Dylan STREAM writes to."
@@ -536,7 +539,7 @@ would exhaust SBCL's binding stack."
        (let ((class (instance.class object)))
          (cond
            ;; Chapter 13: a condition prints as its message.
-           ((subclass? class <condition>) (out (condition-message object)))
+           ((subclass? class <condition>) (out (condition-print-text object target)))
            ;; A program's subclass of <stream> prints as the library's
            ;; streams do, by the print-object method on <stream>.
            ((subclass? class <stream>) (out "{stream}"))
@@ -632,6 +635,26 @@ when first needed.")
                      (setf (gethash value table) (dylan-function-name name))))))
       (setf *predefined-method-names* table)))
   (gethash method *predefined-method-names*))
+
+(defun message-stream-p (stream condition)
+  "Is the Dylan STREAM the one CONDITION-PRINT-TEXT has print write CONDITION's
+message to?"
+  (and (dylan-stream? stream) (dylan-stream-message-of stream)
+       (eq (dylan-stream-message-of stream) condition)))
+
+(defun condition-print-text (condition target)
+  "Chapter 13: print of a condition, when not verbose, prints its message,
+and a program may define a method for print on its own condition class.
+So the text a condition prints as is what print writes, given VERBOSE: #f,
+to a string stream that records the condition; print's method for any
+object writes CONDITION-MESSAGE there, as does this when TARGET, the
+Dylan stream the condition is printed on, is that stream."
+  (if (message-stream-p target condition)
+      (condition-message condition)
+      (let ((stream (%make-dylan-stream :string)))
+        (setf (dylan-stream-message-of stream) condition)
+        (dylan-call dylan/print condition :stream stream :verbose dylan%false)
+        (dylan-stream-string stream))))
 
 (defun condition-message (object)
   "The message of a condition, as the compiler's %CONDITION-MESSAGE puts

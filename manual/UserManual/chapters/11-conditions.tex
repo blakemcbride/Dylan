@@ -489,6 +489,28 @@ used; the arguments of a message print the same way. A direct subclass
 of \code{<error>} with no message and no such method is reported by its
 class only, as \code{Dylan error: \{instance of <oops>\}}.
 
+\index{print!of a condition}
+The manual's own way to give a condition class its message also works:
+``\code{print} of a condition, when not verbose, prints the condition's
+error message'', so a \code{print} method on the class decides it. The
+text a condition prints as is what \code{print}, given \code{verbose:
+\#f}, writes for it to a string stream; \code{print}'s method for any
+object writes the condition's message there, without a newline.
+
+\begin{dylan}
+(define-class <file-not-found> (<error>) (file-name init-keyword: file-name:))
+(define-method print ((self <file-not-found>) #key stream verbose)
+  (if verbose
+      (next-method)
+      (format stream "The file ~A was not found" (file-name self))))
+
+(error (make <file-not-found> file-name: "foo"))
+; Dylan error: The file foo was not found
+\end{dylan}
+
+\noindent A \code{print-object} method of the class comes first: the
+library's, on \code{<condition>}, is the one that calls \code{print}.
+
 \section{Unhandled conditions}\label{sec:conditions-unhandled}
 
 \index{unhandled condition}\index{debugger}

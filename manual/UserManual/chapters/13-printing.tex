@@ -47,7 +47,9 @@ stream to write to, which defaults to \code{*standard-output*}
 \item[\code{(print \meta{object} \#key stream verbose)}]\index{print}
   prints the object escaped, then a newline. It is a generic function,
   so a program can add methods to it, as \dylanbook{chapter 13} does;
-  \code{verbose:} is accepted and ignored.
+  \code{verbose:} is passed on to them. A condition's message is what
+  \code{print} writes for it when not verbose
+  (Section~\ref{sec:conditions-defining}).
 \item[\code{(write-line \meta{object} \#key stream)}]\index{write-line}
   does the same as \code{print}.
 \item[\code{(pp \meta{object} \#key stream)}]\index{pp}

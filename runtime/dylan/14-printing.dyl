@@ -35,7 +35,9 @@ module: dylan
   (%fd init-keyword: fd:))
 
 (define-class <string-stream> (<stream>)
-  (%chars init-function: (method () (make <stretchy-vector>))))
+  (%chars init-function: (method () (make <stretchy-vector>)))
+  ;; The condition whose message print writes to it (%condition-text)
+  (%message-of init-value: #f))
 
 (define *standard-output* (make <%fd-stream> fd: 1))
 (define *standard-error* (make <%fd-stream> fd: 2))
@@ -272,9 +274,23 @@ module: dylan
   (%put stream "{stream}")
   x)
 
-;;; A condition prints as its message (chapter 13).
+;;; A condition prints as its message (chapter 13).  Chapter 13: print of
+;;; a condition, when not verbose, prints its message, and a program may
+;;; define a method for print on its own condition class.  So the text is
+;;; what print writes, given verbose: #f, to a string stream that records
+;;; the condition; print's method for any object writes the message there,
+;;; as does this when it is printing on that stream.
+(define %message-stream?
+  (method (stream c)
+    (and (%instance? stream <string-stream>) (id? (%message-of stream) c))))
+
 (define-method print-object ((c <condition>) stream escape?)
-  (%put stream (%condition-message c))
+  (if (%message-stream? stream c)
+      (%put stream (%condition-message c))
+      (bind ((s (make <string-stream>)))
+        (set! (%message-of s) c)
+        (print c stream: s verbose: #f)
+        (%put stream (stream-contents s))))
   c)
 
 ;;; A condition as display prints it, through any print-object method of
@@ -337,8 +353,12 @@ module: dylan
 (define-generic-function print (object #key stream verbose))
 (define-method print (object #key stream verbose)
   (bind ((s (%stream stream)))
-    (print-object object s #t)
-    (%put s #\newline)
+    (if (and (not verbose) (%instance? object <condition>) (%message-stream? s object))
+        ;; A condition's message (print-object on <condition>)
+        (print-object object s #f)
+        (begin
+          (print-object object s #t)
+          (%put s #\newline)))
     object))
 
 (define write-line

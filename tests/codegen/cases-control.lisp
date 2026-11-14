@@ -1248,4 +1248,42 @@ is-g
   "(print (handler-bind (<error> (method (c n) 1) description: \"a\" description: \"b\") 3))"
   ""
   :compile-error "handler-bind: option description: given twice")
+ ;; Chapter 13's example: a condition's message is what print writes when
+ ;; not verbose, so a program's print method on its condition class gives
+ ;; it; with none, the message is the library's.
+ (condition-print-method
+  "(define-class <file-not-found> (<error>) (file-name init-keyword: file-name:))
+(define-method print ((self <file-not-found>) #key stream verbose)
+  (if verbose (next-method) (format stream \"The file ~A was not found\" (file-name self))))
+(define f (make <file-not-found> file-name: \"foo\"))
+(print (handler-case (error f) ((<error> condition: e) (format #f \"~a\" e))))
+(print (format #f \"~s\" f))
+(define c2 (make <simple-error> format-string: \"plain ~a\" format-arguments: '(1)))
+(print c2)
+(print (format #f \"<~a>\" c2))
+(define s (make <string-stream>))
+(print c2 stream: s)
+(print (stream-contents s))
+(define-class <del> (<error>))
+(define-method print ((self <del>) #key stream verbose) (next-method))
+(print (format #f \"~a\" (make <del>)))
+(define-class <selfref> (<error>))
+(define-method print ((self <selfref>) #key stream verbose)
+  (if verbose (next-method) (format stream \"self: ~a\" self)))
+(print (format #f \"~a\" (make <selfref>)))
+(define-class <po> (<error>))
+(define-method print-object ((x <po>) stream escape?) (format stream \"PO\"))
+(print (format #f \"~a\" (make <po>)))
+(error f)"
+  "\"The file foo was not found\"
+\"The file foo was not found\"
+plain 1
+\"<plain 1>\"
+\"plain 1
+\"
+\"{instance of <del>}\"
+\"self: {instance of <selfref>}\"
+\"PO\"
+"
+  :error "The file foo was not found")
 )

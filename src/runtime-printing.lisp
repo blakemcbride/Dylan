@@ -142,8 +142,12 @@
 
 (defun print-line (object keys)
   (let ((stream (stream-keyword keys)))
-    (print-to object stream t)
-    (terpri (dylan-stream-lisp stream))
+    (if (and (message-stream-p stream object)
+             (false? (dylan%find-keyword keys :verbose (lambda () dylan%false))))
+        ;; A condition's message (CONDITION-PRINT-TEXT)
+        (print-to object stream nil)
+        (progn (print-to object stream t)
+               (terpri (dylan-stream-lisp stream))))
     object))
 
 (defparameter dylan/print

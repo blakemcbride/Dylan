@@ -209,8 +209,8 @@ static D always_true_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     return DY_TRUE;
 }
 
-static DyFunction always_true = { &dy_wrapper_method, always_true_entry, DY_FALSE,
-                                  DY_FALSE, DY_FALSE, NULL };
+DyFunction dy_always_true = { &dy_wrapper_method, always_true_entry, DY_FALSE,
+                              DY_FALSE, DY_FALSE, NULL };
 
 /* (do-handlers funarg): funarg on each active handler's type, test,
  * function and description, the most recent first. */
@@ -219,7 +219,7 @@ PRIMITIVE(do_handlers) {
     need(self, argc, 1, 1);
     for (DyFrame *f = dy_thread->frames; f; f = f->prev)
         if (f->kind == DY_FRAME_HANDLER)
-            DY_CALL(a0, f->a, f->c == DY_FALSE ? DY_OBJ(&always_true) : f->c, f->b,
+            DY_CALL(a0, f->a, f->c == DY_FALSE ? DY_OBJ(&dy_always_true) : f->c, f->b,
                     f->d, 4);
     dy_thread->mv_count = 1;            /* #f alone, not funarg's values */
     return DY_FALSE;

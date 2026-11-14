@@ -953,6 +953,25 @@ before
 {slot s}
 "
   :error "<a> is sealed: it cannot be subclassed")
+ ;; So do initialize's method on <object> and do-handlers' default test.
+ (predefined-method-specializers
+  "(define-class <x> (<object>))
+(define m (last (sorted-applicable-methods initialize (make <x>))))
+(print (list (method-specializers m) (find-method initialize (list <object>))
+             (applicable-method? m) (applicable-method? m 1)))
+(print (bind ((a b c (function-arguments m))) (list a b c)))
+(print m)
+(define t #f)
+(handler-bind (<error> (method (c n) 1))
+  (do-handlers (method (type test function description) (set! t test))))
+(print (list (method-specializers t) (applicable-method? t) (applicable-method? t 1)))
+(print (bind ((a b c (function-arguments t))) (list a b c)))"
+  "(({the class <object>}) {a method on initialize} #f #t)
+(1 #t #f)
+{a method on initialize}
+(({the class <object>}) #f #t)
+(1 #f #f)
+")
  ;; A method's specializers are one for each required argument, <object>
  ;; where none is given, and applicable-method? asks for enough arguments
  ;; (chapter 10).

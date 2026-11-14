@@ -1372,6 +1372,9 @@ D dy_call_list(D f, D first, D list);
 /* initialize's method on <object>: does nothing. */
 extern DyFunction dy_default_initialize;
 
+/* The test do-handlers gives a handler made without one: it answers #t. */
+extern DyFunction dy_always_true;
+
 /* ------------------------------------------------------------- Threads
  * (CompilerPlan.md, Phase 7: an extension; the manual has no threads) */
 

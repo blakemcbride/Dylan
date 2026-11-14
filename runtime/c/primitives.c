@@ -261,16 +261,21 @@ PRIMITIVE(generic_function_methods) {
     return list_of_vector(as_generic(a0)->methods);
 }
 
+/* The specializers of the method M, one for each required argument
+ * (chapter 10), as a list */
+static D specializer_list(D m) {
+    D specs = ((DyFunction *)DY_PTR(m))->specializers;
+    if (specs != DY_FALSE) return list_of_vector(specs);
+    D first, result = DY_EMPTY;
+    for (intptr_t i = dy_method_required(m, &first) - 1; i >= 0; i--)
+        result = dy_pair(i == 0 ? first : dy_wrapper_object.class, result);
+    return result;
+}
+
 PRIMITIVE(method_specializers) {
     need(self, argc, 1, 1);
     if (!dy_kind_p(a0, DY_KIND_FUNCTION)) dy_error("not a method", a0);
-    D specs = ((DyFunction *)DY_PTR(a0))->specializers;
-    if (specs != DY_FALSE) return list_of_vector(specs);
-    /* One for each required argument (chapter 10) */
-    D first, result = DY_EMPTY;
-    for (intptr_t i = dy_method_required(a0, &first) - 1; i >= 0; i--)
-        result = dy_pair(i == 0 ? first : dy_wrapper_object.class, result);
-    return result;
+    return specializer_list(a0);
 }
 
 /* Does METHOD -- or, of a generic function, one of its methods -- apply
@@ -553,7 +558,7 @@ PRIMITIVE(find_method) {
     if (a1 != DY_EMPTY && !dy_kind_p(a1, DY_KIND_PAIR)) dy_error("not a list", a1);
     for (intptr_t i = 0; i < DY_INT_VALUE(methods->size); i++) {
         D specs = ((DyFunction *)DY_PTR(methods->data[i]))->specializers;
-        if (specs == DY_FALSE) continue;
+        if (specs == DY_FALSE) specs = dy_list_to_vector(specializer_list(methods->data[i]));
         DyVector *v = DY_PTR(specs);
         D l = a1;
         intptr_t j = 0;

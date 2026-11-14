@@ -1541,6 +1541,12 @@ each of its Dylan functions -> the name of the module it was written in."
         (dolist (text texts) (format stream "~a~%" text))
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))
         (format stream "int main(void) {~%    dy_init();~%")
+        ;; initialize's method on <object> is the runtime's, a method on
+        ;; the program's initialize: that is how it prints (chapter 11)
+        (let ((init (gethash (dylan-var "initialize") *gfuns*)))
+          (when init
+            (format stream "    dy_default_initialize.owner = ~a;~%"
+                    (address (gfun-c-name init)))))
         ;; The predefined methods written in C print with their names
         (dolist (p *used-primitives*)
           (let ((name (car (find-if (lambda (entry)

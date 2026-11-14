@@ -804,6 +804,9 @@ static const struct { DyFunction *f; int required; bool rest; } primitive_argume
     { &dy_prim_atomic_value, 1, false }, { &dy_prim_atomic_add, 2, false },
     { &dy_prim_atomic_compare_and_swap, 3, false },
     { &dy_prim_current_milliseconds, 0, false },
+    /* Methods, not primitives, but static: initialize's on <object>
+     * (instance #key ...) and do-handlers' default test (condition) */
+    { &dy_default_initialize, 1, true }, { &dy_always_true, 1, false },
 };
 
 /* For the method F: how many arguments it requires, and the specializer

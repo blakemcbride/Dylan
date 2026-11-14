@@ -317,9 +317,36 @@ symbol) -- refers to in the current module."
                          (if (eq (car clause) 'export) "export" "create")
                          variable)))))
     (setf (module.exports module) (remove-duplicates exports))
+    (check-no-new-import-defined (gethash name *dylan-modules*) module)
     (setf (gethash name *dylan-modules*) module)
     (update-using-modules name)
     name))
+
+(defun check-no-new-import-defined (old new)
+  "Chapter 5, as for a definition of an imported name: the module NEW,
+defined again over OLD, may not come to import a name under which OLD
+has a variable of its own with a value -- that variable would silently
+be lost."
+  (when old
+    (maphash (lambda (symbol import)
+               (unless (or (let ((before (gethash symbol (module.imports old))))
+                             (and before
+                                  (eq (module.name (car before)) (module.name (car import)))
+                                  (eq (cdr before) (cdr import))))
+                           (module-creates-p (car import) (cdr import)))
+                 (dolist (setter? '(nil t))
+                   (let ((own (name->module-variable
+                               (module-variable-name old symbol setter?))))
+                     (when (and (boundp own)
+                                (not (eq (symbol-value own) the-unassigned-value)))
+                       (dylan%error
+                        (format nil "define-module: ~a defines ~a, which it would import from module ~a"
+                                (dylan-symbol->string (module.name old))
+                                (if setter?
+                                    (format nil "(setter ~a)" (dylan-symbol->string symbol))
+                                    (dylan-symbol->string symbol))
+                                (dylan-symbol->string (module.name (car import))))))))))
+             (module.imports new))))
 
 (defvar *undefined-module-clauses* '()
   "The modules the define-module forms of the file being run declare that

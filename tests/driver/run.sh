@@ -320,6 +320,22 @@ printf "(print 'one)\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
 check "bin/dylan: (exit) quits" sh -c 'grep -q "^one" exit.out && ! grep -q "^two" exit.out'
 printf "(define-method exit () (print 'mine))\n(exit)\n(print 'two)\n" | "$dylan" > exit.out 2>&1
 check "bin/dylan: (exit) calls a program's exit" sh -c 'grep -q "^mine" exit.out && grep -q "^two" exit.out'
+# A module defined again may not come to import a name under which a
+# module using it defined a variable of its own (chapter 5)
+cat > redefine.dyl <<'EOF2'
+(define-module m1 (use dylan) (export f))
+(dylan:in-module m1)
+(define-method f () 'm1-f)
+(define-method g () 'm1-g)
+(dylan:in-module dylan-user)
+(define-module client (use dylan) (use m1))
+(dylan:in-module client)
+(define g 'client-g)
+(dylan:in-module dylan-user)
+(define-module m1 (use dylan) (export f g))
+EOF2
+"$dylan" < redefine.dyl > redefine.out 2> redefine.err
+check "bin/dylan: a module redefined over a user's own variable" grep -q "^Dylan error: define-module: client defines g, which it would import from module m1" redefine.err
 # A # that ends the standard input, after a form, is an end of file there
 # as at the end of a file
 printf '(print 1)\n#' | "$dylan" > hash-end.out 2>&1

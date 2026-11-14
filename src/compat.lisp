@@ -1298,33 +1298,94 @@ reports its message and carries on, and an unhandled error ends the run
 
 (declaim (special <restart>))
 
-(defun call-with-dylan-restarts (thunk)
+(defun call-with-dylan-restarts (thunk &optional condition)
   "Call THUNK -- which enters the Lisp debugger -- with a Lisp restart for
-each Dylan restart handler in effect.  Chapter 13: the debugger ought to
-offer the user every restart for which a restart handler is applicable.
-Choosing one signals an instance of the handler's restart class."
-  (labels ((bind (frames)
+each Dylan restart handler in effect that applies, and, when CONDITION's
+recovery protocol allows it, one that returns.  Chapter 13: the debugger
+ought to offer the user every restart for which a restart handler is
+applicable, and to return if the condition's recovery protocol allows it.
+A restart is made (with CONDITION as its condition:) to ask the handler's
+test whether it applies; one whose class cannot be made so, as one with a
+required init-keyword, is not offered.  Choosing one calls restart-query
+on it, then signals it.  A description is a string or a function of a
+stream."
+  (labels ((safely (thunk)
+             ;; THUNK's value, or NIL if it signals an error: the menu is
+             ;; made in the debugger, where an error would open another
+             (block safely
+               (handler-case
+                   (dylan%handler-bind
+                    <error>
+                    (make-dylan-callable
+                     (lambda (c next-handler)
+                       (declare (ignore c next-handler))
+                       (return-from safely nil)))
+                    dylan%false dylan%false
+                    thunk)
+                 (error () nil))))
+           (made (type)
+             ;; The restart, or NIL if it cannot be made
+             (safely (lambda ()
+                       (if condition
+                           (dylan-call dylan/make type :condition condition)
+                           (dylan-call dylan/make type)))))
+           (describe-to (stream description default)
+             (cond ((stringp description) (write-string description stream))
+                   ((and description (not (false? description))
+                         ;; Written whole, or not at all
+                         (let ((text (safely
+                                      (lambda ()
+                                        (let ((s (%make-dylan-stream :string)))
+                                          (dylan-call description s)
+                                          (dylan-stream-result s))))))
+                           (and text (plusp (length text))
+                                (progn (write-string text stream) t)))))
+                   (t (write-string default stream))))
+           (bind (frames)
              (if (null frames)
                  (funcall thunk)
                  (destructuring-bind (type function test description)
                      (car frames)
-                   (declare (ignore function test))
-                   (if (and (class? type) (subclass? type <restart>))
-                       (restart-bind
-                           ((dylan-restart
-                              (lambda ()
-                                (dylan-call dylan/signal
-                                            (dylan-call dylan/make type)))
-                              :report-function
-                              (lambda (stream)
-                                (if (stringp description)
-                                    (write-string description stream)
-                                    (format stream "Signal a Dylan ~a"
-                                            (dylan-symbol->string
-                                             (class.debug-name type)))))))
-                         (bind (cdr frames)))
-                       (bind (cdr frames)))))))
-    (bind (reverse *dylan-handler-frames*))))
+                   (declare (ignore function))
+                   (let ((restart (and (class? type) (subclass? type <restart>)
+                                       (made type))))
+                     (if (and restart
+                              (or (null test) (false? test)
+                                  (safely (lambda () (true? (dylan-call test restart))))))
+                         (restart-bind
+                             ((dylan-restart
+                                (lambda ()
+                                  (dylan-call dylan/restart-query restart)
+                                  (dylan-call dylan/signal restart))
+                                :report-function
+                                (lambda (stream)
+                                  (describe-to stream description
+                                               (format nil "Signal a Dylan ~a"
+                                                       (dylan-symbol->string
+                                                        (class.debug-name type)))))))
+                           (bind (cdr frames)))
+                         (bind (cdr frames))))))))
+    (cond
+      ;; Read from a file, the program has no debugger to choose from a
+      ;; menu: nothing is made for one (the restarts' initialize methods
+      ;; are the program's)
+      (*batch* (funcall thunk))
+      ((and condition
+            (safely (lambda () (true? (dylan-call dylan/return-allowed? condition)))))
+       (block returned
+         (restart-bind
+             ((dylan-return
+                (lambda ()
+                  (return-from returned
+                    (dylan-call dylan/return-query condition)))
+                :report-function
+                (lambda (stream)
+                  (describe-to stream
+                               (safely (lambda ()
+                                         (dylan-call dylan/return-description condition)))
+                               "Return from the signal"))))
+           (bind (reverse *dylan-handler-frames*)))))
+      (t (bind (reverse *dylan-handler-frames*))))))
 
 ;;; The control stack, which grows down (DYLAN%CHECK-STACK).
 
@@ -1401,7 +1462,8 @@ handlers."
 (defun implementation-specific/signal-unhandled-dylan-condition (dylan-condition)
   (call-with-dylan-restarts
    (lambda ()
-     (error 'unhandled-dylan-condition :dylan-condition dylan-condition))))
+     (error 'unhandled-dylan-condition :dylan-condition dylan-condition))
+   dylan-condition))
 
 (defun implementation-specific/warning (format-string format-args)
   "An unhandled warning's report, on the standard error, as a compiled

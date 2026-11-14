@@ -368,6 +368,28 @@ EOF2
     # Ctrl-D inside a form: the error at once, and the next line kept
     printf '(+ 1\n^D\n(+ 3 4)\n' | python3 -I tty.py "$dylan" > eof.out 2>&1
     check "bin/dylan at a terminal: Ctrl-D in a form reported at once" sh -c 'sed -n "/End of file inside a Dylan list/,\$p" eof.out | grep -q "^7"'
+    # The debugger offers the restarts that apply, described, made with
+    # restart-query, and a return the condition's protocol allows
+    cat > menu.in <<'EOF2'
+(handler-bind (<simple-restart> (method (c n) 1) test: (method (r) #f) description: "never") (error "e1"))
+0
+(handler-case (error "e2") ((<simple-restart> description: (method (s) (format s "by function"))) 'chosen))
+0
+(define-class <use-value> (<restart>) (v init-value: 0))
+(define-method restart-query ((r <use-value>)) (set! (v r) 42))
+(handler-case (error "e3") ((<use-value> condition: r description: "use a value") (v r)))
+0
+(define-class <rw> (<serious-condition>))
+(define-method return-allowed? ((c <rw>)) #t)
+(define-method return-query ((c <rw>)) 99)
+(list (signal (make <rw>)) 'back)
+1
+EOF2
+    python3 -I tty.py "$dylan" < menu.in > menu.out 2>&1
+    check "the debugger: a restart whose test fails not offered" sh -c 'grep -q "Error: e1" menu.out && ! grep -q "\] never" menu.out'
+    check "the debugger: a description function" sh -c 'grep -q "0: \[DYLAN-RESTART\] by function" menu.out && grep -q "^;Value: chosen" menu.out'
+    check "the debugger: restart-query" grep -q "^;Value: 42" menu.out
+    check "the debugger: return when the protocol allows it" sh -c 'grep -q "DYLAN-RETURN *\] Return from the signal" menu.out && grep -q "^;Value: (99 back)" menu.out'
 fi
 # A # that ends the standard input, after a form, is an end of file there
 # as at the end of a file

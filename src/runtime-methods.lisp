@@ -455,15 +455,35 @@ than the default accepts."
   (dylan%generic-fn 'positive? one-real (boolean-function #'plusp)))
 (defparameter dylan/negative?
   (dylan%generic-fn 'negative? one-real (boolean-function #'minusp)))
+;;; A program's own subclass of <number> has none of the library's
+;;; representations: the library's methods of these generic functions, on
+;;; the numbers it has, do not apply to its instances, as in a compiled
+;;; program, whose methods are on <real> and its subclasses.
+
+(defun no-number-method (name)
+  (dylan-call dylan/error (format nil "no applicable method for ~(~a~)" name)))
+
+(defun host-numbers-1 (name function)
+  "FUNCTION of one number, for the generic function NAME: no method
+applies to an instance of a program's subclass of <number>."
+  (lambda (x) (if (instance? x) (no-number-method name) (funcall function x))))
+
+(defun host-numbers-2 (name function)
+  "FUNCTION of two numbers, for the generic function NAME: no method
+applies to an instance of a program's subclass of <number>."
+  (lambda (x y)
+    (if (or (instance? x) (instance? y)) (no-number-method name) (funcall function x y))))
+
 (defparameter dylan/integral?
   ;; True of any number with an integer value, as Scheme's INTEGER?
   ;; (2.0 included).
   (dylan%generic-fn 'integral? one-number
+                    (host-numbers-1 'integral?
                     (lambda (number)
                       (bool (or (integerp number)
                                 (and (floatp number)
                                      (ignore-errors
-                                      (= number (ffloor number)))))))))
+                                      (= number (ffloor number))))))))))
 
 ;;; Chapter 14: abs, the trigonometric and hyperbolic functions, exp, log,
 ;;; expt and sqrt are as defined in Common Lisp -- so the square root of an
@@ -526,30 +546,34 @@ for a real argument at which BAD is true."
 irrational functions; an exact real stays exact."
   (abs (if (complexp number) (->inexact-argument number) number)))
 
-(defparameter dylan/abs (dylan%generic-fn 'abs one-number #'complex-magnitude))
-(defparameter dylan/sin (dylan%generic-fn 'sin one-number (inexact-function #'sin)))
-(defparameter dylan/cos (dylan%generic-fn 'cos one-number (inexact-function #'cos)))
-(defparameter dylan/tan (dylan%generic-fn 'tan one-number (inexact-function #'tan)))
+(defparameter dylan/abs (dylan%generic-fn 'abs one-number (host-numbers-1 'abs #'complex-magnitude)))
+(defparameter dylan/sin (dylan%generic-fn 'sin one-number (host-numbers-1 'sin (inexact-function #'sin))))
+(defparameter dylan/cos (dylan%generic-fn 'cos one-number (host-numbers-1 'cos (inexact-function #'cos))))
+(defparameter dylan/tan (dylan%generic-fn 'tan one-number (host-numbers-1 'tan (inexact-function #'tan))))
 (defparameter dylan/asin
   (dylan%generic-fn 'asin one-number
-                    (real-domain-function #'asin (lambda (x) (> (abs x) 1))
-                                          "asin: the result would be complex: ~s")))
+                    (host-numbers-1 'asin
+                                    (real-domain-function #'asin (lambda (x) (> (abs x) 1))
+                                                          "asin: the result would be complex: ~s"))))
 (defparameter dylan/acos
   (dylan%generic-fn 'acos one-number
-                    (real-domain-function #'acos (lambda (x) (> (abs x) 1))
-                                          "acos: the result would be complex: ~s")))
+                    (host-numbers-1 'acos
+                                    (real-domain-function #'acos (lambda (x) (> (abs x) 1))
+                                                          "acos: the result would be complex: ~s"))))
 (defparameter dylan/atan
-  (dylan%generic-fn 'atan one-number (inexact-function #'atan)))
+  (dylan%generic-fn 'atan one-number (host-numbers-1 'atan (inexact-function #'atan))))
 (defparameter dylan/atan2
-  (dylan%generic-fn 'atan2 two-numbers (inexact-function #'atan)))
-(defparameter dylan/exp (dylan%generic-fn 'exp one-number (inexact-function #'exp)))
+  (dylan%generic-fn 'atan2 two-numbers (host-numbers-2 'atan2 (inexact-function #'atan))))
+(defparameter dylan/exp (dylan%generic-fn 'exp one-number (host-numbers-1 'exp (inexact-function #'exp))))
 (defparameter dylan/log
   (dylan%generic-fn 'log one-number
-                    (real-domain-function #'log (lambda (x) (<= x 0))
-                                          "log: the argument must be positive: ~s")))
+                    (host-numbers-1 'log
+                                    (real-domain-function #'log (lambda (x) (<= x 0))
+                                                          "log: the argument must be positive: ~s"))))
 (defparameter dylan/expt
   ;; Exact for an exact base and integer power, as in Common Lisp.
   (dylan%generic-fn 'expt two-numbers
+                    (host-numbers-2 'expt
                     (lambda (base power)
                       (cond ((and (rationalp base) (integerp power))
                              (expt base power))
@@ -560,11 +584,12 @@ irrational functions; an exact real stays exact."
                              (domain-error "expt: the result would be complex: ~s"
                                            0 base))
                             (t (apply #'expt
-                                      (->inexact-arguments (list base power))))))))
+                                      (->inexact-arguments (list base power)))))))))
 (defparameter dylan/sqrt
   (dylan%generic-fn 'sqrt one-number
-                    (real-domain-function #'sqrt #'minusp
-                                          "sqrt: the result would be complex: ~s")))
+                    (host-numbers-1 'sqrt
+                                    (real-domain-function #'sqrt #'minusp
+                                                          "sqrt: the result would be complex: ~s"))))
 
 (defparameter dylan/modulo
   (dylan%generic-fn
@@ -688,7 +713,7 @@ slot-descriptors leaves them out, as a compiled program does.")
   (dylan%generic-fn 'slot-allocation any-slot #'slot.allocation))
 
 (defparameter dylan/binary<
-  (dylan%generic-fn 'binary< two-numbers (boolean-function #'<)))
+  (dylan%generic-fn 'binary< two-numbers (host-numbers-2 'binary< (boolean-function #'<))))
 
 ;;; Chapter 9: characters compare by their codes, so case is significant.
 (add-method dylan/binary<
@@ -702,7 +727,12 @@ slot-descriptors leaves them out, as a compiled program does.")
   (dylan%generic-fn 'binary= two-objects (boolean-function #'eq)))
 
 (add-method dylan/binary=
-            (dylan%function->method two-numbers (boolean-function #'=)))
+            (dylan%function->method
+             two-numbers
+             ;; A program's own subclass of <number> is none of the
+             ;; library's numbers: its instances are = as objects are.
+             (lambda (x y)
+               (bool (if (or (instance? x) (instance? y)) (eq x y) (= x y))))))
 
 (defparameter dylan/as-lowercase
   ;; Takes <character>s or <string>s.
@@ -786,10 +816,13 @@ linearly cancel, as those of (i i) do."
             (dylan%function->method
              one-number
              (lambda (number)
-               (if (complexp number)
-                   (combine-hash (real-hash (realpart number))
-                                 (real-hash (imagpart number)))
-                   (real-hash number)))))
+               (cond ((complexp number)
+                      (combine-hash (real-hash (realpart number))
+                                    (real-hash (imagpart number))))
+                     ;; A program's own subclass of <number>
+                     ((instance? number)
+                      (dylan-call dylan/error "not a number: ~s" number))
+                     (t (real-hash number))))))
 
 (add-method dylan/=hash
             (dylan%function->method
@@ -1086,6 +1119,15 @@ class has too: TO."
                      obj class)))))
 
 (labels ((no-change (class object) (declare (ignore class)) object)
+         (cannot-convert (class object)
+           (dylan-call dylan/error "as: ~s cannot be converted to ~s" object class))
+         (library-number (function)
+           ;; A program's own subclass of <number> is no complex or real
+           ;; number of the library's, as in a compiled program.
+           (lambda (class object)
+             (if (instance? object)
+                 (cannot-convert class object)
+                 (funcall function class object))))
          (unwrap (object)
            ;; An <extended-float> as the double-float it holds
            (if (extended-float? object) (extended-float-value object) object))
@@ -1144,7 +1186,7 @@ class has too: TO."
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <complex>))
                                   (object ,<number>)) nil nil nil)
-               #'no-change))
+               (library-number #'no-change)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <real>))
@@ -1155,42 +1197,42 @@ class has too: TO."
                (make-param-list
                 `((class ,(dylan%make-singleton <rectangular-complex>))
                   (object ,<number>)) nil nil nil)
-               #'no-change))
+               (library-number #'no-change)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <rational>))
                                   (object ,<number>)) nil nil nil)
-               #'->exact))
+               (library-number #'->exact)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <float>))
                                   (object ,<number>)) nil nil nil)
-               #'->inexact))
+               (library-number #'->inexact)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <integer>))
                                   (object ,<number>)) nil nil nil)
-               #'->integer))
+               (library-number #'->integer)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <ratio>))
                                   (object ,<number>)) nil nil nil)
-               #'->ratio))
+               (library-number #'->ratio)))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <single-float>))
                                   (object ,<number>)) nil nil nil)
-               (->float-of 'single-float)))
+               (library-number (->float-of 'single-float))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <double-float>))
                                   (object ,<number>)) nil nil nil)
-               (->float-of 'double-float)))
+               (library-number (->float-of 'double-float))))
   (add-method dylan/as
               (dylan%function->method
                (make-param-list `((class ,(dylan%make-singleton <extended-float>))
                                   (object ,<number>)) nil nil nil)
-               (->float-of 'extended)))
+               (library-number (->float-of 'extended))))
   ;; symbols, strings, and keywords
   (add-method dylan/as
               (dylan%function->method

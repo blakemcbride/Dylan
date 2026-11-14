@@ -19,7 +19,10 @@ module: dylan
 (define-generic-function binary= (object1 object2))
 
 (define-method binary= ((x <object>) (y <object>)) (id? x y))
-(define-method binary= ((x <number>) (y <number>)) (%number= x y))
+;;; A program's own subclass of <number> is none of the library's numbers:
+;;; its instances are = as objects are, by id?.
+(define-method binary= ((x <number>) (y <number>))
+  (if (and (%number? x) (%number? y)) (%number= x y) (id? x y)))
 
 (define-generic-function binary< (object1 object2))
 

@@ -3921,4 +3921,46 @@ print
 UNDEF
 \"ERR: the variable UNDEF@dylan-user has no value\"
 ")
+ ;; A program's own subclass of <number> is none of the library's
+ ;; numbers: the library's methods on them do not apply, and its
+ ;; instances are = by id? (Bugs05 B10).
+ (program-number-subclass
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <v2> (<number>))
+(define p (make <v2>))
+(define q (make <v2>))
+(do (method (f) (print (try f)))
+    (list (method () (as <float> p))
+          (method () (as <integer> p))
+          (method () (as <complex> p))
+          (method () (as <number> p))
+          (method () (integral? p))
+          (method () (zero? p))
+          (method () (abs p))
+          (method () (sqrt p))
+          (method () (sin p))
+          (method () (expt p 2))
+          (method () (max p 1))
+          (method () (< 1 p))
+          (method () (+ 1 p))
+          (method () (floor p))
+          (method () (bind ((tb (make <table>))) (set! (element tb p) 1) (element tb p)))))
+(print (list (= p p) (= p q) (= p 1) (member? p (list 1 p) test: =)))"
+  "\"ERR: as: {instance of <v2>} cannot be converted to {the class <float>}\"
+\"ERR: as: {instance of <v2>} cannot be converted to {the class <integer>}\"
+\"ERR: as: {instance of <v2>} cannot be converted to {the class <complex>}\"
+{instance of <v2>}
+\"ERR: no applicable method for integral?\"
+\"ERR: not a number: {instance of <v2>}\"
+\"ERR: no applicable method for abs\"
+\"ERR: no applicable method for sqrt\"
+\"ERR: no applicable method for sin\"
+\"ERR: no applicable method for expt\"
+\"ERR: no applicable method for binary<\"
+\"ERR: no applicable method for binary<\"
+\"ERR: not a number: {instance of <v2>}\"
+\"ERR: no applicable method for floor\"
+\"ERR: not a number: {instance of <v2>}\"
+(#t #f #f ({instance of <v2>}))
+")
 )

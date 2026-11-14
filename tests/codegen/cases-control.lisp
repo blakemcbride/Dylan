@@ -65,6 +65,28 @@
 inside
 "
   :error "called after its bind-exit returned")
+ ;; break establishes a <simple-restart>, in force while its condition's
+ ;; message is made too, which continues from it (chapter 13; Bugs06 C12).
+ (break-establishes-a-restart
+  "(define seen '())
+(define-class <probe> (<simple-warning>))
+(define-method print-object ((c <probe>) stream escape?)
+  (do-handlers (method (type test function description)
+                 (set! seen (cons (list type description) seen))))
+  (display \"probe\" stream: stream))
+(print (break (make <probe>)))
+(print (reverse seen))
+(define-class <probe2> (<simple-warning>))
+(define-method print-object ((c <probe2>) stream escape?)
+  (signal (make <simple-restart>)) (display \"probe2\" stream: stream))
+(print (handler-case (list 'break-returned (break (make <probe2>)))
+         ((<error> condition: e) (list 'error (format #f \"~a\" e)))))
+(print (break \"x ~a\" 1))"
+  "#f
+(({the class <simple-restart>} \"Continue from breakpoint.\"))
+(break-returned #f)
+#f
+")
  ;; So is the exit of a handler-case, cerror or break, a handler called
  ;; after the form that established it has returned (Bugs06 L1).
  (stale-handler-exits

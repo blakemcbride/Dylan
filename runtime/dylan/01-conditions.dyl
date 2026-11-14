@@ -121,12 +121,16 @@ module: dylan
     (handler-case (apply error condition arguments)
       ((<simple-restart> description: restart-description) #f))))
 
+;;; break establishes a <simple-restart> that continues from it (chapter
+;;; 13), in force while its condition is made and reported too.
 (define break
   (method (#rest arguments)
-    (%break (if (id? arguments '())
-                "break"
-                (%condition-text
-                 (%make-condition "break" <simple-warning> (car arguments) (cdr arguments)))))))
+    (handler-case
+        (%break (if (id? arguments '())
+                    "break"
+                    (%condition-text
+                     (%make-condition "break" <simple-warning> (car arguments) (cdr arguments)))))
+      ((<simple-restart> description: "Continue from breakpoint.") #f))))
 
 (define check-type
   (method (value type)

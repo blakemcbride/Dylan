@@ -1213,4 +1213,26 @@ is-g
   "30000
 \"an exit procedure was called after its bind-exit returned\"
 ")
+ ;; <simple-warning> and <simple-error> define their slots the same way,
+ ;; so a class may have both (chapter 6); and a subclass may redefine one
+ ;; without a type:, since they have none.
+ (simple-warning-and-simple-error
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <sw> (<simple-warning> <simple-error>))
+(define c (make <sw> format-string: \"both ~a\" format-arguments: '(1)))
+(print (list (condition-format-string c) (condition-format-arguments c)))
+(print (try (method () (signal c))))
+(define-class <e2> (<simple-error>)
+  (getter: condition-format-string setter: #f init-keyword: format-string: init-value: \"dflt\"))
+(print (condition-format-string (make <e2>)))
+(define-class <t2> (<type-error>)
+  (getter: type-error-value setter: #f init-keyword: value: init-value: 3))
+(print (type-error-value (make <t2>)))
+(print (condition-format-string (make <simple-error>)))"
+  "(\"both ~a\" (1))
+\"ERR: both 1\"
+\"dflt\"
+3
+\"\"
+")
 )

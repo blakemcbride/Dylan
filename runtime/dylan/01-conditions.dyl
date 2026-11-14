@@ -17,9 +17,14 @@ module: dylan
 (define-class <serious-condition> (<condition>))
 (define-class <error> (<serious-condition>))
 
+;;; The format string of a <simple-error> or <simple-warning> made without
+;;; one: one object, so that the two classes define the slot the same way,
+;;; and a class may inherit from both (chapter 6).
+(define %no-format-string "")
+
 (define-class <simple-error> (<error>)
   (getter: condition-format-string setter: #f
-   init-keyword: format-string: init-value: "")
+   init-keyword: format-string: init-value: %no-format-string)
   (getter: condition-format-arguments setter: #f
    init-keyword: format-arguments: init-value: '()))
 
@@ -31,7 +36,7 @@ module: dylan
 
 (define-class <simple-warning> (<warning>)
   (getter: condition-format-string setter: #f
-   init-keyword: format-string: init-value: "")
+   init-keyword: format-string: init-value: %no-format-string)
   (getter: condition-format-arguments setter: #f
    init-keyword: format-arguments: init-value: '()))
 

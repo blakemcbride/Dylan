@@ -64,13 +64,15 @@
    nil))
 
 ;;; A format string not given is empty, as in the compiled library, so
-;;; that such a condition still has a message.
+;;; that such a condition still has a message.  No slot of these classes
+;;; is given a type: (the final NIL), so a subclass that redefines one
+;;; need not give one either (chapter 6).
 (dylan%add-slot <simple-error>
                 nil 'instance nil dylan/condition-format-string
-                'condition-format-string "" t nil :format-string nil)
+                'condition-format-string "" t nil :format-string nil nil)
 (dylan%add-slot <simple-error>
                 nil 'instance nil dylan/condition-format-arguments
-                'condition-format-arguments '() t nil :format-arguments nil)
+                'condition-format-arguments '() t nil :format-arguments nil nil)
 
 (defparameter dylan/type-error-value
   (dylan%generic-fn
@@ -86,10 +88,10 @@
 
 (dylan%add-slot <type-error>
                 nil 'instance nil dylan/type-error-value 'type-error-value
-                nil nil nil :value nil)
+                nil nil nil :value nil nil)
 (dylan%add-slot <type-error>
                 nil 'instance nil dylan/type-error-expected-type
-                'type-error-expected-type nil nil nil :type nil)
+                'type-error-expected-type nil nil nil :type nil nil)
 
 ;;; Chapter 13: the initialization argument condition: is accepted, and
 ;;; ignored, by <restart>.
@@ -101,14 +103,14 @@
 (setf (gethash dylan/restart-condition *private-slot-getters*) t)
 (dylan%add-slot <restart>
                 nil 'instance nil dylan/restart-condition
-                'restart-condition dylan%false t nil :condition nil)
+                'restart-condition dylan%false t nil :condition nil nil)
 
 (dylan%add-slot <simple-warning>
                 nil 'instance nil dylan/condition-format-string
-                'condition-format-string "" t nil :format-string nil)
+                'condition-format-string "" t nil :format-string nil nil)
 (dylan%add-slot <simple-warning>
                 nil 'instance nil dylan/condition-format-arguments
-                'condition-format-arguments '() t nil :format-arguments nil)
+                'condition-format-arguments '() t nil :format-arguments nil nil)
 
 ;;; Basic Operators (pages 138 and 139)
 

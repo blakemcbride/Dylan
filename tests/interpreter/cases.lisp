@@ -89,4 +89,18 @@
 \"ERR: (setter direct-superclasses) -- class is read-only {the class <e>}\"
 1
 ")
+ ;; add-slot's debug-name: names the descriptor it makes (chapter 11),
+ ;; which otherwise prints with its getter's name, or #f.  (The compiler
+ ;; to C has no add-slot.)
+ (add-slot-debug-name
+  "(define h (make <generic-function> required: 1 debug-name: 'hh))
+(define-class <q4> (<object>))
+(print (add-slot <q4> getter: h debug-name: 'dbg))
+(print (add-slot <q4> getter: (make <generic-function> required: 1)))
+(define-class <q8> (<q4>))
+(print (slot-descriptors <q8>))"
+  "{slot dbg}
+{slot #f}
+#({slot dbg} {slot #f})
+")
 )

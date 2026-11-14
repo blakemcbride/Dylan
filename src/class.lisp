@@ -185,7 +185,8 @@ in both -- the options' values id? -- or CLASS must define it."
                          (slot.allocation slot) inherited? data-location)))
     (setf (slot.filtered copy) (slot.filtered slot)
           (slot.original copy) (slot-original slot)
-          (slot.type-given? copy) (slot.type-given? slot))
+          (slot.type-given? copy) (slot.type-given? slot)
+          (slot.shown-name copy) (slot.shown-name slot))
     copy))
 
 ;;; Filtered slots (chapter 6): a virtual slot that overrides an inherited
@@ -519,14 +520,20 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
                                             #'dylan%false-fn))
          (allocation (dylan%find-keyword keyword-list :allocation
                                           (lambda () 'instance)))
-         (debug-name (dylan%find-keyword keyword-list :debug-name
-                                          (lambda () '*the-unnamed-slot*)))
+         (shown-name (false->nil (dylan%find-keyword keyword-list :debug-name
+                                                     (lambda () nil))))
+         (debug-name (or shown-name '*the-unnamed-slot*))
          (required-init-keyword (dylan%find-keyword
                                  keyword-list :required-init-keyword
-                                 (lambda () nil))))
-    (dylan%add-slot owner type allocation setter getter debug-name init-value
-                     have-init-value? init-function init-keyword
-                     required-init-keyword type-given?)))
+                                 (lambda () nil)))
+         (slot (dylan%add-slot owner type allocation setter getter debug-name
+                               init-value have-init-value? init-function
+                               init-keyword required-init-keyword type-given?)))
+    ;; Chapter 11: the debug name can be read back from the descriptor,
+    ;; which prints with it
+    (when (slot? slot)
+      (setf (slot.shown-name slot) shown-name))
+    slot))
 
 (defun same-slot-getter-in-slot-vector->slot (getter slots)
   (find-if (lambda (slot) (and slot (id? (slot.getter slot) getter))) slots))

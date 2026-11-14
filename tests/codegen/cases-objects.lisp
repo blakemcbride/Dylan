@@ -3836,6 +3836,21 @@ other-error
   "600000
 ({the class <v>} 1)
 ")
+ ;; A slot descriptor prints with its getter's name, #f for an anonymous
+ ;; getter.
+ (slot-descriptor-names
+  "(define g (make <generic-function> required: 1))
+(define-class <q> (<object>) (getter: g init-value: 1))
+(print (first (slot-descriptors <q>)))
+(define k (make <generic-function> required: 1 debug-name: 'kay))
+(define-class <q2> (<object>) (getter: k init-value: 1))
+(print (first (slot-descriptors <q2>)))
+(define-class <q3> (<object>) (getter: zz init-value: 1))
+(print (first (slot-descriptors <q3>)))"
+  "{slot #f}
+{slot kay}
+{slot zz}
+")
  ;; A variable may hold any symbol: none is taken to mean it has no value.
  (unassigned-marker-symbol
   "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))

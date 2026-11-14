@@ -575,15 +575,18 @@ would exhaust SBCL's binding stack."
             (write-char #\} stream))
            (t (format stream "{instance of ~a}" (dylan-class-name class))))))
       ((slot? object)
+       ;; As the compiled library prints one: by its getter's name, #f for
+       ;; an anonymous getter -- or by the debug-name: add-slot was given
        (format stream "{slot ~a}"
-               (let ((getter (slot.getter object))
-                     (n (slot.debug-name object)))
-                 (cond ((and (functionp getter)
-                             (dylan%generic-function? getter))
-                        (dylan-function-name
-                         (generic-function.name getter)))
-                       ((symbolp n) (dylan-function-name n))
-                       (t n)))))
+               (let* ((getter (slot.getter object))
+                      (shown (slot.shown-name object))
+                      (name (and (functionp getter)
+                                 (dylan%generic-function? getter)
+                                 (generic-function.name getter))))
+                 (cond ((and shown (symbolp shown)) (dylan-function-name shown))
+                       (shown (format nil "~a" shown))
+                       (name (dylan-function-name name))
+                       (t "#f")))))
       ((singleton? object)
        (out "{singleton ")
        (rec (singleton.object object) t)

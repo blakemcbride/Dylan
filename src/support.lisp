@@ -118,8 +118,10 @@ passed."
   (original nil)                        ; A copy: the slot it copies
   (type-given? t)                       ; Whether its definition gave a
                                         ; type: (chapter 6, redefining)
-  (owner nil))                          ; The class or singleton the slot
+  (owner nil)                           ; The class or singleton the slot
                                         ; was added to
+  (shown-name nil))                     ; add-slot's debug-name:, how the
+                                        ; descriptor prints
 
 ;;; Each class keeps its own copy of an inherited slot, saying where that
 ;;; class stores it.  A program sees one descriptor for the slot in every

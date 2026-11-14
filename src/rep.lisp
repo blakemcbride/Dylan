@@ -160,6 +160,11 @@ are written, then throws to LIMITED-OUTPUT."))
   (write-string " ..."))
 
 (defun print-rep-result (result multiple-values)
+  ;; One value, returned through values, prints as any one value: only
+  ;; several are numbered.
+  (when (and (eq result multiple-values)
+             (= (length (aref multiple-values 0)) 1))
+    (setf result (first (aref multiple-values 0))))
   (if (eq result multiple-values)
       (progn
         (loop for value in (aref multiple-values 0)

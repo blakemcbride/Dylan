@@ -3836,4 +3836,19 @@ other-error
   "600000
 ({the class <v>} 1)
 ")
+ ;; A variable may hold any symbol: none is taken to mean it has no value.
+ (unassigned-marker-symbol
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define x '<<the-unassigned-value>>)
+(print (try (method () x)))
+(define y 1)
+(set! y (as <symbol> \"<<the-unassigned-value>>\"))
+(print (try (method () y)))
+(define g (as <symbol> \"<<THE-UNASSIGNED-VALUE>>\"))
+(define-method g (a) a)
+(print 'after)"
+  "<<the-unassigned-value>>
+<<the-unassigned-value>>
+"
+  :error "g is defined both as a variable and as a generic function")
 )

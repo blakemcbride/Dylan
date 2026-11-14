@@ -95,3 +95,8 @@
 ;;; is being loaded, because nearly every file refers to variables and
 ;;; functions that later files define.
 (declaim (optimize (speed 1) (safety 3) (debug 2)))
+
+;;; The package of the symbol a variable holds before it has a value
+;;; (THE-UNASSIGNED-VALUE, support.lisp): no Dylan symbol is in it.
+(defpackage #:dylan-unassigned
+  (:use))

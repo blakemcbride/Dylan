@@ -50,7 +50,10 @@
 
 (in-package #:dylan)
 
-(defvar the-unassigned-value '<<the-unassigned-value>>)
+(defvar the-unassigned-value 'dylan-unassigned::<<the-unassigned-value>>
+  "What a variable holds before it is given a value: a symbol of a package
+of its own, which neither the reader nor as <symbol> can make, and which
+reads back as itself from a file of compiled Dylan.")
 (defvar *the-uninitialized-slot-value* (list '<<uninitialized>>))
 
 (defvar next-method/not-generic dylan%false

@@ -3797,4 +3797,16 @@ last
 none
 -3
 ")
+ ;; An instance of a program's subclass of <character> is a table key
+ ;; as any object (Bugs05 C21).
+ (character-subclass-hash
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <mychar> (<character>))
+(define c (make <mychar>))
+(define d (make <mychar>))
+(print (try (method () (bind ((tb (make <table>))) (set! (element tb c) 1) (set! (element tb d) 2) (set! (element tb #\\a) 3) (list (element tb c) (element tb d) (element tb #\\a) (size tb))))))
+(print (try (method () (list (= c c) (= c d) (= c #\\a)))))"
+  "(1 2 3 3)
+(#t #f #f)
+")
 )

@@ -291,10 +291,29 @@ path."
                                  (lambda ,lambda-list ,expansion)))))
        ',operator)))
 
+(defparameter +many-arguments+ 32
+  "Past this many arguments, a call collects each argument as it is
+evaluated, so that the host compiler does not keep them all live at once,
+and reads a module variable among them with an out-of-line check: the
+host compiler's time and memory grow with the square of their number.")
+
 (defmacro dylan%call (multiple-values? operator &rest operands)
   ;; Chapter 3 lets the function be evaluated before, during or after the
   ;; arguments; it is evaluated first, as in a compiled program, and then
   ;; the arguments, left to right.
+  (when (> (length operands) +many-arguments+)
+    (let ((fn (gensym "FN"))
+          (args (gensym "ARGS")))
+      (return-from dylan%call
+        `(let ((,fn ,operator)
+               (,args '()))
+           ,@(mapcar (lambda (operand)
+                       `(push (locally (declare (notinline dylan%free-variable-ref))
+                                ,operand)
+                              ,args))
+                     operands)
+           (apply (dylan%function ,fn) ,multiple-values? next-method/not-generic
+                  (nreverse ,args))))))
   (let* ((fn (gensym "FN"))
          (vars (loop repeat (length operands) collect (gensym "ARG")))
          (nargs (length operands))

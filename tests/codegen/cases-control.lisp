@@ -1297,4 +1297,43 @@ plain 1
   "done
 \"ERR: a next-handler was called outside its handler\"
 ")
+ ;; A call with more arguments than the host compiler takes at once in L
+ ;; evaluates the function first and then each argument left to right, as
+ ;; any call does, and passes them all (Bugs05 L8).
+ (call-with-many-arguments
+  "(define x 1)
+(define trace '())
+(define-method note (n) (set! trace (cons n trace)) n)
+(define-method count-them (#rest r) (size r))
+(print (count-them x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x))
+(print (reduce1 + (list (note 1) (note 2) (note 3) (note 4) (note 5) (note 6) (note 7) (note 8) (note 9) (note 10) (note 11) (note 12) (note 13) (note 14) (note 15) (note 16) (note 17) (note 18) (note 19) (note 20) (note 21) (note 22) (note 23) (note 24) (note 25) (note 26) (note 27) (note 28) (note 29) (note 30) (note 31) (note 32) (note 33) (note 34) (note 35) (note 36) (note 37) (note 38) (note 39) (note 40))))
+(print (reverse trace))
+(set! trace '())
+(print (size ((begin (note 'f) list) (note 1) (note 2) (note 3) (note 4) (note 5) (note 6) (note 7) (note 8) (note 9) (note 10) (note 11) (note 12) (note 13) (note 14) (note 15) (note 16) (note 17) (note 18) (note 19) (note 20) (note 21) (note 22) (note 23) (note 24) (note 25) (note 26) (note 27) (note 28) (note 29) (note 30) (note 31) (note 32) (note 33))))
+(print (first (reverse trace)))
+(define-method many () (values 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40))
+(bind ((#rest r (many))) (print (size r)))
+(print (bind ((y 2)) (reduce1 + (list y y y y y y y y y y y y y y y y y y y y y y y y y y y y y y y y y y y))))"
+  "40
+820
+(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40)
+33
+f
+40
+70
+")
+ ;; Calls nested 500 deep, with a variable of the method and an exit from
+ ;; the innermost (Bugs05 L8: L compiles each 50 levels of a large form
+ ;; as a function of its own).
+ (deeply-nested-calls
+  "(define-method deep (x)
+  (bind-exit (out)
+    (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (+ x (if (> x 5) (out 'big) 0)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+(print (deep 1))
+(print (deep 9))
+(print (deep 1.5))"
+  "500
+big
+750.0
+")
 )

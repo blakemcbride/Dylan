@@ -1848,7 +1848,70 @@ the warning is not the program's output."
     (handler-bind ((style-warning #'muffle-warning)
                    #+sbcl (sb-int:constant-modified #'muffle-warning))
       (dolist (form forms result)
-        (setf result (eval form))))))
+        (setf result (eval (if (large-form-p form)
+                               `(locally (declare (optimize (compilation-speed 3) (speed 0)
+                                                            (debug 0) (space 1)
+                                                            #+sbcl (sb-c::store-xref-data 0)
+                                                            #+sbcl (sb-c:store-source-form 0)))
+                                  ,(split-deep-calls form))
+                               form)))))))
+
+(defparameter +large-form+ 2000
+  "A compiled top-level form of more conses than this is compiled by the
+host for its compilation's speed, which grows faster than the form.")
+
+(defparameter +split-depth+ 50
+  "In a large form, each call this many calls deep in the arguments of
+others is compiled by the host as a function of its own.")
+
+(declaim (notinline compiled-apart))
+(defun compiled-apart (function)
+  "FUNCTION, which the host compiler cannot see is called only here, and so
+compiles as a function of its own."
+  function)
+
+(defun split-deep-calls (form)
+  "FORM, with each argument of a call nested +SPLIT-DEPTH+ calls deep
+made a function of its own, called at once.  The host compiler's time and
+memory grow with the square of the number of values held while an
+argument is evaluated -- the function and the arguments before it, of
+every call around it -- and those of the calls outside a function are not
+held within it."
+  (labels ((walk (x depth)
+             (cond ((atom x) x)
+                   ((eq (car x) 'quote) x)
+                   ((eq (car x) 'dylan%call)
+                    (list* (first x) (second x)
+                           (mapcar (lambda (operand)
+                                     (let ((new (walk operand (1+ depth))))
+                                       (if (and (consp new)
+                                                (zerop (mod (1+ depth) +split-depth+)))
+                                           `(funcall (the function
+                                                          (compiled-apart (lambda () ,new))))
+                                           new)))
+                                   (cddr x))))
+                   (t (walk-list x depth))))
+           (walk-list (x depth)
+             (let* ((head (list nil))
+                    (tail head))
+               (loop while (consp x)
+                     do (setf tail (setf (cdr tail) (list (walk (car x) depth))))
+                        (setf x (cdr x)))
+               (setf (cdr tail) x)
+               (cdr head))))
+    (walk form 0)))
+
+(defun large-form-p (form)
+  "Has FORM more than +LARGE-FORM+ conses?"
+  (let ((count 0))
+    (labels ((walk (x)
+               (loop while (consp x)
+                     do (when (> (incf count) +large-form+)
+                          (return-from large-form-p t))
+                        (walk (car x))
+                        (setf x (cdr x)))))
+      (walk form)
+      nil)))
 
 (defun lisp-pp (object &optional (stream *standard-output*))
   "Pretty print OBJECT as Common Lisp, for the compiler's file output.

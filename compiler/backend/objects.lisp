@@ -1082,7 +1082,12 @@ one that takes slots, not read-only or sealed (chapter 11)."
                                               (gmethod-made m)))
                                         methods)))
                   (if foreign
-                      (emit-foreign-attachment foreign var #'own)
+                      (progn
+                        (emit-foreign-attachment foreign var #'own)
+                        ;; whose slot descriptor names it (chapter 11)
+                        (emit "{ D v = ~a; if (v != DY_UNBOUND && dy_kind_p(v, DY_KIND_GENERIC)) ~a.~a = v; }"
+                              (global-c-name var) (sdef-descriptor-c sd)
+                              (if (eq var (sdef-getter sd)) "getter" "setter")))
                       (own)))))))))
     ;; The setter of a slot this define-slot replaces with one that has no
     ;; setter method in its generic function is detached
@@ -2569,8 +2574,10 @@ objects, makers."
         do (dolist (sd (gclass-sdefs g))
              (let ((getter (gethash (sdef-getter sd) *gfuns*)))
                (when getter
-                 (emit-object "    if (a1 == ~a && ~@[~a && ~]dy_wrapper_subtype(w, &~a)) {"
-                              (address (gfun-c-name getter))
+                 ;; The getter the descriptor names, which its
+                 ;; define-class may have changed (GEN-CLASS-DEFINITION-REST)
+                 (emit-object "    if (a1 == ~a.getter && ~@[~a && ~]dy_wrapper_subtype(w, &~a)) {"
+                              (sdef-descriptor-c sd)
                               (and (sdef-node sd) (sdef-c sd "ran"))
                               (wrapper-c-name (sdef-class sd)))
                  (ecase (sdef-allocation sd)
@@ -2664,8 +2671,8 @@ objects, makers."
                                         sdefs)
                              #'>
                              :key (lambda (sd) (length (class-info-cpl (sdef-class sd))))))
-      (emit-object "    if (a1 == ~a && dy_wrapper_subtype(w, &~a)) return ~a;"
-                   (address (gfun-c-name (gethash (sdef-getter sd) *gfuns*)))
+      (emit-object "    if (a1 == ~a.getter && dy_wrapper_subtype(w, &~a)) return ~a;"
+                   (sdef-descriptor-c sd)
                    (wrapper-c-name (sdef-class sd)) (address (sdef-descriptor-c sd))))
     (emit-object "    return DY_FALSE;~%}")
     (declare-object "DyFunction dy_prim_slot_descriptor;")

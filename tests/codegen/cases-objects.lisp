@@ -3634,6 +3634,34 @@ other-error
 (f s seven a 0)
 (five 60 19990)
 ")
+ ;; A slot's descriptor names the generic functions its variables hold when
+ ;; its define-class runs: one make made, or another a define gives it
+ ;; (Bugs06 C10); slot-descriptor and slot-initialized? take them.
+ (slot-getter-a-made-or-aliased-generic
+  "(define g (make <generic-function> required: 1))
+(define gs (make <generic-function> required: 2))
+(define-class <q> (<object>) (getter: g setter: gs init-value: 1))
+(define sd (first (slot-descriptors <q>)))
+(define q (make <q>))
+(print (list (id? (slot-getter sd) g) (id? (slot-setter sd) gs)))
+(print (list (id? (slot-descriptor q g) sd) (slot-initialized? q g)))
+(set! (slot-value q sd) 5)
+(print (list (g q) (slot-value q sd)))
+(define-generic-function label (x))
+(define tag label)
+(define-class <r> (<object>) (getter: tag init-value: 2))
+(define r (make <r>))
+(define sr (first (slot-descriptors <r>)))
+(print (list (id? (slot-getter sr) label) (id? (slot-descriptor r label) sr)
+             (slot-initialized? r tag) (tag r) (label r)))
+(define-class <q2> (<q>))
+(print (list (id? (slot-descriptor (make <q2>) g) sd) (size (slot-descriptors <q2>))))"
+  "(#t #t)
+(#t #t)
+(5 5)
+(#t #t #t 2 2)
+(#t 1)
+")
  ;; A bad class or slot definition is reported in the same words by both
  ;; implementations.
  (define-class-not-a-variable

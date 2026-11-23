@@ -1258,7 +1258,7 @@ superclasses."
     (rebuild-with-descendants! old own)
     old))
 
-(defvar *library-classes* (make-hash-table :test 'eq)
+(defvar *library-class-getters* (make-hash-table :test 'eq)
   "Each class of the library, with the getters of the slots it has there.
 Their superclasses and those slots are the library's own, which its
 functions rely on -- its errors are made as <simple-error>s -- so a
@@ -1267,14 +1267,14 @@ program cannot change them, as a compiled program cannot change any.")
 (defun record-library-classes ()
   "Record the classes the library has made, once it is loaded."
   (dolist (class (cons <object> (class-descendants <object>)))
-    (setf (gethash class *library-classes*)
+    (setf (gethash class *library-class-getters*)
           (map 'list #'slot.getter (class.slots class)))))
 
 (defun library-class-p (class)
-  (nth-value 1 (gethash class *library-classes*)))
+  (nth-value 1 (gethash class *library-class-getters*)))
 
 (defun library-slot-p (class slot)
-  (member (slot.getter slot) (gethash class *library-classes*)))
+  (member (slot.getter slot) (gethash class *library-class-getters*)))
 
 (defun dylan%set-direct-superclasses (class new-superclasses)
   (let ((supers (dylan-call dylan/as <list> new-superclasses)))

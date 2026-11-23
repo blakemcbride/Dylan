@@ -2382,6 +2382,24 @@ error
 (#\\z #\\z #\\c \"abc!\" (#\\a #\\b #\\c))
 (2 20 (0 10 20) {range 0 by 1 size 2})
 ")
+ ;; A program's add! on <stretchy-vector> replaces the library's; one that
+ ;; passes the call on reaches add! on <sequence>, which adds to a copy.
+ ;; The library's string streams, and its add, remove! and
+ ;; remove-duplicates! on its own stretchy vectors, add as the library does
+ ;; (Bugs07 C1).
+ (library-own-stretchy-add
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method add! ((v <stretchy-vector>) e) (next-method))
+(print (add! (make <stretchy-vector>) 1))
+(print (format #f \"~a\" 'abc))
+(print (try (method () (error \"x ~a\" 1))))
+(define s (as <stretchy-vector> '(1 2 3)))
+(print (list (add s 4) s (remove! s 2) (remove-duplicates! (as <stretchy-vector> '(1 1 2)))))"
+  "{<stretchy-vector> 1}
+\"abc\"
+\"ERR: x 1\"
+({<stretchy-vector> 1 2 3 4} {<stretchy-vector> 1 3} {<stretchy-vector> 1 3} {<stretchy-vector> 1 2})
+")
  ;; The same for lists, whose classes have no slots (Bugs07 L1).
  (library-own-size-of-lists
   "(define-method size ((x <list>)) 1)

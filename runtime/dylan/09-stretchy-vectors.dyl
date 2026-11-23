@@ -105,25 +105,37 @@ module: dylan
 (define-method previous-state ((v <stretchy-vector>) (i <integer>))
   (if (zero? i) #f (binary- i 1)))
 
-;;; add! adds at the end (chapter 12).
-(define-method add! ((v <stretchy-vector>) new-element)
-  (%stretchy-ensure v (binary+ (%count v) 1))
-  (%vector-element-setter (%data v) (%count v) new-element)
-  (set! (%count v) (binary+ (%count v) 1))
-  v)
+;;; add! adds at the end (chapter 12).  The library adds to a stretchy
+;;; vector of its own by %stretchy-add!, not by the generic function, which
+;;; a program's method may replace (Bugs02 B10): string streams collect
+;;; their characters so.
+(define %stretchy-add!
+  (method (v new-element)
+    (%stretchy-ensure v (binary+ (%count v) 1))
+    (%vector-element-setter (%data v) (%count v) new-element)
+    (set! (%count v) (binary+ (%count v) 1))
+    v))
 
+(define-method add! ((v <stretchy-vector>) new-element)
+  (%stretchy-add! v new-element))
+
+;;; A copy of the library's own class is added to as the library does;
+;;; one of a program's class, by the generic function.
 (define-method add ((v <stretchy-vector>) new-element)
-  (add! (copy-sequence v) new-element))
+  (bind ((copy (copy-sequence v)))
+    (if (id? (%object-class copy) <stretchy-vector>)
+        (%stretchy-add! copy new-element)
+        (add! copy new-element))))
 
 (define-method remove! ((v <stretchy-vector>) value #key (test id?) count)
   (bind ((kept (%remove-elements (%elements v) value test count)))
     (set! (%count v) 0)
-    (for-each ((e kept)) () (add! v e))
+    (for-each ((e kept)) () (%stretchy-add! v e))
     v))
 
 ;;; In place too, as in the Common Lisp implementation
 (define-method remove-duplicates! ((v <stretchy-vector>) #key (test id?))
   (bind ((kept (remove-duplicates (%elements v) test: test)))
     (set! (%count v) 0)
-    (for-each ((e kept)) () (add! v e))
+    (for-each ((e kept)) () (%stretchy-add! v e))
     v))

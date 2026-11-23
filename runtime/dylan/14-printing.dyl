@@ -45,9 +45,9 @@ module: dylan
 ;;; Write a string or a character
 (define-generic-function %put (stream x))
 (define-method %put ((s <%fd-stream>) x) (%write-fd (%fd s) x))
-(define-method %put ((s <string-stream>) (c <character>)) (add! (%chars s) c))
+(define-method %put ((s <string-stream>) (c <character>)) (%stretchy-add! (%chars s) c))
 (define-method %put ((s <string-stream>) (x <string>))
-  (for-each ((c x)) () (add! (%chars s) c)))
+  (for-each ((c x)) () (%stretchy-add! (%chars s) c)))
 
 (define stream-contents
   (method (s)

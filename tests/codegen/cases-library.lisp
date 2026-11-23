@@ -3540,6 +3540,26 @@ v3!
 #()
 #(10 20 30)
 ")
+ ;; map-into stores each value before calling the procedure for the next
+ ;; (chapter 12, map-into1), so the procedure sees the elements of the
+ ;; target already replaced, and an exit leaves those it replaced
+ ;; (Bugs07 B3).
+ (map-into-stores-as-it-goes
+  "(define v (vector 1 2 3))
+(print (map-into v (method (x) (+ x (element v 0))) v))
+(define l (list 1 2 3))
+(print (map-into l (method (x) (+ x (first l))) l))
+(define w (vector 0 0 0))
+(print (map-into w (method (x) (+ x (reduce + 0 w))) '(1 1 1)))
+(define u (vector 1 2 3))
+(print (bind-exit (k) (map-into u (method (x) (if (= x 2) (k 'exited) (* x 10))) u)))
+(print u)"
+  "#(2 4 5)
+(2 4 5)
+#(1 2 4)
+exited
+#(10 2 3)
+")
  ;; subsequence-position reads its pattern as far as the sequence goes:
  ;; an unbounded pattern is not in a bounded sequence.
  (subsequence-position-unbounded-pattern

@@ -276,23 +276,17 @@ module: dylan
   (bind ((collections (cons c more)))
     (if (and (%instance? target <sequence>)
              (%list-every? (method (c) (%instance? c <sequence>)) collections))
-        ;; The values first: TARGET may be one of the collections.  As
-        ;; many as TARGET has elements, at most: the sources may be
-        ;; unbounded.
-        (bind ((results '())
-               (room (size target)))
-          (unless (id? room 0)
-            (bind-exit (done)
-              (%each-group collections
-                           (method (arguments)
-                             (set! results (cons (apply f arguments) results))
-                             (when room
-                               (set! room (- room 1))
-                               (when (id? room 0) (done #f)))))))
-          (for ((state (initial-state target) (next-state target state))
-                (l (%list-reverse results) (cdr l)))
-               ((or (not state) (id? l '())) target)
-            (set! (current-element target state) (car l))))
+        ;; Chapter 12 (map-into1): each value is stored before the
+        ;; procedure is called for the next, so the procedure sees the
+        ;; elements already replaced when TARGET is also a source.  The
+        ;; walk stops when TARGET or any source runs out: the sources may
+        ;; be unbounded.
+        (for ((state (initial-state target) (next-state target state))
+              (states (%list-map initial-state collections)
+                      (%list-map2 next-state collections states)))
+             ((or (not state) (not (%list-every? (method (s) s) states))) target)
+          (set! (current-element target state)
+                (apply f (%list-map2 current-element collections states))))
         (bind ((keys (intersection (key-sequence target) (%common-keys collections) test: =)))
           (for-each ((key keys))
                     ()

@@ -53,11 +53,15 @@ module: dylan
   (method (s)
     (unless (id? (%object-class s) <string-stream>)
       (error "stream-contents: not a string stream: ~s" s))
-    (bind ((chars (%chars s)))
-      (concatenate-as (if (every? (method (c) (binary< (as <integer> c) 256)) chars)
-                          <byte-string>
-                          <unicode-string>)
-                      chars))))
+    ;; Its characters are in a stretchy vector of the library's own,
+    ;; read as the library reads it, not by the generic functions
+    (bind ((chars (%chars s))
+           (count (%count chars))
+           (narrow? (for ((i 0 (binary+ i 1)))
+                         ((or (binary= i count)
+                              (%wide-character? (%vector-element (%data chars) i)))
+                          (binary= i count)))))
+      (concatenate-as (if narrow? <byte-string> <unicode-string>) chars))))
 
 (define %stream
   (method (stream)

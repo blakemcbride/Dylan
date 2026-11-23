@@ -127,12 +127,12 @@ module: dylan
 (define %vectors-for?
   (method (class sequences)
     (cond ((id? class <byte-string>)
-           (every? (method (s) (%instance? s <byte-string>)) sequences))
+           (%list-every? (method (s) (%instance? s <byte-string>)) sequences))
           ((id? class <simple-object-vector>)
-           (every? (method (s) (or (%instance? s <simple-object-vector>)
-                                   (%instance? s <byte-string>)
-                                   (%instance? s <unicode-string>)))
-                   sequences))
+           (%list-every? (method (s) (or (%instance? s <simple-object-vector>)
+                                         (%instance? s <byte-string>)
+                                         (%instance? s <unicode-string>)))
+                         sequences))
           (else: #f))))
 
 (define %concatenate-vectors
@@ -149,14 +149,16 @@ module: dylan
         (%replace-vector! result i (car l) 0 (%vector-size (car l)))))))
 
 ;;; What NAME concatenates are sequences, and an unbounded range has no
-;;; end to stop at
+;;; end to stop at.  SEQUENCES, the library's own list, is walked as the
+;;; library walks lists, not by every?, which a program's method may
+;;; replace (Bugs02 B10).
 (define %check-bounded
   (method (name sequences)
     (for ((l sequences (cdr l)))
          ((id? l '()))
       (unless (%instance? (car l) <sequence>)
         (error "~a: not a sequence: ~s" name (car l))))
-    (unless (every? (method (s) (or (not (%instance? s <range>)) (size s))) sequences)
+    (unless (%list-every? (method (s) (or (not (%instance? s <range>)) (size s))) sequences)
       (error "~a: the range is unbounded" name))))
 
 (define-generic-function concatenate (sequence1 #rest sequences))

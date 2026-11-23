@@ -2400,6 +2400,24 @@ error
 \"ERR: x 1\"
 ({<stretchy-vector> 1 2 3 4} {<stretchy-vector> 1 3} {<stretchy-vector> 1 3} {<stretchy-vector> 1 2})
 ")
+ ;; concatenate's checks of its arguments, and a string stream's contents,
+ ;; walk the library's own list and stretchy vector as the library does,
+ ;; not by a program's every? (Bugs07 C2).
+ (library-own-every
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method every? ((f <function>) (l <pair>) #rest more) #f)
+(define-method every? ((f <function>) (l <stretchy-vector>) #rest more) #f)
+(print (concatenate (vector 1) (vector 2)))
+(print (concatenate \"ab\" \"cd\"))
+(print (format #f \"~a\" \"xyz\"))
+(print (try (method () (concatenate (range from: 0) '(1)))))
+(print (every? even? '(1 2)))"
+  "#(1 2)
+\"abcd\"
+\"xyz\"
+\"ERR: concatenate: the range is unbounded\"
+#f
+")
  ;; The same for lists, whose classes have no slots (Bugs07 L1).
  (library-own-size-of-lists
   "(define-method size ((x <list>)) 1)

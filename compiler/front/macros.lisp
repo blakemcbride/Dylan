@@ -607,6 +607,8 @@ value.  An error in it is a compile error, its message beginning with WHAT."
               (compile-error (e) (error e))
               (error (e)
                 (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))
+      (when (dylan::circular-form-p expansion)
+        (compile-error "macro ~a: its expansion is circular" (car macro)))
       (note-macro-literals expansion)
       (when *expansion-trace*
         (format *expansion-trace* "~@[~a: ~]~a~%  => ~a~%"

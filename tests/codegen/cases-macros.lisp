@@ -374,6 +374,28 @@ FreSh
   ""
   :compile-error "a compiled program cannot have a circular list as a constant"
   :compiler-only t)
+ ;; Code that holds itself is refused, naming the macro (Bugs07 B12);
+ ;; shared code is not circular.
+ (macro-expands-to-circular-code
+  "(define-macro circ () (bind ((l (list 'list 1))) (set! (cdr (cdr l)) (cdr l)) l))
+(print (circ))"
+  ""
+  :compile-error "macro circ: its expansion is circular")
+ (macro-expands-to-circular-nested-code
+  "(define-macro circ ()
+  (bind ((inner (list 'list 1)) (outer (list 'list inner)))
+    (set! (cdr (cdr inner)) (list outer))
+    outer))
+(print (circ))"
+  ""
+  :compile-error "macro circ: its expansion is circular")
+ (macro-expands-to-shared-code
+  "(define-macro twice ()
+  (bind ((part (list '+ 1 2)))
+    (list 'list part part (list 'list part))))
+(print (twice))"
+  "(3 3 (3))
+")
  (macro-quotes-shared-parts
   "(define-macro m ()
   (bind ((l (list 1 2)) (v (vector l l)))

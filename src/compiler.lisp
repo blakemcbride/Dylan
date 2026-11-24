@@ -881,6 +881,33 @@ that a call with the wrong number is told from an error in the body."
            (method.rest? expander)
            (method.keys expander))))
 
+(defun circular-form-p (form)
+  "Whether FORM, a macro's expansion, is code that holds itself: a list
+met again inside itself, which no compiler could finish with.  Shared
+parts that do not hold themselves are not circular, and a quoted datum or
+a vector, a constant, is not code (a circular one is an ordinary value
+here; the compiler to C refuses it as a constant)."
+  (let ((open (make-hash-table :test #'eq))
+        (done (make-hash-table :test #'eq)))
+    (labels ((enter (x)
+               (cond ((gethash x done) nil)
+                     ((gethash x open) (return-from circular-form-p t))
+                     (t (setf (gethash x open) t))))
+             (walk (x)
+               (when (and (consp x) (not (eq (car x) 'quote)))
+                 ;; The spine a step at a time, each car within it
+                 (let ((spine '()))
+                   (loop for tail = x then (cdr tail)
+                         while (consp tail)
+                         do (unless (enter tail) (return))
+                            (push tail spine)
+                            (walk (car tail)))
+                   (dolist (tail spine)
+                     (remhash tail open)
+                     (setf (gethash tail done) t))))))
+      (walk form)
+      nil)))
+
 (defun expand-macro-call (e)
   "The expansion of E, a call of a macro: its expander applied to the
 argument forms, unevaluated.  An error in the body is reported at the
@@ -900,10 +927,14 @@ call, with the macro's name, as the compiler to C reports it."
     ;; A host error in the body is the Dylan error it reflects, which
     ;; the body's own handlers see first (chapter 16: a macro's body is
     ;; ordinary Dylan).
-    (handler-case (dylan%catch-all-conditions
-                   (lambda () (apply (cdr macro) nil next-method/not-generic (cdr e))))
-      (error (condition)
-        (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
+    (let ((expansion
+            (handler-case (dylan%catch-all-conditions
+                           (lambda () (apply (cdr macro) nil next-method/not-generic (cdr e))))
+              (error (condition)
+                (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
+      (when (circular-form-p expansion)
+        (dylan%error (format nil "macro ~a: its expansion is circular" name)))
+      expansion)))
 
 (defmacro with-compile-time-error-prefix ((prefix) &body body)
   "BODY, run while compiling; an error in it is reported with PREFIX, as

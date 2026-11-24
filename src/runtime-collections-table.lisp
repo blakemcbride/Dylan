@@ -190,7 +190,8 @@ and compared with =, as element finds it."
             (match (dylan-assoc key hash-entry)))
        (when match
          (setf (aref hash-table hash-index)
-               (dylan-call dylan/remove hash-entry match))
+               ;; The library's own list, walked by Lisp (Bugs02 B10)
+               (cl:remove match hash-entry :test #'eq :count 1))
          (set-table-count! table (- (table-count table) 1)))
        table))))                        ; Chapter 12: answers the table
 

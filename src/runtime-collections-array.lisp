@@ -61,7 +61,7 @@
       (do ((state (initial-state key-sequence)
                   (next-state key-sequence state)))
           ((not state)
-           (dylan-call dylan/as (dylan-call dylan/class-for-copy array)
+           (library-as (dylan-call dylan/class-for-copy array)
                        new-array))
         (let ((key (current-element key-sequence state)))
           (library-element-setter new-array key

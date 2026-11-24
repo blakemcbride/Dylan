@@ -123,7 +123,7 @@
     (let ((class (dylan-call dylan/class-for-copy seq)))
       (if (true? (dylan-call dylan/instance? seq class))
           (dylan-call dylan/copy-sequence seq)
-          (dylan-call dylan/as class seq))))))
+          (library-as class seq))))))
 
 (add-method
  dylan/as
@@ -239,7 +239,7 @@ new instance of CLASS, by default FIRST's class-for-copy."
                          (mapcar (lambda (c) (library-element c key))
                                  collections))))
       (if (subclass? class <sequence>)
-          (dylan-call dylan/as class (mapcar #'value-at keys))
+          (library-as class (mapcar #'value-at keys))
           (let ((result
                   ;; An array is made with the first array's dimensions;
                   ;; anything else, by make alone, as the compiled library
@@ -385,7 +385,8 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
                       (collection ,<collection>))
                     nil nil nil)
    (lambda (proc init-value collection)
-     (if (true? (dylan-call dylan/empty? collection))
+     ;; Empty if the iteration protocol says so, not a program's empty?
+     (if (not (initial-state collection))
          init-value
          (loop with cur-value = init-value
                with state = (initial-state collection)
@@ -405,7 +406,7 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
    (make-param-list `((procedure ,<function>) (collection ,<collection>))
                     nil nil nil)
    (lambda (proc collection)
-     (if (true? (dylan-call dylan/empty? collection))
+     (if (not (initial-state collection))
          (dylan-call dylan/error "reduce1: the collection is empty")
          (loop with cur-value = (current-element collection
                                             (initial-state

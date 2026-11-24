@@ -86,7 +86,7 @@
     (check-as-bounded collection)
     (cond ((true? (dylan-call dylan/instance? collection <pair>)) collection)
           ;; Chapter 11: the result is of the class, and no <pair> is empty.
-          ((true? (dylan-call dylan/empty? collection))
+          ((not (initial-state collection))
            (dylan-call dylan/error "as: ~s cannot be converted to ~s"
                        collection class))
           (t (iterate->list #'identity collection))))))
@@ -205,7 +205,7 @@
     (check-bounded "concatenate" (cons list-1 rest))
     ;; A new list: every list is copied, the last too.
     (let ((result '()))
-      (dolist (l (cons list-1 (mapcar (lambda (seq) (dylan-call dylan/as <list> seq))
+      (dolist (l (cons list-1 (mapcar (lambda (seq) (library-as <list> seq))
                                       rest)))
         (loop for tail = l then (list-rest (cdr tail))
               while tail
@@ -222,6 +222,20 @@
                        while tail
                        do (push (car tail) result))
                  result))))
+
+;;; Of a list, a new list, by the library's own remove, not a program's
+;;; remove method, as in a compiled program (Bugs02 B10)
+(add-method
+ dylan/remove!
+ (dylan%dylan-callable->method
+  (make-param-list `((list ,<list>) (value ,<object>)) nil nil '(:test :count))
+  (lambda (multiple-values next-method list value &rest rest)
+    (declare (ignore multiple-values))
+    (dylan%keyword-validate next-method rest '(:test :count))
+    (check-range-bounded "remove!" list)
+    (remove-elements list value
+                     (dylan%find-keyword rest :test (lambda () dylan/id?))
+                     (dylan%find-keyword rest :count (lambda () nil))))))
 
 ;; The pairs themselves, relinked, as in a compiled program.
 (add-method dylan/reverse!

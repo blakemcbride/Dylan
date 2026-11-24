@@ -62,7 +62,7 @@
     (declare (ignore class))
     (if (true? (dylan-call dylan/instance? collection <vector>))
         collection
-        (dylan-call dylan/as <simple-object-vector> collection)))))
+        (library-as <simple-object-vector> collection)))))
 
 (add-method
  dylan/as
@@ -257,7 +257,7 @@
     (check-bounded "concatenate" rest)
     (let ((result (coerce vector-1 'list)))
       (dolist (v (mapcar (lambda (seq)
-                           (dylan-call dylan/as <simple-object-vector> seq))
+                           (library-as <simple-object-vector> seq))
                          rest)
                  (coerce result 'simple-vector))
         (setf result (append result (coerce v 'list))))))))
@@ -277,8 +277,7 @@
                    (lambda ()
                      (car (dylan-call dylan/get-array-dimensions s-vector)))))
            (old-vector (dylan-call dylan/get-array-value s-vector))
-           (new-vector (dylan-call dylan/remove old-vector value
-                                   :test test? :count count)))
+           (new-vector (remove-elements old-vector value test? count)))
       (dylan-call dylan/set-array-value! s-vector new-vector)
       (dylan-call dylan/set-array-dimensions! s-vector
                   (list (length new-vector)))
@@ -364,10 +363,10 @@
       (dylan%find-keyword rest :stable (lambda () nil)) ; Ignored
       (dylan-call dylan/set-array-value!
                   s-vector
-                  (dylan-call dylan/as <simple-object-vector>
-                              (merge-sort-list (dylan-call dylan/as <list> s-vector)
-                                           (lambda (x y)
-                                             (true? (dylan-call test? x y))))))
+                  (library-as <simple-object-vector>
+                              (merge-sort-list (library-as <list> s-vector)
+                                               (lambda (x y)
+                                                 (true? (dylan-call test? x y))))))
       s-vector))))                      ; Not the internal simple vector
 
 (defparameter dylan/vector

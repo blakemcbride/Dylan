@@ -139,8 +139,7 @@ above 255."
     (if (true? (dylan-call dylan/instance? collection <string>))
         collection
         (let ((elements (iterate->list #'identity collection)))
-          (dylan-call dylan/as
-                      (let ((class (string-class-for class elements)))
+          (library-as (let ((class (string-class-for class elements)))
                         (if (eq class <string>) <byte-string> class))
                       elements))))))
 
@@ -250,7 +249,7 @@ the keyword arguments REST."
     (check-bounded "concatenate" rest)
     ;; A new string, even of one argument (chapter 12)
     (let ((result (copy-seq string-1)))
-      (dolist (s (mapcar (lambda (seq) (dylan-call dylan/as <byte-string> seq))
+      (dolist (s (mapcar (lambda (seq) (library-as <byte-string> seq))
                          rest)
                result)
         (setf result (concatenate 'string result s)))))))
@@ -263,7 +262,7 @@ the keyword arguments REST."
     (check-bounded "concatenate" rest)
     (as-unicode-string
      (apply #'concatenate 'string string-1
-            (mapcar (lambda (seq) (dylan-call dylan/as <unicode-string> seq)) rest))))))
+            (mapcar (lambda (seq) (library-as <unicode-string> seq)) rest))))))
 
 ;;; Any other <string>, of a class of the program's own
 (add-method

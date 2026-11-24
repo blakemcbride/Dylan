@@ -4513,6 +4513,59 @@ y
 \"cab\"
 #(1 2 3)
 ")
+ ;; The library's own functions do not call a program's empty?, remove,
+ ;; push, push-last or as (Bugs02 B10; Bugs07 L2).
+ (library-not-generic-empty-remove-push-as
+  "(define-method empty? ((d <deque>)) #t)
+(define-method remove ((s <pair>) v #key test count) 'mine)
+(define-method push-last ((d <deque>) v) (error \"program's push-last\"))
+(define-method push ((d <deque>) v) (error \"program's push\"))
+(define-method as ((c (singleton <simple-object-vector>)) (l <pair>)) 'mine)
+(print (reduce + 0 (as <deque> '(1 2))))
+(print (reduce1 + (as <deque> '(1 2))))
+(print (as <pair> (as <deque> '(1 2))))
+(print (remove! (list 1 2) 1))
+(print (size (as <deque> '(1 2))))
+(print (as <list> (concatenate (as <deque> '(1)) '(2))))
+(print (as <list> (sort! (as <deque> '(2 1)))))
+(print (as <list> (union (as <deque> '(1)) '(2))))
+(print (as <list> (reverse (as <deque> '(1 2)))))
+(print (concatenate (vector 1) '(2)))
+(define t (make <table>))
+(set! (element t 'a) 1)
+(set! (element t 'b) 2)
+(remove-key! t 'a)
+(print (size t))
+(define sv (as <stretchy-vector> '(1 2 1)))
+(remove! sv 1)
+(print sv)
+(define-class <ps> (<sequence>))
+(define-method initial-state ((s <ps>)) 0)
+(define-method next-state ((s <ps>) i) (if (< i 1) (+ i 1) #f))
+(define-method current-element ((s <ps>) i) (+ i 1))
+(define-method class-for-copy ((s <ps>)) <simple-object-vector>)
+(define p (make <ps>))
+(print (add p 0))
+(print (concatenate p '(3)))
+(print (reverse p))
+(print (sort p test: >))"
+  "3
+3
+(1 2)
+(2)
+2
+(1 2)
+(1 2)
+(1 2)
+(2 1)
+#(1 2)
+1
+{<stretchy-vector> 2}
+#(0 1 2)
+#(1 2 3)
+#(2 1)
+#(2 1)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

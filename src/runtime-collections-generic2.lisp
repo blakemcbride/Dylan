@@ -58,8 +58,9 @@
   (iterate->list #'identity sequence))
 
 (defun list->sequence-like (sequence list)
-  "LIST as an instance of SEQUENCE's class-for-copy."
-  (dylan-call dylan/as (dylan-call dylan/class-for-copy sequence) list))
+  "LIST as an instance of SEQUENCE's class-for-copy, by the library's own
+as if that is one of its classes."
+  (library-as (dylan-call dylan/class-for-copy sequence) list))
 
 (defparameter dylan/add
   (dylan%generic-fn
@@ -122,7 +123,7 @@
 made with its size and filled through the iteration protocol, as the
 compiled library's %from-list does."
   (if (subclass? class <list>)
-      (dylan-call dylan/as class elements)
+      (library-as class elements)
       (let ((result (dylan-call dylan/make (string-class-for class elements)
                                 :size (length elements))))
         (loop for state = (initial-state result) then (next-state result state)
@@ -147,26 +148,32 @@ compiled library's %from-list does."
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
     (check-range-bounded "remove" seq)
-    (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
-          ;; No count (or #f) removes every match; a count below 1, none.
-          (count (false->nil (dylan%find-keyword rest :count (lambda () nil)))))
-      (loop with state = (initial-state seq)
-            with kept = '()
-            with changed = 0
-            do (if state
-                   (let ((cur-element (current-element
-                                                  seq state)))
-                     ;; Compared as the compiled library compares them
-                     (if (and (or (null count)
-                                  (true? (dylan-call dylan/binary< changed count)))
-                              (true? (dylan-call test? cur-element value)))
-                         (progn
-                           (setf state (next-state seq state))
-                           (incf changed))
-                         (progn
-                           (setf state (next-state seq state))
-                           (push cur-element kept))))
-                   (return (copy-like seq (nreverse kept)))))))))
+    (remove-elements seq value
+                     (dylan%find-keyword rest :test (lambda () dylan/id?))
+                     (dylan%find-keyword rest :count (lambda () nil))))))
+
+(defun remove-elements (seq value test? count)
+  "SEQ without up to COUNT (#f or NIL: all) elements TEST? finds the same
+as VALUE, as remove answers it: the library's own, which its remove!
+methods call, not the generic function (Bugs02 B10)."
+  (let (;; No count (or #f) removes every match; a count below 1, none.
+        (count (false->nil count)))
+    (loop with state = (initial-state seq)
+          with kept = '()
+          with changed = 0
+          do (if state
+                 (let ((cur-element (current-element seq state)))
+                   ;; Compared as the compiled library compares them
+                   (if (and (or (null count)
+                                (true? (dylan-call dylan/binary< changed count)))
+                            (true? (dylan-call test? cur-element value)))
+                       (progn
+                         (setf state (next-state seq state))
+                         (incf changed))
+                       (progn
+                         (setf state (next-state seq state))
+                         (push cur-element kept))))
+                 (return (copy-like seq (nreverse kept)))))))
 
 (defparameter dylan/remove!
   (dylan%generic-fn
@@ -288,7 +295,7 @@ compiled library's %from-list does."
                                        (true? (dylan-call test? a b)))
                                      elements-1))
                              (iterate->list #'identity seq-2))))
-      (dylan-call dylan/as (dylan-call dylan/class-for-copy seq-1)
+      (library-as (dylan-call dylan/class-for-copy seq-1)
                   (append elements-1 extra))))))
 
 (defparameter dylan/remove-duplicates
@@ -316,7 +323,7 @@ compiled library's %from-list does."
            (push element kept))
          nil)
        seq)
-      (dylan-call dylan/as (dylan-call dylan/class-for-copy seq)
+      (library-as (dylan-call dylan/class-for-copy seq)
                   (reverse kept))))))
 
 (defparameter dylan/remove-duplicates!
@@ -514,10 +521,9 @@ unbounded range, which has no end to stop at."
       (check-range-bounded "sort" seq))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/<))))
       (dylan%find-keyword rest :stable (lambda () dylan%false)) ; Ignored
-      (dylan-call dylan/as
-                  (dylan-call dylan/class-for-copy seq)
-                  (merge-sort-list (dylan-call dylan/as <list> seq)
-                               (lambda (x y) (true? (dylan-call test? x y)))))))))
+      (library-as (dylan-call dylan/class-for-copy seq)
+                  (merge-sort-list (library-as <list> seq)
+                                   (lambda (x y) (true? (dylan-call test? x y)))))))))
 
 (defparameter dylan/sort!
   (dylan%generic-fn
@@ -539,7 +545,7 @@ unbounded range, which has no end to stop at."
       ;; A mutable sequence is sorted in place, its elements put back in
       ;; order, with no copy of it made (which its class may not allow).
       (if (mutable-sequence-p seq)
-          (replace-elements! seq (merge-sort-list (dylan-call dylan/as <list> seq)
+          (replace-elements! seq (merge-sort-list (library-as <list> seq)
                                               (lambda (x y)
                                                 (true? (dylan-call test? x y)))))
           (dylan-call dylan/sort seq :test test? :stable stable))))))

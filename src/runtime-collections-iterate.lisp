@@ -179,6 +179,7 @@
 (defvar *library-size* nil)
 (defvar *library-element* nil)
 (defvar *library-element-setter* nil)
+(defvar *library-as* nil)
 
 (declaim (inline library-instance-p))
 (defun library-instance-p (object)
@@ -212,7 +213,7 @@
 
 (defun snapshot-library-collection-methods ()
   "Run when the library is loaded: record its classes and its methods for
-size, element and (setter element)."
+size, element, (setter element) and as."
   (let ((classes (make-hash-table :test 'eq)))
     (loop for (nil variable) in (symbol-value 'dylan%lisp-names-of-predefined-names)
           do (when (and (boundp variable) (class? (symbol-value variable)))
@@ -221,7 +222,16 @@ size, element and (setter element)."
     (setf *library-size* (snapshot-generic-function dylan/size)
           *library-element* (snapshot-generic-function dylan/element)
           *library-element-setter* (snapshot-generic-function dylan/setter/element/)
+          *library-as* (snapshot-generic-function dylan/as)
           *library-classes* classes)))
+
+(defun library-as (class collection)
+  "COLLECTION as CLASS: by the library's own as, not a program's method,
+if CLASS is one of the library's classes (Bugs02 B10)."
+  (dylan-call (if (and *library-classes* (gethash class *library-classes*))
+                  *library-as*
+                  dylan/as)
+              class collection))
 
 (defun collection-size (collection)
   "The size of COLLECTION, as the library reads it, or NIL where SIZE

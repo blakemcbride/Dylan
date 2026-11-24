@@ -541,6 +541,7 @@ static pthread_mutex_t hash_lock = PTHREAD_MUTEX_INITIALIZER;
 static WeakKeys *hash_keys;        /* in AWL: weak                        */
 static intptr_t *hash_ids;         /* the number of each key              */
 static size_t hash_capacity, hash_used;  /* used counts dead keys too    */
+static size_t hash_demand;         /* the keys placed between rebuilds    */
 static mps_ld_s hash_ld;           /* the keys' addresses it depends on   */
 static intptr_t hash_next = 1;
 
@@ -550,11 +551,19 @@ static size_t address_slot(D x, size_t capacity) {
 }
 
 /* The keys and ids as they are, placed again by the keys' addresses now,
- * in a table of CAPACITY, dead keys dropped.  HASH_LOCK is held. */
-static void rebuild(size_t capacity) {
+ * dead keys dropped, in a table sized by the demand: what was placed
+ * since the last rebuild, or half the demand then, if more.  The table
+ * grows when half full, and after a burst of hashing shrinks by half at
+ * each later rebuild, so that a large table, which each collection scans
+ * and each rebuild walks, does not outlast the need for it.  HASH_LOCK is
+ * held. */
+static void rebuild(void) {
     WeakKeys *old = hash_keys;
     intptr_t *old_ids = hash_ids;
     size_t old_capacity = hash_capacity;
+    hash_demand = hash_used > hash_demand / 2 ? hash_used : hash_demand / 2;
+    size_t capacity = 1024;
+    while (capacity < (hash_demand + 1) * 3) capacity *= 2;
     pthread_mutex_lock(&shared_lock);
     WeakKeys *keys = reserve_commit(weak_ap, &wrapper_weak_keys,
                                     sizeof(WeakKeys) + capacity * sizeof(D),
@@ -596,12 +605,11 @@ static intptr_t identity_number(D x) {
     intptr_t id = find_id(x);
     if (!id && hash_capacity && mps_ld_isstale(&hash_ld, arena, (mps_addr_t)x)) {
         /* Keys have moved: place them again. */
-        rebuild(hash_capacity);
+        rebuild();
         id = find_id(x);
     }
     if (!id) {
-        if ((hash_used + 1) * 2 > hash_capacity)
-            rebuild(hash_capacity ? hash_capacity * 2 : 1024);
+        if ((hash_used + 1) * 2 > hash_capacity) rebuild();
         id = hash_next++;
         mps_ld_add(&hash_ld, arena, (mps_addr_t)x);
         size_t i = address_slot(x, hash_capacity);

@@ -300,11 +300,19 @@ car}\"; else NIL."
 
 (defun static-non-class-string (v)
   "How write writes the value of V, a STATIC-VALUE, if it is surely not a
-class: a constant or a library function; else NIL."
+class: a constant, a library function or a singleton of one of those or of
+a class; else NIL."
   (case (car v)
     (:constant (dylan-form-string (second v)))
     (:global (and (not (global-class (second v)))
-                  (known-function-string (second v))))))
+                  (known-function-string (second v))))
+    (:singleton
+     (let* ((x (second v))
+            (class (and (eq (car x) :global) (global-class (second x))))
+            (object (if class
+                        (format nil "{the class ~a}" (class-info-name class))
+                        (static-non-class-string x))))
+       (and object (format nil "{singleton ~a}" object))))))
 
 (defun resolve-class (atom what)
   (let* ((v (static-value atom))

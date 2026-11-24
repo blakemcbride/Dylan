@@ -1255,6 +1255,12 @@ base
 (print 'x)"
   ""
   :compile-error "not a class: 5")
+ ;; Nor is a singleton, worded alike (Bugs07 B18)
+ (superclass-a-singleton
+  "(define-class <c> ((singleton 3)))
+(print 'x)"
+  ""
+  :compile-error "not a class: {singleton 3}")
  ;; Chapter 6: required-init-keyword: is like init-keyword:, so init-keyword
  ;; answers it (chapter 11).
  (init-keyword-of-required-slot

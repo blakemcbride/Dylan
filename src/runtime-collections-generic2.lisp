@@ -349,6 +349,8 @@ compiled library's %from-list does."
   (lambda (multiple-values next-method source &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:start :end))
+    (unless (true? (dylan%find-keyword rest :end (lambda () dylan%false)))
+      (check-range-bounded "copy-sequence" source))
     (let* ((start (dylan%find-keyword rest :start (lambda () 0)))
            (end (check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s"
                                  source start
@@ -373,9 +375,7 @@ unbounded range, which has no end to stop at."
     (unless (true? (dylan-call dylan/instance? s <sequence>))
       (dylan-call dylan/error "~a: not a sequence: ~s" name s)))
   (dolist (s sequences)
-    (when (and (true? (dylan-call dylan/instance? s <range>))
-               (null (collection-size s)))
-      (dylan-call dylan/error "~a: the range is unbounded" name))))
+    (check-range-bounded name s)))
 
 (defparameter dylan/concatenate-as
   (dylan%generic-fn
@@ -508,6 +508,10 @@ unbounded range, which has no end to stop at."
   (lambda (multiple-values next-method seq &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :stable))
+    ;; A circular list; an unbounded range is as <list>'s error below,
+    ;; as the compiled library's range method gives it
+    (when (consp seq)
+      (check-range-bounded "sort" seq))
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/<))))
       (dylan%find-keyword rest :stable (lambda () dylan%false)) ; Ignored
       (dylan-call dylan/as
@@ -528,6 +532,8 @@ unbounded range, which has no end to stop at."
   (lambda (multiple-values next-method seq &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :stable))
+    (when (consp seq)
+      (check-range-bounded "sort!" seq))
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/<)))
            (stable (dylan%find-keyword rest :stable (lambda () dylan%false))))
       ;; A mutable sequence is sorted in place, its elements put back in

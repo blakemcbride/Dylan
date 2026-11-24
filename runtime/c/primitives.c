@@ -97,10 +97,17 @@ static Spread spread_arguments(intptr_t argc, D a0, D a1, D a2, D a3) {
         if (last != DY_EMPTY && !dy_kind_p(last, DY_KIND_PAIR) && sequence_hook)
             /* "The last arg must be a sequence" (chapter 8) */
             last = DY_CALL(sequence_hook, last, 0, 0, 0, 1);
+        D slow = last;
         for (D l = last; l != DY_EMPTY; l = dy_tail(l)) {
             /* An improper list: a <type-error> of its tail (design note 16) */
             if (!dy_kind_p(l, DY_KIND_PAIR)) dy_check_type(l, dy_wrapper_list.class);
             count++;
+            /* A circular list has no end: a walker at half the speed
+             * meets this one in the cycle. */
+            if (!(count & 1)) {
+                slow = dy_tail(slow);
+                if (slow == dy_tail(l)) dy_error("apply: the list is circular", 0);
+            }
         }
     }
     intptr_t n = before + count;

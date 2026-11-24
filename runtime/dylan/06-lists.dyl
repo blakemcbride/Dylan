@@ -196,6 +196,7 @@ module: dylan
 
 ;;; Chapter 12: add's result shares no structure with the list.
 (define-method add ((l <list>) new-element)
+  (%check-range-bounded "add" l)
   (bind ((head (cons new-element '())))
     (bind-methods ((copy (last l)
                      (if (%pair? l)
@@ -208,9 +209,11 @@ module: dylan
 (define-method add! ((l <list>) new-element) (cons new-element l))
 
 (define-method remove! ((l <list>) value #key (test id?) count)
+  (%check-range-bounded "remove!" l)
   (%remove-elements l value test count))
 
 (define-method reverse ((l <list>))
+  (%check-range-bounded "reverse" l)
   (bind-methods ((loop (l r)
                    (cond ((%pair? l) (loop (cdr l) (cons (car l) r)))
                          ((id? l '()) r)

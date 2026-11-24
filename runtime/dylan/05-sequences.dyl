@@ -51,20 +51,36 @@ module: dylan
       (loop elements count '()))))
 
 ;;; A function that makes a sequence of all of a sequence's elements, of
-;;; an unbounded range, would never end: NAME's error instead, as as and
-;;; concatenate give.  One that walks several in step ends when one of
-;;; them does (%check-some-bounded).
-(define %unbounded-range?
-  (method (s) (and (%instance? s <range>) (not (%library-size s)))))
+;;; an unbounded range or a circular list, would never end: NAME's error
+;;; instead, as as and concatenate give.  One that walks several in step
+;;; ends when one of them does (%check-some-bounded).
+
+;;; Whether L, a list, holds itself; an improper list does not
+(define %list-circular?
+  (method (l)
+    (bind-methods ((loop (slow fast)
+                     (if (and (%pair? fast) (%pair? (cdr fast)))
+                         (bind ((slow2 (cdr slow)) (fast2 (cdr (cdr fast))))
+                           (if (id? slow2 fast2) #t (loop slow2 fast2)))
+                         #f)))
+      (loop l l))))
+
+;;; What has no end about S, as an error says it, or #f
+(define %endless
+  (method (s)
+    (cond ((%pair? s) (and (%list-circular? s) "list is circular"))
+          ((%instance? s <range>) (and (not (%library-size s)) "range is unbounded"))
+          (else: #f))))
 
 (define %check-range-bounded
   (method (name s)
-    (when (%unbounded-range? s) (error "~a: the range is unbounded" name))))
+    (bind ((endless (%endless s)))
+      (when endless (error "~a: the ~a" name endless)))))
 
 (define %check-some-bounded
   (method (name collections)
-    (when (%list-every? %unbounded-range? collections)
-      (error "~a: the range is unbounded" name))))
+    (when (%list-every? %endless collections)
+      (error "~a: the ~a" name (%endless (car collections))))))
 
 (define-generic-function remove (sequence value #key test count))
 (define-method remove ((s <sequence>) value #key (test id?) count)
@@ -130,6 +146,7 @@ module: dylan
 
 (define-generic-function copy-sequence (source #key start end))
 (define-method copy-sequence ((s <sequence>) #key (start 0) end)
+  (unless end (%check-range-bounded "copy-sequence" s))
   (%check-start-end "copy-sequence: bad start: or end: for ~s: ~s ~s" s start end)
   (%copy-like s (for ((state (initial-state s) (next-state s state))
                       (index 0 (binary+ index 1))
@@ -194,8 +211,9 @@ module: dylan
          ((id? l '()))
       (unless (%instance? (car l) <sequence>)
         (error "~a: not a sequence: ~s" name (car l))))
-    (unless (%list-every? (method (s) (or (not (%instance? s <range>)) (%library-size s))) sequences)
-      (error "~a: the range is unbounded" name))))
+    (for ((l sequences (cdr l)))
+         ((id? l '()))
+      (%check-range-bounded name (car l)))))
 
 (define-generic-function concatenate (sequence1 #rest sequences))
 (define-method concatenate ((s <sequence>) #rest more)
@@ -292,6 +310,7 @@ module: dylan
 
 (define-generic-function sort (sequence #key test stable))
 (define-method sort ((s <sequence>) #key (test <) stable)
+  (%check-range-bounded "sort" s)
   (bind ((v (%sort-vector (%elements-vector s) (if (id? test <) binary< test)))
          (class (class-for-copy s)))
     (if (id? class <simple-object-vector>)
@@ -305,6 +324,7 @@ module: dylan
   (sort s test: test))
 
 (define-method sort! ((s <mutable-sequence>) #key (test <) stable)
+  (%check-range-bounded "sort!" s)
   (bind ((v (%sort-vector (%elements-vector s) (if (id? test <) binary< test))))
     (%replace-elements! s (for ((i (binary- (%vector-size v) 1) (binary- i 1))
                                 (l '() (cons (%vector-element v i) l)))

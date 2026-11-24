@@ -4428,6 +4428,48 @@ y
 (a c)
 (1 2)
 ")
+ ;; So does one given a circular list, whose size is #f, apply too; a walk
+ ;; in step with a proper list, or to an end:, ends (Bugs07 B10).
+ (circular-list-whole-sequence
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define c (bind ((x (list 1 2))) (set! (cdr (cdr x)) x) x))
+(print (size c))
+(print (try (method () (apply list c))))
+(print (try (method () (as <vector> c))))
+(print (try (method () (copy-sequence c))))
+(print (try (method () (as <stretchy-vector> c))))
+(print (try (method () (as <deque> c))))
+(print (try (method () (as <string> c))))
+(print (try (method () (add c 0))))
+(print (try (method () (reverse c))))
+(print (try (method () (concatenate c '(1)))))
+(print (try (method () (concatenate '(1) c))))
+(print (try (method () (sort c))))
+(print (try (method () (sort! c))))
+(print (try (method () (map identity c))))
+(print (try (method () (choose odd? c))))
+(print (try (method () (remove c 1))))
+(print (copy-sequence c end: 5))
+(print (map + c '(10 20 30)))"
+  "#f
+\"ERR: apply: the list is circular\"
+\"ERR: as: the list is circular\"
+\"ERR: copy-sequence: the list is circular\"
+\"ERR: as: the list is circular\"
+\"ERR: as: the list is circular\"
+\"ERR: as: the list is circular\"
+\"ERR: add: the list is circular\"
+\"ERR: reverse: the list is circular\"
+\"ERR: concatenate: the list is circular\"
+\"ERR: concatenate: the list is circular\"
+\"ERR: sort: the list is circular\"
+\"ERR: sort!: the list is circular\"
+\"ERR: map: the list is circular\"
+\"ERR: choose: the list is circular\"
+\"ERR: remove: the list is circular\"
+(1 2 1 2 1)
+(11 22 31)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

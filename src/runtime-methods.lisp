@@ -1117,8 +1117,11 @@ class has too: TO."
                                "apply: the last argument is not a sequence: ~s"
                                sequence))
                  ;; Its elements are as <list> answers them, as in the
-                 ;; compiled library: an unbounded range has no end.
-                 (check-as-bounded sequence)
+                 ;; compiled library: an unbounded range has no end, nor
+                 ;; a circular list, which apply walks itself.
+                 (if (consp sequence)
+                     (check-range-bounded "apply" sequence)
+                     (check-as-bounded sequence))
                  (append early (iterate->list #'identity sequence)))))))
       (unless (functionp fn)
         (dylan-call dylan/error "not a function: ~s" fn))

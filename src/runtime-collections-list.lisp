@@ -185,6 +185,7 @@
  dylan/add
  (dylan%function->method one-list-and-an-object
                          (lambda (the-list new-element)
+                           (check-range-bounded "add" the-list)
                            ;; Chapter 12: the result shares no structure
                            ;; with the list.
                            (cons new-element (copy-list the-list)))))
@@ -201,7 +202,7 @@
  (dylan%function->method
   at-least-one-list
   (lambda (list-1 &rest rest)
-    (check-bounded "concatenate" rest)
+    (check-bounded "concatenate" (cons list-1 rest))
     ;; A new list: every list is copied, the last too.
     (let ((result '()))
       (dolist (l (cons list-1 (mapcar (lambda (seq) (dylan-call dylan/as <list> seq))
@@ -215,6 +216,7 @@
             (dylan%function->method
              one-list
              (lambda (list)
+               (check-range-bounded "reverse" list)
                (let ((result '()))
                  (loop for tail = list then (list-rest (cdr tail))
                        while tail

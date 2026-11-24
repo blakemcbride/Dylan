@@ -528,6 +528,7 @@ module: dylan
 (define-method as ((class <class>) (c <collection>))
   (cond ((%instance? c class) c)
         ((%subclass? class <mutable-sequence>)
+         (%check-range-bounded "as" c)
          ;; A list is made as a <list>, so that the error names C: map-as
          ;; refuses an <empty-list> with elements and an empty <pair>.
          ;; The elements as the collection's iteration gives them, as do

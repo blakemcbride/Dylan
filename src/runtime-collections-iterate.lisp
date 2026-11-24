@@ -232,25 +232,40 @@ answers #f (an unbounded collection)."
   (and (true? (dylan-call dylan/instance? collection <range>))
        (null (collection-size collection))))
 
+(defun circular-list-p (list)
+  "Whether LIST is a list that holds itself; an improper list does not."
+  (loop with slow = list and fast = list
+        while (and (consp fast) (consp (cdr fast)))
+        do (setf slow (cdr slow)
+                 fast (cddr fast))
+        when (eq slow fast)
+          return t))
+
+(defun endless (collection)
+  "What has no end about COLLECTION, as an error says it, or NIL."
+  (cond ((consp collection)
+         (and (circular-list-p collection) "list is circular"))
+        ((unbounded-range-p collection) "range is unbounded")))
+
 (defun check-range-bounded (name collection)
   "Signal NAME's error, as a compiled program does, if COLLECTION is an
-unbounded range, all of whose elements a sequence made of it would need:
-it would have no end."
-  (when (unbounded-range-p collection)
-    (dylan-call dylan/error (format nil "~a: the range is unbounded" name))))
+unbounded range or a circular list, all of whose elements a sequence made
+of it would need: it would have no end."
+  (let ((endless (endless collection)))
+    (when endless
+      (dylan-call dylan/error (format nil "~a: the ~a" name endless)))))
 
 (defun check-some-bounded (name collections)
   "Signal NAME's error if each of COLLECTIONS, walked in step, is an
-unbounded range: the walk would have no end."
-  (when (every #'unbounded-range-p collections)
-    (dylan-call dylan/error (format nil "~a: the range is unbounded" name))))
+unbounded range or a circular list: the walk would have no end."
+  (when (every #'endless collections)
+    (dylan-call dylan/error (format nil "~a: the ~a" name (endless (car collections))))))
 
 (defun check-as-bounded (collection)
-  "Signal, as a compiled program does, if COLLECTION is an unbounded range:
-as cannot make another collection of it, which would have no end."
-  (when (and (true? (dylan-call dylan/instance? collection <range>))
-             (null (collection-size collection)))
-    (dylan-call dylan/error "as: the range is unbounded")))
+  "Signal, as a compiled program does, if COLLECTION is an unbounded range
+or a circular list: as cannot make another collection of it, which would
+have no end."
+  (check-range-bounded "as" collection))
 
 ;;; Arrays, vectors included: the state is the row-major index of the
 ;;; element, as in the compiled library.

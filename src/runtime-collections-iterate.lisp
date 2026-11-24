@@ -707,6 +707,24 @@ integer, whatever the sequence, as in a compiled program."
                               key))
                  (t default))))))))
 
+(defun element-by-protocol (seq key rest)
+  "The element of SEQ at the integer KEY, found by the iteration protocol,
+or REST's default:."
+  (let* ((default-marker (cons 1 2))
+         (default (dylan%find-keyword rest :default
+                                      (lambda () default-marker))))
+    ;; No negative key is among them, nor found in an unbounded range.
+    (do ((state (if (minusp key) nil (initial-state seq))
+                (next-state seq state))
+         (k 0 (+ k 1)))
+        ((or (not state) (= k key))
+         (cond (state (current-element seq state))
+               ((eq default default-marker)
+                (dylan-call dylan/error
+                            "element: there is no element at the index ~s"
+                            key))
+               (t default))))))
+
 (add-method
  dylan/element
  (dylan%dylan-callable->method
@@ -715,20 +733,7 @@ integer, whatever the sequence, as in a compiled program."
   (lambda (multiple-values next-method seq key &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (let* ((default-marker (cons 1 2))
-           (default (dylan%find-keyword rest :default
-                                        (lambda () default-marker))))
-      ;; No negative key is among them, nor found in an unbounded range.
-      (do ((state (if (minusp key) nil (initial-state seq))
-                  (next-state seq state))
-           (k 0 (+ k 1)))
-          ((or (not state) (= k key))
-           (cond (state (current-element seq state))
-                 ((eq default default-marker)
-                  (dylan-call dylan/error
-                              "element: there is no element at the index ~s"
-                              key))
-                 (t default))))))))
+    (element-by-protocol seq key rest))))
 
 ;;; A sequence's keys are integers: any other key denotes the index
 ;;; INDEX-KEY finds, if any, and is otherwise absent, so that the answer is

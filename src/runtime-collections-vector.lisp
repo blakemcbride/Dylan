@@ -393,19 +393,24 @@
   (lambda (multiple-values next-method vector index &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (let* ((vector-value (vector-value vector))
-           (size (length vector-value)))
-      (if (and (>= index 0) (< index size))
-          (aref vector-value index)
-          ;; N.B. the Scheme looked for the LIST (default:) rather than the
-          ;; keyword itself, so the default: value was never found; fixed.
-          (dylan%find-keyword
-           rest :default
-           (lambda ()
-             (dylan-call
-              dylan/error
-              "element: there is no element at the index ~s"
-              index))))))))
+    (if (storage-less-array-p vector)
+        ;; A program's subclass, with no storage of the library's, by its
+        ;; iteration protocol, as for any sequence (chapter 12)
+        (element-by-protocol vector index rest)
+        (let* ((vector-value (vector-value vector))
+               (size (length vector-value)))
+          (if (and (>= index 0) (< index size))
+              (aref vector-value index)
+              ;; N.B. the Scheme looked for the LIST (default:) rather than
+              ;; the keyword itself, so the default: value was never found;
+              ;; fixed.
+              (dylan%find-keyword
+               rest :default
+               (lambda ()
+                 (dylan-call
+                  dylan/error
+                  "element: there is no element at the index ~s"
+                  index)))))))))
 
 ;;; Any other key: the index it denotes, if any (INDEX-KEY), as for any
 ;;; sequence.  (Without this, the <explicit-key-collection> method would

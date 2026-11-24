@@ -136,15 +136,25 @@ module: dylan
 
 ;;; A key that denotes no index (%INDEX-KEY), or a negative one, has no
 ;;; element, with no walk of the sequence.
+(define %sequence-element
+  (method (c key default)
+    (bind ((index (%index-key key)))
+      (for ((state (and index (not (negative? index)) (initial-state c))
+                   (next-state c state))
+            (k 0 (binary+ k 1)))
+           ((or (not state) (binary= k index))
+            (cond (state (current-element c state))
+                  ((id? default %no-default) (error "element: there is no element at the index ~s" key))
+                  (else: default)))))))
+
 (define-method element ((c <sequence>) key #key (default %no-default))
-  (bind ((index (%index-key key)))
-    (for ((state (and index (not (negative? index)) (initial-state c))
-                 (next-state c state))
-          (k 0 (binary+ k 1)))
-         ((or (not state) (binary= k index))
-          (cond (state (current-element c state))
-                ((id? default %no-default) (error "element: there is no element at the index ~s" key))
-                (else: default))))))
+  (%sequence-element c key default))
+
+;;; A vector is an array too, so an explicit-key collection, but its keys
+;;; are its indexes: one of a program's class is found as any sequence's,
+;;; as the interpreter finds it.  (The library's vectors have their own.)
+(define-method element ((v <vector>) key #key (default %no-default))
+  (%sequence-element v key default))
 
 (define-generic-function (setter element) (collection key new-value))
 
@@ -155,15 +165,22 @@ module: dylan
             (set! (current-element c state) new-value)
             (error "element: there is no element for the key ~s" key)))))
 
+(define %sequence-element-setter
+  (method (c key new-value)
+    (bind ((index (%index-key key)))
+      (for ((state (and index (not (negative? index)) (initial-state c))
+                   (next-state c state))
+            (k 0 (binary+ k 1)))
+           ((or (not state) (binary= k index))
+            (if state
+                (set! (current-element c state) new-value)
+                (error "element: there is no element at the index ~s" key)))))))
+
 (define-method (setter element) ((c <mutable-sequence>) key new-value)
-  (bind ((index (%index-key key)))
-    (for ((state (and index (not (negative? index)) (initial-state c))
-                 (next-state c state))
-          (k 0 (binary+ k 1)))
-         ((or (not state) (binary= k index))
-          (if state
-              (set! (current-element c state) new-value)
-              (error "element: there is no element at the index ~s" key))))))
+  (%sequence-element-setter c key new-value))
+
+(define-method (setter element) ((v <vector>) key new-value)
+  (%sequence-element-setter v key new-value))
 
 ;;; Size and the like
 

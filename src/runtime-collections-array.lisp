@@ -48,6 +48,7 @@
 
 (declaim (special dylan/get-array-value dylan/get-array-dimensions
                   dylan/set-array-value! dylan/set-array-dimensions!))
+(declaim (ftype function storage-less-array-p)) ; runtime-collections-vector.lisp
 
 (add-method
  dylan/shallow-copy
@@ -319,7 +320,11 @@ in a compiled program."
    ;; A copy: the array's own list is what it checks subscripts against.
    (lambda (array)
      (dylan-call dylan/check-type array <array>)
-     (copy-list (dylan-call dylan/get-array-dimensions array)))))
+     ;; Of a program's subclass with no storage of the library's, its
+     ;; size, as in a compiled program
+     (if (storage-less-array-p array)
+         (list (library-size array))
+         (copy-list (dylan-call dylan/get-array-dimensions array))))))
 
 (add-method
  dylan/element

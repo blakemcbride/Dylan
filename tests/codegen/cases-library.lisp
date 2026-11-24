@@ -3993,6 +3993,33 @@ none
 \"{instance of <ma>}\"
 \"ERR: no applicable method for initial-state\"
 ")
+ ;; With the iteration protocol, such a subclass of <vector> is enough:
+ ;; element, aref, dimensions and add work through it (chapter 12,
+ ;; "Defining a New Collection Class"; Bugs07 L3).
+ (vector-subclass-by-protocol
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <v3> (<vector>))
+(define-method initial-state ((v <v3>)) 0)
+(define-method next-state ((v <v3>) i) (if (< i 2) (+ i 1) #f))
+(define-method current-element ((v <v3>) i) (* 10 i))
+(define-method size ((v <v3>)) 3)
+(define-method class-for-copy ((v <v3>)) <simple-object-vector>)
+(define v (make <v3>))
+(print (as <list> v))
+(print (try (method () (element v 1))))
+(print (try (method () (aref v 1))))
+(print (try (method () (dimensions v))))
+(print (try (method () (add v 5))))
+(print (try (method () (element v 7 default: 'none))))
+(print (try (method () (element v 7))))"
+  "(0 10 20)
+10
+10
+(3)
+#(5 0 10 20)
+none
+\"ERR: element: there is no element at the index 7\"
+")
  ;; Chapter 11: shallow-copy makes the copy by calling make on the
  ;; class-for-copy -- a range's copy is a list, and an instance whose
  ;; class-for-copy is another class is copied into one, with the values

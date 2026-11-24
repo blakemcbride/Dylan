@@ -220,20 +220,39 @@ void dy_symbols_through(intptr_t form) {
     atomic_store_explicit(&forms_begun, form, memory_order_release);
 }
 
-/* AS: for as, which makes a symbol not yet read with its own spelling */
+/* Must the symbol S, found by as, take its spelling from as's name? */
+static bool respelled(const DySymbol *s, bool as) {
+    return as && s->form > atomic_load_explicit(&forms_begun, memory_order_acquire);
+}
+
+/* AS: for as, which makes a symbol not yet read with its own spelling.
+ * The name and the symbol are made with the table unlocked: making them
+ * may signal "out of memory", which a handler may catch, and the table
+ * must not stay locked then.  Another thread may have made the symbol
+ * meanwhile, which is then the one. */
 static D intern(SymbolTable *t, const Name *n, bool as) {
     uint64_t hash = name_hash(n);
     pthread_mutex_lock(&t->lock);
     DySymbol *s = table_find(t, n, hash);
+    bool found = s != NULL, respell = found && respelled(s, as);
+    pthread_mutex_unlock(&t->lock);
+    if (found && !respell) return DY_OBJ(s);
+    /* N's characters are copied before anything is allocated (copy_name);
+     * after that N may have moved, and the copy is looked up. */
+    D string = copy_name(n);
+    DySymbol *made = found ? NULL : dy_alloc(t->wrapper, sizeof(DySymbol));
+    Name copy = name_of(string);
+    pthread_mutex_lock(&t->lock);
+    s = table_find(t, &copy, hash);
     if (!s) {
-        D string = copy_name(n);
-        s = dy_alloc(t->wrapper, sizeof(DySymbol));
+        /* (Not found before either: symbols are never dropped.) */
+        made->name = string;
+        made->hash = hash;
+        made->form = 0;
+        table_add(t, made);             /* its root, if it grows, or the end */
+        s = made;
+    } else if (respelled(s, as)) {
         s->name = string;
-        s->hash = hash;
-        s->form = 0;
-        table_add(t, s);
-    } else if (as && s->form > atomic_load_explicit(&forms_begun, memory_order_acquire)) {
-        s->name = copy_name(n);
         s->form = 0;
     }
     pthread_mutex_unlock(&t->lock);

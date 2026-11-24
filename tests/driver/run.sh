@@ -452,6 +452,17 @@ if (ulimit -s unlimited) 2>/dev/null; then
     (ulimit -s unlimited; ulimit -v 3145728; ./down) > down.out 2>&1; status=$?
     check "the stack exhausted with no stack limit" sh -c "test $status = 0 && grep -q 'ERR: the stack is exhausted' down.out && grep -q '^after' down.out"
 fi
+# A caught "out of memory" while a symbol is made leaves the table of
+# symbols usable: in an address space with no room for a second copy of
+# the name, the next symbol is made (Bugs07 C5)
+cat > intern.dyl <<'EOF2'
+(define s (make <byte-string> size: 300000000 fill: #\a))
+(print (handler-case (as <symbol> s) ((<error> condition: c) (format #f "~a" c))))
+(print (as <symbol> "hello"))
+EOF2
+"$dylanc" -o intern intern.dyl >/dev/null 2>&1
+(ulimit -v 1000000; timeout 60 ./intern) > intern.out 2>&1
+check "out of memory while a symbol is made" sh -c "printf '\"out of memory\"\nhello\n' | cmp -s - intern.out"
 "$dylan" < deeper.dyl > deeper.out 2> deeper.err; status=$?
 check "bin/dylan: the stack exhausted in a handler: status 1" test "$status" = 1
 check "bin/dylan: the stack exhausted in a handler: reported" sh -c 'grep -q "^before" deeper.out && ! grep -q after deeper.out && grep -q "^Dylan error: the stack is exhausted" deeper.err'

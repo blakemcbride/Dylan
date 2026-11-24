@@ -160,6 +160,16 @@ module: dylan
 
 ;;; concatenate-as, which concatenate calls, not the generic function,
 ;;; whose methods a program may add (Bugs02 B10)
+;;; The elements of S as a list: a list's own pairs, as the library walks
+;;; its own lists, not by a program's current-element method (Bugs02 B10),
+;;; as the interpreter walks them; any other sequence's by its iteration
+;;; protocol.  An improper list is the error of its tail.
+(define %sequence-elements
+  (method (s)
+    (if (%instance? s <list>)
+        (begin (%list-size s) s)
+        (%elements s))))
+
 (define %concatenate-as
   (method (class sequences)
     ;; Chapter 12: CLASS must be a subclass of <mutable-sequence>
@@ -170,7 +180,7 @@ module: dylan
                      (if (id? sequences '())
                          (%list-reverse r)
                          (gather (cdr sequences)
-                                 (%list-reduce (method (r e) (cons e r)) r (%elements (car sequences)))))))
+                                 (%list-reduce (method (r e) (cons e r)) r (%sequence-elements (car sequences)))))))
       (if (%vectors-for? class sequences)
           (%concatenate-vectors class sequences)
           (%from-list class (gather sequences '()))))))
@@ -302,7 +312,7 @@ module: dylan
 ;;; The elements of the sequence S in a fresh simple object vector
 (define %elements-vector
   (method (s)
-    (bind ((l (%elements s))
+    (bind ((l (%sequence-elements s))
            (v (%make-vector (%list-length l) #f)))
       (for ((l l (cdr l)) (i 0 (binary+ i 1)))
            ((id? l '()) v)

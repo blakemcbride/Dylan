@@ -1118,11 +1118,17 @@ class has too: TO."
                                sequence))
                  ;; Its elements are as <list> answers them, as in the
                  ;; compiled library: an unbounded range has no end, nor
-                 ;; a circular list, which apply walks itself.
+                 ;; a circular list, which apply walks itself -- its own
+                 ;; pairs, not by a program's current-element method.
                  (if (consp sequence)
                      (check-range-bounded "apply" sequence)
                      (check-as-bounded sequence))
-                 (append early (iterate->list #'identity sequence)))))))
+                 (append early
+                         (if (listp sequence)
+                             (loop for tail = sequence then (list-rest (cdr tail))
+                                   while tail
+                                   collect (car tail))
+                             (iterate->list #'identity sequence))))))))
       (unless (functionp fn)
         (dylan-call dylan/error "not a function: ~s" fn))
       (dylan-full-apply fn multiple-values next-method/not-generic arguments)))))

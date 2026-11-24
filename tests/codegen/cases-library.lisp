@@ -4566,6 +4566,27 @@ y
 #(2 1)
 #(2 1)
 ")
+ ;; A program's current-element method on lists is called once for each
+ ;; element a function walks by the protocol, as map does, and not at all
+ ;; where the library walks a list's own pairs: apply, concatenate, sort
+ ;; (Bugs07 B5).
+ (list-current-element-method-once
+  "(define-method current-element ((c <list>) (s <pair>)) (list 'e (car s)))
+(define l '(1 2))
+(define v #(1 2))
+(print (map identity l))
+(print (map-as <list> identity v))
+(print (map-as <vector> identity l))
+(print (concatenate l l))
+(print (apply list l))
+(print (sort l test: (method (a b) #f)))"
+  "((e 1) (e 2))
+(1 2)
+#((e 1) (e 2))
+(1 2 1 2)
+(1 2)
+(1 2)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

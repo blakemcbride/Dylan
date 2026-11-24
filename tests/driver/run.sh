@@ -99,6 +99,16 @@ cat > oom.dyl <<'EOF'
 EOF
 check "--gc boehm out of memory" "$dylanc" --gc boehm -o oomboehm oom.dyl
 check "--gc boehm out of memory, no warnings" output_is '"out of memory"' ./oomboehm
+# A heap full of small objects is reported, and the program ends
+# (Bugs07 C4)
+cat > oomsmall.dyl <<'EOF'
+(define-method grow (l n) (if (= n 0) l (grow (cons n l) (- n 1))))
+(print (handler-case (size (grow '() 400000000))
+         ((<error> condition: c) (format #f "caught: ~a" c))))
+EOF
+"$dylanc" --gc boehm -o oomsmallb oomsmall.dyl >/dev/null 2>&1
+(ulimit -v 1000000; timeout 120 ./oomsmallb) > oomsmall.out 2>&1; status=$?
+check "--gc boehm a heap of small objects full" sh -c "test $status = 1 && printf 'Dylan error: out of memory\n' | cmp -s - oomsmall.out"
 for o in -O0 -O1 -O3 -Os -g; do
     check "$o" "$dylanc" $o -o opt greet.dyl main.dyl
     check "$o runs" output_is "$expected" ./opt

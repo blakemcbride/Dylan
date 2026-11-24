@@ -539,10 +539,14 @@ static inline char *dy_alloc_bytes(size_t n) {
 
 #else
 
+/* The collector refused BYTES (object.c): as with the MPS, the error "out
+ * of memory" for a large request, else the report and the end. */
+_Noreturn void dy_boehm_cannot_allocate(size_t bytes);
+
 static inline void *dy_alloc_init(DyWrapper *wrapper, size_t bytes, const D *fields,
                                   size_t nfields, D fill) {
     D *w = GC_MALLOC(bytes);
-    if (!w) dy_error("out of memory", 0);
+    if (!w) dy_boehm_cannot_allocate(bytes);
     size_t words = bytes / sizeof(D), i = 1;
     w[0] = (D)wrapper;
     for (; i <= nfields && i < words; i++) w[i] = fields[i - 1];
@@ -552,14 +556,14 @@ static inline void *dy_alloc_init(DyWrapper *wrapper, size_t bytes, const D *fie
 
 static inline void *dy_alloc(DyWrapper *wrapper, size_t bytes) {
     DyHeader *object = GC_MALLOC(bytes);
-    if (!object) dy_error("out of memory", 0);
+    if (!object) dy_boehm_cannot_allocate(bytes);
     object->wrapper = wrapper;
     return object;
 }
 
 static inline void *dy_alloc_atomic(DyWrapper *wrapper, size_t bytes) {
     DyHeader *object = GC_MALLOC_ATOMIC(bytes);
-    if (!object) dy_error("out of memory", 0);
+    if (!object) dy_boehm_cannot_allocate(bytes);
     object->wrapper = wrapper;
     return object;
 }
@@ -581,19 +585,19 @@ static inline void *dy_alloc_atomic_sized(DyWrapper *wrapper, size_t bytes, D si
 
 static inline D *dy_alloc_words(size_t n) {
     D *words = GC_MALLOC(n * sizeof(D));
-    if (!words) dy_error("out of memory", 0);
+    if (!words) dy_boehm_cannot_allocate(n * sizeof(D));
     return words;
 }
 
 static inline char *dy_alloc_bytes(size_t n) {
     char *bytes = GC_MALLOC_ATOMIC(n);
-    if (!bytes) dy_error("out of memory", 0);
+    if (!bytes) dy_boehm_cannot_allocate(n);
     return bytes;
 }
 
 static inline void *dy_alloc_root(size_t bytes) {
     void *p = GC_MALLOC_UNCOLLECTABLE(bytes);
-    if (!p) dy_error("out of memory", 0);
+    if (!p) dy_boehm_cannot_allocate(bytes);
     return p;
 }
 
@@ -1208,7 +1212,7 @@ static inline D dy_make_cell(D value) {
 #else
 static inline D dy_make_cell(D value) {
     D *cell = GC_MALLOC(sizeof(D));
-    if (!cell) dy_error("out of memory", 0);
+    if (!cell) dy_boehm_cannot_allocate(sizeof(D));
     *cell = value;
     return (D)cell;
 }

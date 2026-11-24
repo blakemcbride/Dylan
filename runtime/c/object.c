@@ -51,7 +51,7 @@ typedef struct {
 
 static WeakList *make_weak_list(intptr_t size) {
     WeakList *l = GC_MALLOC_ATOMIC(sizeof(WeakList) + (size_t)size * sizeof(void *));
-    if (!l) dy_error("out of memory", 0);
+    if (!l) dy_boehm_cannot_allocate(sizeof(WeakList) + (size_t)size * sizeof(void *));
     memset(l, 0, sizeof(WeakList) + (size_t)size * sizeof(void *));
     l->size = size;
     return l;
@@ -65,7 +65,7 @@ static void move_weak(void *x, void **from, void **to) {
     *from = 0;
     *to = x;
     if (GC_general_register_disappearing_link(to, x) == GC_NO_MEMORY)
-        dy_error("out of memory", 0);
+        dy_boehm_cannot_allocate(0);
 }
 
 D dy_weak_add(D list, D x) {
@@ -95,7 +95,7 @@ D dy_weak_add(D list, D x) {
     }
     l->objects[used] = DY_PTR(x);
     if (GC_general_register_disappearing_link(&l->objects[used], DY_PTR(x)) == GC_NO_MEMORY)
-        dy_error("out of memory", 0);
+        dy_boehm_cannot_allocate(0);
     l->used = used + 1;
     return DY_OBJ(l);
 }
@@ -132,7 +132,7 @@ bool dy_in_heap(D x) {
 
 D dy_weak_keys(intptr_t n) {
     WeakKeys *k = GC_MALLOC_ATOMIC(sizeof(WeakKeys) + (size_t)n * sizeof(void *));
-    if (!k) dy_error("out of memory", 0);
+    if (!k) dy_boehm_cannot_allocate(sizeof(WeakKeys) + (size_t)n * sizeof(void *));
     memset(k, 0, sizeof(WeakKeys) + (size_t)n * sizeof(void *));
     k->size = n;
     return DY_OBJ(k);
@@ -147,7 +147,7 @@ void dy_set_weak_key(D keys, intptr_t i, D x) {
     GC_unregister_disappearing_link(link);   /* if there is one */
     *link = DY_PTR(x);
     if (GC_general_register_disappearing_link(link, DY_PTR(x)) == GC_NO_MEMORY)
-        dy_error("out of memory", 0);
+        dy_boehm_cannot_allocate(0);
 }
 
 void dy_weak_keys_drop(D keys) {
@@ -168,6 +168,17 @@ static void GC_CALLBACK filter_warning(char *message, GC_word argument) {
     if (strstr(message, "Failed to expand heap") || strstr(message, "Out of Memory"))
         return;
     collector_warn(message, argument);
+}
+
+/* As dy_mps_cannot_allocate (gc-mps.c): a request of a megabyte or more
+ * that the collector refused is the error "out of memory", which a
+ * handler can catch.  A smaller one means that memory is gone: making the
+ * error would itself allocate, and fail again, so it is reported. */
+_Noreturn void dy_boehm_cannot_allocate(size_t bytes) {
+    if (bytes >= 1024 * 1024) dy_error("out of memory", 0);
+    fflush(stdout);
+    fputs("Dylan error: out of memory\n", stderr);
+    exit(1);
 }
 #endif
 

@@ -529,19 +529,26 @@ Its faults are worded as the compiler to C words them."
                  (slot.init-function slot))
            mv bound-vars compiler nil
            (lambda (compiled-forms mv)
+             ;; The owner and the options first, then the getter and
+             ;; setter made generic functions, as the compiler to C does
+             ;; it: an option that signals leaves them undefined.
              (funcall continue
-                      `(dylan%add-slot ,owner
-                                       ,(car compiled-forms)   ; Type
-                                       ',(slot.allocation slot)
-                                       ,setter
-                                       ,getter
-                                       ',(slot.debug-name slot)
-                                       ,(cadr compiled-forms)  ; Init-Value
-                                       ,(slot.has-initial-value? slot)
-                                       ,(caddr compiled-forms) ; Init-Function
-                                       ',(slot.init-keyword slot)
-                                       ',(slot.required-init-keyword slot)
-                                       ',(slot.type-given? slot))
+                      `(let ((!owner ,owner)
+                             (!type ,(car compiled-forms))
+                             (!init-value ,(cadr compiled-forms))
+                             (!init-function ,(caddr compiled-forms)))
+                         (dylan%add-slot !owner
+                                         !type
+                                         ',(slot.allocation slot)
+                                         ,setter
+                                         ,getter
+                                         ',(slot.debug-name slot)
+                                         !init-value
+                                         ,(slot.has-initial-value? slot)
+                                         !init-function
+                                         ',(slot.init-keyword slot)
+                                         ',(slot.required-init-keyword slot)
+                                         ',(slot.type-given? slot)))
                       mv)))))))))
 
 (defun generate-define-class (name superclasses getter-code slots bound-vars

@@ -501,6 +501,19 @@ not-a-singleton
  ;; earlier (chapter 10), though the define-slot's owner is known only
  ;; when the program runs; on singletons of other objects, both stay
  ;; (Bugs07 C7).
+ ;; A define-slot's options are evaluated before its getter is made a
+ ;; generic function: one that signals leaves the getter undefined
+ ;; (Bugs07 B11).
+ (define-slot-option-signals
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <base> (<object>) (b1 init-value: 1))
+(print (try (method () (define-slot <base> extra init-value: (error \"boom\")) 'done)))
+(print (try (method () (extra (make <base>)))))
+(print (try (method () (slot-descriptor (make <base>) extra))))"
+  "\"ERR: boom\"
+\"ERR: the variable extra@dylan-user has no value\"
+\"ERR: the variable extra@dylan-user has no value\"
+")
  (define-slot-singleton-and-method-replace
   "(define-method h ((x <integer>)) 'int)
 (define-slot (singleton 7) h init-value: \"slot\")

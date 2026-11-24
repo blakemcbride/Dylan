@@ -136,6 +136,11 @@ a compiled program reports an unhandled error, and exit with status 1."
 
 (defparameter *transcript-limit* 100000)
 
+(defparameter *transcript-stack* (* 64 1024 1024)
+  "The stack that writing a value for the transcript may use: a printer
+that recurs without end is the error \"the stack is exhausted\" before it
+fills the heap with what each round makes.")
+
 (defclass limited-output (sb-gray:fundamental-character-output-stream)
   ((target :initarg :target :reader limited-output-target)
    (left :initarg :left :accessor limited-output-left))
@@ -152,12 +157,32 @@ are written, then throws to LIMITED-OUTPUT."))
   nil)
 
 (defun write-transcript-value (value)
-  (catch 'limited-output
-    (dylan-write value (make-instance 'limited-output
-                                      :target *standard-output*
-                                      :left *transcript-limit*))
-    (return-from write-transcript-value))
-  (write-string " ..."))
+  "Write VALUE for the transcript.  It is written to a string first: a
+printer that signals -- a program's print-object -- leaves none of its
+output, the transcript says why instead, and the run goes on, as it does
+in a compiled program, which has no transcript to print."
+  (let* ((out (make-string-output-stream))
+         (whole t)
+         (failure
+           (handler-case
+               (let ((*stack-guard*
+                       (max *stack-guard*
+                            (- (implementation-specific/stack-pointer) *transcript-stack*))))
+                 (catch 'limited-output
+                   (dylan-write value (make-instance 'limited-output
+                                                     :target out
+                                                     :left *transcript-limit*))
+                   (return-from write-transcript-value
+                     (write-string (get-output-stream-string out))))
+                 (setf whole nil)
+                 nil)
+             ((or error stack-exhausted) (condition)
+               (batch-error-text condition)))))
+    (if failure
+        (format t "{the value could not be printed: ~a}" failure)
+        (progn
+          (write-string (get-output-stream-string out))
+          (unless whole (write-string " ..."))))))
 
 (defun print-rep-result (result multiple-values)
   ;; One value, returned through values, prints as any one value: only

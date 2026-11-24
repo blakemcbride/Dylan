@@ -165,7 +165,11 @@ that returns several values shows each one on its own line, numbered:
 \end{repl}
 
 \noindent The loop prints no more than 100,000 characters of a value, then
-\code{ ...}, so that a circular list, say, does not print forever.
+\code{ ...}, so that a circular list, say, does not print forever. A
+value that cannot be printed --- its \code{print-object} method signals
+an error, or recurs without end --- is shown as \code{\{the value could
+not be printed: \meta{message}\}}, and the loop goes on: the form itself
+signalled nothing.
 
 \begin{notebox}
 In a real terminal the loop prints an extra blank line after each form you

@@ -338,6 +338,21 @@ check "bin/dylan: a byte not UTF-8 read as U+FFFD" sh -c '"$0" latin.dyl < /dev/
 printf '(define x (list 1 2))\n(set! (cdr (cdr x)) x)\n(print (quote after))\n' > circular.dyl
 timeout -s KILL 60 "$dylan" circular.dyl < /dev/null > circular.out 2>&1
 check "bin/dylan: a circular value's transcript ends" sh -c 'grep -q "^;Value: (1 2 1 2 .* \.\.\.$" circular.out && grep -q "^after" circular.out'
+# A value whose print-object signals, or recurs without end, is not
+# printed, and the run goes on, as in a compiled program, which has no
+# transcript (Bugs07 L6)
+cat > unprintable.dyl <<'EOF'
+(define-class <person> (<object>) (name))
+(define-method print-object ((p <person>) (s <stream>) e) (format s "{person ~a}" (name p)))
+(define q (make <person>))
+(set! q q)
+(define-class <deep> (<object>))
+(define-method print-object ((p <deep>) (s <stream>) e) (print-object p s e) 1)
+(make <deep>)
+(print 'after)
+EOF
+timeout -s KILL 120 "$dylan" unprintable.dyl < /dev/null > unprintable.out 2>&1; status=$?
+check "bin/dylan: a value print-object cannot print" sh -c 'test "$0" = 0 && grep -q "^;Value: {the value could not be printed: the slot name is not initialized}$" unprintable.out && grep -q "^;Value: {the value could not be printed: the stack is exhausted}$" unprintable.out && grep -q "^after" unprintable.out' "$status"
 # Read from a file, a program has no read-eval-print loop's restart:
 # abort ends it as an unhandled error, and it sees no handlers of its own
 cat > abort.dyl <<'EOF'

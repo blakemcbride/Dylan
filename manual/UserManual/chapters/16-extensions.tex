@@ -237,7 +237,11 @@ Functions and variables for macro bodies to use are defined with
 \noindent at top level, which runs the \meta{form}s in the compile-time
 environment while compiling, and leaves nothing in the compiled program:
 the program cannot see what they define. A variable defined there keeps
-its value from one expansion to the next.
+its value from one expansion to the next. The library's generic
+functions are in both environments, but a method either one adds to them
+is its own: one that \code{define-for-macros} adds is not the program's,
+and one the program adds is not seen by macro bodies. A module that
+\code{define-for-macros} defines is likewise unknown to the program.
 Here a helper builds the names of accessors for a macro that defines a
 class:
 

@@ -531,24 +531,27 @@ each, as the interpreter does, and does not merge equal ones."
   "Evaluate the Dylan FORM in the compile-time environment; answer its
 value.  An error in it is a compile error, its message beginning with WHAT."
   (when (eq *compile-time-variables* :new)
+    ;; A new program: what an earlier one's compile-time code did is
+    ;; forgotten
+    (dylan::forget-compile-time-world)
     (setf *compile-time-variables* '()))
   (handler-case
-      (let ((dylan::*current-module* (dylan::compile-time-module))
-            (*standard-output* *error-output*)
-            ;; No one is at a debugger: break reports and carries on
-            (dylan::*batch* t)
-            (result nil))
-        (dylan::compile-expression
-         form nil *compile-time-variables*
-         (lambda (new preamble output)
-           (setf *compile-time-variables* (append new *compile-time-variables*))
-           ;; A host error is the Dylan error it reflects, which the
-           ;; form's own handlers see first, as when the program runs.
-           (setf result (dylan::dylan%catch-all-conditions
-                         (lambda ()
-                           (dylan::implementation-specific/eval
-                            (append preamble (list output))))))))
-        result)
+      (dylan::with-compile-time-module
+        (let ((*standard-output* *error-output*)
+              ;; No one is at a debugger: break reports and carries on
+              (dylan::*batch* t)
+              (result nil))
+          (dylan::compile-expression
+           form nil *compile-time-variables*
+           (lambda (new preamble output)
+             (setf *compile-time-variables* (append new *compile-time-variables*))
+             ;; A host error is the Dylan error it reflects, which the
+             ;; form's own handlers see first, as when the program runs.
+             (setf result (dylan::dylan%catch-all-conditions
+                           (lambda ()
+                             (dylan::implementation-specific/eval
+                              (append preamble (list output))))))))
+          result))
     (compile-error (e) (error e))
     (error (e) (compile-error "~a: ~a" what (condition-text e)))))
 
@@ -600,10 +603,11 @@ value.  An error in it is a compile error, its message beginning with WHAT."
                             ;; A host error in the body is the Dylan error
                             ;; it reflects, which the body's own handlers
                             ;; see first (chapter 16).
-                            (dylan::dylan%catch-all-conditions
-                             (lambda ()
-                               (apply (cdr macro) nil dylan::next-method/not-generic
-                                      (cdr form)))))
+                            (dylan::with-compile-time-module
+                              (dylan::dylan%catch-all-conditions
+                               (lambda ()
+                                 (apply (cdr macro) nil dylan::next-method/not-generic
+                                        (cdr form))))))
               (compile-error (e) (error e))
               (error (e)
                 (compile-error "macro ~a: ~a" (car macro) (condition-text e))))))

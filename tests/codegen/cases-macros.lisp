@@ -241,6 +241,38 @@ FreSh
 6
 "
   :error "the variable twice@dylan-user has no value")
+ ;; The library's generic functions are both environments', but a method
+ ;; one adds is its own: define-for-macros's are not the program's ...
+ (compile-time-methods-apart-from-program
+  "(define-for-macros
+  (define-method binary+ ((a <string>) (b <string>)) (concatenate a b)))
+(define-macro joined () (+ \"a\" \"b\"))
+(print (joined))
+(print (handler-case (+ \"a\" \"b\") ((<error>) \"no method\")))"
+  "\"ab\"
+\"no method\"
+")
+ ;; ... nor are the program's the macros' (Bugs07 L5).
+ (program-methods-apart-from-macros
+  "(define-method binary+ ((a <string>) (b <string>)) (concatenate a b))
+(define-macro m () (handler-case (+ \"a\" \"b\") ((<error>) \"no method\")))
+(print (m))
+(print (+ \"a\" \"b\"))"
+  "\"no method\"
+\"ab\"
+")
+ ;; The modules define-for-macros defines are its own too.
+ (compile-time-module-apart-from-program
+  "(define-for-macros (define-module dylan-user (use dylan exclude: (car))))
+(print (car '(1 2)))"
+  "1
+")
+ (compile-time-module-unknown-to-program
+  "(define-for-macros (define-module foo (use dylan) (export bar)))
+(define-module app (use dylan) (use foo))
+(print 'ok)"
+  ""
+  :compile-error "unknown module foo")
  ;; A second define-macro replaces the macro for the forms after it (chapter 16).
  (macro-defined-twice
   "(define-macro m () 1)

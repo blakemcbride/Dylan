@@ -81,6 +81,7 @@ program's; the system defines none.)"
         (remhash variable *read-only-variables*))))
   (clrhash *dylan-macros*)
   (clrhash *defined-names*)
+  (forget-compile-time-world)
   (reset-program-variables)
   (setf rep-module-variables '()))
 

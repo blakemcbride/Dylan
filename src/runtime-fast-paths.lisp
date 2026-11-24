@@ -76,6 +76,10 @@
 ;;; functions use (runtime-collections-iterate.lisp)
 (snapshot-library-collection-methods)
 
+;;; ... and all its generic functions' methods, which the compile-time
+;;; world starts with (generic.lisp)
+(snapshot-library-generic-methods)
+
 ;;; ... and the program's copies of its variables (runtime-internal.lisp)
 (make-program-variables)
 

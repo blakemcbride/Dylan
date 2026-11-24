@@ -831,3 +831,79 @@ Dylan."
 
 (defun dylan%dylan-callable->method (param-list dylan-callable)
   (dylan%make-method param-list dylan-callable))
+
+;;;; The compile-time world
+;;;;
+;;;; Macro bodies and define-for-macros run while the program is compiled,
+;;;; in an environment of their own, apart from the program's (chapter 16,
+;;;; design row 15), as in the compiler to C, which runs them here and
+;;;; never runs the program.  The library's generic functions are objects
+;;;; both see, so each has two sets of methods: the program's and the
+;;;; compile-time code's.  Its data holds those of the world now running;
+;;;; the other world's are kept aside, and entering or leaving the
+;;;; compile-time world swaps them, with the dispatch caches that go with
+;;;; them.  (A method either adds may turn off a fast path for both; that
+;;;; only sends their calls through dispatch.)
+
+(defstruct (generic-world (:constructor make-generic-world (data methods frozen)))
+  data methods frozen (cache nil) (cache-epoch 0) (cache-singletons nil))
+
+(defvar *library-generic-methods* '()
+  "Each of the library's generic functions' data, with the methods and
+frozen lists the library gave it: (DATA METHODS . FROZEN).")
+
+(defvar *compile-time-generics* nil
+  "A GENERIC-WORLD for each of the library's generic functions, holding
+the methods of the world its data does not: the compile-time world's
+while the program runs, the program's while compile-time code runs.  NIL
+until compile-time code first runs.")
+
+(defvar *in-compile-time-world* nil)
+
+(defun snapshot-library-generic-methods ()
+  "Note the library's generic functions and their methods, once it is
+loaded: the compile-time world starts with them."
+  (let ((seen (make-hash-table :test #'eq)))
+    (setf *library-generic-methods*
+          (loop for (nil variable) in dylan%lisp-names-of-predefined-names
+                for value = (and (boundp variable) (symbol-value variable))
+                for data = (and value (dylan%generic-function? value)
+                                (generic-function-data value))
+                when (and data (not (gethash data seen)))
+                  collect (progn (setf (gethash data seen) t)
+                                 (list* data
+                                        (copy-list (generic-function-data.methods data))
+                                        (generic-function-data.frozen data)))))))
+
+(defun swap-generic-worlds ()
+  (dolist (world *compile-time-generics*)
+    (let ((data (generic-world-data world)))
+      (rotatef (generic-function-data.methods data) (generic-world-methods world))
+      (rotatef (generic-function-data.frozen data) (generic-world-frozen world))
+      (rotatef (generic-function-data.cache data) (generic-world-cache world))
+      (rotatef (generic-function-data.cache-epoch data)
+               (generic-world-cache-epoch world))
+      (rotatef (generic-function-data.cache-singletons data)
+               (generic-world-cache-singletons world)))))
+
+(defun call-in-compile-time-world (thunk)
+  "Call THUNK with the library's generic functions holding the
+compile-time world's methods, which start as the library's own."
+  (if *in-compile-time-world*
+      (funcall thunk)
+      (progn
+        (unless *compile-time-generics*
+          (setf *compile-time-generics*
+                (loop for (data methods . frozen) in *library-generic-methods*
+                      collect (make-generic-world data (copy-list methods) frozen))))
+        (swap-generic-worlds)
+        (unwind-protect (let ((*in-compile-time-world* t))
+                          (funcall thunk))
+          (swap-generic-worlds)))))
+
+(defun forget-compile-time-world ()
+  "Forget what compile-time code added to the library's generic functions,
+and the modules it defined, for a new program."
+  (unless *in-compile-time-world*
+    (setf *compile-time-generics* nil
+          *compile-time-modules* nil)))

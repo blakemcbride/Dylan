@@ -179,6 +179,9 @@ longer, and the library's generic functions lose the methods it added."
   (reset-program-variables)
   (clrhash *dylan-macros*)              ; a macro's own name is not among them
   (clrhash *defined-names*)
+  ;; What its define-for-macros and macros added to the library's generic
+  ;; functions, and the modules they defined
+  (forget-compile-time-world)
   ;; Chapter 15: how a symbol was spelled, but for the implementation's
   ;; own names
   (clrhash *symbol-spellings*)

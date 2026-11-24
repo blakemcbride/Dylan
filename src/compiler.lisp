@@ -926,10 +926,11 @@ call, with the macro's name, as the compiler to C reports it."
                              (let ((*standard-output* s)) (dylan-write e))))))
     ;; A host error in the body is the Dylan error it reflects, which
     ;; the body's own handlers see first (chapter 16: a macro's body is
-    ;; ordinary Dylan).
+    ;; ordinary Dylan).  The body runs in the compile-time environment.
     (let ((expansion
-            (handler-case (dylan%catch-all-conditions
-                           (lambda () (apply (cdr macro) nil next-method/not-generic (cdr e))))
+            (handler-case (with-compile-time-module
+                            (dylan%catch-all-conditions
+                             (lambda () (apply (cdr macro) nil next-method/not-generic (cdr e)))))
               (error (condition)
                 (dylan%error (format nil "macro ~a: ~a" name (condition-text condition)))))))
       (when (circular-form-p expansion)

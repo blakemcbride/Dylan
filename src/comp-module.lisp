@@ -564,19 +564,44 @@ and is not a header, that line followed by STREAM."
 (defvar *compile-time-variables* '()
   "The variables defined so far in the compile-time environment.")
 
+;;; The compile-time environment has modules of its own: the library's,
+;;; a dylan-user of its own, its own module, and those its define-module
+;;; forms define, which the program does not see, as in the compiler to C.
+
+(defvar *compile-time-modules* nil
+  "The compile-time environment's module table, apart from the program's
+*DYLAN-MODULES*; NIL until made.")
+
+(defun compile-time-modules ()
+  "The compile-time environment's module table, made if need be."
+  (or *compile-time-modules*
+      (let ((table (make-hash-table :test #'eq))
+            (*current-module* *current-module*))
+        (setf (gethash 'dylan table) (find-module 'dylan))
+        (let ((*dylan-modules* table))
+          (dylan%define-module 'dylan-user '((use dylan)))
+          (dylan%define-module +compile-time-module+ '((use dylan))))
+        (setf *compile-time-variables* '())
+        (setf *compile-time-modules* table))))
+
 (defun compile-time-module ()
   "The name of the compile-time environment's module, made if need be."
-  (unless (find-module +compile-time-module+ nil)
-    (let ((*current-module* *current-module*))
-      (dylan%define-module +compile-time-module+ '((use dylan))))
-    (setf *compile-time-variables* '()))
+  (compile-time-modules)
   +compile-time-module+)
 
+(declaim (ftype function call-in-compile-time-world)) ; generic.lisp
+
 (defmacro with-compile-time-module (&body body)
-  `(let ((*current-module* (compile-time-module)))
-     ,@body))
+  "BODY, run in the compile-time environment: in its module, with its
+modules, and with its methods on the library's generic functions."
+  `(call-in-compile-time-world
+    (lambda ()
+      (let* ((*dylan-modules* (compile-time-modules))
+             (*current-module* +compile-time-module+))
+        ,@body))))
 
 (defun initialize-modules ()
+  (setf *compile-time-modules* nil)
   (clrhash *dylan-modules*)
   (setf (gethash 'dylan *dylan-modules*) (make-dylan-module :name 'dylan))
   (dylan%define-module 'dylan-user '((use dylan)))

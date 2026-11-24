@@ -522,7 +522,13 @@ init-keyword, required-init-keyword, debug-name, and allocation.  See page 52."
                                           (lambda () 'instance)))
          (shown-name (false->nil (dylan%find-keyword keyword-list :debug-name
                                                      (lambda () nil))))
-         (debug-name (or shown-name '*the-unnamed-slot*))
+         ;; The slot's name in its errors: the debug-name:, or else its
+         ;; getter's, as a define-class slot is named
+         (debug-name (or shown-name
+                         (and (functionp getter)
+                              (dylan%generic-function? getter)
+                              (generic-function.name getter))
+                         '*the-unnamed-slot*))
          (required-init-keyword (dylan%find-keyword
                                  keyword-list :required-init-keyword
                                  (lambda () nil)))

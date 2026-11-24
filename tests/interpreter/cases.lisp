@@ -103,6 +103,24 @@
 {slot #f}
 #({slot dbg} {slot #f})
 ")
+ ;; A slot add-slot made is named in its errors as it prints: by its
+ ;; debug-name:, or else its getter's name (Bugs07 L8)
+ (add-slot-named-in-errors
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <c> (<object>))
+(define gx (make <generic-function> required: 1 debug-name: 'gx))
+(add-slot <c> getter: gx)
+(print (try (method () (gx (make <c>)))))
+(define-generic-function gy (x))
+(add-slot <c> getter: gy)
+(print (try (method () (gy (make <c>)))))
+(define gz (make <generic-function> required: 1 debug-name: 'gz))
+(add-slot <c> getter: gz debug-name: 'shown)
+(print (try (method () (gz (make <c>)))))"
+  "\"ERR: the slot gx is not initialized\"
+\"ERR: the slot gy is not initialized\"
+\"ERR: the slot shown is not initialized\"
+")
  ;; An integer too large for the heap is the error "out of memory" at
  ;; once, which a handler catches (Bugs05 L4).  (The compiler to C has no
  ;; integers past 63 bits.)

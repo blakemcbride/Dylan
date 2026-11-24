@@ -97,7 +97,7 @@ run it.
 $ make
 $ bin/dylan
 
-Dylan version 1.1
+Dylan version 1.2
 Entering Dylan read-eval-print-loop.
 Leave by typing "(exit)"
 

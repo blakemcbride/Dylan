@@ -4249,4 +4249,95 @@ y
 {range 1 by 1 size 3}
 (2 3)
 ")
+ ;; The library's functions on its own classes call its own code, not
+ ;; the generic functions a program may add methods to: any?, choose,
+ ;; reduce, map-as, do, size, empty?, push, push-last and pop-last
+ ;; (Bugs07 C10).  One program for each set of methods that can be
+ ;; defined together.
+ (library-calls-not-generic-1
+  "(define-method any? ((f <function>) (s <byte-string>) #rest more) #t)
+(print (add-new \"abc\" #\\z))
+(print (add-new! \"abc\" #\\z))
+(print (union \"ab\" \"bc\"))
+(define-method choose ((f <function>) (s <simple-object-vector>)) (vector))
+(print (intersection (vector 1 2) '(2 3)))
+(print (union (vector 1 2) (vector 2 3)))
+(define-method reduce ((f <function>) init (s <list>)) init)
+(print (concatenate-as <vector> '(1 2) '(3)))
+(print (concatenate '(1 2) '(3)))
+(define-method map-as ((c <class>) (f <function>) (s <deque>) #rest more) 'mine)
+(print (map identity (as <deque> '(1 2))))
+(print (as <deque> (as <deque> '(3 4))))
+(define-method do ((f <function>) (s <stretchy-vector>) #rest more) #f)
+(define-method map-as ((c <class>) (f <function>) (s <list>) #rest more) 'mine)
+(print (choose-by even? (as <stretchy-vector> '(1 2 3 4)) (as <stretchy-vector> '(a b c d))))
+(print (as <vector> '(1 2)))
+(print (as <stretchy-vector> '(1 2)))"
+  "\"zabc\"
+\"zabc\"
+\"abc\"
+#(2)
+#(1 2 3)
+#(1 2 3)
+(1 2 3)
+{<deque> 1 2}
+{<deque> 3 4}
+{<stretchy-vector> b d}
+#(1 2)
+{<stretchy-vector> 1 2}
+")
+ (library-calls-not-generic-2
+  "(define-method size ((v <simple-object-vector>)) 1)
+(print (map-into (vector 0 0 0) identity '(1 2 3)))
+(print (vector 1 2 3))
+(define-method empty? ((d <deque>)) #t)
+(define-method empty? ((d <array>)) #t)
+(define-method empty? ((d <stretchy-vector>)) #t)
+(print (as <deque> '(1 2)))
+(print (make <array> dimensions: '(2 2) fill: 0))
+(print (as <stretchy-vector> '(1 2)))"
+  "#(1 2 3)
+#(1 2 3)
+{<deque> 1 2}
+{<array> 0 0 0 0}
+{<stretchy-vector> 1 2}
+")
+ (library-calls-not-generic-3
+  "(define-method size ((r <range>)) #f)
+(print (concatenate '(9) (range from: 0 up-to: 3)))
+(print (concatenate-as <list> '(9) (range from: 0 up-to: 3)))
+(print (as <table> (range from: 0 up-to: 3)))
+(define-method size ((v <simple-object-vector>)) #f)
+(print (replace-subsequence! (list 1 2 3) (vector 9)))"
+  "(9 0 1 2)
+(9 0 1 2)
+{table 0 => 0 1 => 1 2 => 2}
+(9 2 3)
+")
+ (library-calls-not-generic-4
+  "(define d (as <deque> '(1 2)))
+(define-method push ((d <deque>) x) (error \"my push\"))
+(define-method push-last ((d <deque>) x) (error \"my push-last\"))
+(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (add d 0))))
+(print (try (method () (add! d 0))))
+(print (try (method () (remove! d 1))))
+(print (try (method () (as <deque> '(5 6)))))
+(define-method pop-last ((d <deque>)) (error \"my pop-last\"))
+(define e (as <deque> '(1 2 3)))
+(set! (size e) 1)
+(print e)
+(set! (size e) 3)
+(print e)
+(print (try (method () (concatenate e '(4)))))
+(print (try (method () (reverse e))))"
+  "{<deque> 0 1 2}
+{<deque> 0 1 2}
+{<deque> 0 2}
+{<deque> 5 6}
+{<deque> 1}
+{<deque> 1 #f #f}
+{<deque> 1 #f #f 4}
+{<deque> #f #f 1}
+")
 )

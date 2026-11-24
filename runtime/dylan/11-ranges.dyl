@@ -235,7 +235,7 @@ module: dylan
   (cond ((not (or (id? test id?) (id? test =)))
          (if (%size r)
              ;; #t, whatever true value the test answers
-             (if (any? (method (e) (test value e)) (%elements r)) #t #f)
+             (if (%list-any? (method (e) (test value e)) (%elements r)) #t #f)
              (error "member?: a test: on an unbounded range might not terminate")))
         ((not (%instance? value <real>)) #f)
         ((zero? (%by r))
@@ -272,10 +272,10 @@ module: dylan
          (bind ((q (binary/ (binary- value (%grid-origin r)) (%grid-by r))))
            (and (binary< (abs q) 4.0e18)
                 (bind ((k (round q)))
-                  (any? (method (d)
-                          (bind ((i (%grid-index r (binary+ k d))))
-                            (and i (test value (%range-element r i)))))
-                        '(0 -1 1)))
+                  (%list-any? (method (d)
+                                (bind ((i (%grid-index r (binary+ k d))))
+                                  (and i (test value (%range-element r i)))))
+                              '(0 -1 1)))
                 #t)))))
 
 ;;; A real, exactly: a float as the rational it holds
@@ -381,7 +381,7 @@ module: dylan
         ((zero? (%by y))
          (bind ((v (%from y)))
            (if (and (member? v y) (member? v x)) (range from: v size: 1) (%empty-range))))
-        ((every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
+        ((%list-every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
          (%grid-intersection x y))
         ((%size x) (%float-intersection x y test))
         ((%size y) (%float-intersection (%range-window x y) y test))
@@ -441,8 +441,8 @@ module: dylan
     ;; Of rationals, the grids scaled to integers by their common
     ;; denominator D.  The common points nearest the ends of the interval
     ;; both ranges cover are found exactly, in 128 bits (%grid-point).
-    (bind ((d (if (every? (method (n) (%instance? n <integer>))
-                          (list (%from x) (%by x) (%from y) (%by y)))
+    (bind ((d (if (%list-every? (method (n) (%instance? n <integer>))
+                                (list (%from x) (%by x) (%from y) (%by y)))
                   1
                   (lcm (denominator (%from x)) (denominator (%by x))
                        (denominator (%from y)) (denominator (%by y)))))

@@ -116,7 +116,7 @@ module: dylan
 ;;; as a table: the collection's keys, each with its element (chapter 11).
 (define-method as ((class (singleton <table>)) (c <collection>))
   (cond ((%instance? c <table>) c)
-        ((and (%instance? c <range>) (not (size c)))
+        ((and (%instance? c <range>) (not (%library-size c)))
          (error "as: the range is unbounded"))
         (else:
          (bind ((t (make <table>)))

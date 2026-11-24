@@ -61,7 +61,7 @@ module: dylan
                          ((or (binary= i count)
                               (%wide-character? (%vector-element (%data chars) i)))
                           (binary= i count)))))
-      (concatenate-as (if narrow? <byte-string> <unicode-string>) chars))))
+      (%concatenate-as (if narrow? <byte-string> <unicode-string>) (list chars)))))
 
 (define %stream
   (method (stream)
@@ -171,7 +171,7 @@ module: dylan
 (define-method print-object ((x <sequence>) stream escape?)
   (%put stream #\{)
   (print-object (%class-name (%object-class x)) stream #f)
-  (unless (empty? x)
+  (when (initial-state x)
     (%put stream #\space)
     (if (%library-size x)
         (%print-elements x stream escape?)
@@ -182,7 +182,7 @@ module: dylan
 ;;; An array: <array> and its elements, in row-major order
 (define-method print-object ((x <%general-array>) stream escape?)
   (%put stream "{<array>")
-  (unless (empty? x)
+  (when (initial-state x)
     (%put stream #\space)
     (%print-elements x stream escape?))
   (%put stream #\})
@@ -435,7 +435,7 @@ module: dylan
                        (%pretty-print head s (binary+ column 1))
                        (lines (cdr object) (binary+ column 1))))
                  (%put s #\))))
-              ((and (%instance? object <simple-object-vector>) (not (empty? object)))
+              ((and (%instance? object <simple-object-vector>) (binary< 0 (%vector-size object)))
                (%put s "#(")
                (%pretty-print (%library-element object 0 %no-default) s (binary+ column 2))
                (lines (cdr (as <list> object)) (binary+ column 2))

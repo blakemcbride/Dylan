@@ -37,7 +37,7 @@ module: dylan
   (method ((array <array>))
     ;; A copy: the array's own list is what it checks indices against
     (if (%instance? array <%general-array>)
-        (copy-sequence (%dimensions array))
+        (%list-map (method (d) d) (%dimensions array))
         (list (%library-size array)))))
 
 (define %row-major
@@ -112,7 +112,7 @@ module: dylan
   (bind-methods ((split (dims k)
                    (if (id? dims '())
                        '()
-                       (bind ((inner (reduce binary* 1 (cdr dims))))
+                       (bind ((inner (%list-reduce binary* 1 (cdr dims))))
                          (bind ((q r (truncate/ k inner)))
                            (cons q (split (cdr dims) r)))))))
     (as <simple-object-vector> (split (%dimensions a) i))))

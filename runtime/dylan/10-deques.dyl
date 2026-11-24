@@ -92,28 +92,37 @@ module: dylan
 (define-method final-state ((d <deque>)) (if (zero? (%count d)) #f (binary- (%count d) 1)))
 (define-method previous-state ((d <deque>) (i <integer>)) (if (zero? i) #f (binary- i 1)))
 
-(define-generic-function push (deque new-value))
-(define-method push ((d <deque>) new-value)
-  (%deque-grow d)
-  (bind ((n (%vector-size (%data d))))
-    (set! (%first d) (if (zero? (%first d)) (binary- n 1) (binary- (%first d) 1)))
-    (%vector-element-setter (%data d) (%first d) new-value)
+;;; push and push-last, which the library's own functions on deques call,
+;;; not the generic functions, whose methods a program may add or replace
+;;; (Bugs02 B10)
+(define %deque-push
+  (method (d new-value)
+    (%deque-grow d)
+    (bind ((n (%vector-size (%data d))))
+      (set! (%first d) (if (zero? (%first d)) (binary- n 1) (binary- (%first d) 1)))
+      (%vector-element-setter (%data d) (%first d) new-value)
+      (set! (%count d) (binary+ (%count d) 1))
+      d)))
+
+(define %deque-push-last
+  (method (d new-value)
+    (%deque-grow d)
+    (%vector-element-setter (%data d) (%deque-slot d (%count d)) new-value)
     (set! (%count d) (binary+ (%count d) 1))
     d))
 
+(define-generic-function push (deque new-value))
+(define-method push ((d <deque>) new-value) (%deque-push d new-value))
+
 (define-generic-function push-last (deque new-value))
-(define-method push-last ((d <deque>) new-value)
-  (%deque-grow d)
-  (%vector-element-setter (%data d) (%deque-slot d (%count d)) new-value)
-  (set! (%count d) (binary+ (%count d) 1))
-  d)
+(define-method push-last ((d <deque>) new-value) (%deque-push-last d new-value))
 
 ;;; Size-setter for stretchy sequences (design note 12): elements are
 ;;; dropped from the end, or #f added there, as make adds them without
 ;;; fill:.
 (define-method (setter size) ((d <deque>) n)
   (%check-new-size n)
-  (for () ((not (binary< n (%count d)))) (pop-last d))
+  (for () ((not (binary< n (%count d)))) (%deque-pop-last d))
   ;; Room for them all first, in one request, as make asks for it: a size
   ;; too large to allocate is "out of memory", not memory used up one
   ;; element at a time.
@@ -123,7 +132,7 @@ module: dylan
         (%vector-element-setter new i (%vector-element (%data d) (%deque-slot d i))))
       (set! (%data d) new)
       (set! (%first d) 0)))
-  (for () ((not (binary< (%count d) n))) (push-last d #f))
+  (for () ((not (binary< (%count d) n))) (%deque-push-last d #f))
   n)
 
 (define-generic-function pop (deque))
@@ -139,26 +148,30 @@ module: dylan
 (define-generic-function pop-last (deque))
 (define-method pop-last ((d <deque>))
   (when (zero? (%count d)) (error "pop-last: the deque is empty"))
-  (bind ((k (%deque-slot d (binary- (%count d) 1))))
-    (bind ((value (%vector-element (%data d) k)))
-      (%vector-element-setter (%data d) k #f)
-      (set! (%count d) (binary- (%count d) 1))
-      value)))
+  (%deque-pop-last d))
+
+(define %deque-pop-last
+  (method (d)
+    (bind ((k (%deque-slot d (binary- (%count d) 1))))
+      (bind ((value (%vector-element (%data d) k)))
+        (%vector-element-setter (%data d) k #f)
+        (set! (%count d) (binary- (%count d) 1))
+        value))))
 
 ;;; add! on a deque is push; remove! changes the deque itself.
-(define-method add! ((d <deque>) new-value) (push d new-value))
+(define-method add! ((d <deque>) new-value) (%deque-push d new-value))
 
 ;;; A new instance of the class-for-copy (chapter 12): a deque is pushed
 ;;; on, as add! does; another class adds as it does.
 (define-method add ((d <deque>) new-value)
   (bind ((copy (copy-sequence d)))
-    (if (%instance? copy <deque>) (push copy new-value) (add copy new-value))))
+    (if (%instance? copy <deque>) (%deque-push copy new-value) (add copy new-value))))
 
 (define-method remove! ((d <deque>) value #key (test id?) count)
   (bind ((kept (%remove-elements (%elements d) value test count)))
     (set! (%count d) 0)
     (set! (%first d) 0)
-    (for-each ((e kept)) () (push-last d e))
+    (for-each ((e kept)) () (%deque-push-last d e))
     d))
 
 ;;; In place too, as in the Common Lisp implementation
@@ -166,5 +179,5 @@ module: dylan
   (bind ((kept (remove-duplicates (%elements d) test: test)))
     (set! (%count d) 0)
     (set! (%first d) 0)
-    (for-each ((e kept)) () (push-last d e))
+    (for-each ((e kept)) () (%deque-push-last d e))
     d))

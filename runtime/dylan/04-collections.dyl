@@ -51,6 +51,20 @@ module: dylan
     (bind-methods ((loop (l r) (if (id? l '()) r (loop (cdr l) (cons (car l) r)))))
       (loop (%list-reverse a) b))))
 
+(define %list-any?
+  (method (f l)
+    (cond ((id? l '()) #f)
+          ((f (car l)) #t)
+          (else: (%list-any? f (cdr l))))))
+
+;;; Whether F is true of an element of the collection C, walked by its
+;;; iteration protocol, not by any?, as far as the first such: C may be
+;;; unbounded
+(define %collection-any?
+  (method (f c)
+    (for ((state (initial-state c) (next-state c state)))
+         ((or (not state) (f (current-element c state))) (if state #t #f)))))
+
 ;;; F of each pair of elements of two lists of one length
 (define %list-every2?
   (method (f l1 l2)
@@ -277,21 +291,26 @@ module: dylan
 (define-generic-function map (procedure collection #rest more-collections))
 
 (define-method map ((f <function>) (c <collection>) #rest more)
-  (apply map-as (class-for-copy c) f c more))
+  (%map-as (class-for-copy c) f (cons c more)))
 
 (define-generic-function map-as (class procedure collection #rest more-collections))
 
 (define-method map-as ((class <class>) (f <function>) (c <collection>) #rest more)
-  ;; Chapter 12: CLASS must be a subclass of <mutable-collection>
-  (unless (%subclass? class <mutable-collection>)
-    (error "map-as: the class is not a mutable collection: ~s" class))
-  (bind ((collections (cons c more)))
+  (%map-as class f (cons c more)))
+
+;;; map-as, which map and as call, not the generic function, whose
+;;; methods a program may add (Bugs02 B10)
+(define %map-as
+  (method (class f collections)
+    ;; Chapter 12: CLASS must be a subclass of <mutable-collection>
+    (unless (%subclass? class <mutable-collection>)
+      (error "map-as: the class is not a mutable collection: ~s" class))
     ;; A vector is a sequence, though also (as an array) an explicit-key
     ;; collection: sequences first.
     (if (not (%subclass? class <sequence>))
-        (bind ((result (if (and (%subclass? class <array>) (%instance? c <array>))
+        (bind ((result (if (and (%subclass? class <array>) (%instance? (car collections) <array>))
                            ;; An array is made with its dimensions
-                           (make <array> dimensions: (dimensions c))
+                           (make <array> dimensions: (dimensions (car collections)))
                            (make class))))
           (for-each ((key (%common-keys collections)))
                     ()
@@ -446,10 +465,11 @@ module: dylan
        ;; A default no element of Y can be.  (%no-default is element's
        ;; own mark for no default, which signals an error.)
        (bind ((absent (list #f)))
-         (every? (method (key)
-                   (bind ((other (%library-element y key absent)))
-                     (and (not (id? other absent)) (= (%library-element x key %no-default) other))))
-                 (key-sequence x)))))
+         (not (%collection-any?
+               (method (key)
+                 (bind ((other (%library-element y key absent)))
+                   (or (id? other absent) (not (= (%library-element x key %no-default) other)))))
+               (key-sequence x))))))
 
 (define-method binary= ((x <sequence>) (y <sequence>))
   (bind-exit (return)
@@ -499,9 +519,9 @@ module: dylan
          ;; refuses an <empty-list> with elements and an empty <pair>.
          ;; The elements as the collection's iteration gives them, as do
          ;; and shallow-copy see them, not as element finds them by key.
-         (bind ((result (map-as (if (%subclass? class <list>) <list> class)
-                                identity
-                                (if (%instance? c <sequence>) c (%iterated-elements c)))))
+         (bind ((result (%map-as (if (%subclass? class <list>) <list> class)
+                                 identity
+                                 (list (if (%instance? c <sequence>) c (%iterated-elements c))))))
            (if (%instance? result class)
                result
                (error "as: ~s cannot be converted to ~s" c class))))

@@ -206,14 +206,19 @@ module: dylan
         (%copy-shared-slots x (make class)))))
 
 (define-method %copy-shared-slots (from to)
-  (bind ((shared (%slot-descriptors (%object-class to))))
-    (do (method (sd)
-          (if (and (id? (%slot-allocation sd) 'instance)
-                   (member? sd shared)
-                   (%slot-initialized? from (%slot-getter sd)))
-              (%slot-value-setter to sd (%slot-value from sd))
-              #f))
-        (%slot-descriptors (%object-class from)))
+  ;; The descriptors' vectors are walked here, not by do and member?,
+  ;; whose methods a program may add (Bugs02 B10).
+  (bind ((shared (%slot-descriptors (%object-class to)))
+         (own (%slot-descriptors (%object-class from))))
+    (bind-methods ((shared? (sd i)
+                     (and (binary< i (%vector-size shared))
+                          (or (id? (%vector-element shared i) sd) (shared? sd (binary+ i 1))))))
+      (dotimes (i (%vector-size own))
+        (bind ((sd (%vector-element own i)))
+          (when (and (id? (%slot-allocation sd) 'instance)
+                     (shared? sd 0)
+                     (%slot-initialized? from (%slot-getter sd)))
+            (%slot-value-setter to sd (%slot-value from sd))))))
     to))
 
 ;;; as: conversions (chapters 12, 15 and 16).  An object is already as

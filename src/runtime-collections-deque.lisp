@@ -152,8 +152,7 @@
           (do ((state (initial-state object)
                       (next-state object state)))
               ((not state) new-deque)
-            (dylan-call dylan/push-last new-deque
-                        (current-element object state))))))))
+            (dylan%push-last new-deque (current-element object state))))))))
 
 (add-method
  dylan/make
@@ -241,7 +240,7 @@
                          (lambda (deque new-element)
                            (let ((copy (dylan-call dylan/copy-sequence deque)))
                              (if (true? (dylan-call dylan/instance? copy <deque>))
-                                 (dylan-call dylan/push copy new-element)
+                                 (dylan%push copy new-element)
                                  (dylan-call dylan/add copy new-element))))))
 
 (defun dylan%push (deque new-value)
@@ -300,7 +299,7 @@
         (let ((result-deque (dylan-call dylan/make <deque>)))
           (dolist (collection (cons deque-1 rest) result-deque)
             (iterate! (lambda (element)
-                        (dylan-call dylan/push-last result-deque element))
+                        (dylan%push-last result-deque element))
                       collection)))
         (copy-like deque-1 (mapcan #'sequence->list (cons deque-1 rest)))))))
 
@@ -315,8 +314,7 @@
           (do ((state (initial-state deque-1)
                       (next-state deque-1 state)))
               ((not state) result)
-            (dylan-call dylan/push result
-                        (current-element deque-1 state))))
+            (dylan%push result (current-element deque-1 state))))
         (copy-like deque-1 (reverse (sequence->list deque-1)))))))
 
 (add-method
@@ -356,14 +354,14 @@
        (set-deque-count! deque (- (deque-count deque) 1))
        value))))
 
+(defun dylan%push-last (deque new-value)
+  (deque-grow deque)
+  (deque-set deque (deque-count deque) new-value)
+  (set-deque-count! deque (+ (deque-count deque) 1))
+  deque)
+
 (defparameter dylan/push-last
-  (dylan%generic-fn
-   'push-last one-deque-and-a-value
-   (lambda (deque new-value)
-     (deque-grow deque)
-     (deque-set deque (deque-count deque) new-value)
-     (set-deque-count! deque (+ (deque-count deque) 1))
-     deque)))
+  (dylan%generic-fn 'push-last one-deque-and-a-value #'dylan%push-last))
 
 (defparameter dylan/pop-last
   (dylan%generic-fn
@@ -371,11 +369,14 @@
    (lambda (deque)
      (when (zerop (deque-count deque))
        (dylan-call dylan/error "pop-last: the deque is empty"))
-     (let* ((k (deque-slot deque (- (deque-count deque) 1)))
-            (value (svref (deque-data deque) k)))
-       (setf (svref (deque-data deque) k) dylan%false)
-       (set-deque-count! deque (- (deque-count deque) 1))
-       value))))
+     (dylan%pop-last deque))))
+
+(defun dylan%pop-last (deque)
+  (let* ((k (deque-slot deque (- (deque-count deque) 1)))
+         (value (svref (deque-data deque) k)))
+    (setf (svref (deque-data deque) k) dylan%false)
+    (set-deque-count! deque (- (deque-count deque) 1))
+    value))
 
 ;;;
 ;;; Mutable Collection
@@ -398,7 +399,7 @@
   (lambda (deque n)
     (check-new-size deque n)
     (loop while (> (deque-count deque) n)
-          do (dylan-call dylan/pop-last deque))
+          do (dylan%pop-last deque))
     (loop while (< (deque-count deque) n)
-          do (dylan-call dylan/push-last deque dylan%false))
+          do (dylan%push-last deque dylan%false))
     n)))

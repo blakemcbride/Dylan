@@ -28,7 +28,7 @@ module: dylan
 ;;; The test is called with an element of the sequence first.
 (define %member-by?
   (method (test s value)
-    (any? (method (e) (test e value)) s)))
+    (%collection-any? (method (e) (test e value)) s)))
 
 (define-generic-function add-new (sequence new-element #key test))
 (define-method add-new ((s <sequence>) new-element #key (test id?))
@@ -69,7 +69,9 @@ module: dylan
 (define-generic-function choose-by (predicate test-sequence value-sequence))
 (define-method choose-by ((predicate <function>) (tests <sequence>) (values <sequence>))
   (bind ((chosen '()))
-    (do (method (t v) (when (predicate t) (set! chosen (cons v chosen)))) tests values)
+    (%each-group (list tests values)
+                 (method (tv)
+                   (when (predicate (car tv)) (set! chosen (cons (car (cdr tv)) chosen)))))
     (%copy-like values (%list-reverse chosen))))
 
 (define-generic-function intersection (sequence1 sequence2 #key test))
@@ -80,13 +82,17 @@ module: dylan
 
 (define-generic-function union (sequence1 sequence2 #key test))
 (define-method union ((s1 <sequence>) (s2 <sequence>) #key (test id?))
-  (concatenate s1 (choose (method (f) (not (any? (method (e) (test e f)) s1))) s2)))
+  (bind ((e1 (%elements s1)))
+    (%copy-like s1 (%list-append
+                    e1
+                    (%list-choose (method (f) (not (%list-any? (method (e) (test e f)) e1)))
+                                  (%elements s2))))))
 
 (define-generic-function remove-duplicates (sequence #key test))
 (define-method remove-duplicates ((s <sequence>) #key (test id?))
   (%copy-like s (bind-methods ((loop (l r)
                                  (cond ((id? l '()) (%list-reverse r))
-                                       ((any? (method (kept) (test kept (car l))) r)
+                                       ((%list-any? (method (kept) (test kept (car l))) r)
                                         (loop (cdr l) r))
                                        (else: (loop (cdr l) (cons (car l) r))))))
                   (loop (%elements s) '()))))
@@ -108,16 +114,21 @@ module: dylan
 
 (define-generic-function concatenate-as (class sequence1 #rest more-sequences))
 (define-method concatenate-as ((class <class>) (s <sequence>) #rest more)
-  ;; Chapter 12: CLASS must be a subclass of <mutable-sequence>
-  (unless (%subclass? class <mutable-sequence>)
-    (error "concatenate-as: the class is not a mutable sequence: ~s" class))
-  (%check-bounded "concatenate-as" (cons s more))
-  (bind ((sequences (cons s more)))
+  (%concatenate-as class (cons s more)))
+
+;;; concatenate-as, which concatenate calls, not the generic function,
+;;; whose methods a program may add (Bugs02 B10)
+(define %concatenate-as
+  (method (class sequences)
+    ;; Chapter 12: CLASS must be a subclass of <mutable-sequence>
+    (unless (%subclass? class <mutable-sequence>)
+      (error "concatenate-as: the class is not a mutable sequence: ~s" class))
+    (%check-bounded "concatenate-as" sequences)
     (bind-methods ((gather (sequences r)
                      (if (id? sequences '())
                          (%list-reverse r)
                          (gather (cdr sequences)
-                                 (reduce (method (r e) (cons e r)) r (car sequences))))))
+                                 (%list-reduce (method (r e) (cons e r)) r (%elements (car sequences)))))))
       (if (%vectors-for? class sequences)
           (%concatenate-vectors class sequences)
           (%from-list class (gather sequences '()))))))
@@ -158,20 +169,20 @@ module: dylan
          ((id? l '()))
       (unless (%instance? (car l) <sequence>)
         (error "~a: not a sequence: ~s" name (car l))))
-    (unless (%list-every? (method (s) (or (not (%instance? s <range>)) (size s))) sequences)
+    (unless (%list-every? (method (s) (or (not (%instance? s <range>)) (%library-size s))) sequences)
       (error "~a: the range is unbounded" name))))
 
 (define-generic-function concatenate (sequence1 #rest sequences))
 (define-method concatenate ((s <sequence>) #rest more)
   (%check-bounded "concatenate" (cons s more))
-  (apply concatenate-as (class-for-copy s) s more))
+  (%concatenate-as (class-for-copy s) (cons s more)))
 
 ;;; Byte strings, most often, at once
 (define-method concatenate ((s <byte-string>) #rest more)
   (%check-bounded "concatenate" more)
   (bind ((class (class-for-copy s)))
     (or (and (id? class <byte-string>) (%concatenate-byte-strings s more))
-        (apply concatenate-as class s more))))
+        (%concatenate-as class (cons s more)))))
 
 (define-generic-function replace-subsequence! (mutable-sequence insert-sequence #key start))
 ;;; The error for too short a target is signalled before anything is
@@ -179,7 +190,7 @@ module: dylan
 ;;; target holds an unbounded INSERT's.
 (define-method replace-subsequence! ((target <mutable-sequence>) (insert <sequence>)
                                      #key (start 0))
-  (unless (size insert)
+  (unless (%library-size insert)
     (error "replace-subsequence!: the sequence is too short"))
   (bind ((elements (%elements insert))
          (state (for ((state (initial-state target) (next-state target state))

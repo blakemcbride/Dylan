@@ -2317,6 +2317,20 @@ ok
 \"ERR: f is defined both as a variable and as a generic function\"
 made
 ")
+ ;; The keys a method does not accept are all named, however long the
+ ;; message (Bugs07 C12)
+ (missing-keys-message-whole
+  "(define-macro gen20 ()
+  `(define-generic-function g (x #key ,@(map (method (i) (as <symbol> (format #f \"key-number-~a-with-a-rather-long-name\" i)))
+                                          (range from: 10 size: 20)))))
+(gen20)
+(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(define msg (try (method () (define-method g ((x <object>) #key other) x))))
+(print (size msg))
+(print msg)"
+  "846
+\"a method of g does not accept the keys its generic function names: key-number-10-with-a-rather-long-name: key-number-11-with-a-rather-long-name: key-number-12-with-a-rather-long-name: key-number-13-with-a-rather-long-name: key-number-14-with-a-rather-long-name: key-number-15-with-a-rather-long-name: key-number-16-with-a-rather-long-name: key-number-17-with-a-rather-long-name: key-number-18-with-a-rather-long-name: key-number-19-with-a-rather-long-name: key-number-20-with-a-rather-long-name: key-number-21-with-a-rather-long-name: key-number-22-with-a-rather-long-name: key-number-23-with-a-rather-long-name: key-number-24-with-a-rather-long-name: key-number-25-with-a-rather-long-name: key-number-26-with-a-rather-long-name: key-number-27-with-a-rather-long-name: key-number-28-with-a-rather-long-name: key-number-29-with-a-rather-long-name:\"
+")
  ;; A generic function make makes chooses the methods define-method gives
  ;; it when it is called, as the compiler's own do.
  (define-method-on-made-generic

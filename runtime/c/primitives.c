@@ -507,20 +507,35 @@ void dy_add_method_when_run(D generic, D method, const char *name, _Atomic(D) *k
     /* The keys it declares, each named by the method, unless it takes
      * #rest or #key alone */
     if (dy_kind_p(gi[2], DY_KIND_PAIR) && mi[1] == DY_FALSE && mi[2] != DY_EMPTY) {
-        char missing[512] = "";
-        size_t used = 0;
-        for (D l = gi[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) {
-            D m = mi[2];
-            while (dy_kind_p(m, DY_KIND_PAIR) && dy_head(m) != dy_head(l)) m = dy_tail(m);
-            if (!dy_kind_p(m, DY_KIND_PAIR) && used < sizeof missing - 1)
-                used += (size_t)snprintf(missing + used, sizeof missing - used, "%s%s:",
-                                         used ? " " : "", dy_symbol_utf8(dy_head(l)));
-        }
-        if (used) {
-            char after[600];
-            snprintf(after, sizeof after,
-                     " does not accept the keys its generic function names: %s", missing);
-            dy_error_naming("a method of ", gname, after, 0);
+        static const char intro[] = " does not accept the keys its generic function names:";
+        size_t need = 0;
+        for (int pass = 0; pass < 2; pass++) {
+            /* The size of the message, then the message, in scratch
+             * memory, which an error leaves to the collector */
+            char *after = pass ? dy_alloc_bytes(need) : NULL;
+            size_t used = 0;
+            if (after) { memcpy(after, intro, sizeof intro - 1); used = sizeof intro - 1; }
+            bool any = false;
+            for (D l = gi[2]; dy_kind_p(l, DY_KIND_PAIR); l = dy_tail(l)) {
+                D m = mi[2];
+                while (dy_kind_p(m, DY_KIND_PAIR) && dy_head(m) != dy_head(l)) m = dy_tail(m);
+                if (dy_kind_p(m, DY_KIND_PAIR)) continue;
+                const char *key = dy_symbol_utf8(dy_head(l));
+                size_t k = strlen(key);
+                if (after) {
+                    after[used] = ' ';
+                    memcpy(after + used + 1, key, k);
+                    after[used + 1 + k] = ':';
+                }
+                used += k + 2;
+                any = true;
+            }
+            if (!any) break;
+            if (after) {
+                after[used] = 0;
+                dy_error_naming("a method of ", gname, after, 0);
+            }
+            need = sizeof intro - 1 + used;
         }
     }
     /* It replaces the one with the same specializers (chapter 6). */

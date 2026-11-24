@@ -48,8 +48,8 @@ other arguments are refused with a usage message."
   ;; exit, and a second TERM arriving meanwhile (GNU timeout signals the
   ;; process, then its group) left it waiting on a lock for ever.
   (sb-sys:enable-interrupt sb-unix:sigterm :default)
-  ;; Heap exhaustion is the error "out of memory" while it can be, and
-  ;; else ends the run, not in SBCL's monitor (compat.lisp).
+  ;; A full heap is reported as "out of memory" and ends the run, as in a
+  ;; compiled program, not in SBCL's monitor (compat.lisp).
   (dylan::implementation-specific/limit-heap)
   (let* ((arguments (rest sb-ext:*posix-argv*))
          (file (and arguments (null (rest arguments))

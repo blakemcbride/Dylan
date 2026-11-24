@@ -1438,18 +1438,19 @@ stream."
 ;;; and keeps a soft limit: after a collection that leaves more of the heap
 ;;; in use than 2/5 of its size, or than a quarter of the memory its cgroup
 ;;; allows or the machine has (a collection's copying and the pages it
-;;; keeps make the process's memory twice what is in use), the main thread
-;;; is interrupted with the error "out of memory", which a handler can
-;;; catch, as a compiled program's large request that fails is.  Once
-;;; signalled it is not signalled again until the heap is less than half
-;;; that full.  A large request is checked against the limit at once
-;;; (CHECK-ROOM).  Collections come often enough for the limit to be seen
-;;; in time.
+;;; keeps make the process's memory twice what is in use), the run reports
+;;; "out of memory" and ends, as a compiled program whose heap fills does.
+;;; It is no error a handler could catch: the collection comes at any
+;;; point, perhaps inside an update of the runtime's own tables, which an
+;;; error there would leave half done.  A large request is checked against
+;;; the limit at once (CHECK-ROOM), and is such an error, as in a compiled
+;;; program.  Collections come often enough for the limit to be seen in
+;;; time.
 
 (defvar *heap-soft-limit* nil
-  "Bytes of the heap in use past which a collection signals out of memory.")
-(defvar *heap-limit-armed* t)
-(defvar *heap-limit-thread* nil "The thread interrupted with the error.")
+  "Bytes of the heap in use past which a collection ends the run.")
+(defvar *heap-limit-reached* nil "True once the run is being ended.")
+(defvar *heap-limit-thread* nil "The thread that reports and ends the run.")
 
 (defun read-first-line (file)
   (ignore-errors
@@ -1482,21 +1483,29 @@ bytes, or NIL if none is set."
             when (and (> (length line) 9) (string= "MemTotal:" line :end2 9))
               return (* 1024 (parse-integer line :start 9 :junk-allowed t))))))
 
-(defun heap-limit-error ()
-  (dylan-call dylan/error "out of memory"))
+(defun end-out-of-memory ()
+  "Report out of memory and end the run with status 1, as a compiled
+program whose heap fills does: what was written to the standard output
+first, the report after it."
+  (ignore-errors (finish-output *standard-output*))
+  (ignore-errors (finish-output sb-sys:*stdout*))
+  (ignore-errors
+    (format *error-output* "~&Dylan error: out of memory~%")
+    (finish-output *error-output*))
+  (sb-ext:exit :code 1 :abort t))
 
 (defun check-heap-limit ()
-  "After a collection (SB-EXT:*AFTER-GC-HOOKS*, run in any thread)."
-  (let ((used (sb-kernel:dynamic-usage))
-        (limit *heap-soft-limit*))
-    (when limit
-      (cond ((and *heap-limit-armed* (> used limit))
-             (setf *heap-limit-armed* nil)
-             (let ((thread *heap-limit-thread*))
-               (when (and thread (sb-thread:thread-alive-p thread))
-                 (sb-thread:interrupt-thread thread #'heap-limit-error))))
-            ((< used (floor limit 2))
-             (setf *heap-limit-armed* t))))))
+  "After a collection (SB-EXT:*AFTER-GC-HOOKS*, run in SBCL's finalizer
+thread): past the soft limit, stop the main thread and end the run from
+it, so that it writes nothing after the report."
+  (let ((limit *heap-soft-limit*))
+    (when (and limit (not *heap-limit-reached*)
+               (> (sb-kernel:dynamic-usage) limit))
+      (setf *heap-limit-reached* t)
+      (let ((thread *heap-limit-thread*))
+        (if (and thread (sb-thread:thread-alive-p thread))
+            (sb-thread:interrupt-thread thread #'end-out-of-memory)
+            (end-out-of-memory))))))
 
 (defun implementation-specific/limit-heap ()
   "Turn off SBCL's low-level monitor and set the soft limit, for the
@@ -1508,7 +1517,7 @@ current thread, the main one."
                                               (remove nil (list (cgroup-memory-limit)
                                                                 (machine-memory))))))))
     (setf *heap-soft-limit* limit
-          *heap-limit-armed* t
+          *heap-limit-reached* nil
           *heap-limit-thread* sb-thread:*current-thread*)
     ;; A collection at least every 1/8 of the limit, so that the limit is
     ;; seen in time: SBCL's interval grows with the heap's size.

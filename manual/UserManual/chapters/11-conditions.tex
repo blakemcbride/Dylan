@@ -338,19 +338,16 @@ reported, as an unhandled one is, and the program ends.
 \index{memory, exhausted}
 Likewise a request for more memory than there is --- \code{(make
 <vector> size: \meta{n})} with an \meta{n} too large, say --- is the
-\code{<simple-error>} ``out of memory'', which a handler can catch. A
-compiled program whose heap fills up with small objects reports ``out of
-memory'' and ends: its heap is full when a collection of everything
-leaves more than a quarter of the memory the machine has or the process
-is allowed (its address space, or its cgroup's memory) in use, since a
-collection needs room to copy what it keeps. The interactive
-implementation signals the same
-catchable error for an integer too large for the heap, and when its heap
-fills up: after a collection that leaves more than two-fifths of its
-16~GB in use, or more than a quarter of the memory the machine has or
-the process is allowed, if less (a collection needs room to copy what it
-keeps). The error is not signalled again until less than half that much
-is in use.
+\code{<simple-error>} ``out of memory'', which a handler can catch. The
+interactive implementation signals the same error for an integer too
+large for the heap. A program whose heap fills up with small objects
+reports ``out of memory'' and ends, with status 1: no handler runs,
+since the heap may fill in the middle of any operation. Its heap is full
+when a collection leaves more than a quarter of the memory the machine
+has or the process is allowed (its address space, or its cgroup's
+memory) in use, since a collection needs room to copy what it keeps; in
+the interactive implementation also when it leaves more than two-fifths
+of its 16~GB heap in use.
 
 \section{Default handlers}\label{sec:conditions-default-handler}
 

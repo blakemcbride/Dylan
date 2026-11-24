@@ -241,7 +241,9 @@ module: dylan
                            (function (%list-map2 current-element collections states))
                            (loop (%list-map2 next-state collections states)))))
           (loop (%list-map initial-state collections)))
-        (for-each ((key (%common-keys collections)))
+        ;; In increasing order if the first is a sequence, whichever
+        ;; collection's keys bound them, as the interpreter visits them
+        (for-each ((key (%aligned-keys collections)))
                   ()
           (function (%list-map (method (c) (%library-element c key %no-default)) collections))))))
 
@@ -321,7 +323,7 @@ module: dylan
                            ;; An array is made with its dimensions
                            (make <array> dimensions: (dimensions (car collections)))
                            (make class))))
-          (for-each ((key (%common-keys collections)))
+          (for-each ((key (%aligned-keys collections)))
                     ()
             (%library-element-setter
              result key

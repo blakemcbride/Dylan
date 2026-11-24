@@ -4357,6 +4357,20 @@ y
 (0 10 20 30 40)
 (1 2)
 ")
+ ;; When the first collection is a sequence, the keys are visited in
+ ;; increasing order, whichever collection's keys bound them.
+ (aligned-keys-in-order-after-a-sequence
+  "(define t1 (make <table>))
+(for ((i 0 (+ i 1))) ((= i 5)) (set! (element t1 i) (* i 10)))
+(print (map + (range from: 0) t1))
+(define seen '())
+(do (method (a b) (set! seen (cons b seen))) (range from: 0) t1)
+(print (reverse seen))
+(print (map-as <list> list (range from: 0) t1))"
+  "(0 11 22 33 44)
+(0 10 20 30 40)
+((0 0) (1 10) (2 20) (3 30) (4 40))
+")
  ;; The library's functions on its own classes call its own code, not
  ;; the generic functions a program may add methods to: any?, choose,
  ;; reduce, map-as, do, size, empty?, push, push-last and pop-last

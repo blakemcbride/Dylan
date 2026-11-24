@@ -81,20 +81,22 @@ static D restore_values(Saved s) {
 
 /* ---------------------------------------------------------------- Exits */
 
-/* Leave every frame above TARGET, running cleanups, then jump to it.  The
- * values to return are in the thread. */
+/* Leave every frame above TARGET, then jump to it.  The values to return
+ * are in the thread.  A cleanup runs where its unwind-protect is, once
+ * the exit has left what it protected (chapter 8), not on top of the
+ * code that exits, whose stack may be nearly gone: the exit jumps to the
+ * cleanup's frame first, which runs it and goes on to TARGET
+ * (dy_unwind_protect). */
 _Noreturn void dy_unwind_to(DyFrame *target) {
     DyThread *t = dy_thread;
-    Saved s = save_values(t->mv_count > 0 ? t->mv[0] : DY_FALSE);
     while (t->frames != target) {
         DyFrame *f = t->frames;
         t->frames = f->prev;
         if (f->kind == DY_FRAME_CLEANUP) {
-            DY_CALL(f->a, 0, 0, 0, 0, 0);
-            restore_values(s);
+            f->b = (D)target;
+            longjmp(f->jump, 1);
         }
     }
-    if (s.count == 1) t->mv[0] = s.primary;
     /* longjmp, not _longjmp, which ThreadSanitizer does not see (the
      * jump buffer, made by _setjmp, holds no signal mask to restore). */
     longjmp(target->jump, 1);
@@ -140,6 +142,18 @@ D dy_unwind_protect(D protected, D cleanup) {
     DyFrame f;
     f.a = cleanup;
     dy_push_frame(&f, DY_FRAME_CLEANUP);
+    if (_setjmp(f.jump) != 0) {
+        /* An exit to the frame in f.b is leaving PROTECTED, with its
+         * values in the thread; dy_unwind_to took this frame off. */
+        DyThread *t = dy_thread;
+        DyFrame *target = (DyFrame *)((volatile DyFrame *)&f)->b;
+        /* Out of the error's handling, if it left a recursion too deep */
+        if ((char *)&f > t->stack_soft) dy_stack_guard = t->stack_soft;
+        Saved s = save_values(t->mv_count > 0 ? t->mv[0] : DY_FALSE);
+        DY_CALL(cleanup, 0, 0, 0, 0, 0);
+        restore_values(s);
+        dy_unwind_to(target);
+    }
     D r = DY_CALL(protected, 0, 0, 0, 0, 0);
     dy_thread->frames = f.prev;
     Saved s = save_values(r);

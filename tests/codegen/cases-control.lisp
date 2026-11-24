@@ -286,6 +286,26 @@ aborted
 (1 2 3 #f)
 ")
 
+ ;; A cleanup runs where its unwind-protect is, once the exit has left
+ ;; the protected form (chapter 8), not on top of the stack the exiting
+ ;; code used: here, the handler of a recursion through unwind-protect
+ ;; that exhausted the stack runs, and so does every cleanup, though the
+ ;; first needs more stack than was left (Bugs07 C8).
+ (cleanup-runs-at-its-own-depth
+  "(define-method build (n) (if (zero? n) '() (cons n (build (- n 1)))))
+(define cleanups 0)
+(define deepest 0)
+(define-method deep (n)
+  (unwind-protect (begin (set! deepest n) (+ 1 (deep (+ n 1))))
+    (set! cleanups (+ cleanups 1))
+    (when (= cleanups 1) (size (build 20000)))))
+(print (handler-case (deep 0)
+         ((<error> condition: c) (format #f \"caught: ~a\" c))))
+(print (list (> deepest 10) (<= (+ deepest 1) cleanups (+ deepest 2))))"
+  "\"caught: the stack is exhausted\"
+(#t #t)
+")
+
  ;; Chapter 8: it is an error for a case key to appear in more than one
  ;; match list; no two strings are id?.
  (case-key-twice

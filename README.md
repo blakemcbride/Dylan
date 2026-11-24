@@ -283,6 +283,11 @@ What a static program cannot do, which the 1992 manual allows:
   `make-polar` and `make` of `<complex>` are an error unless the imaginary
   part or the angle is an exact zero.
 - **Evaluate or load code while running.**
+- **Quote other objects from a macro:** an expansion may quote numbers,
+  characters, strings, symbols, booleans, and lists and simple object
+  vectors of them. One that quotes a range, table, deque, stretchy vector,
+  array, class or function its macro's body made is reported when
+  compiling ("a compiled program cannot have … as a constant").
 
 ## Testing
 

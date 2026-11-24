@@ -131,6 +131,11 @@ to change them; a compiled program cannot:
   \code{<generic-function>} made by \code{make} is given methods only by
   \code{define-method} of a variable that holds it.
 \item There is no evaluation or loading of code at run time.
+\item A macro's expansion may quote numbers, characters, strings,
+  symbols, booleans, and lists and simple object vectors of them; one
+  that quotes a range, table, deque, stretchy vector, array, class or
+  function its body made is a compile error (``a compiled program cannot
+  have \ldots{} as a constant'').
 \item \code{gensym} is for macros, while compiling: a compiled program
   that calls it gets an error (Chapter~\ref{ch:extensions}).
 \end{itemize}

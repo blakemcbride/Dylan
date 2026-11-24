@@ -794,6 +794,23 @@ no \code{eval} and no \code{load}. Any code it runs must be in its
 source when it is compiled. (Macros, which run at compile time, can
 compute code; see Chapter~\ref{ch:extensions}.)
 
+\paragraph{Constants a macro makes.}
+The C a compiled program is made of holds its constants: numbers,
+characters, strings, symbols, \code{\#t} and \code{\#f}, and lists and
+simple object vectors of them. A macro's expansion that quotes another
+object its body made --- a range, table, deque, stretchy vector, array,
+class or function --- is a compile error; the interactive implementation
+uses the object itself:
+
+\begin{dylan}
+(define-macro m () (list 'quote (range from: 1 size: 3)))
+(print (m))
+; error: a compiled program cannot have {range 1 by 1 size 3} as a constant
+\end{dylan}
+
+\noindent An expansion that calls the code instead, as
+\code{`(range from: 1 size: 3)}, makes the object when the program runs.
+
 \paragraph{Undefined variables.}
 A reference to a variable that nothing defines is only a warning when
 compiling, as shown in Section~\ref{sec:dylanc-diagnostics}. If the

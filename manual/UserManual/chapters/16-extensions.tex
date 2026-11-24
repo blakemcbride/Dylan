@@ -128,6 +128,11 @@ macro that never stops expanding is reported (``one never stops?'').
 \item A call of a macro must be a proper list, and must supply arguments
   its parameter list accepts (``macro m: wrong number of arguments in
   (m 1 2)'').
+\item In a compiled program, an expansion may quote only numbers,
+  characters, strings, symbols, booleans, and lists and simple object
+  vectors of them: quoting a range, table, deque, stretchy vector,
+  array, class or function the macro's body made is a compile error
+  (Section~\ref{sec:dylanc-static}).
 \item An error signalled by a macro's body is reported at the call, with
   the macro's name: \code{(define-macro m (a) (error "no
   good: \textasciitilde{}s" a))} and a call \code{(m 1)} report

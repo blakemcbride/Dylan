@@ -993,7 +993,47 @@ then does, once they are computed (IR-DEFINE-CLASS-START)."
   (unless (eq part :start)
     (gen-slot-options node))
   (unless (eq part :options)
-    (gen-class-definition-rest node)))
+    (gen-class-definition-rest node))
+  ;; Begun, the definition is cancelled if it does not finish
+  ;; (GEN-CLASS-CANCEL).
+  (case part
+    (:start (emit "~a = 0;" (class-done-c node)))
+    (:options (emit "~a = 1;" (class-done-c node)))))
+
+(defvar *class-done-flags* nil
+  "The define-class nodes whose options are computed, to the C names of
+their flags that say the definition finished.")
+
+(defun class-done-c (node)
+  (or (gethash node *class-done-flags*)
+      (let ((name (format nil "~a_done" (gclass-ready-c (gethash (ir-define-class-var node)
+                                                                   *gclasses*)))))
+        (declare-object "static int ~a;" name)
+        (setf (gethash node *class-done-flags*) name))))
+
+(defun gen-class-cancel (node)
+  "Code run when the define-class NODE, whose options are computed, ends:
+if it did not finish -- an option exited -- the definition is cancelled
+(chapter 5), as in L: the class is not defined, nor below its
+superclasses, and the methods of its slots' getters and setters are
+removed from their generic functions, which stay."
+  (let ((g (gethash (ir-define-class-var node) *gclasses*)))
+    (emit "if (!~a) {" (class-done-c node))
+    (emit "~a = 0;" (gclass-ready-c g))
+    (dolist (sd (gethash node *sdef-of-node*))
+      (dolist (var (list (sdef-getter sd) (sdef-setter sd)))
+        (let ((gf (and var (gethash var *gfuns*))))
+          (dolist (m (and gf (gfun-methods gf)))
+            (when (and (eq (gmethod-sdef m) sd) (added-when-run-p m)
+                       (not (gethash m *incongruent*))
+                       (not (or (gmethod-copies m) (gmethod-foreign-errors m) (gmethod-made m))))
+              (emit "dy_lock_methods();")
+              (when (gmethod-flag-c m)
+                (emit "~a = 0;" (gmethod-flag-c m)))
+              (emit "dy_remove_methods(~a, (const D[]){ ~a }, 1);"
+                    (address (gfun-c-name gf)) (method-object-c-expr m))
+              (emit "dy_unlock_methods();"))))))
+    (emit "}")))
 
 (defun foreign-accessor-p (sd g)
   "Is a method of SD's in G attached to another generic function its

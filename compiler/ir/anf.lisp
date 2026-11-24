@@ -170,10 +170,13 @@ makes of the list of them."
        ;; (chapter 6): after an IR-DEFINE-CLASS-START.
        ;; Each slot's options are then stored as soon as they are
        ;; computed, before the next slot's: an instance made while one is
-       ;; computed has the slots before it.
+       ;; computed has the slots before it.  One that exits cancels the
+       ;; definition (chapter 5): the cleanup of an unwind-protect around
+       ;; it all, the IR-DEFINE-CLASS-START :CANCEL.
        (let* ((var (define-class-node-var node))
               (start (and (some #'computed-slot-option-p (define-class-node-slots node))
                           (make-ir-define-class-start var)))
+              (cancel (and start (make-ir-define-class-start var :cancel)))
               (stores '()))
          (norm-atoms (define-class-node-superclasses node)
                      (lambda (supers)
@@ -182,7 +185,8 @@ makes of the list of them."
                                                  (let ((d (make-ir-define-class var supers slots)))
                                                    (when start
                                                      (setf (ir-define-class-start d) start
-                                                           (ir-define-class-start-class start) d)
+                                                           (ir-define-class-start-class start) d
+                                                           (ir-define-class-start-class cancel) d)
                                                      (dolist (store stores)
                                                        (setf (ir-define-class-start-class store) d)))
                                                    d))
@@ -191,7 +195,9 @@ makes of the list of them."
                                                       (let ((store (make-ir-define-class-start var i)))
                                                         (push store stores)
                                                         store))))))
-                         (if start (make-ir-seq (list start rest)) rest))))))
+                         (if start
+                             (make-ir-unwind (make-ir-seq (list start rest)) cancel)
+                             rest))))))
       (define-slot-node
        (norm-atom (define-slot-node-owner node)
                   (lambda (owner)

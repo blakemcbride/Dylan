@@ -506,9 +506,10 @@ signals if the result is too large (chapter 8), and nothing is allocated."
                (own)))
          (deliver dest (definition-value var))))
       (ir-define-class-start
-       (if (ir-define-class-start-slot e)
-           (gen-slot-store (ir-define-class-start-class e) (ir-define-class-start-slot e))
-           (gen-class-definition (ir-define-class-start-class e) :start))
+       (let ((slot (ir-define-class-start-slot e)))
+         (cond ((eq slot :cancel) (gen-class-cancel (ir-define-class-start-class e)))
+               (slot (gen-slot-store (ir-define-class-start-class e) slot))
+               (t (gen-class-definition (ir-define-class-start-class e) :start))))
        (deliver dest "DY_FALSE"))
       (ir-define-class
        (gen-class-definition e (if (ir-define-class-start e) :options :all))
@@ -1450,6 +1451,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*own-class-refs* (make-hash-table :test #'eq))
         (*constant-globals* (make-hash-table :test #'eq))
         (*sdef-of-node* (make-hash-table :test #'eq))
+        (*class-done-flags* (make-hash-table :test #'eq))
         (*singleton-sdefs* '())
         (*instance-slot-numbers* (make-hash-table :test #'eq))
         (*object-text* '())

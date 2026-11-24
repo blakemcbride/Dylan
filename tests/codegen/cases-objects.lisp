@@ -3932,6 +3932,39 @@ after
 2
 (1 2 3)
 ")
+ ;; A slot option that signals, or exits, cancels the definition
+ ;; (chapter 5): the class is not defined, nor below its superclasses,
+ ;; and its slots' generic functions have no methods for it; run again,
+ ;; it is defined (Bugs07 C6).
+ (define-class-cancelled-by-slot-option
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <base> (<object>))
+(print (try (method () (define-class <q> (<base>) (r init-value: 1) (s init-value: (error \"boom\")) (u init-value: 3)))))
+(print (try (method () <q>)))
+(print (list (direct-subclasses <base>) (size (generic-function-methods r)) (size (generic-function-methods s))))
+(print (try (method () (define-class <t> (<base>) (a init-value: 1) (b type: (error \"type boom\"))))))
+(print (try (method () (make <t>))))
+(print (bind-exit (k) (define-class <q2> (<base>) (c init-value: 1) (d init-value: (k 'left)))))
+(print (try (method () <q2>)))
+(print (list (direct-subclasses <base>) (size (generic-function-methods c))))
+(define-method def (v) (define-class <w> (<base>) (p init-value: (v)) (q init-value: 2)))
+(print (try (method () (def (method () (error \"first\"))))))
+(print (try (method () <w>)))
+(print (def (method () 10)))
+(print (list (p (make <w>)) (q (make <w>)) (direct-subclasses <base>)))"
+  "\"ERR: boom\"
+\"ERR: the variable <q>@dylan-user has no value\"
+(() 0 0)
+\"ERR: type boom\"
+\"ERR: the variable <t>@dylan-user has no value\"
+left
+\"ERR: the variable <q2>@dylan-user has no value\"
+(() 0)
+\"ERR: first\"
+\"ERR: the variable <w>@dylan-user has no value\"
+<w>
+(10 2 ({the class <w>}))
+")
  ;; Chapter 6: an anonymous method's specializers are evaluated when the
  ;; method is made, each to a class or a singleton -- the error is then,
  ;; whether or not the method is used or called (Bugs05 B1).

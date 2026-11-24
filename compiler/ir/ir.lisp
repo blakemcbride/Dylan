@@ -214,7 +214,9 @@ keywords (NIL, :ANY, or a list)."
 ;;; options, which are computed after it: its variable has its value
 ;;; (chapter 6, "after the variable containing the class is defined").
 ;;; With SLOT, an index, the options of that slot have been computed and
-;;; are stored now, before the next slot's are computed.
+;;; are stored now, before the next slot's are computed.  With SLOT
+;;; :CANCEL, the cleanup run when the definition ends: unless it was
+;;; finished, an option exited, and the class is undefined again.
 (defstruct (ir-define-class-start (:include ir-node)
                                   (:constructor make-ir-define-class-start (var &optional slot)))
   var

@@ -211,16 +211,20 @@
   (:fn "b" :escapes nil :call-sites 1))
 
  ;; Definitions take atoms.  A slot option computed by a call is computed
- ;; once the class's variable has its value, after %define-class-start.
+ ;; once the class's variable has its value, after %define-class-start,
+ ;; and stored at once; an option that exits cancels the definition.
  (definitions
   "(define-class <p> (<object>) (x init-value: (f) type: <integer>)) (define v (g))"
   "(let ((t_1 <object>@dylan))
-  (begin (%define-class-start <p>@dylan-user)
-   (let ((t_2 <integer>@dylan))
-     (let ((t_3 f@dylan-user))
-       (let ((t_4 (t_3)))
-         (define-class <p>@dylan-user (t_1)
-          (x@dylan-user setter: (setter x)@dylan-user type: t_2 init-value: t_4)))))))
+  (unwind-protect
+      (begin (%define-class-start <p>@dylan-user)
+       (let ((t_2 <integer>@dylan))
+         (let ((t_3 f@dylan-user))
+           (let ((t_4 (t_3)))
+             (begin (%define-class-start <p>@dylan-user 0)
+              (define-class <p>@dylan-user (t_1)
+               (x@dylan-user setter: (setter x)@dylan-user type: t_2 init-value: t_4)))))))
+    (%define-class-start <p>@dylan-user cancel)))
 (let ((t_5 g@dylan-user))
   (let ((t_6 (t_5)))
     (define v@dylan-user t_6)))")

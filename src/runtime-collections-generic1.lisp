@@ -202,22 +202,29 @@
 (defun sequence? (collection)
   (subclass? (get-type collection) <sequence>))
 
+(declaim (ftype function table-has-key-p))  ; runtime-collections-table.lisp
+
 (defun aligned-keys (collections)
   "Chapter 12's collection alignment: the keys common to COLLECTIONS.  A
 bounded key sequence goes first, so that the intersection, which walks its
-first argument, ends."
-  (let ((key-sequences (stable-sort (mapcar (lambda (collection)
-                                              (dylan-call dylan/key-sequence
-                                                          collection))
-                                            collections)
-                                    (lambda (a b)
-                                      (and (collection-size a)
-                                           (not (collection-size b)))))))
-    (cl:reduce (lambda (keys key-sequence)
-                 (dylan-call dylan/intersection keys key-sequence
-                             :test dylan/=))
-               (cdr key-sequences)
-               :initial-value (car key-sequences))))
+first argument, ends.  A table of the library's own class is asked for
+each key, by its hash, which is matching with = as the intersection does,
+in time linear in the keys, not quadratic."
+  (let ((pairs (stable-sort (mapcar (lambda (collection)
+                                      (cons collection
+                                            (dylan-call dylan/key-sequence collection)))
+                                    collections)
+                            (lambda (a b)
+                              (and (collection-size (cdr a))
+                                   (not (collection-size (cdr b))))))))
+    (cl:reduce (lambda (keys pair)
+                 (if (eq (get-type (car pair)) <table>)
+                     (remove-if-not (lambda (key) (table-has-key-p (car pair) key))
+                                    (iterate->list #'identity keys))
+                     (dylan-call dylan/intersection keys (cdr pair)
+                                 :test dylan/=)))
+               (cdr pairs)
+               :initial-value (cdr (car pairs)))))
 
 (defun map-aligned-by-keys (proc first collections
                             &optional (class (dylan-call dylan/class-for-copy first)))

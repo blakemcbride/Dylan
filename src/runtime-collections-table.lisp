@@ -173,6 +173,12 @@ REMAINDER, never answers a negative index."
              hash))
        (length hash-table)))
 
+(defun table-has-key-p (table key)
+  "Whether TABLE, of the library's own class, has KEY: found by its hash
+and compared with =, as element finds it."
+  (let ((hash-table (dylan-call dylan/get-hash-table table)))
+    (and (dylan-assoc key (aref hash-table (table-bucket hash-table key))) t)))
+
 (defparameter dylan/remove-key!
   (dylan%generic-fn
    'remove-key!

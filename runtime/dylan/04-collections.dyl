@@ -268,15 +268,24 @@ module: dylan
 ;;; not end.
 (define %common-keys
   (method (collections)
-    (bind ((key-sequences (%list-map key-sequence collections))
-           (bounded (%list-choose %library-size key-sequences))
-           (unbounded (%list-choose (method (k) (not (%library-size k))) key-sequences))
+    (bind ((pairs (%list-map (method (c) (cons c (key-sequence c))) collections))
+           (bounded (%list-choose (method (p) (%library-size (cdr p))) pairs))
+           (unbounded (%list-choose (method (p) (not (%library-size (cdr p)))) pairs))
            (ordered (%list-append bounded unbounded)))
+      ;; A table of the library's own class is asked for each key, by its
+      ;; hash, which is matching with = as intersection does, in time
+      ;; linear in the keys, not quadratic.  The keys so far are then of a
+      ;; bounded collection, which goes before it.
       (bind-methods ((loop (keys more)
                        (if (id? more '())
                            keys
-                           (loop (intersection keys (car more) test: =) (cdr more)))))
-        (loop (car ordered) (cdr ordered))))))
+                           (bind ((c (car (car more))))
+                             (loop (if (id? (%object-class c) <table>)
+                                       (%list-choose (method (k) (%table-find c k))
+                                                     (%elements keys))
+                                       (intersection keys (cdr (car more)) test: =))
+                                   (cdr more))))))
+        (loop (cdr (car ordered)) (cdr ordered))))))
 
 (define-generic-function do (procedure collection #rest more-collections))
 

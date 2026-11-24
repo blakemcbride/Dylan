@@ -4326,6 +4326,37 @@ y
 {range 1 by 1 size 3}
 (2 3)
 ")
+ ;; Aligning by keys with a table looks each key up by its hash, matching
+ ;; with = as before, in the order of the first's keys (Bugs07 B22).
+ (table-alignment-by-lookup
+  "(define t1 (make <table>))
+(define t2 (make <table>))
+(for ((i 0 (+ i 1))) ((= i 5)) (set! (element t1 i) (* i 10)))
+(for ((i 3 (+ i 1))) ((= i 8)) (set! (element t2 i) i))
+(set! (element t2 1.0) 100)
+(print (sort (as <list> (map + t1 t2))))
+(define v (vector 'a 'b 'c 'd 'e 'f))
+(print (map list v t2))
+(define n 0)
+(do (method (a b) (set! n (+ n a b))) t1 t2)
+(print n)
+(define keys '())
+(do (method (x a) (set! keys (cons a keys))) v t1)
+(print (reverse keys))
+(define t3 (make <table>))
+(set! (element t3 (list 1 2)) 'x)
+(set! (element t3 \"k\") 'y)
+(define t4 (make <table>))
+(set! (element t4 (list 1 2)) 1)
+(set! (element t4 \"k\") 2)
+(set! (element t4 'other) 3)
+(print (sort (map-as <list> (method (a b) b) t3 t4)))"
+  "(33 44 110)
+#((b 100) (d 3) (e 4) (f 5))
+187
+(0 10 20 30 40)
+(1 2)
+")
  ;; The library's functions on its own classes call its own code, not
  ;; the generic functions a program may add methods to: any?, choose,
  ;; reduce, map-as, do, size, empty?, push, push-last and pop-last

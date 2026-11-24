@@ -45,8 +45,9 @@ program runs, which enters it by its object (dy_add_method_when_run)?")
   "CLASS-INFO -> GCLASS, for a built-in class a define-slot gives slots
 \(chapter 6): one with no variable, which holds the define-slots' slots.")
 (defvar *sealed-slot-owners* nil
-  "IR-DEFINE-SLOT -> the sealed class it would give a slot: an error when
-it runs.")
+  "IR-DEFINE-SLOT -> the sealed class it would give a slot, or (:LIBRARY
+. CLASS), a class of the library whose library slot it would replace: an
+error when it runs.")
 (defvar *gfuns* nil "MODULE-VAR -> GFUN.")
 (defvar *method-of-fn* nil "IR-FN -> GMETHOD, for define-method fns.")
 (defvar *constant-globals* nil "MODULE-VAR -> C expression of its value.")
@@ -677,11 +678,15 @@ options whose values are compared when the class is defined."
          (let* ((v (static-value (ir-define-slot-owner d)))
                 (class (and (eq (car v) :global) (global-class (second v)))))
            (if class
-               ;; A sealed class is read-only (chapter 11): the error is
-               ;; the define-slot's when it runs.  Any other's instances
-               ;; are each given the slot (chapter 6).
-               (if (class-info-sealed-p class)
-                   (setf (gethash d *sealed-slot-owners*) class)
+               ;; A sealed class is read-only (chapter 11), and a class of
+               ;; the library keeps the slots the library gave it: the
+               ;; error is the define-slot's when it runs.  Any other's
+               ;; instances are each given the slot (chapter 6).
+               (if (or (class-info-sealed-p class)
+                       (and (not (library-location-p (ir-node-location d)))
+                            (library-slot-of-p class (slot-spec-getter (ir-define-slot-slot d)))))
+                   (setf (gethash d *sealed-slot-owners*)
+                         (if (class-info-sealed-p class) class (cons :library class)))
                (let ((g (or (class-gclass class)
                             (setf (gethash class *builtin-gclasses*)
                                   (make-gclass :info class)))))
@@ -1057,10 +1062,30 @@ one that takes slots, not read-only or sealed (chapter 11)."
           (let ((g (and var (gethash var *gfuns*))))
             (when (and g (not (and sd (foreign-accessor-p sd g))))
               (dolist (line (generic-definition-c g)) (emit "~a" line))))))
-      (if sealed
-          (emit "dy_error(\"define-slot: the class is read-only\", ~a);"
-                (address (class-c-name sealed)))
-          (emit "dy_check_slot_owner(~a);" (address (class-c-name (sdef-class sd))))))))
+      (cond ((consp sealed)
+             (emit "dy_error(~a, ~a);"
+                   (c-utf8-literal
+                    (format nil "define-slot: the slot ~a of the library cannot be replaced"
+                            (name-string (module-var-name (slot-spec-getter (ir-define-slot-slot node))))))
+                   (address (class-c-name (cdr sealed)))))
+            (sealed
+             (emit "dy_error(\"define-slot: the class is read-only\", ~a);"
+                   (address (class-c-name sealed))))
+            (t
+             (emit "dy_check_slot_owner(~a);" (address (class-c-name (sdef-class sd)))))))))
+
+(defun library-slot-of-p (class getter)
+  "Has CLASS, a class of the library, a slot the library gave it -- its
+own or inherited -- with the getter GETTER?  A program's define-slot
+cannot replace it: the library's functions rely on it (chapter 11)."
+  (let ((g (defined-gclass class)))
+    (and (not (and g (program-gclass-p g)))
+         (loop for c in (class-info-cpl class)
+               for cg = (class-gclass c)
+               thereis (and cg (some (lambda (sd)
+                                       (and (eq (sdef-getter sd) getter)
+                                            (library-location-p (sdef-location sd))))
+                                     (gclass-sdefs cg)))))))
 
 (defun gen-slot-store (node index)
   "Code storing the options of the slot INDEX of the define-class NODE,

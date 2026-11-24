@@ -385,7 +385,9 @@ class has the slot, and so does each subclass defined so far that has no
 slot with the same getter of its own; a class defined later inherits it.
 Instances that already exist gain the slot then, each given its initial
 value. \code{slot-descriptors} lists the slot after the ones the class
-had, or in the place of the one with the same getter that it replaces,
+had, or in the place of the one with the same getter that it replaces
+--- unless that is one the library gave a class of the library, which it
+keeps: replacing it is an error ---
 and \code{make} takes its init-keyword; before the \code{define-slot}
 runs, neither does. The compiler to C requires a class owner to be known
 when compiling, rather than a value computed at run time; a singleton
@@ -605,8 +607,9 @@ updated to the new definition before they are next used.
 All of this works in the Common Lisp implementation, on the program's
 classes; the library's classes keep their superclasses and the slots the
 library gave them, on which its own functions depend, so
-\code{(setter direct-superclasses)} of one, or \code{remove-slot} of
-such a slot, is an error. A program for the
+\code{(setter direct-superclasses)} of one, \code{remove-slot} of
+such a slot, or a \code{define-slot} that would replace one (in both
+implementations), is an error. A program for the
 compiler to C is static: its classes and their slots are fixed when it is
 compiled. There \code{add-slot}, \code{remove-slot} and
 \code{(setter direct-superclasses)} are errors when compiling, \code{make} of \code{<class>} is an error when run, and

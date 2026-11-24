@@ -2532,6 +2532,28 @@ added
 4
 5
 ")
+ ;; A class of the library keeps the slots the library gave it, on which
+ ;; its functions rely -- error makes a <simple-error> with format-string:
+ ;; -- so a define-slot cannot replace one; it can add a slot, and a
+ ;; program's subclass can redefine one (Bugs07 B1).
+ (define-slot-replacing-library-slot
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"~a\" c))))
+(print (try (method () (define-slot <simple-error> condition-format-string init-value: \"x\") 'done)))
+(print (handler-case (error \"oops\") ((<error>) 'caught)))
+(print (try (method () (error \"a ~a\" 1))))
+(print (try (method () (define-slot <simple-error> extra-thing init-value: 5) 'done)))
+(print (extra-thing (make <simple-error> format-string: \"z\")))
+(define-class <mine> (<simple-error>))
+(print (try (method () (define-slot <mine> condition-format-string init-value: \"mine\" init-keyword: format-string:) 'done)))
+(print (condition-format-string (make <mine>)))"
+  "\"define-slot: the slot condition-format-string of the library cannot be replaced: {the class <simple-error>}\"
+caught
+\"a 1\"
+done
+5
+done
+\"mine\"
+")
  ;; A compiled define-slot on a singleton gives its slot to one object:
  ;; run again for that object it works, for another it is an error.
  (define-slot-singleton-one-object

@@ -873,6 +873,15 @@ slots.")
            (dylan-call dylan/error
                        "define-slot: the owner must be a singleton or a class: ~s"
                        owner)))
+    ;; A class of the library keeps the slots the library gave it, on
+    ;; which its functions rely (chapter 11): a slot with the same getter
+    ;; would take one's place.
+    (when (class? owner)
+      (let ((replaced (same-slot-getter-in-slot-vector->slot getter (class.slots owner))))
+        (when (and replaced (library-slot-p owner replaced))
+          (dylan-call dylan/error
+                      "define-slot: the slot ~a of the library cannot be replaced: ~s"
+                      debug-name owner))))
     (when (and required-init-keyword
                (or init-keyword has-init-value? init-function))
       (dylan-call dylan/error

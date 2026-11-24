@@ -1059,7 +1059,7 @@ removed from their generic functions, which stay."
                        (not (or (gmethod-copies m) (gmethod-foreign-errors m) (gmethod-made m))))
               (emit "dy_lock_methods();")
               (when (gmethod-flag-c m)
-                (emit "~a = 0;" (gmethod-flag-c m)))
+                (emit "dy_set_method_flag(&~a, 0);" (gmethod-flag-c m)))
               (emit "dy_remove_methods(~a, (const D[]){ ~a }, 1);"
                     (address (gfun-c-name gf)) (method-object-c-expr m))
               (emit "dy_unlock_methods();"))))))
@@ -1199,7 +1199,7 @@ computed after the class was made (IR-DEFINE-CLASS-START)."
                 (when (and (eq (gmethod-kind m) :setter) (eq (gmethod-sdef m) old)
                            (gmethod-flag-c m))
                   (emit "dy_lock_methods();")
-                  (emit "~a = 0;" (gmethod-flag-c m))
+                  (emit "dy_set_method_flag(&~a, 0);" (gmethod-flag-c m))
                   (emit "dy_remove_methods(~a, (const D[]){ ~a }, 1);"
                         (address (gfun-c-name gf)) (method-object-c-expr m))
                   (emit "dy_unlock_methods();")))))))))
@@ -2002,17 +2002,17 @@ definitions running at once in several threads attach each method once
      (list (format nil "dy_check_addable(~a);" (address (gfun-c-name g)))
            "dy_lock_methods();")
      (loop for s in replaced
-           when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
+           when (gmethod-flag-c s) collect (format nil "dy_set_method_flag(&~a, 0);" (gmethod-flag-c s)))
      ;; Those with its specializers only if a define-slot's owner is the
      ;; object of another singleton: replaced if it is now.
      (loop for (s . conditions) in (gmethod-maybe-siblings m)
            when (gmethod-flag-c s)
              collect (let ((objects (cons (method-object-c-expr s)
                                           (and (gmethod-closure-c s) (list (gmethod-closure-c s))))))
-                       (format nil "if (~{~a~^ && ~}) { ~a = 0; dy_remove_methods(~a, (const D[]){ ~{~a~^, ~} }, ~d); }"
+                       (format nil "if (~{~a~^ && ~}) { dy_set_method_flag(&~a, 0); dy_remove_methods(~a, (const D[]){ ~{~a~^, ~} }, ~d); }"
                                conditions (gmethod-flag-c s) (address (gfun-c-name g))
                                objects (length objects))))
-     (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
+     (and (gmethod-flag-c m) (list (format nil "dy_set_method_flag(&~a, 1);" (gmethod-flag-c m))))
      (let ((object (or closure (method-object-c-expr m)))
            (dropped (append (mapcar #'method-object-c-expr replaced)
                             (and closure (list (gmethod-closure-c m))))))
@@ -2021,7 +2021,7 @@ definitions running at once in several threads attach each method once
                          (address (gfun-c-name g)) object dropped (length dropped))
                  (format nil "dy_add_method(~a, ~a, NULL, 0);"
                          (address (gfun-c-name g)) object))))
-     (and closure (list (format nil "~a = ~a;" (gmethod-closure-c m) closure)))
+     (and closure (list (format nil "dy_set_method_closure(&~a, ~a);" (gmethod-closure-c m) closure)))
      (list "dy_unlock_methods();"))))
 
 (defun defined-flag-c (var)
@@ -2253,6 +2253,41 @@ being the next-method expression for each: answer whether one surely is."
                (return t))
         finally (return nil)))
 
+(defvar *next-objects* nil
+  "(NAME METHODS) for each next-method object made, which has steps
+(DyNextStep), which run it as of an earlier time.")
+
+(defun emit-next-steps (name methods)
+  "Emit NAME_steps, the steps of the next-method object NAME, which runs
+the first attached of METHODS (DyNextStep in dylan.h)."
+  (emit-object "static const DyNextStep ~a_steps[] = {" name)
+  (loop for tail on methods
+        for m = (car tail)
+        for entry = (gmethod-entry-c m)
+        do (emit-object "    { ~a, ~a, ~a, ~a, ~a },"
+                        ;; One known only when running, as a predefined
+                        ;; method's, is its object's own
+                        (if (every (lambda (c) (or (alphanumericp c) (char= c #\_))) entry)
+                            entry
+                            "NULL")
+                        (if (gmethod-closure-c m) "0" (address (gmethod-object-c m)))
+                        (if (gmethod-closure-c m) (format nil "&~a" (gmethod-closure-c m)) "NULL")
+                        (if (gmethod-flag-c m) (format nil "&~a" (gmethod-flag-c m)) "NULL")
+                        (if (rest tail)
+                            (format nil "&~a" (gethash (rest tail) *nexts*))
+                            "NULL")))
+  (emit-object "};"))
+
+(defun emit-next-index ()
+  "Emit dy_next_index, the next-method objects with their steps, which the
+program's main gives the runtime (dy_set_next_index)."
+  (emit-object "static DyNextIndex dy_next_index[] = {")
+  (dolist (x (reverse *next-objects*))
+    (destructuring-bind (name methods) x
+      (emit-object "    { &~a, ~a_steps, ~d, ~a }," name name (length methods)
+                   (address (gfun-c-name (gethash (gmethod-var (first methods)) *gfuns*))))))
+  (emit-object "    { NULL, NULL, 0, 0 }~%};"))
+
 (defun next-object (methods)
   "The C expression for the next method that runs the first attached
 method of METHODS, with the rest after it."
@@ -2277,6 +2312,8 @@ method of METHODS, with the rest after it."
                                   (address (gfun-c-name (gethash (gmethod-var (first methods))
                                                                  *gfuns*)))))
                    (emit-object "}")
+                   (emit-next-steps name methods)
+                   (push (list name methods) *next-objects*)
                    name))))))
 
 (defun spec-rank (spec class)
@@ -2726,6 +2763,7 @@ need, which GENERATE-C places."
   "Emit what depends on the code of the methods: dispatch, method
 objects, makers."
   (let ((*nexts* (make-hash-table :test #'equal))
+        (*next-objects* '())
         (direct (make-hash-table :test #'equal)))
     (dolist (m (append (loop for g being the hash-values of *gfuns* append (gfun-methods g))
                        (made-only-methods)))
@@ -2735,6 +2773,7 @@ objects, makers."
         (setf (gethash (gmethod-entry-c m) direct) t)
         (emit-direct-entry m)))
     (loop for g being the hash-values of *gfuns* do (emit-dispatch g))
+    (emit-next-index)
     (emit-method-objects)
     (loop for g being the hash-values of *gfuns* do (emit-generic-object g))
     (emit-slot-initialized-p)

@@ -52,6 +52,66 @@ pint
 from-a
 ")
 
+ ;; The next method is the one the call's dispatch found (chapter 10): a
+ ;; method attached or replaced after that, while the method runs or
+ ;; before a kept next-method is called, does not change it, nor what it
+ ;; calls next (Bugs07 B2).
+ (next-method-as-dispatched
+  "(define-method g ((x <object>)) 'object)
+(define-method add-number-method ()
+  (define-method g ((x <number>)) 'number))
+(define-method g ((x <integer>))
+  (add-number-method)
+  (list 'integer (next-method)))
+(print (g 1))
+(print (g 1))
+(define-method g1 ((x <object>)) 'old)
+(define-method g1 ((x <integer>)) next-method)
+(define nm (g1 1))
+(define-method g1 ((x <object>)) 'new)
+(print (nm))
+(define-method g2 ((x <object>)) 'object)
+(define-method g2 ((x <integer>)) next-method)
+(define nm2 (g2 1))
+(print (nm2))
+(define-method g2 ((x <number>)) (list 'number (next-method)))
+(print (nm2))
+(print ((g2 1)))
+(define-method g3 ((x <object>)) (list 'object x))
+(define-method g3 ((x <integer>))
+  (define-method g3 ((x <object>)) (list 'new-object x))
+  (map (method (y) (next-method y)) (list x 5)))
+(print (g3 1))
+(print (g3 2))
+(define make-m
+  (method (tag)
+    (define-method g4 ((x <object>)) (list tag x))))
+(make-m 'first)
+(define-method g4 ((x <integer>)) next-method)
+(define nm4 (g4 1))
+(make-m 'second)
+(print (nm4))
+(print ((g4 2)))
+(define-method g5 ((x <object>) #rest r) (list 'object r))
+(define-method g5 ((x <integer>) #rest r)
+  (define-method g5 ((x <number>) #rest r) (list 'number r (next-method)))
+  (list 'integer (next-method) (next-method x 9)))
+(print (g5 1 2))
+(print (g5 1 2))"
+  "(integer object)
+(integer number)
+old
+object
+object
+(number object)
+((object 1) (object 5))
+((new-object 2) (new-object 5))
+(first 1)
+(second 2)
+(integer (object (2)) (object (9)))
+(integer (number (2) (object (2))) (number (9) (object (9))))
+")
+
  ;; Classes neither of which is a subclass of the other are ordered by
  ;; the precedence list of the argument's class.
  (multiple-inheritance

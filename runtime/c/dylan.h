@@ -89,7 +89,7 @@ _Static_assert((intptr_t)-1 >> 1 == -1, "right shifts of integers are arithmetic
 
 /* The version of what the compiler's C and the runtime agree on; the
  * compiler's C checks it. */
-#define DY_ABI_VERSION 24
+#define DY_ABI_VERSION 25
 
 /* ------------------------------------------------------------ Compilers */
 
@@ -1382,9 +1382,45 @@ void dy_check_class_slots(const D *supers, intptr_t n, const D *own, intptr_t m)
 void dy_check_define_slot(const struct DyProgramClass *owner, D descriptor, const D *supers,
                           intptr_t n);
 
+/* A next method is the one its call's dispatch found (chapter 10): later
+ * changes to which methods are attached do not change it.  Each change
+ * the program makes is noted in DY_METHODS_NOW, a list that a method
+ * holds its place in when it is entered, so the next methods it was
+ * given can run as they were then (dy_next_as_of).  A compiled next
+ * method (DyNextStep) runs the first attached of its methods. */
+typedef struct DyNextStep {
+    DyEntry entry;                 /* the method's, or NULL for its
+                                      object's own                       */
+    D object;                      /* its <method> object, or 0         */
+    D *closure;                    /* or the variable holding it         */
+    unsigned char *flag;           /* set while it is attached, or NULL
+                                      if it always is                    */
+    DyFunction *next;              /* the next method after it, or NULL  */
+} DyNextStep;
+typedef struct DyNextIndex {
+    DyFunction *next;              /* NULL at the end                    */
+    const DyNextStep *steps;
+    intptr_t count;
+    D generic;
+} DyNextIndex;
+extern D dy_methods_now;
+/* The compiled next methods, which the program's main gives */
+void dy_set_next_index(DyNextIndex *index);
+/* Attach or detach a method by setting its FLAG, or set the VARIABLE
+ * holding a method's closure, with the methods' lock held */
+void dy_set_method_flag(unsigned char *flag, int on);
+void dy_set_method_closure(D *variable, D closure);
+/* NEXT as it was when the method's place in the changes was AT */
+D dy_next_as_of(D next, D at);
+#define DY_NEXT_AS_OF(next, at) \
+    (DY_UNLIKELY(__atomic_load_n(&dy_methods_now, __ATOMIC_ACQUIRE) != (at)) \
+     ? dy_next_as_of((next), (at)) : (next))
+/* NEXT, kept with the method's place AT, to be called later */
+D dy_keep_next(D next, D at);
+
 /* A next-method object that, called with no arguments, calls NEXT with
- * the arguments the current method was given. */
-D dy_capture_next(D next, intptr_t argc, D a0, D a1, D a2, D a3);
+ * the arguments the current method was given, as it was at AT. */
+D dy_capture_next(D next, D at, intptr_t argc, D a0, D a1, D a2, D a3);
 
 /* A new instance of the class whose instances have WRAPPER, every slot
  * uninitialized (DY_UNBOUND). */

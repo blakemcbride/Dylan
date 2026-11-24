@@ -50,6 +50,12 @@
   (spec nil))                           ; its specialized entry: NIL,
                                         ; :ONLY (its only body) or :COPY
 
+(defvar *next-at* nil
+  "In a method whose next method is only called, in the method's own C
+function, the next method's variable and the C temporary holding the
+place, in the changes to which methods are attached, as of which it
+runs (dy_methods_now).")
+
 (defvar *direct-next* nil
   "In a method whose next method is only called, and with no arguments
 called with the method's own, the next method's variable and the C
@@ -119,7 +125,7 @@ hand, a branch of an if that tested it (types.lisp).")
 (defparameter +line-reset+ "#line DY_RESET"
   "Stands for a #line directive back to the C file itself.")
 
-(defconstant +abi-version+ 24 "As DY_ABI_VERSION in runtime/c/dylan.h.")
+(defconstant +abi-version+ 25 "As DY_ABI_VERSION in runtime/c/dylan.h.")
 
 (defvar *emit-lines* t
   "Write #line directives, so that the C compiler's messages and debuggers
@@ -202,7 +208,11 @@ by a real closure, not just by a contified fn.")
 (defun v-name (var) (format nil "v~d" (ivar-id var)))
 
 (defun var-read (var)
-  (cond ((cell-var-p var) (format nil "DY_CELL(~a)" (v-name var)))
+  (cond ((and *next-at* (eq var (car *next-at*)))
+         ;; A next method, as it was when the method was entered
+         (format nil "DY_NEXT_AS_OF(~a, ~a)"
+                 (let ((*next-at* nil)) (var-read var)) (cdr *next-at*)))
+        ((cell-var-p var) (format nil "DY_CELL(~a)" (v-name var)))
         ((unboxed-p var) (box-double (v-name var)))
         (t (v-name var))))
 
@@ -1185,6 +1195,7 @@ specialized entry, made with *SPEC* SPEC."
          (*temp-counter* 0)
          (*line-location* nil)
          (*direct-next* nil)
+         (*next-at* nil)
          (*lines* '())
          (*indent* 1)
          (*location* (ir-fn-location fn))
@@ -1228,19 +1239,29 @@ specialized entry, made with *SPEC* SPEC."
           ((and (ir-fn-next fn) (gethash fn *method-of-fn*))
            ;; Its caller left its next method in the thread.  A next method
            ;; that may be called with no arguments must remember these.
-           (let ((temp (new-temp)))
+           (let ((temp (new-temp))
+                 (at (new-temp))
+                 (var (ir-fn-next fn)))
              (emit "~a = dy_thread->next_method;" temp)
-             (when (needs-captured-next-p (ir-fn-next fn) fn)
-               (if (direct-next-p (ir-fn-next fn) fn)
-                   (setf *direct-next*
-                         (cons (ir-fn-next fn)
-                               (loop for i below r
-                                     collect (let ((a (new-temp)))
-                                               (emit "~a = a~d;" a i)
-                                               a))))
-                   (emit "if (~a != DY_FALSE) ~a = dy_capture_next(~a, argc, a0, a1, a2, a3);"
-                         temp temp temp)))
-             (emit-bind (ir-fn-next fn) temp)))
+             ;; It runs as it was when this method was entered, though
+             ;; another method be attached or detached since (chapter 10).
+             (emit "~a = dy_methods_now;" at)
+             (cond ((not (needs-captured-next-p var fn))
+                    (if (ivar-captured-p var)
+                        (emit "if (~a != DY_FALSE) ~a = dy_keep_next(~a, ~a);" temp temp temp at)
+                        (setf *next-at* (cons var at))))
+                   ((direct-next-p var fn)
+                    (setf *next-at* (cons var at)
+                          *direct-next*
+                          (cons var
+                                (loop for i below r
+                                      collect (let ((a (new-temp)))
+                                                (emit "~a = a~d;" a i)
+                                                a)))))
+                   (t
+                    (emit "if (~a != DY_FALSE) ~a = dy_capture_next(~a, ~a, argc, a0, a1, a2, a3);"
+                          temp temp temp at)))
+             (emit-bind var temp)))
           ((ir-fn-next fn)
            ;; Called directly, a method has no next method.
            (emit-bind (ir-fn-next fn) "DY_FALSE")))
@@ -1560,7 +1581,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (terpri stream)
         (dolist (text texts) (format stream "~a~%" text))
         (dolist (text (reverse *object-text*)) (format stream "~a~%" text))
-        (format stream "int main(void) {~%    dy_init();~%")
+        (format stream "int main(void) {~%    dy_init();~%    dy_set_next_index(dy_next_index);~%")
         ;; initialize's method on <object> is the runtime's, a method on
         ;; the program's initialize: that is how it prints (chapter 11)
         (let ((init (gethash (dylan-var "initialize") *gfuns*)))

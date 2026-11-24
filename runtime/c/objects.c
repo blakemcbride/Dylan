@@ -285,31 +285,164 @@ void dy_check_class_slots(const D *supers, intptr_t n, const D *own, intptr_t m)
 
 /* ------------------------------------------------------- Next methods */
 
-/* env[0] is the next method, env[1] the argument count, env[2..] the
- * arguments. */
+/* The changes to which methods are attached (dylan.h): DY_METHODS_NOW is
+ * a #[address, old value, next] whose next is #f, which the next change
+ * fills.  A method entered holds the one current then; those no method
+ * holds are garbage. */
+D dy_methods_now = DY_FALSE;
+
+static DyNextIndex *next_index;
+static intptr_t next_count;
+
+static int by_next(const void *a, const void *b) {
+    uintptr_t x = (uintptr_t)((const DyNextIndex *)a)->next;
+    uintptr_t y = (uintptr_t)((const DyNextIndex *)b)->next;
+    return x < y ? -1 : x > y;
+}
+
+void dy_set_next_index(DyNextIndex *index) {
+    intptr_t n = 0;
+    while (index[n].next) n++;
+    qsort(index, (size_t)n, sizeof *index, by_next);
+    next_index = index;
+    next_count = n;
+    if (dy_methods_now == DY_FALSE) dy_methods_now = dy_make_vector(3, DY_FALSE);
+}
+
+static const DyNextIndex *next_steps(D next) {
+    intptr_t low = 0, high = next_count;
+    while (low < high) {
+        intptr_t mid = low + (high - low) / 2;
+        uintptr_t m = (uintptr_t)next_index[mid].next;
+        if (m == (uintptr_t)next) return &next_index[mid];
+        if (m < (uintptr_t)next) low = mid + 1; else high = mid;
+    }
+    return NULL;
+}
+
+static void note_change(void *address, D old) {
+    if (dy_methods_now == DY_FALSE) dy_methods_now = dy_make_vector(3, DY_FALSE);
+    D fresh = dy_make_vector(3, DY_FALSE);
+    DyVector *v = DY_PTR(dy_methods_now);
+    v->data[0] = DY_INT((intptr_t)address);
+    v->data[1] = old;
+    __atomic_store_n(&v->data[2], fresh, __ATOMIC_RELEASE);
+    __atomic_store_n(&dy_methods_now, fresh, __ATOMIC_RELEASE);
+}
+
+void dy_set_method_flag(unsigned char *flag, int on) {
+    if (*flag == on) return;
+    note_change(flag, DY_INT(*flag));
+    __atomic_store_n(flag, (unsigned char)on, __ATOMIC_RELEASE);
+}
+
+void dy_set_method_closure(D *variable, D closure) {
+    if (*variable == closure) return;
+    note_change(variable, *variable);
+    __atomic_store_n(variable, closure, __ATOMIC_RELEASE);
+}
+
+/* What was at ADDRESS, which holds NOW, when AT was current: the old value
+ * of its first change after.  NOW is read first: a change is noted before
+ * it is made. */
+static D value_at(const void *address, D now, D at) {
+    D key = DY_INT((intptr_t)address);
+    for (D n = at;;) {
+        DyVector *v = DY_PTR(n);
+        D next = __atomic_load_n(&v->data[2], __ATOMIC_ACQUIRE);
+        if (next == DY_FALSE) return now;
+        if (v->data[0] == key) return v->data[1];
+        n = next;
+    }
+}
+
+static int attached_at(const DyNextStep *s, D at) {
+    if (!s->flag) return 1;
+    D now = DY_INT(__atomic_load_n(s->flag, __ATOMIC_ACQUIRE));
+    return value_at(s->flag, now, at) != DY_INT(0);
+}
+
+/* env[0] is a compiled next method, env[1] the place it runs as of */
+static D next_as_of_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    DyFunction *c = DY_PTR(self);
+    D at = c->env[1];
+    const DyNextIndex *x = next_steps(c->env[0]);
+    for (intptr_t i = 0; i < x->count; i++) {
+        const DyNextStep *s = &x->steps[i];
+        if (!attached_at(s, at)) continue;
+        D object = s->object;
+        if (s->closure)
+            object = value_at(s->closure, __atomic_load_n(s->closure, __ATOMIC_ACQUIRE), at);
+        D next = DY_FALSE;
+        if (s->next) {
+            const DyNextIndex *r = next_steps(DY_OBJ(s->next));
+            for (intptr_t j = 0; j < r->count; j++)
+                if (attached_at(&r->steps[j], at)) {
+                    next = dy_next_as_of(DY_OBJ(s->next), at);
+                    break;
+                }
+        }
+        dy_thread->next_method = next;
+        if (s->entry) DY_TAIL_CALL_DIRECT(s->entry, object, a0, a1, a2, a3, argc);
+        DY_TAIL_CALL_DIRECT(dy_entry(object), object, a0, a1, a2, a3, argc);
+    }
+    /* (Not reached: a next method is given only if one was attached.) */
+    dy_no_applicable_method(x->generic);
+}
+
+D dy_next_as_of(D next, D at) {
+    if (next == DY_FALSE || at == __atomic_load_n(&dy_methods_now, __ATOMIC_ACQUIRE)
+        || !next_steps(next))
+        return next;
+    D c = dy_make_closure(next_as_of_entry, 2);
+    DyFunction *f = DY_PTR(c);
+    f->env[0] = next;
+    f->env[1] = at;
+    return c;
+}
+
+/* env[0] is the next method, env[1] the place it runs as of */
+static D kept_next_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
+    DyFunction *c = DY_PTR(self);
+    D next = dy_next_as_of(c->env[0], c->env[1]);
+    DY_TAIL_CALL(next, a0, a1, a2, a3, argc);
+}
+
+D dy_keep_next(D next, D at) {
+    if (next == DY_FALSE || !next_steps(next)) return next;
+    D c = dy_make_closure(kept_next_entry, 2);
+    DyFunction *f = DY_PTR(c);
+    f->env[0] = next;
+    f->env[1] = at;
+    return c;
+}
+
+/* env[0] is the next method, env[1] the place it runs as of, env[2] the
+ * argument count, env[3..] the arguments. */
 static D captured_next_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     DyFunction *c = DY_PTR(self);
-    D next = c->env[0];
+    D next = dy_next_as_of(c->env[0], c->env[1]);
     if (argc == 0) {
-        argc = DY_INT_VALUE(c->env[1]);
+        argc = DY_INT_VALUE(c->env[2]);
         dy_reserve_arguments(argc);
-        for (intptr_t i = 4; i < argc; i++) *dy_argument_slot(i) = c->env[2 + i];
-        a0 = argc > 0 ? c->env[2] : 0;
-        a1 = argc > 1 ? c->env[3] : 0;
-        a2 = argc > 2 ? c->env[4] : 0;
-        a3 = argc > 3 ? c->env[5] : 0;
+        for (intptr_t i = 4; i < argc; i++) *dy_argument_slot(i) = c->env[3 + i];
+        a0 = argc > 0 ? c->env[3] : 0;
+        a1 = argc > 1 ? c->env[4] : 0;
+        a2 = argc > 2 ? c->env[5] : 0;
+        a3 = argc > 3 ? c->env[6] : 0;
     }
     DY_TAIL_CALL(next, a0, a1, a2, a3, argc);
 }
 
-D dy_capture_next(D next, intptr_t argc, D a0, D a1, D a2, D a3) {
+D dy_capture_next(D next, D at, intptr_t argc, D a0, D a1, D a2, D a3) {
     size_t n = argc < 4 ? 4 : (size_t)argc;
-    D c = dy_make_closure(captured_next_entry, 2 + n);
+    D c = dy_make_closure(captured_next_entry, 3 + n);
     DyFunction *f = DY_PTR(c);
     f->env[0] = next;
-    f->env[1] = DY_INT(argc);
-    f->env[2] = a0; f->env[3] = a1; f->env[4] = a2; f->env[5] = a3;
-    for (intptr_t i = 4; i < argc; i++) f->env[2 + i] = *dy_argument_slot(i);
+    f->env[1] = at;
+    f->env[2] = DY_INT(argc);
+    f->env[3] = a0; f->env[4] = a1; f->env[5] = a2; f->env[6] = a3;
+    for (intptr_t i = 4; i < argc; i++) f->env[3 + i] = *dy_argument_slot(i);
     return c;
 }
 

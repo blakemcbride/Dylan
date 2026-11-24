@@ -176,4 +176,32 @@ alive
 ((int 19999) (str 19999) char 3)
 "
   :compiler-only t)
+ ;; Threads that run define-slots on one class at once: no slot is lost,
+ ;; in the class or its subclass (Bugs07 C13).
+ (define-slot-in-threads
+  "(define-class <a> (<object>))
+(define-class <b> (<a>))
+(define-macro slots (p n)
+  (bind ((l '()))
+    (for ((i n (- i 1))) ((= i 0))
+      (set! l (add l (list 'define-slot '<a> (as <symbol> (format #f \"s~a-~a\" p i)) init-value: i))))
+    (concatenate (list 'begin) l)))
+(define-macro getters (p n)
+  (bind ((l '()))
+    (for ((i n (- i 1))) ((= i 0))
+      (set! l (add l (as <symbol> (format #f \"s~a-~a\" p i)))))
+    (concatenate (list 'list) l)))
+(define go (make <atomic-integer>))
+(define-method defs1 () (atomic-add! go 1) (until (= (atomic-value go) 2)) (slots 1 100) 'one)
+(define-method defs2 () (atomic-add! go 1) (until (= (atomic-value go) 2)) (slots 2 100) 'two)
+(define t1 (make-thread defs1))
+(define t2 (make-thread defs2))
+(print (list (join-thread t1) (join-thread t2)))
+(define x (make <b>))
+(print (list (size (slot-descriptors <a>)) (size (slot-descriptors <b>))
+             (reduce + 0 (map (method (g) (g x)) (concatenate (getters 1 100) (getters 2 100))))))"
+  "(one two)
+(200 200 10100)
+"
+  :compiler-only t)
 )

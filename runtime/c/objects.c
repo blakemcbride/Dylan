@@ -613,10 +613,18 @@ void dy_check_slot_owner(D class) {
 }
 
 void dy_check_define_slot(const DyProgramClass *owner, D d, const D *supers, intptr_t n) {
-    D current = dy_find_slot_descriptor(*owner->slots, descriptor(d)->getter);
+    D current = dy_find_slot_descriptor(dy_class_slots(owner->slots), descriptor(d)->getter);
     if (current != DY_FALSE && descriptor(current)->owner != owner->class)
         dy_check_slot_respecified(d, supers, n);
 }
+
+/* A class's slot descriptors are changed with this lock held: by a
+ * define-slot, and by a define-class, which combines its superclasses'
+ * (dy_combine_slots), until it is ready.  Threads may run them at once. */
+static pthread_mutex_t slots_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void dy_lock_slots(void) { pthread_mutex_lock(&slots_lock); }
+void dy_unlock_slots(void) { pthread_mutex_unlock(&slots_lock); }
 
 void dy_define_class_slot(const DyProgramClass *owner, D d) {
     dy_check_slot_owner(owner->class);
@@ -624,8 +632,10 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
     bool instance = descriptor(d)->kind == 0;
     /* The slot replaced, if any, which the subclasses that inherit it
      * share */
+    dy_lock_slots();
     D replaced = dy_find_slot_descriptor(*owner->slots, getter);
-    *owner->slots = put_slot(*owner->slots, d);
+    dy_set_class_slots(owner->slots, put_slot(*owner->slots, d));
+    dy_unlock_slots();
     if (instance) initialize_early(owner, d);
     /* Every instance of the owner is given the slot (chapter 6): down
      * through the subclasses, breadth first, as far as each lacks a slot
@@ -646,15 +656,18 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
             if (!seen) dy_error("out of memory", 0);
         }
         seen[seen_size++] = c;
+        dy_lock_slots();
         D slots = *c->slots;
         D had = dy_find_slot_descriptor(slots, getter);
         if (had != DY_FALSE && had != replaced) {
+            dy_unlock_slots();
             /* The subclass's own redefinition must still respecify what
              * the new definition specifies */
             if (descriptor(had)->owner == c->class) check_respecified(had, &d, 1);
             continue;
         }
-        *c->slots = put_slot(slots, d);
+        dy_set_class_slots(c->slots, put_slot(slots, d));
+        dy_unlock_slots();
         if (instance) initialize_early(c, d);
         queue = queue_subclasses(queue, &size, &room, c);
     }
@@ -848,7 +861,7 @@ static DySlotDescriptor *storage_of(const DyProgramClass *k, D d) {
 D dy_fill_slots(D x, const DyProgramClass *k, D self, intptr_t argc, D a0, D a1,
                 D a2, D a3) {
     DY_CHECK_STACK();
-    D slots = *k->slots;
+    D slots = dy_class_slots(k->slots);
     intptr_t n = DY_VECTOR_SIZE(slots);
     dy_check_keywords(self, argc, 1, a0, a1, a2, a3, NULL, 0);
     D keys = dy_collect_arguments(argc, 1, a0, a1, a2, a3);

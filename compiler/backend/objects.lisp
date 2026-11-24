@@ -1207,8 +1207,12 @@ computed after the class was made (IR-DEFINE-CLASS-START)."
     (let ((g (gethash (ir-define-class-var node) *gclasses*)))
       (if (dynamic-slots-p (gclass-info g))
           (progn
+            ;; As no define-slot on a superclass changes them meanwhile
+            ;; in another thread, unseen (dy_define_class_slot)
+            (emit "dy_lock_slots();")
             (emit-class-slots g node)
-            (emit "~a = ++dy_class_serial;" (gclass-ready-c g)))
+            (emit "~a = ++dy_class_serial;" (gclass-ready-c g))
+            (emit "dy_unlock_slots();"))
           (emit "~a = 1;" (gclass-ready-c g)))))
   ;; A define-slot on a class: the class's slot from now on, and its
   ;; subclasses' that lack one with the getter; the instances made so far
@@ -1282,9 +1286,9 @@ slot descriptors: its superclasses' as they are now, then its own."
     (if own
         (progn
           (emit "    const D own[] = { ~{~a~^, ~} };" own)
-          (emit "    ~a = dy_combine_slots(supers, ~d, own, ~d);" (class-slots-c info)
+          (emit "    dy_set_class_slots(&~a, dy_combine_slots(supers, ~d, own, ~d));" (class-slots-c info)
                 (length supers) (length own)))
-        (emit "    ~a = dy_combine_slots(supers, ~d, NULL, 0);" (class-slots-c info)
+        (emit "    dy_set_class_slots(&~a, dy_combine_slots(supers, ~d, NULL, 0));" (class-slots-c info)
               (length supers)))
     (emit "}")))
 
@@ -2897,7 +2901,7 @@ objects, makers."
     ;; are now
     (dolist (info *classes*)
       (when (dynamic-slots-p info)
-        (emit-object "    if (w == &~a) return dy_find_slot_descriptor(~a, a1);"
+        (emit-object "    if (w == &~a) return dy_find_slot_descriptor(dy_class_slots(&~a), a1);"
                      (wrapper-c-name info) (class-slots-c info))))
     (dolist (sd (stable-sort (remove-if (lambda (sd) (dynamic-slots-p (sdef-class sd)))
                                         sdefs)
@@ -2919,7 +2923,7 @@ objects, makers."
     ;; A program's class, or one a define-slot changes: as they are now
     (dolist (info *classes*)
       (when (dynamic-slots-p info)
-        (emit-object "    if (a0 == ~a) return dy_reported_slots(~a);"
+        (emit-object "    if (a0 == ~a) return dy_reported_slots(dy_class_slots(&~a));"
                      (address (class-c-name info)) (class-slots-c info))))
     (loop for g being the hash-values of *gclasses*
           do (unless (dynamic-slots-p (gclass-info g))

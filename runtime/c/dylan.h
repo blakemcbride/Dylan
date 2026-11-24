@@ -942,6 +942,15 @@ D dy_find_slot_descriptor(D slots, D getter);
 void dy_check_slot_owner(D class);
 /* A define-slot of the slot DESCRIPTOR on the class OWNER runs. */
 void dy_define_class_slot(const DyProgramClass *owner, D descriptor);
+/* Held while a class's slot descriptors change, and while a define-class
+ * combines its superclasses' until it is ready (threads). */
+void dy_lock_slots(void);
+void dy_unlock_slots(void);
+/* A class's slot vector, which another thread may set meanwhile */
+static inline D dy_class_slots(D *place) { return __atomic_load_n(place, __ATOMIC_ACQUIRE); }
+static inline void dy_set_class_slots(D *place, D slots) {
+    __atomic_store_n(place, slots, __ATOMIC_RELEASE);
+}
 /* The instance slot DESCRIPTOR of X, an object with no storage of its own
  * (a symbol, a character...), its getter's objects' values in *TABLE: its
  * value, which it takes now from the slot's initial value if it has none

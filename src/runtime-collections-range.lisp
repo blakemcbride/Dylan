@@ -446,21 +446,23 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
     (check-bounded "concatenate" rest)
     (mapcan #'sequence->list (cons range-1 rest)))))
 
+(defun range-reverse (range)
+  "The bounded RANGE reversed, from the last element by -BY, as many as
+there are: the library's own, which reverse! uses, not a program's reverse
+(Bugs02 B10)."
+  (if (zerop (collection-size range))
+      (dylan-call dylan/range :from (range-start range) :by (range-step range) :size 0)
+      (let ((n (collection-size range)))
+        (sub-range range (- n 1) -1 n))))
+
 (add-method
  dylan/reverse
  (dylan%function->method
   one-range
   (lambda (range)
-    (let ((start (dylan-call dylan/get-range-start range))
-          (end (dylan-call dylan/get-range-end range))
-          (step (dylan-call dylan/get-range-step range)))
-      ;; From the last element by -BY, as many as there are
-      (cond ((not end)
-             (dylan-call dylan/error "reverse: the range is unbounded"))
-            ((zerop (collection-size range))
-             (dylan-call dylan/range :from start :by step :size 0))
-            (t (let ((n (collection-size range)))
-                 (sub-range range (- n 1) -1 n))))))))
+    (unless (dylan-call dylan/get-range-end range)
+      (dylan-call dylan/error "reverse: the range is unbounded"))
+    (range-reverse range))))
 
 (add-method
  dylan/reverse!
@@ -469,7 +471,7 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
   (lambda (range)
     (unless (collection-size range)
       (dylan-call dylan/error "reverse!: the range is unbounded"))
-    (let ((reversed (dylan-call dylan/reverse range)))
+    (let ((reversed (range-reverse range)))
       (set-range-start! range (range-start reversed))
       (set-range-step! range (range-step reversed))
       (set-range-end! range (range-end reversed))

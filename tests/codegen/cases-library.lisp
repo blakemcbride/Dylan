@@ -4337,6 +4337,21 @@ y
   "(1 1 -1 12 12)
 (1.5 -1.5)
 ")
+ ;; reverse! of a range reverses it by the library's own reverse, not a
+ ;; program's (Bugs07 B19).
+ (range-reverse!-not-generic
+  "(define-method reverse ((r <range>)) (next-method))
+(define r (range from: 3 by: -1 size: 3))
+(reverse! r)
+(print r)
+(define-method reverse ((r <range>)) '(1 2))
+(define s (range from: 0 by: 2 size: 4))
+(print (reverse! s))
+(print (reverse! (range from: 5 size: 0)))"
+  "{range 1 by 1 size 3}
+{range 6 by -2 size 4}
+{range 5 by 1 size 0}
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

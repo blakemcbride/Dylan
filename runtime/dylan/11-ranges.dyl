@@ -326,13 +326,19 @@ module: dylan
 
 (define-method reverse ((r <range>))
   (unless (%size r) (error "reverse: the range is unbounded"))
-  (if (zero? (%size r))
-      (make <range> from: (%from r) by: (%by r) size: 0)
-      (%sub-range r (binary- (%size r) 1) -1 (%size r))))
+  (%range-reverse r))
+
+;;; The bounded range R reversed: the library's own, which reverse! uses,
+;;; not a program's reverse (Bugs02 B10)
+(define %range-reverse
+  (method (r)
+    (if (zero? (%size r))
+        (make <range> from: (%from r) by: (%by r) size: 0)
+        (%sub-range r (binary- (%size r) 1) -1 (%size r)))))
 
 (define-method reverse! ((r <range>))
   (unless (%size r) (error "reverse!: the range is unbounded"))
-  (bind ((reversed (reverse r)))
+  (bind ((reversed (%range-reverse r)))
     (set! (%from r) (%from reversed))
     (set! (%by r) (%by reversed))
     (set! (%origin r) (%origin reversed))

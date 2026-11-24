@@ -589,6 +589,16 @@ static void initialize_early(const DyProgramClass *k, D d) {
     }
 }
 
+/* A copy of the USED classes of OLD with room for ROOM, in scratch
+ * memory: an init function or a check that signals leaves it to the
+ * collector, where malloc'd memory would be lost */
+static const DyProgramClass **class_array(const DyProgramClass **old, intptr_t used,
+                                          intptr_t room) {
+    const DyProgramClass **a = (const DyProgramClass **)dy_alloc_bytes((size_t)room * sizeof *a);
+    if (used) memcpy(a, old, (size_t)used * sizeof *a);
+    return a;
+}
+
 /* Append to QUEUE (of *SIZE, with room for *ROOM) the subclasses of K
  * defined so far, the most recently defined first */
 static const DyProgramClass **queue_subclasses(const DyProgramClass **queue, intptr_t *size,
@@ -599,8 +609,7 @@ static const DyProgramClass **queue_subclasses(const DyProgramClass **queue, int
         if (!*c->ready) continue;
         if (*size == *room) {
             *room = *room * 2 + 8;
-            queue = realloc(queue, (size_t)*room * sizeof *queue);
-            if (!queue) dy_error("out of memory", 0);
+            queue = class_array(queue, *size, *room);
         }
         intptr_t j = (*size)++;
         while (j > start && *queue[j - 1]->ready < *c->ready) { queue[j] = queue[j - 1]; j--; }
@@ -645,9 +654,8 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
      * with the getter or inherits the one replaced */
     intptr_t size = 0, room = 0, next = 0, seen_size = 0;
     const DyProgramClass **queue = queue_subclasses(NULL, &size, &room, owner);
-    const DyProgramClass **seen = malloc((size_t)(room + 1) * sizeof *seen);
     intptr_t seen_room = room + 1;
-    if (!seen) dy_error("out of memory", 0);
+    const DyProgramClass **seen = class_array(NULL, 0, seen_room);
     while (next < size) {
         const DyProgramClass *c = queue[next++];
         bool done = false;
@@ -655,8 +663,7 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
         if (done) continue;
         if (seen_size == seen_room) {
             seen_room = seen_room * 2;
-            seen = realloc(seen, (size_t)seen_room * sizeof *seen);
-            if (!seen) dy_error("out of memory", 0);
+            seen = class_array(seen, seen_size, seen_room);
         }
         seen[seen_size++] = c;
         dy_lock_slots();
@@ -674,8 +681,6 @@ void dy_define_class_slot(const DyProgramClass *owner, D d) {
         if (instance) initialize_early(c, d);
         queue = queue_subclasses(queue, &size, &room, c);
     }
-    free(queue);
-    free(seen);
 }
 
 void dy_define_slot_done(const DyProgramClass *k) {

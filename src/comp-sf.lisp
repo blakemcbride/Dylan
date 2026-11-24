@@ -165,8 +165,8 @@
 
 (defun check-case-keys-once (clauses)
   "Chapter 8: it is an error for a key to appear in more than one match
-list.  The keys are compared as case compares them, by id?; no two
-string literals are id?."
+list.  The keys are compared as case compares them, by id?: two string
+literals never are, but one string a macro puts in two match lists is."
   (let ((seen '()))
     (dolist (clause clauses)
       (when (and (consp clause) (consp (car clause))
@@ -174,8 +174,8 @@ string literals are id?."
         ;; One match list may repeat a key
         (let ((mine '()))
           (dolist (key (car clause))
-            (when (and (not (stringp key)) (member key seen :test #'id?))
-              (dylan%error "case: ~s appears in more than one match list" key))
+            (when (member key seen :test #'id?)
+              (syntax-error "case" "~a appears in more than one match list" key))
             (pushnew key mine :test #'id?))
           (setf seen (append mine seen)))))))
 

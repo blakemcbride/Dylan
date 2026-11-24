@@ -1136,6 +1136,17 @@ is-g
              (case e ((2.0l0) 'a) ((2.0l0) 'b) (else: 'c))))"
   ""
   :compile-error "case: 2.0l0 appears in more than one match list")
+ ;; One string a macro puts in two match lists is one key twice; two
+ ;; string literals are two keys, never id? (Bugs07 B16)
+ (case-shared-string-key-twice
+  "(define-macro m (x) (bind ((s \"a\")) `(case ,x ((,s) 1) ((,s) 2) (else: 3))))
+(print (m \"a\"))"
+  ""
+  :compile-error "case: a appears in more than one match list")
+ (case-string-literals-twice
+  "(print (case \"a\" ((\"a\") 1) ((\"a\") 2) (else: 3)))"
+  "3
+")
  ;; A malformed special form is reported in the same words by both
  ;; implementations: each names the form and the part that is wrong.
  (bind-binding-without-init

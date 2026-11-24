@@ -138,6 +138,11 @@ method is not congruent with its generic function (chapter 6).")
   (toplevel nil)                        ; for a program's method, the index
                                         ; of the top-level form whose own
                                         ; code defines it, or NIL
+  (maybe-siblings '())                  ; (method . C conditions): those with
+                                        ; its specializers if the owner of a
+                                        ; define-slot on a singleton, known
+                                        ; only when running, is the object
+                                        ; of another singleton (MAYBE-SAME-SPEC-P)
   (siblings '())                        ; the other methods with its
                                         ; specializers, which replace it or
                                         ; it replaces
@@ -397,6 +402,26 @@ its C the object, which the define-slot stores."
            ;; ID?: an extended float is the same object as another
            ;; of its value
            (dylan::id? (spec-value a) (spec-value b)))))
+
+(defun maybe-same-spec-p (a b)
+  "May the singletons A and B, not the same when compiling, be of the same
+object: is either the owner of a define-slot on a singleton, known only
+when the program runs?"
+  (and (eq (spec-kind a) :singleton) (eq (spec-kind b) :singleton)
+       (or (runtime-spec-p a) (runtime-spec-p b))
+       (not (same-spec-p a b))))
+
+(defun maybe-same-specs-conditions (a b)
+  "If the methods A and B have the same specializers but for singletons
+that may be of the same object (MAYBE-SAME-SPEC-P), the C conditions under
+which they are; else NIL."
+  (let ((sa (gmethod-specs a)) (sb (gmethod-specs b)))
+    (and (= (length sa) (length sb))
+         (every (lambda (x y) (or (same-spec-p x y) (maybe-same-spec-p x y))) sa sb)
+         (loop for x in sa
+               for y in sb
+               when (maybe-same-spec-p x y)
+                 collect (format nil "dy_identical(~a, ~a)" (spec-c x) (spec-c y))))))
 
 (defun spec-object-c (spec)
   "A C expression for SPEC as a Dylan object, for reflection."
@@ -1824,11 +1849,19 @@ congruent with that one, the error then."
           (setf (gmethod-var m) (gfun-var g)
                 (gmethod-siblings m)
                 (remove-if-not (lambda (other) (and (not (eq other m)) (same-specs-p other m)))
-                               methods)))
+                               methods)
+                ;; And those it replaces, or that replace it, if a
+                ;; define-slot's owner is another singleton's object
+                (gmethod-maybe-siblings m)
+                (loop for other in methods
+                      for conditions = (and (not (eq other m))
+                                            (maybe-same-specs-conditions m other))
+                      when conditions collect (cons other conditions))))
         (setf (gfun-methods g) methods)))
     (let ((methods (gfun-methods g)))
       (dolist (m methods)
-        (when (or (flagged-method-p m) (some #'flagged-method-p (gmethod-siblings m)))
+        (when (or (flagged-method-p m) (some #'flagged-method-p (gmethod-siblings m))
+                  (some (lambda (x) (flagged-method-p (car x))) (gmethod-maybe-siblings m)))
           ;; Named apart from the library's objects, whose names must not
           ;; depend on the program
           (let ((name (format nil "~a_on~d" (gfun-c-name g) (position m methods))))
@@ -1970,6 +2003,15 @@ definitions running at once in several threads attach each method once
            "dy_lock_methods();")
      (loop for s in replaced
            when (gmethod-flag-c s) collect (format nil "~a = 0;" (gmethod-flag-c s)))
+     ;; Those with its specializers only if a define-slot's owner is the
+     ;; object of another singleton: replaced if it is now.
+     (loop for (s . conditions) in (gmethod-maybe-siblings m)
+           when (gmethod-flag-c s)
+             collect (let ((objects (cons (method-object-c-expr s)
+                                          (and (gmethod-closure-c s) (list (gmethod-closure-c s))))))
+                       (format nil "if (~{~a~^ && ~}) { ~a = 0; dy_remove_methods(~a, (const D[]){ ~{~a~^, ~} }, ~d); }"
+                               conditions (gmethod-flag-c s) (address (gfun-c-name g))
+                               objects (length objects))))
      (and (gmethod-flag-c m) (list (format nil "~a = 1;" (gmethod-flag-c m))))
      (let ((object (or closure (method-object-c-expr m)))
            (dropped (append (mapcar #'method-object-c-expr replaced)
@@ -2291,24 +2333,28 @@ it does not apply."
                                  when (eq (spec-kind s) :singleton) collect s)
                            :test #'same-spec-p))
               (first t))
-         (labels ((narrow (class singleton)
+         (labels ((narrow (class singleton &optional also)
                     ;; The candidates applicable to an argument of CLASS (that
-                    ;; is SINGLETON's object, if it is not NIL), with their rank.
+                    ;; is SINGLETON's object, if it is not NIL, and the
+                    ;; object of each singleton in ALSO), with their rank.
                     (loop for c in candidates
                           for s = (nth pos (gmethod-specs (car c)))
                           for rank = (if (eq (spec-kind s) :singleton)
-                                         (and singleton (same-spec-p s singleton) -1)
+                                         (and singleton
+                                              (or (same-spec-p s singleton)
+                                                  (some (lambda (a) (same-spec-p s a)) also))
+                                              -1)
                                          (spec-rank s class))
                           when rank collect (cons (car c) (cons rank (cdr c)))))
-                  (class-switch (singleton indent)
+                  (class-switch (singleton indent &optional also)
                     ;; A switch on the argument's class (that is SINGLETON's
-                    ;; object, if it is not NIL)
+                    ;; object, and ALSO's, if it is not NIL)
                     (let ((pad (make-string (* 4 indent) :initial-element #\Space))
                           (groups '())    ; (narrowed . ids)
                           (cases '()))    ; (code . ids): groups whose code is
                                           ; the same share their case
                       (dolist (class *classes*)
-                        (let* ((narrowed (narrow class singleton))
+                        (let* ((narrowed (narrow class singleton also))
                                (key (mapcar (lambda (c) (cons (car c) (cadr c))) narrowed))
                                (group (assoc key groups :test #'equal)))
                           (if group
@@ -2339,14 +2385,35 @@ it does not apply."
                                              (id-ranges (cdr c))))
                         (dolist (line (car c)) (emit-object "~a" line)))
                       (emit-object "~adefault: goto no_method;" pad)
-                      (emit-object "~a}" pad))))
-           (dolist (s singletons)
-             (emit-object "~a~:[} else ~;~]if (~a) {" pad first (singleton-test-c s arg))
-             (setf first nil)
-             (if (spec-class s)
-                 (gen-dispatch-tree g (1+ pos) (narrow (spec-class s) s) (1+ indent))
-                 ;; An object known only when running: its class is not.
-                 (class-switch s (1+ indent))))
+                      (emit-object "~a}" pad)))
+                  (singleton-branch (s also indent)
+                    ;; The tree for an argument that is S's object, and
+                    ;; ALSO's, singletons that may be of the same object
+                    (cond ((spec-class s)
+                           (gen-dispatch-tree g (1+ pos) (narrow (spec-class s) s also) indent))
+                          ((and also (spec-class (first also)))
+                           (gen-dispatch-tree g (1+ pos) (narrow (spec-class (first also)) s also)
+                                              indent))
+                          ;; An object known only when running: its class is not.
+                          (t (class-switch s indent also)))))
+           ;; A singleton known only when running (MAYBE-SAME-SPEC-P) may be
+           ;; the object of one tested after it, whose methods then apply
+           ;; too: that is tested within.  One tested before it is not.
+           (loop for (s . later) on singletons
+                 for maybe = (remove-if-not (lambda (o) (maybe-same-spec-p s o)) later)
+                 do (emit-object "~a~:[} else ~;~]if (~a) {" pad first (singleton-test-c s arg))
+                    (setf first nil)
+                    (if (null maybe)
+                        (singleton-branch s '() (1+ indent))
+                        (let ((inner (make-string (* 4 (1+ indent)) :initial-element #\Space)))
+                          (loop for o in maybe
+                                for first-o = t then nil
+                                do (emit-object "~a~:[} else ~;~]if (~a) {" inner first-o
+                                                (singleton-test-c o arg))
+                                   (singleton-branch s (list o) (+ 2 indent)))
+                          (emit-object "~a} else {" inner)
+                          (singleton-branch s '() (+ 2 indent))
+                          (emit-object "~a}" inner))))
            (if first
                (class-switch nil indent)
                (progn (emit-object "~a} else {" pad)

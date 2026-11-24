@@ -398,6 +398,36 @@ special
 not-a-singleton
 ")
 
+ ;; A define-slot on a singleton and a define-method on a singleton of
+ ;; the same object have the same specializers: the later replaces the
+ ;; earlier (chapter 10), though the define-slot's owner is known only
+ ;; when the program runs; on singletons of other objects, both stay
+ ;; (Bugs07 C7).
+ (define-slot-singleton-and-method-replace
+  "(define-method h ((x <integer>)) 'int)
+(define-slot (singleton 7) h init-value: \"slot\")
+(define-method h ((x (singleton 7))) (list 'seven (next-method)))
+(print (list (h 7) (h 8) (size (generic-function-methods h))))
+(define-method k ((x <integer>)) 'int)
+(define-method k ((x (singleton 7))) (list 'seven (next-method)))
+(define-slot (singleton 7) k init-value: \"kslot\")
+(print (list (k 7) (k 9) (size (generic-function-methods k))))
+(define o (vector 1))
+(define-method m ((x <vector>)) 'vec)
+(define-slot (singleton o) m init-value: \"mslot\")
+(define-method m ((x (singleton 7))) 'seven)
+(print (list (m o) (m 7) (m (vector 2))))
+(define-method p ((x <object>)) 'obj)
+(define-slot (singleton 'a) p init-value: \"pslot\")
+(define-method p ((x (singleton 'a))) (list 'a (next-method)))
+(define-method p ((x (singleton 'b))) 'b)
+(print (list (p 'a) (p 'b) (p 'c)))"
+  "((seven int) int 2)
+(\"kslot\" int 2)
+(\"mslot\" seven vec)
+((a obj) b obj)
+")
+
  (define-slot-singleton-class-allocation
   "(define-slot (singleton 1) z allocation: class)"
   ""

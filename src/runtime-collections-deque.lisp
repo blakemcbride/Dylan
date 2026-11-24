@@ -397,7 +397,7 @@
  (dylan%function->method
   (make-param-list `((deque ,<deque>) (n ,<object>)) nil nil nil)
   (lambda (deque n)
-    (check-new-size deque n)
+    (check-new-size n (deque-count deque))
     (loop while (> (deque-count deque) n)
           do (dylan%pop-last deque))
     (loop while (< (deque-count deque) n)

@@ -1525,10 +1525,12 @@ current thread, the main one."
           (max (* 16 1024 1024) (min (sb-ext:bytes-consed-between-gcs) (floor limit 8)))))
   (pushnew 'check-heap-limit sb-ext:*after-gc-hooks*))
 
-(defun implementation-specific/heap-room ()
-  "How many bytes of the heap are free, after a full collection: up to
-the soft limit, if there is one."
-  (sb-ext:gc :full t)
+(defun implementation-specific/heap-room (collect)
+  "How many bytes of the heap are free, up to the soft limit, if there is
+one: after a full collection if COLLECT, else counting what is garbage as
+used."
+  (when collect
+    (sb-ext:gc :full t))
   (- (or *heap-soft-limit* (sb-ext:dynamic-space-size)) (sb-kernel:dynamic-usage)))
 
 (declaim (type fixnum *stack-guard* *stack-hard* *stack-floor*))

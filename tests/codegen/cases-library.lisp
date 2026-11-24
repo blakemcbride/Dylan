@@ -2078,6 +2078,18 @@ error
 (1 #f #f)
 1000000
 ")
+ ;; Growing or shrinking a sequence past a megabyte an element at a time
+ ;; does not collect the heap each time (Bugs07 L7).
+ (size-setter-past-a-megabyte
+  "(define sv (make <stretchy-vector>))
+(for ((i 0 (+ i 1))) ((= i 200000)) (set! (size sv) (+ i 1)))
+(for ((i 0 (+ i 1))) ((= i 1000)) (set! (size sv) (- (size sv) 1)))
+(define d (make <deque>))
+(for ((i 0 (+ i 1))) ((= i 200000)) (set! (size d) (+ i 1)))
+(for ((i 0 (+ i 1))) ((= i 300)) (make <vector> size: 132000))
+(print (list (size sv) (size d)))"
+  "(199000 200000)
+")
  ;; Walking onto the tail of a dotted list is a <type-error> of the tail
  ;; (design note 16); finishing before it answers normally.
  (improper-lists

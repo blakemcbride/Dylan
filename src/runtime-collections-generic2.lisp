@@ -595,13 +595,15 @@ unbounded range, which has no end to stop at."
 (defparameter dylan/setter/size/
   (dylan%generic-fn 'setter/size/ one-sequence-and-an-object nil))
 
-(defun check-new-size (sequence n)
-  (declare (ignore sequence))
+(defun check-new-size (n old-size)
+  "Signal unless N is a size a sequence of OLD-SIZE elements can be given:
+a non-negative integer, and one that fits if it grows."
   (unless (and (integerp n) (not (minusp n)))
     (dylan-call dylan/error
                 "(setter size): the size must be a non-negative integer: ~s"
                 n))
-  (check-room n 8))
+  (when (> n old-size)
+    (check-room n 8)))
 
 ;;; Design note 11.
 (defparameter dylan/setter/last/

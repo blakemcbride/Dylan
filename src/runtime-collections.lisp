@@ -138,7 +138,9 @@ a compiled program."
 ;;; a handler can catch, as in a compiled program, not the host's heap
 ;;; exhaustion.  Only a request of a megabyte or more is checked: a large
 ;;; object needs room of its own, a tenth of the heap's being kept for the
-;;; collector.
+;;; collector.  The heap is collected, to see what is free, only when the
+;;; request seems not to fit, so that a request's cost does not depend on
+;;; how much of the heap is alive.
 
 (defun check-integer-room (bits)
   "Signal out of memory if an integer of BITS bits would not fit, as a
@@ -149,5 +151,6 @@ collection that would not fit does: before the host tries to make it."
   "Signal out of memory if COUNT elements of BYTES-EACH would not fit."
   (let ((bytes (* count bytes-each)))
     (when (and (>= bytes (* 1024 1024))
-               (> bytes (floor (* 9 (implementation-specific/heap-room)) 10)))
+               (> bytes (floor (* 9 (implementation-specific/heap-room nil)) 10))
+               (> bytes (floor (* 9 (implementation-specific/heap-room t)) 10)))
       (dylan-call dylan/error "out of memory"))))

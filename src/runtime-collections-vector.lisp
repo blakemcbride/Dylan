@@ -504,7 +504,7 @@
   ;; In place, as ADD! grows the vector: made adjustable, with a fill
   ;; pointer, the first time; its storage doubles when it must grow.
   (lambda (s-vector n)
-    (check-new-size s-vector n)
+    (check-new-size n (car (stretchy-dimensions s-vector)))
     (let ((vector (stretchy-value s-vector))
           (size (car (stretchy-dimensions s-vector))))
       (unless (= n size)

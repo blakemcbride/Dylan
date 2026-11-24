@@ -83,7 +83,7 @@ module: dylan
     (bind ((bucket (%vector-element (%buckets t) k)))
       (when (%table-find t key)
         (%vector-element-setter (%buckets t) k
-                                (choose (method (entry) (not (%element= (car entry) key))) bucket))
+                                (%list-choose (method (entry) (not (%element= (car entry) key))) bucket))
         (set! (%count t) (binary- (%count t) 1)))
       t)))
 

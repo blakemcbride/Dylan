@@ -76,7 +76,7 @@ module: dylan
 ;;; member?, not a walk of S2: a range answers it by arithmetic, and an
 ;;; unbounded one has no end to walk.
 (define-method intersection ((s1 <sequence>) (s2 <sequence>) #key (test id?))
-  (choose (method (e) (member? e s2 test: test)) s1))
+  (%copy-like s1 (%list-choose (method (e) (member? e s2 test: test)) (%elements s1))))
 
 (define-generic-function union (sequence1 sequence2 #key test))
 (define-method union ((s1 <sequence>) (s2 <sequence>) #key (test id?))

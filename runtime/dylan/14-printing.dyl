@@ -131,7 +131,7 @@ module: dylan
   (cond ((not (id? (%object-class x) <character>)) (next-method))
         (escape?
          (%put stream "#\\")
-         (bind ((name (find-pair x %character-names)))
+         (bind ((name (%list-find-pair x %character-names)))
            (%put stream (if name (cdr name) x))))
         (else: (%put stream x)))
   x)

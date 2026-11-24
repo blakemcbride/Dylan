@@ -145,11 +145,11 @@ module: dylan
 
 (define curry
   (method (function #rest curried)
-    (method (#rest arguments) (apply function (append curried arguments)))))
+    (method (#rest arguments) (apply function (%list-append curried arguments)))))
 
 (define rcurry
   (method (function #rest curried)
-    (method (#rest arguments) (apply function (append arguments curried)))))
+    (method (#rest arguments) (apply function (%list-append arguments curried)))))
 
 (define always
   (method (object)

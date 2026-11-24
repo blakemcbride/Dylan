@@ -19,14 +19,14 @@ module: dylan
   ;; A list of the array's own: as may answer the caller's.  Made before
   ;; the dimensions are checked, so that an unbounded range is refused by
   ;; as, not read for ever.
-  (bind ((dims (copy-sequence (as <list> dimensions))))
-    (unless (every? (method (d) (and (%instance? d <integer>) (not (negative? d)))) dims)
+  (bind ((dims (%list-map (method (d) d) (as <list> dimensions))))
+    (unless (%list-every? (method (d) (and (%instance? d <integer>) (not (negative? d)))) dims)
       (error "make: the dimensions of an <array> are not non-negative integers: ~s"
              dimensions))
     (if (and (%pair? dims) (id? (cdr dims) '()))
         (%make-vector (car dims) fill)
         (%make <%general-array> dimensions: dims
-               data: (%make-vector (reduce binary* 1 dims) fill)))))
+               data: (%make-vector (%list-reduce binary* 1 dims) fill)))))
 
 ;;; A collection as an array: a vector of its elements, an array of one
 ;;; dimension.
@@ -66,9 +66,8 @@ module: dylan
   (method ((array <array>) #rest indices-and-new-value)
     (when (id? indices-and-new-value '())
       (error "(setter aref): no new value given"))
-    (bind ((new-value (last indices-and-new-value))
-           (indices (copy-sequence indices-and-new-value
-                                   end: (binary- (%list-length indices-and-new-value) 1))))
+    (bind ((new-value (car (%list-reverse indices-and-new-value)))
+           (indices (%list-reverse (cdr (%list-reverse indices-and-new-value)))))
       (if (%instance? array <%general-array>)
           (%vector-element-setter (%data array) (%row-major array indices) new-value)
           (if (and (%pair? indices) (id? (cdr indices) '()))
@@ -83,7 +82,7 @@ module: dylan
 (define-method element ((a <%general-array>) (indices <sequence>) #key (default %no-default))
   (bind ((l (as <list> indices)))
     (if (and (= (%list-length l) (%list-length (%dimensions a)))
-             (every? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
+             (%list-every2? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
                      l (%dimensions a)))
         (apply aref a l)
         (if (id? default %no-default)
@@ -93,10 +92,10 @@ module: dylan
 (define-method (setter element) ((a <%general-array>) (indices <sequence>) new-value)
   (bind ((l (as <list> indices)))
     (unless (and (= (%list-length l) (%list-length (%dimensions a)))
-                 (every? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
+                 (%list-every2? (method (i d) (and (%instance? i <integer>) (not (negative? i)) (binary< i d)))
                          l (%dimensions a)))
       (error "element: there is no element at ~s" indices))
-    (apply (setter aref) a (append l (list new-value)))))
+    (apply (setter aref) a (%list-append l (list new-value)))))
 
 ;;; Row-major iteration; the state is the row-major index.
 (define-method initial-state ((a <%general-array>)) (if (zero? (%vector-size (%data a))) #f 0))

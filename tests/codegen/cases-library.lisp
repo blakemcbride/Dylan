@@ -4205,4 +4205,48 @@ init
 (5 0 1)
 {range 2 by -1 size 3}
 ")
+ ;; The library walks its own lists itself, not by the generic functions,
+ ;; whose methods a program may add: aligning a table's keys, removing a
+ ;; key, curry, printing a character, arrays and as <range> (Bugs07 C9).
+ (library-lists-not-generic
+  "(define-method choose ((f <function>) (l <pair>)) '())
+(define-method append ((l <list>) #rest more) '(appended))
+(define-method find-pair (item (l <list>) #key test) #f)
+(define-method every? ((f <function>) (l <list>) #rest more) #f)
+(define-method reduce ((f <function>) init (l <list>)) 0)
+(define-method copy-sequence ((l <list>) #key start end) '())
+(define-method last ((l <list>) #key default) 'last)
+(define t (make <table>))
+(set! (element t 'a) 1)
+(set! (element t 'b) 2)
+(define m (map + t t))
+(print (list (size m) (element m (quote a)) (element m (quote b))))
+(remove-key! t 'a)
+(print t)
+(print ((curry list 1) 2))
+(print ((rcurry list 1) 2))
+(print #\\space)
+(print #\\newline)
+(define a (make <array> dimensions: '(2 3) fill: 0))
+(print (size a))
+(set! (aref a 1 2) 'x)
+(print (aref a 1 2))
+(print (element a '(1 2)))
+(set! (element a '(0 1)) 'y)
+(print (aref a 0 1))
+(print (as <range> '(1 2 3)))
+(print (intersection '(1 2 3) '(2 3 4)))"
+  "(2 2 4)
+{table b => 2}
+(1 2)
+(2 1)
+#\\space
+#\\newline
+6
+x
+x
+y
+{range 1 by 1 size 3}
+(2 3)
+")
 )

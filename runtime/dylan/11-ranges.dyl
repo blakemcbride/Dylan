@@ -179,7 +179,7 @@ module: dylan
       (bind ((l (as <list> c)))
         (cond ((id? l '()) (%empty-range))
               ((id? (cdr l) '()) (range from: (car l) size: 1))
-              ((not (every? (method (x) (%instance? x <number>)) l))
+              ((not (%list-every? (method (x) (%instance? x <number>)) l))
                (error "as: the elements of ~s are not numbers" c))
               (else:
                (bind ((step (binary- (car (cdr l)) (car l))))

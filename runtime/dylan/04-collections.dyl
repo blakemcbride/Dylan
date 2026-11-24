@@ -35,6 +35,40 @@ module: dylan
     (bind-methods ((loop (l n) (if (id? l '()) n (loop (cdr l) (binary+ n 1)))))
       (loop l 0))))
 
+;;; The library's own lists are walked by these, not by the generic
+;;; functions, whose methods a program may add or replace (Bugs02 B10).
+(define %list-choose
+  (method (f l)
+    (bind-methods ((loop (l r)
+                     (cond ((id? l '()) (%list-reverse r))
+                           ((f (car l)) (loop (cdr l) (cons (car l) r)))
+                           (else: (loop (cdr l) r)))))
+      (loop l '()))))
+
+;;; A fresh list of A's elements, then B itself
+(define %list-append
+  (method (a b)
+    (bind-methods ((loop (l r) (if (id? l '()) r (loop (cdr l) (cons (car l) r)))))
+      (loop (%list-reverse a) b))))
+
+;;; F of each pair of elements of two lists of one length
+(define %list-every2?
+  (method (f l1 l2)
+    (cond ((id? l1 '()) #t)
+          ((f (car l1) (car l2)) (%list-every2? f (cdr l1) (cdr l2)))
+          (else: #f))))
+
+(define %list-reduce
+  (method (f init l)
+    (if (id? l '()) init (%list-reduce f (f init (car l)) (cdr l)))))
+
+;;; The pair of ALIST whose head is id? to KEY, or #f
+(define %list-find-pair
+  (method (key alist)
+    (cond ((id? alist '()) #f)
+          ((id? (car (car alist)) key) (car alist))
+          (else: (%list-find-pair key (cdr alist))))))
+
 ;;; The iteration protocol
 
 (define-generic-function initial-state (collection))
@@ -221,9 +255,9 @@ module: dylan
 (define %common-keys
   (method (collections)
     (bind ((key-sequences (%list-map key-sequence collections))
-           (bounded (choose %library-size key-sequences))
-           (unbounded (choose (method (k) (not (%library-size k))) key-sequences))
-           (ordered (concatenate bounded unbounded)))
+           (bounded (%list-choose %library-size key-sequences))
+           (unbounded (%list-choose (method (k) (not (%library-size k))) key-sequences))
+           (ordered (%list-append bounded unbounded)))
       (bind-methods ((loop (keys more)
                        (if (id? more '())
                            keys

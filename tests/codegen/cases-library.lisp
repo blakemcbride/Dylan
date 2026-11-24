@@ -1520,6 +1520,34 @@ error
 ((0.7853982s0 {the class <single-float>}) (0.7853982s0 {the class <single-float>}) (0.7853981633974483 {the class <double-float>}) (0.7853981633974483 {the class <double-float>}))
 ")
 
+ ;; find-pair refuses an element not a list after its match as well as
+ ;; before (chapter 12), and checks a circular list's once (Bugs07 B21)
+ (find-pair-checks-every-element
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (find-pair 'a '((a . 1) 5)))))
+(print (try (method () (find-pair 'z '((a . 1) 5)))))
+(print (try (method () (find-pair 'a '((a . 1) () (b . 2))))))
+(print (try (method () (find-pair 'a '((a . 1) (b . 2) . 7)))))
+(define c (list '(x . 0) '(a . 1) '(b . 2)))
+(set! (cdr (cdr (cdr c))) c)
+(print (try (method () (find-pair 'a c))))
+(print (try (method () (find-pair 'x c))))
+(print (try (method () (find-pair 'b c))))
+(define d (list '(x . 0) '(a . 1) 9 '(b . 2)))
+(set! (cdr (cdr (cdr (cdr d)))) (cdr d))
+(print (try (method () (find-pair 'b d))))
+(print (try (method () (find-pair 'x d))))"
+  "\"ERR: find-pair: 5 is not a list\"
+\"ERR: find-pair: 5 is not a list\"
+(a . 1)
+\"ERR: 7 is not an instance of {the class <list>}\"
+(a . 1)
+(x . 0)
+(b . 2)
+\"ERR: find-pair: 9 is not a list\"
+\"ERR: find-pair: 9 is not a list\"
+")
+
  ;; Lists and arrays.  An improper list has no size: design note 16 makes
  ;; it a <type-error>, of the tail; a circular one's is #f.  find-pair
  ;; passes over an element that is not a pair.  <pair> is not

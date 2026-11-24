@@ -162,13 +162,27 @@ module: dylan
 
 (define-generic-function find-pair (item list #key test))
 (define-method find-pair (item (l <list>) #key (test id?))
-  (bind-methods ((walk (l)
+  (bind-methods ((element-list (e)
+                   (unless (%instance? e <list>) (error "find-pair: ~s is not a list" e)))
+                 ;; The elements after the match must be lists too (chapter
+                 ;; 12): those of a circular list once each, until FAST,
+                 ;; a step at a time, meets SLOW, half as fast
+                 (check-rest (fast slow half?)
+                   (cond ((id? fast '()) #t)
+                         ((not (%pair? fast)) (%improper-list-tail fast))
+                         (else:
+                          (element-list (car fast))
+                          (bind ((slow (if half? (cdr slow) slow)))
+                            (unless (id? (cdr fast) slow)
+                              (check-rest (cdr fast) slow (not half?)))))))
+                 (walk (l)
                    (cond ((id? l '()) #f)
                          ((not (%pair? l)) (%improper-list-tail l))
-                         ((not (%instance? (car l) <list>))
-                          (error "find-pair: ~s is not a list" (car l)))
-                         ((and (%pair? (car l)) (test item (car (car l)))) (car l))
-                         (else: (walk (cdr l))))))
+                         (else:
+                          (element-list (car l))
+                          (if (and (%pair? (car l)) (test item (car (car l))))
+                              (begin (check-rest (cdr l) l #f) (car l))
+                              (walk (cdr l)))))))
     (walk l)))
 
 ;;; For lists, member? answers the tail whose car matched.

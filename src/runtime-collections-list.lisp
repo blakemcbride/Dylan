@@ -360,7 +360,21 @@
                       (return (dylan-call dylan/error "find-pair: ~s is not a list"
                                           (car rest-list))))
                      ((true? (dylan-call test-fn item (caar rest-list)))
+                      (find-pair-check-rest (cdr rest-list) rest-list)
                       (return (car rest-list)))))))))
+
+(defun find-pair-check-rest (rest slow)
+  "Signal unless each element of the list REST, after find-pair's match at
+the pair SLOW, is a list (chapter 12): those of a circular list once each,
+until the walk, a step at a time, meets SLOW, moved half as fast."
+  (loop with half = nil
+        for fast = (list-rest rest) then (list-rest (cdr fast))
+        while fast
+        do (unless (listp (car fast))
+             (dylan-call dylan/error "find-pair: ~s is not a list" (car fast)))
+           (when half (setf slow (cdr slow)))
+           (setf half (not half))
+           (when (eq (cdr fast) slow) (return))))
 
 ;;;
 ;;; Collection Keys

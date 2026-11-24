@@ -30,7 +30,9 @@
   (strings (make-hash-table :test #'equal))
   (symbols (make-hash-table :test #'equal))   ; folded name -> C name
   (symbol-list '())                     ; C names, newest first
-  (keywords (make-hash-table :test #'equal)))
+  (keywords (make-hash-table :test #'equal))
+  (made (make-hash-table :test #'eq)))     ; list or vector -> ((key . C) ...):
+                                        ; a part shared is walked once
 
 (defun cdata-name (data prefix)
   (format nil "~a~d" prefix (incf (cdata-counter data))))
@@ -128,13 +130,22 @@ LITERAL-KEY."
          (address (c-symbol data (dylan::dylan-symbol->string value) :keyword)))
         ((symbolp value)
          (address (c-symbol data (dylan::dylan-symbol->string value) :symbol)))
-        ((consp value) (address (c-pair data value (literal-key value key))))
-        ((vectorp value)
-         (let ((key (literal-key value key)))
-           (address (c-vector data (loop for x across value
-                                         for i from 0
-                                         collect (c-constant data x (and key (format nil "~a.~d" key i))))
-                              key))))
+        ((or (consp value) (vectorp value))
+         ;; A part that several parts share is made once, not once for
+         ;; each way to reach it
+         (let* ((key (literal-key value key))
+                (made (assoc key (gethash value (cdata-made data)) :test #'equal)))
+           (if made
+               (cdr made)
+               (let ((c (address
+                         (if (consp value)
+                             (c-pair data value key)
+                             (c-vector data (loop for x across value
+                                                  for i from 0
+                                                  collect (c-constant data x (and key (format nil "~a.~d" key i))))
+                                       key)))))
+                 (push (cons key c) (gethash value (cdata-made data)))
+                 c))))
         ((typep value 'ratio)
          (multiple-value-bind (name old)
              (content-name data "dy_ratio_" (format nil "~d/~d" (numerator value) (denominator value)))

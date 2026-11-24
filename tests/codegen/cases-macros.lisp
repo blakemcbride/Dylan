@@ -372,6 +372,19 @@ FreSh
 (1 2)
 100000
 ")
+ ;; A part shared by parts shared in turn is made once, not once for each
+ ;; of the 2^40 ways to reach it (Bugs07 C17).
+ (macro-quotes-deeply-shared-parts
+  "(define-macro dag (n)
+  (bind ((x '(leaf)) (v #(leaf)))
+    (for ((i 0 (+ i 1))) ((= i n)) (set! x (list x x)) (set! v (vector v v)))
+    (list 'quote (list x v))))
+(bind ((d (dag 40)))
+  (print (id? (first (first d)) (second (first d))))
+  (print (id? (element (second d) 0) (element (second d) 1))))"
+  "#t
+#t
+")
  ;; A <unicode-string> it quotes stays one, though its characters fit in
  ;; a byte (Bugs06 C15).
  (macro-quotes-a-unicode-string

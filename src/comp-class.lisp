@@ -496,6 +496,7 @@ Its faults are worded as the compiler to C words them."
 
 (defun make-add-slot-call (slot owner bound-vars mod-vars compiler continue)
   (labels ((get-mod-var (name mod-vars setter? continue)
+             (note-defined-name name)   ; as define-macro sees it
              (if name
                  (module-refs
                   name bound-vars mod-vars continue

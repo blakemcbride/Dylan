@@ -80,6 +80,7 @@ program's; the system defines none.)"
         (makunbound variable)
         (remhash variable *read-only-variables*))))
   (clrhash *dylan-macros*)
+  (clrhash *defined-names*)
   (reset-program-variables)
   (setf rep-module-variables '()))
 

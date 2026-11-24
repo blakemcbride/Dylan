@@ -512,6 +512,26 @@ done
   "(define m 1) (define-macro m () 2)"
   ""
   :compile-error "define-macro: m is defined as a variable too")
+ ;; A definition counts though it never runs (Bugs07 B13)
+ (define-macro-name-defined-in-a-method
+  "(define-method f () (define m 5))
+(define-macro m () 1)
+(print (m))"
+  ""
+  :compile-error "define-macro: m is defined as a variable too")
+ (define-macro-name-defined-never
+  "(if #f (define m 5) #f)
+(define-macro m () 1)
+(print (m))"
+  ""
+  :compile-error "define-macro: m is defined as a variable too")
+ (define-macro-name-a-slot-getter-in-a-method
+  "(define-class <c> (<object>))
+(define-method f () (define-slot <c> s))
+(define-macro s () 1)
+(print (s))"
+  ""
+  :compile-error "define-macro: s is defined as a variable too")
  (define-macro-not-a-name
   "(define-macro \"m\" (x) 1)"
   ""

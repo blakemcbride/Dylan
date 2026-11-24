@@ -62,6 +62,12 @@
   "The Lisp name of a module variable -> (dylan-name . expander), for
 define-macro; see Macros, below.")
 
+(defvar *defined-names* (make-hash-table :test #'eq)
+  "The Lisp names of the module variables that a definition compiled so
+far defines, whether or not it has run -- one inside a method never
+called, say: a define-macro of one is refused, as the compiler to C,
+which sees the whole program, refuses it.")
+
 (defvar *expansions* 0
   "Macro expansions so far in the top-level form being compiled.")
 
@@ -806,12 +812,23 @@ it; the last result form delivers MULTIPLE-VALUES?."
   name)
 
 (defun check-not-macro (dylan-variable form-name)
-  (when (and (symbolp dylan-variable)
-             (gethash (name->module-variable (variable->name dylan-variable))
-                      *dylan-macros*))
-    (dylan%error (format nil "~a of ~a: ~a is a macro" (string-downcase form-name)
-                         (dylan-symbol->string dylan-variable)
-                         (dylan-symbol->string dylan-variable)))))
+  "Signal if the definition FORM-NAME, being compiled, defines a macro's
+name; else note the name as defined."
+  (when (symbolp dylan-variable)
+    (when (gethash (name->module-variable (variable->name dylan-variable))
+                   *dylan-macros*)
+      (dylan%error (format nil "~a of ~a: ~a is a macro" (string-downcase form-name)
+                           (dylan-symbol->string dylan-variable)
+                           (dylan-symbol->string dylan-variable))))
+    (note-defined-name dylan-variable)))
+
+(defun note-defined-name (dylan-variable)
+  "Note DYLAN-VARIABLE, a name a definition being compiled defines, in
+*DEFINED-NAMES*."
+  (when (and (symbolp dylan-variable) (variable-name? dylan-variable))
+    (setf (gethash (name->module-variable (variable->name dylan-variable))
+                   *defined-names*)
+          t)))
 
 (defun check-not-macro-variable (dylan-variable bound-vars)
   "A name that is a macro cannot be used as a variable (user manual
@@ -910,8 +927,9 @@ the compiler to C reports one: \"define-for-macros: boom\"."
                            (dylan-symbol->string name) (printed-form params))))
     (check-not-imported name "DEFINE-MACRO")
     (let ((variable (name->module-variable (variable->name name))))
-      (when (and (boundp variable)
-                 (not (eq (symbol-value variable) the-unassigned-value)))
+      (when (or (and (boundp variable)
+                     (not (eq (symbol-value variable) the-unassigned-value)))
+                (gethash variable *defined-names*))
         (dylan%error (format nil "define-macro: ~a is defined as a variable too"
                              (dylan-symbol->string name))))
       (let ((code nil))

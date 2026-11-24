@@ -1074,6 +1074,15 @@ stop
   "(select 1 = 5)"
   ""
   :compile-error "select: bad clause 5")
+ ;; A clause must be a proper list (Bugs07 B15)
+ (case-improper-clause
+  "(print (case 1 ((1) . 2)))"
+  ""
+  :compile-error "case: bad clause ((1) . 2)")
+ (select-improper-clause
+  "(print (select 1 = ((1) . 2)))"
+  ""
+  :compile-error "select: bad clause ((1) . 2)")
  (quote-bad-syntax
   "(print (quote . a))"
   ""

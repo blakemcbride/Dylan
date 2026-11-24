@@ -186,8 +186,8 @@ string literals are id?."
   (let ((have-default? nil))
     (labels
         ((compile-clause (clause mod-vars continue)
-           (unless (consp clause)
-             (dylan%error "case: bad clause ~a" clause))
+           (unless (and (consp clause) (proper-list? clause))
+             (syntax-error "case" "bad clause ~a" clause))
            (let ((match-list (car clause))
                  (consequents (cdr clause)))
              (let ((new-match
@@ -240,8 +240,8 @@ string literals are id?."
   (let ((have-default? nil))
     (labels
         ((compile-clause (clause mod-vars continue)
-           (unless (consp clause)
-             (dylan%error "select: bad clause ~a" clause))
+           (unless (and (consp clause) (proper-list? clause))
+             (syntax-error "select" "bad clause ~a" clause))
            (let ((match-list (car clause))
                  (consequents (cdr clause)))
              (let ((new-match

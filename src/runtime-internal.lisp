@@ -394,8 +394,8 @@ first; the test keeps the operation."
 (define-character-fast-paths (dylan/= char=) (dylan/< char<) (dylan/> char>)
   (dylan/<= char<=) (dylan/>= char>=))
 
-;;; Integers only: for them MODULO (by way of FLOOR/) and REMAINDER answer
-;;; what MOD and REM do.
+;;; Integers only: for them MODULO and REMAINDER answer what MOD and REM
+;;; do.
 (define-fast-path dylan/modulo *fast-modulo* (a b)
   `(and (integerp ,a) (integerp ,b) (not (zerop ,b)))
   `(mod ,a ,b))

@@ -52,7 +52,6 @@
     (guard 'dylan/binary= '*fast-key=* simple-key)
     (guard 'dylan/=hash '*fast-key=* simple-key)
     (guard 'dylan/modulo '*fast-modulo* two-integers)
-    (guard 'dylan/floor/ '*fast-modulo* two-integers)
     (guard 'dylan/remainder '*fast-remainder* two-integers)
     (guard 'dylan/element '*fast-element* vector-index
            '*fast-string-element* string-index)

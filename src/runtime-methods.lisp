@@ -607,12 +607,11 @@ host's invalid operation for zero by zero."
       (/ real1 real2)))
 
 (defparameter dylan/modulo
-  (dylan%generic-fn
-   'modulo two-reals
-   (lambda (r1 r2)
-     (let ((multiple-values (vector nil nil '())))
-       (dylan-mv-call dylan/floor/ multiple-values r1 r2)
-       (aref multiple-values 1)))))     ; The remainder, not the quotient
+  ;; floor/'s remainder, by the library's own arithmetic, not a program's
+  ;; floor/ (Bugs02 B10), as remainder is truncate/'s
+  (dylan%generic-fn 'modulo two-reals
+                    (lambda (real1 real2)
+                      (- real1 (* real2 (floor (real-quotient real1 real2)))))))
 
 (defparameter dylan/remainder
   (dylan%generic-fn 'remainder two-reals

@@ -329,9 +329,10 @@ module: dylan
 
 (define-generic-function binary-lcm (integer1 integer2))
 (define-method binary-lcm ((m <integer>) (n <integer>))
+  ;; The library's own division, not a program's truncate/ (Bugs02 B10)
   (if (or (zero? m) (zero? n))
       0
-      (abs (binary* (truncate/ m (%gcd m n)) n))))
+      (abs (binary* (%divide 3 m (%gcd m n)) n))))
 
 (define gcd
   (method (#rest integers)

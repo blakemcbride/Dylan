@@ -4326,6 +4326,17 @@ y
 {range 1 by 1 size 3}
 (2 3)
 ")
+ ;; modulo is floor/'s remainder, remainder truncate/'s, and lcm divides,
+ ;; by the library's own arithmetic, not a program's floor/ or truncate/
+ ;; (Bugs07 B6).
+ (library-division-not-generic
+  "(define-method floor/ ((a <integer>) (b <integer>)) (values 'fq 'fr))
+(define-method truncate/ ((a <integer>) (b <integer>)) (values 'tq 'tr))
+(print (list (modulo 7 2) (modulo -7 2) (remainder -7 2) (lcm 4 6) (lcm 4 -6)))
+(print (list (modulo 7.5 2) (remainder -7.5 2)))"
+  "(1 1 -1 12 12)
+(1.5 -1.5)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

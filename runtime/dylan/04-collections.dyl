@@ -302,11 +302,13 @@ module: dylan
 (define-generic-function map (procedure collection #rest more-collections))
 
 (define-method map ((f <function>) (c <collection>) #rest more)
+  (%check-some-bounded "map" (cons c more))
   (%map-as (class-for-copy c) f (cons c more)))
 
 (define-generic-function map-as (class procedure collection #rest more-collections))
 
 (define-method map-as ((class <class>) (f <function>) (c <collection>) #rest more)
+  (%check-some-bounded "map-as" (cons c more))
   (%map-as class f (cons c more)))
 
 ;;; map-as, which map and as call, not the generic function, whose

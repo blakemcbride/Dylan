@@ -287,6 +287,7 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
   (dylan%generic-fn
    'map procedure-and-at-least-one-collection
    (lambda (proc li &rest rest)
+     (check-some-bounded "map" (cons li rest))
      (map-to-class nil proc li rest))))
 
 (defparameter dylan/map-as
@@ -296,6 +297,7 @@ collections, in a new instance of CLASS (by default LI's class-for-copy)."
                       (collection ,<collection>))
                     nil t nil)
    (lambda (class proc collection &rest rest)
+     (check-some-bounded "map-as" (cons collection rest))
      ;; Chapter 12: CLASS must be a subclass of <mutable-collection>
      (unless (subclass? class <mutable-collection>)
        (dylan-call dylan/error "map-as: the class is not a mutable collection: ~s"

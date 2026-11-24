@@ -228,6 +228,23 @@ size, element and (setter element)."
 answers #f (an unbounded collection)."
   (false->nil (library-size collection)))
 
+(defun unbounded-range-p (collection)
+  (and (true? (dylan-call dylan/instance? collection <range>))
+       (null (collection-size collection))))
+
+(defun check-range-bounded (name collection)
+  "Signal NAME's error, as a compiled program does, if COLLECTION is an
+unbounded range, all of whose elements a sequence made of it would need:
+it would have no end."
+  (when (unbounded-range-p collection)
+    (dylan-call dylan/error (format nil "~a: the range is unbounded" name))))
+
+(defun check-some-bounded (name collections)
+  "Signal NAME's error if each of COLLECTIONS, walked in step, is an
+unbounded range: the walk would have no end."
+  (when (every #'unbounded-range-p collections)
+    (dylan-call dylan/error (format nil "~a: the range is unbounded" name))))
+
 (defun check-as-bounded (collection)
   "Signal, as a compiled program does, if COLLECTION is an unbounded range:
 as cannot make another collection of it, which would have no end."

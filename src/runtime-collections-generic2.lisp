@@ -146,6 +146,7 @@ compiled library's %from-list does."
   (lambda (multiple-values next-method seq value &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
+    (check-range-bounded "remove" seq)
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
           ;; No count (or #f) removes every match; a count below 1, none.
           (count (false->nil (dylan%find-keyword rest :count (lambda () nil)))))
@@ -182,6 +183,7 @@ compiled library's %from-list does."
   (lambda (multiple-values next-method seq value &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test :count))
+    (check-range-bounded "remove!" seq)
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
           (count (dylan%find-keyword rest :count (lambda () dylan%false))))
       (dylan-call dylan/remove seq value :test test? :count count)))))
@@ -192,6 +194,7 @@ compiled library's %from-list does."
    (make-param-list `((predicate ,<function>) (sequence ,<sequence>))
                     nil nil nil)
    (lambda (test? seq)
+     (check-range-bounded "choose" seq)
      (loop with state = (initial-state seq)
            with kept = '()
            do (if state
@@ -209,6 +212,7 @@ compiled library's %from-list does."
                       (value-sequence ,<sequence>))
                     nil nil nil)
    (lambda (test? test-sequence value-sequence)
+     (check-some-bounded "choose-by" (list test-sequence value-sequence))
      (loop with test-state = (initial-state test-sequence)
            with value-state = (initial-state value-sequence)
            with kept = '()
@@ -242,6 +246,7 @@ compiled library's %from-list does."
   (lambda (multiple-values next-method seq-1 seq-2 &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
+    (check-range-bounded "intersection" seq-1)
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?))))
       (loop with state = (initial-state seq-1)
             with kept = '()
@@ -274,6 +279,8 @@ compiled library's %from-list does."
     ;; first and one of SEQUENCE-2 second.  The result is SEQUENCE-1's
     ;; elements and those of SEQUENCE-2 that match none of them; duplicates
     ;; within one argument may remain (design note 14).
+    (check-range-bounded "union" seq-1)
+    (check-range-bounded "union" seq-2)
     (let* ((test? (dylan%find-keyword rest :test (lambda () dylan/id?)))
            (elements-1 (iterate->list #'identity seq-1))
            (extra (remove-if (lambda (b)
@@ -297,6 +304,7 @@ compiled library's %from-list does."
   (lambda (multiple-values next-method seq &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
+    (check-range-bounded "remove-duplicates" seq)
     ;; Each element is compared with those already kept (the Scheme
     ;; compared it with the first elements of the input instead), the
     ;; earlier element first, as chapter 12 requires.
@@ -324,6 +332,7 @@ compiled library's %from-list does."
   (lambda (multiple-values next-method seq &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
+    (check-range-bounded "remove-duplicates!" seq)
     (let ((test? (dylan%find-keyword rest :test (lambda () dylan/id?))))
       (dylan-call dylan/remove-duplicates seq :test test?)))))
 

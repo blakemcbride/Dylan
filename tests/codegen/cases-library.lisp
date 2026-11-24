@@ -4392,6 +4392,42 @@ y
 (5 0 10 20)
 (0 10 20 1)
 ")
+ ;; A function that would make a sequence of all of an unbounded range's
+ ;; elements says so, naming itself, as as and concatenate do; walked in
+ ;; step with a bounded sequence, the range is not refused (Bugs07 B9).
+ (unbounded-range-whole-sequence
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(print (try (method () (map identity (range)))))
+(print (try (method () (map + (range) (range)))))
+(print (try (method () (map-as <vector> identity (range)))))
+(print (try (method () (choose even? (range)))))
+(print (try (method () (choose-by even? (range) (range)))))
+(print (try (method () (remove (range) 1))))
+(print (try (method () (remove! (range) 1))))
+(print (try (method () (union '(1) (range)))))
+(print (try (method () (union (range) '(1)))))
+(print (try (method () (remove-duplicates (range)))))
+(print (try (method () (remove-duplicates! (range)))))
+(print (try (method () (intersection (range) '(1 2)))))
+(print (map + (range) '(1 2)))
+(print (choose-by even? (range) '(a b c)))
+(print (intersection '(1 2 x) (range)))"
+  "\"ERR: map: the range is unbounded\"
+\"ERR: map: the range is unbounded\"
+\"ERR: map-as: the range is unbounded\"
+\"ERR: choose: the range is unbounded\"
+\"ERR: choose-by: the range is unbounded\"
+\"ERR: remove: the range is unbounded\"
+\"ERR: remove!: the range is unbounded\"
+\"ERR: union: the range is unbounded\"
+\"ERR: union: the range is unbounded\"
+\"ERR: remove-duplicates: the range is unbounded\"
+\"ERR: remove-duplicates!: the range is unbounded\"
+\"ERR: intersection: the range is unbounded\"
+(1 3)
+(a c)
+(1 2)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

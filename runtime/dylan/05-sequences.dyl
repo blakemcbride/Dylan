@@ -50,16 +50,35 @@ module: dylan
                            (else: (loop (cdr l) left (cons (car l) result))))))
       (loop elements count '()))))
 
+;;; A function that makes a sequence of all of a sequence's elements, of
+;;; an unbounded range, would never end: NAME's error instead, as as and
+;;; concatenate give.  One that walks several in step ends when one of
+;;; them does (%check-some-bounded).
+(define %unbounded-range?
+  (method (s) (and (%instance? s <range>) (not (%library-size s)))))
+
+(define %check-range-bounded
+  (method (name s)
+    (when (%unbounded-range? s) (error "~a: the range is unbounded" name))))
+
+(define %check-some-bounded
+  (method (name collections)
+    (when (%list-every? %unbounded-range? collections)
+      (error "~a: the range is unbounded" name))))
+
 (define-generic-function remove (sequence value #key test count))
 (define-method remove ((s <sequence>) value #key (test id?) count)
+  (%check-range-bounded "remove" s)
   (%copy-like s (%remove-elements (%elements s) value test count)))
 
 (define-generic-function remove! (sequence value #key test count))
 (define-method remove! ((s <sequence>) value #key (test id?) count)
+  (%check-range-bounded "remove!" s)
   (remove s value test: test count: count))
 
 (define-generic-function choose (predicate sequence))
 (define-method choose ((predicate <function>) (s <sequence>))
+  (%check-range-bounded "choose" s)
   (%copy-like s (bind-methods ((loop (l r)
                                  (cond ((id? l '()) (%list-reverse r))
                                        ((predicate (car l)) (loop (cdr l) (cons (car l) r)))
@@ -68,6 +87,7 @@ module: dylan
 
 (define-generic-function choose-by (predicate test-sequence value-sequence))
 (define-method choose-by ((predicate <function>) (tests <sequence>) (values <sequence>))
+  (%check-some-bounded "choose-by" (list tests values))
   (bind ((chosen '()))
     (%each-group (list tests values)
                  (method (tv)
@@ -78,10 +98,13 @@ module: dylan
 ;;; member?, not a walk of S2: a range answers it by arithmetic, and an
 ;;; unbounded one has no end to walk.
 (define-method intersection ((s1 <sequence>) (s2 <sequence>) #key (test id?))
+  (%check-range-bounded "intersection" s1)
   (%copy-like s1 (%list-choose (method (e) (member? e s2 test: test)) (%elements s1))))
 
 (define-generic-function union (sequence1 sequence2 #key test))
 (define-method union ((s1 <sequence>) (s2 <sequence>) #key (test id?))
+  (%check-range-bounded "union" s1)
+  (%check-range-bounded "union" s2)
   (bind ((e1 (%elements s1)))
     (%copy-like s1 (%list-append
                     e1
@@ -90,6 +113,7 @@ module: dylan
 
 (define-generic-function remove-duplicates (sequence #key test))
 (define-method remove-duplicates ((s <sequence>) #key (test id?))
+  (%check-range-bounded "remove-duplicates" s)
   (%copy-like s (bind-methods ((loop (l r)
                                  (cond ((id? l '()) (%list-reverse r))
                                        ((%list-any? (method (kept) (test kept (car l))) r)
@@ -99,6 +123,7 @@ module: dylan
 
 (define-generic-function remove-duplicates! (sequence #key test))
 (define-method remove-duplicates! ((s <sequence>) #key (test id?))
+  (%check-range-bounded "remove-duplicates!" s)
   (remove-duplicates s test: test))
 
 ;;; Copying and joining

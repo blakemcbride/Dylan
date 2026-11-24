@@ -401,6 +401,7 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
   (lambda (multiple-values next-method range value &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:count :test))
+    (check-range-bounded "remove!" range)
     (let ((test (dylan%find-keyword rest :test (lambda () dylan/id?)))
           (count (dylan%find-keyword rest :count
                                      (lambda () (collection-size range)))))
@@ -415,6 +416,7 @@ K0, K0 + D, K0 + 2D, ...: on RANGE's grid if RANGE is a range of floats."
   (lambda (multiple-values next-method range &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:test))
+    (check-range-bounded "remove-duplicates!" range)
     (let ((test (dylan%find-keyword rest :test (lambda () dylan/id?))))
       (dylan-call dylan/remove-duplicates range :test test)))))
 

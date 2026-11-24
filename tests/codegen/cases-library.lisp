@@ -796,6 +796,24 @@ found
 0.33333325s0
 ")
 
+ ;; The remainder of the least integer by -1 fits although the quotient
+ ;; does not, called through the library as well as inline (Bugs07 C11).
+ (remainder-of-least-integer-by-minus-one
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+   (define m -4611686018427387904)
+   (print (list (modulo m -1) (remainder m -1)))
+   (print (try (method () (map modulo (list m) '(-1)))))
+   (print (try (method () (map remainder (list m) '(-1)))))
+   (print (try (method () (apply modulo (list m -1)))))
+   (print (try (method () (floor/ m -1))))"
+  "(0 0)
+(0)
+(0)
+0
+\"ERR: integer overflow (integers are 63 bits)\"
+"
+  :compiler-only t)
+
  ;; A float divided by an exact number: the remainder takes the divisor
  ;; times the quotient exactly, however large, and rounds it once to the
  ;; float's format; only a quotient answered must fit in 63 bits.

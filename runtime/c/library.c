@@ -83,6 +83,9 @@ PRIMITIVE(divide) {
     if (only_remainder) kind = kind == MODULO ? FLOOR : TRUNCATE;
     D a = a1, b = a2, r;
     if (DY_IS_INT(a) && DY_IS_INT(b)) {
+        /* The one quotient past 63 bits is that of the least integer by
+         * -1; its remainder, 0, fits (Bugs03 C8). */
+        if (only_remainder && b == DY_INT(-1)) return DY_INT(0);
         D q;
         switch (kind) {
         case FLOOR: q = dy_int_floor(a, b, &r); break;

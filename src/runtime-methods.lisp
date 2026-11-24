@@ -1043,16 +1043,18 @@ class has too: TO."
                           (numerator real)))))
 
 (defparameter dylan/angle
-  (dylan%generic-fn 'angle one-number (inexact-function #'phase)))
+  (dylan%generic-fn 'angle one-number (host-numbers-1 'angle (inexact-function #'phase))))
 (defparameter dylan/magnitude
-  (dylan%generic-fn 'magnitude one-number #'complex-magnitude))
+  (dylan%generic-fn 'magnitude one-number (host-numbers-1 'magnitude #'complex-magnitude)))
 ;;; There are no complex numbers: the imaginary part of a real is the
 ;;; integer 0, whatever the real's format, as the compiled library has it.
 (defparameter dylan/imag-part
-  (dylan%generic-fn 'imag-part one-number (lambda (x) (declare (ignore x)) 0)))
-(defparameter dylan/real-part (dylan%generic-fn 'real-part one-number #'realpart))
+  (dylan%generic-fn 'imag-part one-number
+                    (host-numbers-1 'imag-part (lambda (x) (declare (ignore x)) 0))))
+(defparameter dylan/real-part
+  (dylan%generic-fn 'real-part one-number (host-numbers-1 'real-part #'realpart)))
 (defparameter dylan/rationalize
-  (dylan%generic-fn 'rationalize one-number #'rationalize))
+  (dylan%generic-fn 'rationalize one-number (host-numbers-1 'rationalize #'rationalize)))
 
 (defparameter dylan/init-function
   (dylan%generic-fn 'init-function any-slot

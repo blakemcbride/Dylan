@@ -4045,7 +4045,13 @@ UNDEF
           (method () (< 1 p))
           (method () (+ 1 p))
           (method () (floor p))
-          (method () (bind ((tb (make <table>))) (set! (element tb p) 1) (element tb p)))))
+          (method () (bind ((tb (make <table>))) (set! (element tb p) 1) (element tb p)))
+          (method () (rationalize p))
+          (method () (angle p))
+          (method () (magnitude p))
+          (method () (imag-part p))
+          (method () (real-part p))
+          (method () (numerator p))))
 (print (list (= p p) (= p q) (= p 1) (member? p (list 1 p) test: =)))"
   "\"ERR: as: {instance of <v2>} cannot be converted to {the class <float>}\"
 \"ERR: as: {instance of <v2>} cannot be converted to {the class <integer>}\"
@@ -4062,6 +4068,12 @@ UNDEF
 \"ERR: not a number: {instance of <v2>}\"
 \"ERR: no applicable method for floor\"
 \"ERR: not a number: {instance of <v2>}\"
+\"ERR: no applicable method for rationalize\"
+\"ERR: no applicable method for angle\"
+\"ERR: no applicable method for magnitude\"
+\"ERR: no applicable method for imag-part\"
+\"ERR: no applicable method for real-part\"
+\"ERR: no applicable method for numerator\"
 (#t #f #f ({instance of <v2>}))
 ")
  ;; as answers an object already of the class, and else makes an

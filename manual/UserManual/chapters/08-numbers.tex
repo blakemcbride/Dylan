@@ -173,13 +173,16 @@ A real argument never gives a complex result, in either implementation:
 
 In the compiler to C, \code{<complex>} is kept, abstract, as the
 superclass of \code{<real>}, but it has no instances of its own.
-\code{make-rectangular} and \code{make-polar} accept only an exact zero
-for the imaginary part or the angle, and answer the real; anything else
-is an error, as is \code{make} of \code{<complex>}:
+\code{make-rectangular}, \code{make-polar} and \code{make} of
+\code{<complex>} accept only an exact zero for the imaginary part or
+the angle, and answer the real; anything else is an error, a float
+zero included:
 
 \begin{dylan}
-(make-rectangular 3 0)   ; => 3
-(make-rectangular 1 2)   ; C: error: complex numbers are not supported: 1 2
+(make-rectangular 3 0)     ; => 3
+(make <complex> real: 5)   ; => 5
+(make-rectangular 1 2)     ; C: error: complex numbers are not supported: 1 2
+(make-rectangular 1 0.0)   ; C: error: complex numbers are not supported: 1 0.0
 \end{dylan}
 
 \section{Writing numbers}\label{sec:numbers-literals}

@@ -146,11 +146,14 @@ to change them; a compiled program cannot:
   implementation has bignums: \code{(* 4611686018427387904 2)}
   \yields{} \code{9223372036854775808} there, while in a compiled program
   even the literal is an error.
-\item \textbf{No complex numbers.} \code{<complex>} exists, abstract, as
-  the superclass of \code{<real>} (so \code{(instance? 3 <complex>)}
-  \yields{} \code{\#t}), but it has no instances. A complex literal is a
-  compile error, and \code{make-rectangular} with a non-zero imaginary
-  part is an error. A function whose result would be complex signals an
+\item \textbf{No complex numbers.} \code{<complex>} exists as the
+  superclass of \code{<real>} (so \code{(instance? 3 <complex>)}
+  \yields{} \code{\#t}), but it has no instances of its own. A complex
+  literal is a compile error, and \code{make-rectangular},
+  \code{make-polar} and \code{make} of \code{<complex>} are an error
+  unless the imaginary part or the angle is an exact zero, so
+  \code{(make-rectangular 1 0.0)} is an error too. A function whose
+  result would be complex signals an
   error in both implementations: \code{(sqrt -4.0)} signals ``sqrt: the
   result would be complex''.
 \item \code{<single-float>} is a C \code{float}; \code{<double-float>}

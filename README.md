@@ -279,7 +279,9 @@ What a static program cannot do, which the 1992 manual allows:
   `define-slot` owner may be any singleton, but a class owner must be known
   when compiling.
 - **Bignums and complex numbers:** integers are 63 bits (overflow is an
-  error), and `<complex>` has no instances.
+  error), and `<complex>` has no instances of its own: `make-rectangular`,
+  `make-polar` and `make` of `<complex>` are an error unless the imaginary
+  part or the angle is an exact zero.
 - **Evaluate or load code while running.**
 
 ## Testing

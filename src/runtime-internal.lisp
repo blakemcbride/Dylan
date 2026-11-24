@@ -436,8 +436,24 @@ first, and adds an initial NIL next-method argument."
   (apply #'apply fn args))
 
 (defun dylan%dynamic-wind (before thunk after) ; Used for UNWIND-PROTECT
+  "Call THUNK, then AFTER, the cleanup, however THUNK is left.  An escape
+(a Dylan exit) that leaves it is stopped here, once the stack has unwound
+to this frame, so that AFTER runs at the unwind-protect's own depth, as in
+a compiled program (chapter 8) -- not on top of the code that took the
+exit -- and is then taken on.  Any other unwind runs AFTER as it passes."
   (funcall before)
-  (unwind-protect (funcall thunk) (funcall after)))
+  (let ((exit nil) (returned nil))
+    (block stopped
+      (return-from dylan%dynamic-wind
+        (unwind-protect (multiple-value-prog1 (funcall thunk)
+                          (setf returned t))
+          (if (and (not returned) *exit-in-progress*)
+              (progn (setf exit *exit-in-progress*
+                           *exit-in-progress* nil)
+                     (return-from stopped))
+              (funcall after)))))
+    (funcall after)
+    (escape-to (car exit) (cdr exit))))
 
 (defun dylan%type-check (value class)   ; Used for BIND
   ;; Should signal a <type-error>!

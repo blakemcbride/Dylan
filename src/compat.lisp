@@ -235,6 +235,11 @@ can vanish while a caller walks it."
 
 (declaim (ftype function dylan%stale-exit))   ; runtime-internal.lisp
 
+(defvar *exit-in-progress* nil
+  "The escape being taken, (TAG . VALUE), while its throw passes the
+unwind-protects between, each of which stops it at its own frame to run
+its cleanup there (DYLAN%DYNAMIC-WIND).")
+
 (defun call-with-escape-continuation (receiver)
   "Call RECEIVER with an escape procedure, which may be called only while
 RECEIVER runs (chapter 8): one called after is the Dylan error that an
@@ -243,12 +248,20 @@ form or function it escapes from."
   (let ((tag (list '#:escape))
         (live t))
     (unwind-protect
-         (catch tag
-           (funcall receiver
-                    (lambda (&optional value)
-                      (unless live (dylan%stale-exit))
-                      (throw tag value))))
+         (multiple-value-prog1
+             (catch tag
+               (funcall receiver
+                        (lambda (&optional value)
+                          (unless live (dylan%stale-exit))
+                          (escape-to tag value))))
+           ;; Arrived, or never taken
+           (setf *exit-in-progress* nil))
       (setf live nil))))
+
+(defun escape-to (tag value)
+  "Throw VALUE to TAG, noting the escape for the unwind-protects it passes."
+  (setf *exit-in-progress* (cons tag value))
+  (throw tag value))
 
 (defmacro dynamic-wind (before thunk after)
   "The Scheme DYNAMIC-WIND, restricted to escaping continuations."

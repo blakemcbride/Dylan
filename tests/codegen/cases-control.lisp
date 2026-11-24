@@ -305,6 +305,22 @@ aborted
   "\"caught: the stack is exhausted\"
 (#t #t)
 ")
+ ;; So a cleanup as deep as three fifths of the stack runs after an exit
+ ;; from as deep: each alone fits (Bugs07 L9).
+ (cleanup-as-deep-as-the-exit
+  "(define deepest 0)
+(define-method probe (n) (set! deepest n) (if (< n 0) n (cons n (probe (+ n 1)))))
+(handler-case (probe 0) ((<error>) #f))
+(define n (truncate/ (* deepest 3) 5))
+(define-method build (n) (if (zero? n) '() (cons n (build (- n 1)))))
+(define-method sink (n) (if (zero? n) (error \"bottom\") (cons n (sink (- n 1)))))
+(define done #f)
+(print (handler-case (unwind-protect (sink n) (build n) (set! done #t))
+         ((<error> condition: c) (format #f \"caught: ~a\" c))))
+(print done)"
+  "\"caught: bottom\"
+#t
+")
 
  ;; Chapter 8: it is an error for a case key to appear in more than one
  ;; match list; no two strings are id?.

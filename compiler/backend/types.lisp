@@ -282,6 +282,8 @@ NIL for <object>."
         (types (make-hash-table :test #'eq))     ; ivar -> type during the search
         (results (make-hash-table :test #'eq))   ; ir-fn -> type of its value
         (declared (make-hash-table :test #'eq))  ; ivar -> the class a bind declares
+        (readers (make-hash-table :test #'eq))   ; ivar or ir-fn -> what read it
+        (reader nil)                             ; the ivar or ir-fn being found
         (callers (analyze-calls fns)))
     (when *or-false-types* (clrhash *or-false-types*))
     (labels ((source (var s)
@@ -335,7 +337,12 @@ NIL for <object>."
                  (ir-bind-exit (unknown (ir-bind-exit-var e))
                                (walk (ir-bind-exit-body e)))
                  (ir-unwind (walk (ir-unwind-protected e)) (walk (ir-unwind-cleanup e)))))
+             (note-read (key)
+               ;; READER is found again should KEY's type change.
+               (when (and reader (not (eq (car (gethash key readers)) reader)))
+                 (push reader (gethash key readers))))
              (var-type (var)
+               (note-read var)
                (multiple-value-bind (type found) (gethash var types)
                  (if found type nil)))
              (search-atom-type (a)
@@ -398,44 +405,71 @@ NIL for <object>."
                                                         (let ((m (resolved-method what args types (ir-call-site e))))
                                                           (and m (gmethod-fn m))))))))))
                        (if callee
-                           (multiple-value-bind (r found) (gethash callee results)
-                             (if found r nil))
+                           (progn
+                             (note-read callee)
+                             (multiple-value-bind (r found) (gethash callee results)
+                               (if found r nil)))
                            type)))))
              (step-type (g arg-types)
                ;; The class of an inline method's value, given its
                ;; arguments' types
                (cond ((member :none arg-types) :none)
                      (t (let ((args (mapcar (lambda (type) (make-c-atom "" type)) arg-types)))
-                          (generic-call-type g args))))))
+                          (generic-call-type g args)))))
+             (var-search-type (var)
+               ;; The join of the types of VAR's sources
+               (let ((type (reduce #'join-types
+                                   (mapcar (lambda (s)
+                                             (cond ((eq s :unknown) nil)
+                                                   ((class-info-p s) s)
+                                                   (t (let ((*refinements* (cdr s)))
+                                                        (expr-type (car s))))))
+                                           (gethash var sources))
+                                   :initial-value :none))
+                     (declared-type (gethash var declared)))
+                 (if (and declared-type (or (null type) (class-info-p type)))
+                     (narrower type declared-type)
+                     type))))
       (mapc #'walk-fn fns)
       (loop for var being the hash-keys of sources do (setf (gethash var types) :none))
       (dolist (fn fns) (setf (gethash fn results) :none))
-      (loop for round from 1 do
-        (let ((changed nil))
-          (when (> round 1000)
-            ;; Narrowing makes the search not plainly monotone; should it
-            ;; not settle, nothing is known.
-            (clrhash types)
-            (return))
-          (loop for var being the hash-keys of sources using (hash-value srcs)
-                do (let ((type (reduce #'join-types
-                                       (mapcar (lambda (s)
-                                                 (cond ((eq s :unknown) nil)
-                                                       ((class-info-p s) s)
-                                                       (t (let ((*refinements* (cdr s)))
-                                                            (expr-type (car s))))))
-                                               srcs)
-                                       :initial-value :none))
-                         (declared-type (gethash var declared)))
-                     (when (and declared-type (or (null type) (class-info-p type)))
-                       (setf type (narrower type declared-type)))
-                     (unless (equal type (gethash var types))
-                       (setf (gethash var types) type changed t))))
-          (dolist (fn fns)
-            (let ((type (expr-type (ir-fn-body fn))))
-              (unless (equal type (gethash fn results))
-                (setf (gethash fn results) type changed t))))
-          (unless changed (return))))
+      ;; A worklist: each variable, and each function for its value, is
+      ;; found once, and again only when the type of something it read
+      ;; has changed.  (Found again in rounds, a chain of N calls took N
+      ;; rounds over the whole program and the library.)
+      (let ((queue '())
+            (next '())
+            (queued (make-hash-table :test #'eq))
+            (evaluations (make-hash-table :test #'eq)))
+        (flet ((enqueue (item)
+                 (unless (gethash item queued)
+                   (setf (gethash item queued) t)
+                   (push item next))))
+          (loop for var being the hash-keys of sources do (enqueue var))
+          (dolist (fn fns) (enqueue fn))
+          (loop
+            (when (null queue)
+              (when (null next) (return))
+              (setf queue (nreverse next) next '()))
+            (let ((item (pop queue)))
+              (setf (gethash item queued) nil)
+              (when (> (incf (gethash item evaluations 0)) 1000)
+                ;; Narrowing makes the search not plainly monotone; should
+                ;; it not settle, nothing is known.
+                (clrhash types)
+                (return))
+              (let* ((fn-p (ir-fn-p item))
+                     (type (progn (setf reader item)
+                                  (unwind-protect
+                                       (if fn-p
+                                           (expr-type (ir-fn-body item))
+                                           (var-search-type item))
+                                    (setf reader nil))))
+                     (table (if fn-p results types)))
+                (unless (equal type (gethash item table))
+                  (setf (gethash item table) type)
+                  (dolist (r (gethash item readers))
+                    (enqueue r))))))))
       (loop for var being the hash-keys of types using (hash-value type)
             do (setf (ivar-type var) (and (class-info-p (class-of-type type))
                                           (class-of-type type)))

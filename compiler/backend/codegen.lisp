@@ -1461,6 +1461,7 @@ each of its Dylan functions -> the name of the module it was written in."
         (*global-set-values* (make-hash-table :test #'eq))
         (*made-generic-dispatch* nil)
         (*gclasses* (make-hash-table :test #'eq))
+        (*gclass-of-info* (make-hash-table :test #'eq))
         (*builtin-gclasses* (make-hash-table :test #'eq))
         (*sealed-slot-owners* (make-hash-table :test #'eq))
         (*gfuns* (make-hash-table :test #'eq))

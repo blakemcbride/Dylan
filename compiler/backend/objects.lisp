@@ -41,6 +41,7 @@ C-NAME, codegen.lisp), and the library's in its.")
   "Can a define-method add its method to a generic function made when the
 program runs, which enters it by its object (dy_add_method_when_run)?")
 (defvar *gclasses* nil "MODULE-VAR -> GCLASS, for the program's classes.")
+(defvar *gclass-of-info* nil "CLASS-INFO -> GCLASS, the same classes by their info.")
 (defvar *builtin-gclasses* nil
   "CLASS-INFO -> GCLASS, for a built-in class a define-slot gives slots
 \(chapter 6): one with no variable, which holds the define-slots' slots.")
@@ -491,7 +492,8 @@ variable's value (chapter 6's slot types and initial values may name it)."
                           :kind :instance))
                    (g (make-gclass :var var :info info :location *location*
                                    :ready-c (format nil "dy_ready_~d" (hash-table-count *gclasses*)))))
-              (setf (gethash var *gclasses*) g)
+              (setf (gethash var *gclasses*) g
+                    (gethash info *gclass-of-info*) g)
               (push (cons d g) user))))))
     (setf user (nreverse user))
     ;; Superclasses, now that every class exists.
@@ -534,15 +536,18 @@ after it."
           for i from 0
           do (setf (gethash (gclass-info g) order) i
                    (gethash (gclass-info g) program) t))
+    ;; SEEN holds each class reached from the one asked about, however many
+    ;; paths lead to it: a chain of diamonds has exponentially many.
     (labels ((reaches-p (from to seen)
                (loop for s in (class-info-supers from)
                      thereis (or (eq s to)
                                  (and (gethash s program)
-                                      (not (member s seen))
-                                      (reaches-p s to (cons s seen)))))))
+                                      (not (gethash s seen))
+                                      (progn (setf (gethash s seen) t)
+                                             (reaches-p s to seen)))))))
       (let ((cyclic (loop for (nil . g) in user
                           for c = (gclass-info g)
-                          when (reaches-p c c (list c)) collect c)))
+                          when (reaches-p c c (make-hash-table :test #'eq)) collect c)))
         (dolist (c cyclic)
           (let ((kept (remove-if (lambda (s)
                                    (and (gethash s program)
@@ -792,29 +797,34 @@ such slots out, as the interpreter does."
 interpreter's order: the slots of each direct superclass in turn, each slot
 where it first appears -- a more specific definition reached later taking
 its place -- and then the class's own, a redefinition in the place of
-the slot it redefines."
-  (or (gethash info memo)
-      (setf (gethash info memo)
-            (let ((effective '()))
-              (flet ((put (sd own)
-                       (let ((old (find (sdef-getter sd) effective :key #'sdef-getter)))
-                         (cond ((null old) (setf effective (append effective (list sd))))
-                               ((or own (and (not (eq (sdef-class sd) (sdef-class old)))
-                                             (subclass-info-p (sdef-class sd) (sdef-class old))))
-                                (setf effective (substitute sd old effective)))))))
-                (dolist (super (class-info-supers info))
-                  (dolist (sd (reported-slot-definitions super memo))
-                    (put sd nil)))
-                (let ((g (class-gclass info)))
-                  (when g
-                    (dolist (sd (gclass-sdefs g))
-                      (put sd t)))))
-              effective))))
+the slot it redefines.  MEMO holds each class's answer, an empty list
+included: a chain of diamonds reaches a class by exponentially many paths."
+  (multiple-value-bind (known found) (gethash info memo)
+    (if found
+        known
+        (setf (gethash info memo)
+          (let ((effective '()))
+            (flet ((put (sd own)
+                     (let ((old (find (sdef-getter sd) effective :key #'sdef-getter)))
+                       (cond ((null old) (setf effective (append effective (list sd))))
+                             ((or own (and (not (eq (sdef-class sd) (sdef-class old)))
+                                           (subclass-info-p (sdef-class sd) (sdef-class old))))
+                              (setf effective (substitute sd old effective)))))))
+              (dolist (super (class-info-supers info))
+                (dolist (sd (reported-slot-definitions super memo))
+                  (put sd nil)))
+              (let ((g (class-gclass info)))
+                (when g
+                  (dolist (sd (gclass-sdefs g))
+                    (put sd t)))))
+            effective)))))
 
 (defun defined-gclass (info)
   "The GCLASS of INFO, a class the program or the library defines, or NIL."
-  (loop for g being the hash-values of *gclasses*
-        when (eq (gclass-info g) info) return g))
+  (if *gclass-of-info*
+      (values (gethash info *gclass-of-info*))
+      (loop for g being the hash-values of *gclasses*
+            when (eq (gclass-info g) info) return g)))
 
 (defun class-gclass (info)
   "The GCLASS holding the slots of INFO: a class the program or library

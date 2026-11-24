@@ -4213,4 +4213,57 @@ left
 #f
 \"the slot sl is not initialized\"
 ")
+ ;; A chain of 30 diamonds: 90 classes, but 2^30 paths from the last to
+ ;; <object>.  Each class is visited once, so it is defined, tested and
+ ;; given a slot at once (Bugs07 B4).
+ (diamond-chain
+  "(define-class <d0> (<object>))
+(define-class <a1> (<d0>)) (define-class <b1> (<d0>)) (define-class <d1> (<a1> <b1>))
+(define-class <a2> (<d1>)) (define-class <b2> (<d1>)) (define-class <d2> (<a2> <b2>))
+(define-class <a3> (<d2>)) (define-class <b3> (<d2>)) (define-class <d3> (<a3> <b3>))
+(define-class <a4> (<d3>)) (define-class <b4> (<d3>)) (define-class <d4> (<a4> <b4>))
+(define-class <a5> (<d4>)) (define-class <b5> (<d4>)) (define-class <d5> (<a5> <b5>))
+(define-class <a6> (<d5>)) (define-class <b6> (<d5>)) (define-class <d6> (<a6> <b6>))
+(define-class <a7> (<d6>)) (define-class <b7> (<d6>)) (define-class <d7> (<a7> <b7>))
+(define-class <a8> (<d7>)) (define-class <b8> (<d7>)) (define-class <d8> (<a8> <b8>))
+(define-class <a9> (<d8>)) (define-class <b9> (<d8>)) (define-class <d9> (<a9> <b9>))
+(define-class <a10> (<d9>)) (define-class <b10> (<d9>)) (define-class <d10> (<a10> <b10>))
+(define-class <a11> (<d10>)) (define-class <b11> (<d10>)) (define-class <d11> (<a11> <b11>))
+(define-class <a12> (<d11>)) (define-class <b12> (<d11>)) (define-class <d12> (<a12> <b12>))
+(define-class <a13> (<d12>)) (define-class <b13> (<d12>)) (define-class <d13> (<a13> <b13>))
+(define-class <a14> (<d13>)) (define-class <b14> (<d13>)) (define-class <d14> (<a14> <b14>))
+(define-class <a15> (<d14>)) (define-class <b15> (<d14>)) (define-class <d15> (<a15> <b15>))
+(define-class <a16> (<d15>)) (define-class <b16> (<d15>)) (define-class <d16> (<a16> <b16>))
+(define-class <a17> (<d16>)) (define-class <b17> (<d16>)) (define-class <d17> (<a17> <b17>))
+(define-class <a18> (<d17>)) (define-class <b18> (<d17>)) (define-class <d18> (<a18> <b18>))
+(define-class <a19> (<d18>)) (define-class <b19> (<d18>)) (define-class <d19> (<a19> <b19>))
+(define-class <a20> (<d19>)) (define-class <b20> (<d19>)) (define-class <d20> (<a20> <b20>))
+(define-class <a21> (<d20>)) (define-class <b21> (<d20>)) (define-class <d21> (<a21> <b21>))
+(define-class <a22> (<d21>)) (define-class <b22> (<d21>)) (define-class <d22> (<a22> <b22>))
+(define-class <a23> (<d22>)) (define-class <b23> (<d22>)) (define-class <d23> (<a23> <b23>))
+(define-class <a24> (<d23>)) (define-class <b24> (<d23>)) (define-class <d24> (<a24> <b24>))
+(define-class <a25> (<d24>)) (define-class <b25> (<d24>)) (define-class <d25> (<a25> <b25>))
+(define-class <a26> (<d25>)) (define-class <b26> (<d25>)) (define-class <d26> (<a26> <b26>))
+(define-class <a27> (<d26>)) (define-class <b27> (<d26>)) (define-class <d27> (<a27> <b27>))
+(define-class <a28> (<d27>)) (define-class <b28> (<d27>)) (define-class <d28> (<a28> <b28>))
+(define-class <a29> (<d28>)) (define-class <b29> (<d28>)) (define-class <d29> (<a29> <b29>))
+(define-class <a30> (<d29>)) (define-class <b30> (<d29>)) (define-class <d30> (<a30> <b30>))
+(define x (make <d30>))
+(print (instance? x <string>))
+(print (instance? x <d0>))
+(print (subclass? <d30> <a1>))
+(define-slot <d0> tag init-value: 'zero)
+(print (tag x))
+(define-class <z> (<d30>))
+(print (instance? (make <z>) <b3>))
+(print (tag (make <z>)))
+(print (size (slot-descriptors <z>)))"
+  "#f
+#t
+#t
+zero
+#t
+zero
+1
+")
 )

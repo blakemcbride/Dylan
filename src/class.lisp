@@ -83,8 +83,7 @@
             (:constructor make-class (debug-name instances subclasses
                                       superclasses slots class-data
                                       instance-data-size sealed? read-only?
-                                      abstract? specificity
-                                      specificity-token)))
+                                      abstract?)))
   debug-name                            ; Name, for debugging
   instances                             ; Population of all direct
                                         ; instances of this class
@@ -101,8 +100,6 @@
   sealed?                               ; Has the class been sealed?
   read-only?
   abstract?                             ; Is the class abstract?
-  specificity                           ; Longest path from root.
-  specificity-token                     ; Unique to a specificity labeling.
   (precedence-list nil)                 ; Cached; see CLASS-PRECEDENCE-LIST
   (required-init-keywords nil))         ; Cached; see DYLAN%MAKE-<OBJECT>
 
@@ -208,22 +205,32 @@ in both -- the options' values id? -- or CLASS must define it."
 
 ;;; The class whose own slot is the one CLASS has for GETTER: CLASS itself
 ;;; if the slot is not inherited, otherwise the most specific of the
-;;; origins found through its direct superclasses.
+;;; origins found through its direct superclasses.  Each class's origin is
+;;; found once: a chain of diamonds reaches a class by exponentially many
+;;; paths.
 
 (defun slot-origin (class getter)
-  (let ((slot (same-slot-getter-in-slot-vector->slot getter (class.slots class))))
-    (if (and slot (not (slot.inherited? slot)))
-        class
-        (let ((origins
-                (loop for super in (class.superclasses class)
-                      when (same-slot-getter-in-slot-vector->slot
-                            getter (class.slots super))
-                        collect (slot-origin super getter))))
-          (or (find-if (lambda (origin)
-                         (every (lambda (other) (subclass? origin other))
-                                origins))
-                       origins)
-              (car origins))))))
+  (let ((memo (make-hash-table :test #'eq)))
+    (labels ((origin (class)
+               (multiple-value-bind (known found) (gethash class memo)
+                 (if found
+                     known
+                     (setf (gethash class memo)
+                           (let ((slot (same-slot-getter-in-slot-vector->slot
+                                        getter (class.slots class))))
+                             (if (and slot (not (slot.inherited? slot)))
+                                 class
+                                 (let ((origins
+                                         (loop for super in (class.superclasses class)
+                                               when (same-slot-getter-in-slot-vector->slot
+                                                     getter (class.slots super))
+                                                 collect (origin super))))
+                                   (or (find-if (lambda (origin)
+                                                  (every (lambda (other) (subclass? origin other))
+                                                         origins))
+                                                origins)
+                                       (car origins))))))))))
+      (origin class))))
 
 ;;; The collection library's say in the getter method a class gets for an
 ;;; instance slot it inherits: a function of the class, the slot's getter
@@ -380,21 +387,6 @@ slot vector, the class-data size and the instance-data size."
       (setf (class.precedence-list class)
             (compute-class-precedence-list class))))
 
-(defun recompute-class-specificities! ()
-  (let ((new-token (cons 'specificity 'token)))
-    (labels ((level-me (me level)
-               (if (eq new-token (class.specificity-token me))
-                   (when (> level (class.specificity me))
-                     (setf (class.specificity me) level))
-                   (progn
-                     (setf (class.specificity-token me) new-token)
-                     (setf (class.specificity me) level)))
-               (let ((sublevel (+ 1 level)))
-                 (map-over-population!
-                  (class.subclasses me)
-                  (lambda (subclass) (level-me subclass sublevel))))))
-      (level-me <object> 0))))
-
 (defun check-slot-value (slot value)
   "Chapter 6: a slot's type is enforced by the slot storage itself, so a
 value stored when the slot is initialized is checked as the setter's is."
@@ -466,9 +458,7 @@ value stored when the slot is initialized is checked as the setter's is."
                        0                        ; instance-data-size
                        nil                      ; sealed?
                        nil                      ; read-only?
-                       nil                      ; abstract?
-                       nil                      ; specificity
-                       nil))                    ; specificity-token
+                       nil))                    ; abstract?
          (combined-slots
            (progn
              (class-precedence-list the-class) ; Signals if inconsistent
@@ -491,18 +481,20 @@ value stored when the slot is initialized is checked as the setter's is."
     (setf (class.instance-data-size the-class) instance-data-size)
     (dolist (parent-class superclasses)
       (add-to-population! (class.subclasses parent-class) the-class))
-    (unless top? (recompute-class-specificities!))
     the-class))
 
 (defun subclass? (class1 class2)
-  "Is CLASS1 a subclass of CLASS2?"
+  "Is CLASS1 a subclass of CLASS2?  Each superclass is looked at once,
+however many paths of multiple inheritance lead to it."
   (or (id? class1 class2)
-      (loop with classes-left = (class.superclasses class1)
-            do (cond ((null classes-left) (return nil))
-                     ((id? class2 (car classes-left)) (return t))
-                     (t (setf classes-left
-                              (append (class.superclasses (car classes-left))
-                                      (cdr classes-left))))))))
+      (let ((seen '()))
+        (labels ((below? (class)
+                   (dolist (super (class.superclasses class) nil)
+                     (cond ((id? class2 super) (return t))
+                           ((member super seen :test #'eq))
+                           (t (push super seen)
+                              (when (below? super) (return t)))))))
+          (below? class1)))))
 
 (defun add-slot (owner &rest keyword-list)
   "Keywords allowed are: getter, setter, type, init-value, init-function,
@@ -719,19 +711,22 @@ class.  FN receives two arguments: a class and (PREDICATE class).  Classes
 appear only once, even if multiple inheritance makes a non-tree."
   (loop with subclasses = (population->list classes)
         with already-seen = '()
-        do (if (null subclasses)
-               (return 'done)
-               (let* ((this-subclass (car subclasses))
-                      (test (funcall predicate this-subclass)))
-                 (unless (member this-subclass already-seen)
-                   (funcall fn this-subclass test))
-                 (setf subclasses
-                       (if test
-                           (append (cdr subclasses)
-                                   (population->list
-                                    (class.subclasses (car subclasses))))
-                           (cdr subclasses)))
-                 (push this-subclass already-seen)))))
+        do (cond ((null subclasses) (return 'done))
+                 ;; A class seen before, by another path, and its
+                 ;; subclasses are not visited again.
+                 ((member (car subclasses) already-seen)
+                  (pop subclasses))
+                 (t
+                  (let* ((this-subclass (car subclasses))
+                         (test (funcall predicate this-subclass)))
+                    (push this-subclass already-seen)
+                    (funcall fn this-subclass test)
+                    (setf subclasses
+                          (if test
+                              (append (cdr subclasses)
+                                      (population->list
+                                       (class.subclasses this-subclass)))
+                              (cdr subclasses))))))))
 
 (defun map-over-all-superclasses! (class fn)
   "Call FN on each superclass of CLASS, once each, in precedence order, and
@@ -1233,7 +1228,6 @@ it has now)."
       (if (eq c class)
           (rebuild-class! c own-slots)
           (rebuild-class! c)))
-    (recompute-class-specificities!)
     (incf *class-structure-epoch*)))
 
 ;;; Chapter 6: DEFINE-CLASS on a variable that already holds a class

@@ -39,6 +39,9 @@
 #include "mpscawl.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #ifdef __APPLE__
 #include <mach-o/getsect.h>
 #include <mach-o/ldsyms.h>
@@ -429,8 +432,48 @@ void dy_mps_thread_end(void) {
 static _Atomic size_t in_use_floor;    /* the least in use since the last one started */
 static size_t nursery_bytes = 128 * 1024 * 1024;   /* set by dy_gc_init */
 
+/* The heap is full when, after a collection of everything, more than
+ * HEAP_LIMIT bytes are in use (0: no limit; set by dy_gc_init).  A full
+ * heap must be found before the memory runs out: as it nears the end of
+ * what it may have, the MPS collects in an emergency at each refill, and
+ * the program, slowed many times over, may never come to the end; or the
+ * kernel kills it.  A collection that copies what it keeps needs as much
+ * again, so the limit is, as in L, a quarter of the address space the
+ * process may have, of its cgroup's memory, and of the machine's.  A
+ * small request that would take what is in use past both the limit and
+ * an eighth of it more than the last such collection left starts a
+ * collection of everything; if that does not make room, the request is
+ * refused, and the program reports it and ends (dy_mps_cannot_allocate).
+ * A large request is left to the MPS, which refuses one it cannot meet:
+ * when a collection starts while it is being made, it is made again, and
+ * the first try, still referred to from the stack, would be counted. */
+static size_t heap_limit;
+static _Atomic size_t full_left;       /* in use after the last check's collection */
+static pthread_mutex_t full_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static size_t in_use_now(void) {
+    return mps_arena_committed(arena) - mps_arena_spare_committed(arena);
+}
+
+/* Is there room for BYTES more, a small request, IN_USE being in use? */
+static bool room_for(size_t in_use, size_t bytes) {
+    if (in_use + bytes <= heap_limit
+        || in_use + bytes <= atomic_load(&full_left) + heap_limit / 8)
+        return true;
+    /* One thread collects; others go on meanwhile, as they would have. */
+    if (pthread_mutex_trylock(&full_lock)) return true;
+    dy_gc_collect();
+    in_use = in_use_now();
+    atomic_store(&full_left, in_use);
+    atomic_store_explicit(&in_use_floor, in_use, memory_order_relaxed);
+    pthread_mutex_unlock(&full_lock);
+    return in_use + bytes <= heap_limit;
+}
+
 mps_res_t dy_mps_fill(mps_addr_t *p, mps_ap_t ap, size_t bytes) {
-    size_t in_use = mps_arena_committed(arena) - mps_arena_spare_committed(arena);
+    size_t in_use = in_use_now();
+    if (heap_limit && bytes < DY_LARGE_REQUEST && !room_for(in_use, bytes))
+        return MPS_RES_COMMIT_LIMIT;
     size_t floor = atomic_load_explicit(&in_use_floor, memory_order_relaxed);
     /* The growth since must be at least what was in use then (so that the
      * heap at most doubles), and at least the nursery and 64 MB besides
@@ -682,9 +725,64 @@ static mps_gen_param_s generations[] = {
     { 128 * 1024, 0.45 }
 };
 
+/* The first number in FILE, or 0 if it has none (as "max" has none) */
+static size_t read_number(const char *file) {
+    FILE *in = fopen(file, "r");
+    if (!in) return 0;
+    unsigned long long n = 0;
+    if (fscanf(in, "%llu", &n) != 1) n = 0;
+    fclose(in);
+    return (size_t)n;
+}
+
+static size_t least(size_t a, size_t b) { return !a ? b : !b ? a : a < b ? a : b; }
+
+/* The least memory.max of this process's cgroup and those above it, or 0
+ * if none is set (Linux; L reads the same). */
+static size_t cgroup_memory_limit(void) {
+    size_t limit = 0;
+#ifdef __linux__
+    FILE *in = fopen("/proc/self/cgroup", "r");
+    if (!in) return 0;
+    char line[4096], path[4096 + 32];
+    while (fgets(line, sizeof line, in)) {
+        if (strncmp(line, "0::", 3)) continue;
+        char *group = line + 3;
+        group[strcspn(group, "\n")] = 0;
+        for (;;) {
+            snprintf(path, sizeof path, "/sys/fs/cgroup%s/memory.max", group);
+            limit = least(limit, read_number(path));
+            char *slash = strrchr(group, '/');
+            if (!slash) break;
+            *slash = 0;
+        }
+        break;
+    }
+    fclose(in);
+#endif
+    return limit;
+}
+
+/* HEAP_LIMIT (dy_mps_fill): a quarter of the least of the address space
+ * the process may have, its cgroup's memory and the machine's.
+ * DYLAN_MPS_HEAP_LIMIT (bytes; 0 for none) says otherwise. */
+static size_t find_heap_limit(void) {
+    const char *given = getenv("DYLAN_MPS_HEAP_LIMIT");
+    if (given) return (size_t)atoll(given);
+    size_t limit = 0;
+    struct rlimit as;
+    if (!getrlimit(RLIMIT_AS, &as) && as.rlim_cur != RLIM_INFINITY)
+        limit = (size_t)as.rlim_cur;
+    limit = least(limit, cgroup_memory_limit());
+    long pages = sysconf(_SC_PHYS_PAGES), page = sysconf(_SC_PAGESIZE);
+    if (pages > 0 && page > 0) limit = least(limit, (size_t)pages * (size_t)page);
+    return limit / 4;
+}
+
 void dy_gc_init(void) {
     check(mps_arena_create_k(&arena, mps_arena_class_vm(), mps_args_none),
           "make its arena");
+    heap_limit = find_heap_limit();
     /* Memory freed is kept, not given back to the system: given back, it
      * must be faulted in afresh when the nursery next fills, which can
      * take longer than the collecting.  DYLAN_MPS_SPARE (the fraction of

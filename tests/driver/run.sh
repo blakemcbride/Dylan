@@ -109,6 +109,16 @@ EOF
 "$dylanc" --gc boehm -o oomsmallb oomsmall.dyl >/dev/null 2>&1
 (ulimit -v 1000000; timeout 120 ./oomsmallb) > oomsmall.out 2>&1; status=$?
 check "--gc boehm a heap of small objects full" sh -c "test $status = 1 && printf 'Dylan error: out of memory\n' | cmp -s - oomsmall.out"
+# And with the MPS, at once, not after the MPS has collected in an
+# emergency for ever, nor killed by the kernel in a cgroup (Bugs07 C3)
+"$dylanc" -o oomsmallm oomsmall.dyl >/dev/null 2>&1
+(ulimit -v 1000000; timeout 60 ./oomsmallm) > oomsmall.out 2>&1; status=$?
+check "a heap of small objects full" sh -c "test $status = 1 && printf 'Dylan error: out of memory\n' | cmp -s - oomsmall.out"
+if systemd-run --user --scope -q true >/dev/null 2>&1; then
+    timeout 60 systemd-run --user --scope -q -p MemoryMax=1G -p MemorySwapMax=0 \
+        ./oomsmallm > oomsmall.out 2>&1; status=$?
+    check "a heap of small objects full, in a cgroup" sh -c "test $status = 1 && printf 'Dylan error: out of memory\n' | cmp -s - oomsmall.out"
+fi
 for o in -O0 -O1 -O3 -Os -g; do
     check "$o" "$dylanc" $o -o opt greet.dyl main.dyl
     check "$o runs" output_is "$expected" ./opt
@@ -464,14 +474,16 @@ if (ulimit -s unlimited) 2>/dev/null; then
 fi
 # A caught "out of memory" while a symbol is made leaves the table of
 # symbols usable: in an address space with no room for a second copy of
-# the name, the next symbol is made (Bugs07 C5)
+# the name, the next symbol is made (Bugs07 C5).  The heap holds more
+# than a quarter of the address space, which is full (C3) once it is
+# collected, so the check of that is turned off.
 cat > intern.dyl <<'EOF2'
 (define s (make <byte-string> size: 300000000 fill: #\a))
 (print (handler-case (as <symbol> s) ((<error> condition: c) (format #f "~a" c))))
 (print (as <symbol> "hello"))
 EOF2
 "$dylanc" -o intern intern.dyl >/dev/null 2>&1
-(ulimit -v 1000000; timeout 60 ./intern) > intern.out 2>&1
+(ulimit -v 1000000; DYLAN_MPS_HEAP_LIMIT=0 timeout 60 ./intern) > intern.out 2>&1
 check "out of memory while a symbol is made" sh -c "printf '\"out of memory\"\nhello\n' | cmp -s - intern.out"
 "$dylan" < deeper.dyl > deeper.out 2> deeper.err; status=$?
 check "bin/dylan: the stack exhausted in a handler: status 1" test "$status" = 1

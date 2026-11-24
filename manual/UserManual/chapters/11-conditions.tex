@@ -340,7 +340,11 @@ Likewise a request for more memory than there is --- \code{(make
 <vector> size: \meta{n})} with an \meta{n} too large, say --- is the
 \code{<simple-error>} ``out of memory'', which a handler can catch. A
 compiled program whose heap fills up with small objects reports ``out of
-memory'' and ends. The interactive implementation signals the same
+memory'' and ends: its heap is full when a collection of everything
+leaves more than a quarter of the memory the machine has or the process
+is allowed (its address space, or its cgroup's memory) in use, since a
+collection needs room to copy what it keeps. The interactive
+implementation signals the same
 catchable error for an integer too large for the heap, and when its heap
 fills up: after a collection that leaves more than two-fifths of its
 16~GB in use, or more than a quarter of the memory the machine has or

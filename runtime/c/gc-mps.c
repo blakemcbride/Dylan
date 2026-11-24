@@ -240,7 +240,10 @@ FORMAT_FUNCTION mps_res_t format_scan(mps_ss_t ss, mps_addr_t base, mps_addr_t l
                 intptr_t n = DY_INT_VALUE(k->size);
                 for (intptr_t i = 0; i < n; i++) {
                     mps_addr_t a = (mps_addr_t)k->keys[i];
-                    if (DY_IS_POINTER((D)a) && MPS_FIX1(ss, a)) {
+                    /* Not an empty place, 0, which has a pointer's tag:
+                     * made dead_key, it would fill the identity hash
+                     * table until a search for a new key never ends */
+                    if (a && DY_IS_POINTER((D)a) && MPS_FIX1(ss, a)) {
                         mps_res_t r = MPS_FIX2(ss, &a);
                         if (r != MPS_RES_OK) return r;
                         k->keys[i] = a ? (D)a : DY_OBJ(&dead_key);

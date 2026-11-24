@@ -148,6 +148,10 @@ _Noreturn void dy_not_a_slot(const char *getter, D instance) {
     dy_error_naming("", getter, " is not a slot of the object", instance);
 }
 
+/* Chapter 6: the arguments from START on are keyword/value pairs, each
+ * key a keyword -- checked first, as the interactive implementation
+ * checks them -- and then, unless ACCEPTED is NULL, each key one of the N
+ * it accepts. */
 void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
                        D a3, const D *accepted, size_t n) {
     D in_registers[4] = { a0, a1, a2, a3 };
@@ -155,7 +159,10 @@ void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
     for (intptr_t i = start; i < argc; i += 2) {
         D key = i < 4 ? in_registers[i] : *dy_argument_slot(i);
         if (!dy_kind_p(key, DY_KIND_KEYWORD)) dy_odd_keyword_arguments(f);
-        if (accepted) {
+    }
+    if (accepted) {
+        for (intptr_t i = start; i < argc; i += 2) {
+            D key = i < 4 ? in_registers[i] : *dy_argument_slot(i);
             size_t j = 0;
             while (j < n && accepted[j] != key) j++;
             if (j == n) dy_unknown_keyword(f, key);
@@ -164,9 +171,10 @@ void dy_check_keywords(D f, intptr_t argc, intptr_t start, D a0, D a1, D a2,
 }
 
 void dy_check_keyword_list(D f, D pairs, const D *accepted, size_t n) {
+    for (D l = pairs; l != DY_EMPTY; l = dy_tail(dy_tail(l)))
+        if (!dy_kind_p(dy_head(l), DY_KIND_KEYWORD)) dy_odd_keyword_arguments(f);
     for (D l = pairs; l != DY_EMPTY; l = dy_tail(dy_tail(l))) {
         D key = dy_head(l);
-        if (!dy_kind_p(key, DY_KIND_KEYWORD)) dy_odd_keyword_arguments(f);
         size_t j = 0;
         while (j < n && accepted[j] != key) j++;
         if (j == n) dy_unknown_keyword(f, key);

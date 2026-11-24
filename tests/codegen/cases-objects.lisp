@@ -226,6 +226,44 @@ a
    (make <req> x: 1 y: 2)"
   ""
   :error "keyword argument not accepted")
+ ;; The arguments after the required ones are first checked to be
+ ;; keyword/value pairs, then their keys to be accepted: through a generic
+ ;; function, a method called directly, apply and make alike (Bugs07 B17)
+ (keyword-pairs-checked-first
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-method f ((x <integer>) #key a) a)
+(print (try (method () (f 1 d: 10 99))))
+(print (try (method () (f 1 d: 10 5 6))))
+(print (try (method () (f 1 d: 10))))
+(print (try (method () (f 1 a: 10 d:))))
+(print (try (method () ((method (x #key a) a) 1 d: 10 99))))
+(print (try (method () ((method (x #key a) a) 1 d: 10 5 6))))
+(print (try (method () (apply f 1 '(d: 10 99)))))
+(define-generic-function g (x #key a))
+(define-method g ((x <integer>) #key a) a)
+(print (try (method () (g 1 d: 10 99))))
+(print (try (method () (g 1 d: 10 5 6))))
+(print (try (method () (g 1 d: 10))))
+(define-class <c> (<object>) (s init-keyword: s:))
+(print (try (method () (make <c> d: 10 99))))
+(print (try (method () (make <c> d: 10 5 6))))
+(print (try (method () (make <c> d: 10))))
+(print (f 1 a: 5))"
+  "\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: d:\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: d:\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: the arguments after the required ones are not keyword/value pairs\"
+\"ERR: keyword argument not accepted: d:\"
+5
+")
 
  ;; initialize methods, their keywords accepted by make, and the method
  ;; on <object> as their next method.

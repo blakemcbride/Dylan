@@ -152,16 +152,22 @@ passed."
                  ((eq keyword (car rest)) (return (cadr rest))))))
 
 (defun validate-keywords (arglist allowed error)
+  "Chapter 6: ARGLIST is keyword/value pairs, each key a keyword -- checked
+first, as the compiler to C checks them -- and each key ALLOWED (T for
+any); else call ERROR."
   (loop for args = arglist then (cddr args)
-        do (cond ((null args) (return t))
-                 ((or (not (consp args))
-                      (not (consp (cdr args)))
-                      (not (keyword? (car args))))
-                  (return (funcall error "incorrect keyword format"
-                                   arglist allowed)))
-                 ((not (or (eq allowed t) (member (car args) allowed)))
-                  (return (funcall error "illegal keyword argument" (car args)
-                                   (if (eq allowed t) 'any allowed)))))))
+        until (null args)
+        when (or (not (consp args))
+                 (not (consp (cdr args)))
+                 (not (keyword? (car args))))
+          do (return-from validate-keywords
+               (funcall error "incorrect keyword format" arglist allowed)))
+  (unless (eq allowed t)
+    (loop for args on arglist by #'cddr
+          unless (member (car args) allowed)
+            do (return-from validate-keywords
+                 (funcall error "illegal keyword argument" (car args) allowed))))
+  t)
 
 ;;;; General utilities
 

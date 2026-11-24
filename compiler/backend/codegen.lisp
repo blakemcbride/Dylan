@@ -1352,6 +1352,10 @@ with the arguments FN was given?"
          (i (new-temp "intptr_t"))
          (key (new-temp)))
     (dolist (k keys) (emit "~a = DY_UNSUPPLIED;" (v-name (ir-key-var k))))
+    ;; Keyword/value pairs first, then the keys accepted, as the
+    ;; interactive implementation checks them
+    (unless (and (null keys) any)
+      (emit "dy_check_keywords(self, argc, ~d, a0, a1, a2, a3, NULL, 0);" start))
     (emit "for (~a = ~d; ~a < argc; ~a += 2) {" i start i i)
     (indented
       (emit "if (~a + 1 >= argc) dy_odd_keyword_arguments(self);" i)

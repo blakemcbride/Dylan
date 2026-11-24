@@ -733,6 +733,25 @@ end.  Indexes from 4.0e18 on are of no element, as for member?."
                 (b (+ (ceiling (if (< qb 4.0d18) qb 4.0d18)) 1)))
             (sub-range range-1 a 1 (+ (- b a) 1)))))))
 
+(defun range-match (range value test)
+  "The element of RANGE, of a step not zero, that TEST, id? or =, finds the
+same as VALUE, a member of RANGE: VALUE itself if the test is id? or all
+are integers; else the element at VALUE's index, which = may find of
+another class (1.0 for 1)."
+  (let ((start (range-start range))
+        (step (range-step range))
+        (size (collection-size range)))
+    (if (or (eq test dylan/id?)
+            (and (integerp value) (integerp start) (integerp step)))
+        value
+        (let ((k (round (/ (- (range-number value) (range-number start))
+                           (range-number step)))))
+          (loop for i in (list k (1- k) (1+ k))
+                when (and (>= i 0) (or (null size) (< i size))
+                          (true? (dylan-call test value (range-ref range i))))
+                  return (range-ref range i)
+                finally (return value))))))
+
 (defun general-intersection (next-method range-1 range-2 rest)
   "The sequence method's intersection of the two ranges."
   (if (functionp next-method)
@@ -756,14 +775,17 @@ end.  Indexes from 4.0e18 on are of no element, as for member?."
              ;; Range-1's elements are kept if its value is in range-2.
              (if (true? (dylan-call dylan/member?
                                     (dylan-call dylan/get-range-start range-1)
-                                    range-2))
+                                    range-2 :test (or test dylan/id?)))
                  (dylan-call dylan/copy-sequence range-1)
                  (empty-range)))
             ((zero-step? range-2)
              (let ((value (dylan-call dylan/get-range-start range-2)))
                (if (and (true? (dylan-call dylan/member? value range-2))
-                        (true? (dylan-call dylan/member? value range-1)))
-                   (dylan-call dylan/range :from value :size 1)
+                        (true? (dylan-call dylan/member? value range-1
+                                           :test (or test dylan/id?))))
+                   (dylan-call dylan/range
+                               :from (range-match range-1 value (or test dylan/id?))
+                               :size 1)
                    (empty-range))))
             ;; Exact ranges intersect as grids; any float among the starts
             ;; or steps means intersecting the elements (design note 18).

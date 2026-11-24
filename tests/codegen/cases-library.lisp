@@ -3850,6 +3850,25 @@ last
 -4611686018427387903
 (0)
 ")
+ ;; A range whose step is zero meets another as test: says: = finds 1
+ ;; and 1.0 the same, and the elements kept are the first range's
+ ;; (Bugs07 B7)
+ (range-intersection-zero-step-test
+  "(print (intersection (list 1 1) (range from: 1.0 size: 3) test: =))
+(print (intersection (range from: 1 by: 0 size: 2) (range from: 1.0 size: 3) test: =))
+(print (intersection (range from: 1.0 size: 3) (range from: 1 by: 0 size: 2) test: =))
+(print (intersection (range from: 1.0 size: 3) (range from: 1 by: 0 size: 2)))
+(print (intersection (range from: 1 size: 3) (range from: 2 by: 0 size: 2)))
+(print (intersection (range from: 1/2 by: 1/2) (range from: 3.0 by: 0 size: 2) test: =))
+(print (intersection (range from: 0.5 by: 0.25) (range from: 3 by: 0 size: 2) test: =))"
+  "(1 1)
+{range 1 by 0 size 2}
+{range 1.0 by 1 size 1}
+{range 0 by 1 size 0}
+{range 2 by 1 size 1}
+{range 3 by 1 size 1}
+{range 3.0 by 1 size 1}
+")
  ;; The intersection of two ranges finds their common point at once,
  ;; however long the steps' period (Bugs05 C24); last of a range.
  (range-intersection-common-point

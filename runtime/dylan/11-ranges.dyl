@@ -377,10 +377,12 @@ module: dylan
 (define-method intersection ((x <range>) (y <range>) #key (test id?))
   (cond ((not (or (id? test id?) (id? test =))) (next-method))
         ((zero? (%by x))
-         (if (member? (%from x) y) (copy-sequence x) (%empty-range)))
+         (if (member? (%from x) y test: test) (copy-sequence x) (%empty-range)))
         ((zero? (%by y))
          (bind ((v (%from y)))
-           (if (and (member? v y) (member? v x)) (range from: v size: 1) (%empty-range))))
+           (if (and (member? v y) (member? v x test: test))
+               (range from: (%range-match x v test) size: 1)
+               (%empty-range))))
         ((%list-every? (method (n) (%instance? n <rational>)) (list (%from x) (%by x) (%from y) (%by y)))
          (%grid-intersection x y))
         ((%size x) (%float-intersection x y test))
@@ -388,6 +390,23 @@ module: dylan
         (else: (error "intersection: unbounded ranges of floats: ~s ~s" x y))))
 
 (define %empty-range (method () (range from: 0 size: 0)))
+
+;;; The element of the range X, of a step not zero, that TEST, id? or =,
+;;; finds the same as V, a member of X: V itself if the test is id? or all
+;;; are integers; else the element at V's index, which = may find of
+;;; another class (1.0 for 1).
+(define %range-match
+  (method (x v test)
+    (if (or (id? test id?)
+            (and (%instance? v <integer>) (%instance? (%from x) <integer>)
+                 (%instance? (%by x) <integer>)))
+        v
+        (bind ((k (%divide 2 (binary/ (binary- v (%from x)) (%by x)) 1))
+               (at? (method (i) (and (%range-index? x i) (test v (%range-element x i))))))
+          (cond ((at? k) (%range-element x k))
+                ((at? (binary- k 1)) (%range-element x (binary- k 1)))
+                ((at? (binary+ k 1)) (%range-element x (binary+ k 1)))
+                (else: v))))))
 
 ;;; The elements of the unbounded range X that may be in the bounded range
 ;;; Y: those between Y's lowest and highest, with one more at each end.

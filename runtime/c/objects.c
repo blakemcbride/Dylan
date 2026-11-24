@@ -79,7 +79,7 @@ void dy_add_method(D generic, D method, const D *replaced, intptr_t n) {
     for (intptr_t i = 0; i < size; i++)
         if (!dropped(old->data[i], method, replaced, n)) new->data[k++] = old->data[i];
     new->data[k] = method;
-    g->methods = v;
+    __atomic_store_n(&g->methods, v, __ATOMIC_RELEASE);
 }
 
 void dy_remove_methods(D generic, const D *removed, intptr_t n) {
@@ -93,7 +93,7 @@ void dy_remove_methods(D generic, const D *removed, intptr_t n) {
     intptr_t k = 0;
     for (intptr_t i = 0; i < size; i++)
         if (!dropped(old->data[i], DY_UNBOUND, removed, n)) new->data[k++] = old->data[i];
-    g->methods = v;
+    __atomic_store_n(&g->methods, v, __ATOMIC_RELEASE);
 }
 
 /* The variable NAME, which define-method defines, holds VALUE; it must be
@@ -289,7 +289,7 @@ void dy_check_class_slots(const D *supers, intptr_t n, const D *own, intptr_t m)
  * a #[address, old value, next] whose next is #f, which the next change
  * fills.  A method entered holds the one current then; those no method
  * holds are garbage. */
-D dy_methods_now = DY_FALSE;
+_Atomic(D) dy_methods_now = DY_FALSE;
 
 static DyNextIndex *next_index;
 static intptr_t next_count;
@@ -306,7 +306,7 @@ void dy_set_next_index(DyNextIndex *index) {
     qsort(index, (size_t)n, sizeof *index, by_next);
     next_index = index;
     next_count = n;
-    if (dy_methods_now == DY_FALSE) dy_methods_now = dy_make_vector(3, DY_FALSE);
+    if (atomic_load(&dy_methods_now) == DY_FALSE) atomic_store(&dy_methods_now, dy_make_vector(3, DY_FALSE));
 }
 
 static const DyNextIndex *next_steps(D next) {
@@ -320,26 +320,28 @@ static const DyNextIndex *next_steps(D next) {
     return NULL;
 }
 
-static void note_change(void *address, D old) {
-    if (dy_methods_now == DY_FALSE) dy_methods_now = dy_make_vector(3, DY_FALSE);
+static void note_change(const void *address, D old) {
+    if (atomic_load(&dy_methods_now) == DY_FALSE) atomic_store(&dy_methods_now, dy_make_vector(3, DY_FALSE));
     D fresh = dy_make_vector(3, DY_FALSE);
-    DyVector *v = DY_PTR(dy_methods_now);
+    DyVector *v = DY_PTR(atomic_load_explicit(&dy_methods_now, memory_order_relaxed));
     v->data[0] = DY_INT((intptr_t)address);
     v->data[1] = old;
     __atomic_store_n(&v->data[2], fresh, __ATOMIC_RELEASE);
-    __atomic_store_n(&dy_methods_now, fresh, __ATOMIC_RELEASE);
+    atomic_store_explicit(&dy_methods_now, fresh, memory_order_release);
 }
 
-void dy_set_method_flag(unsigned char *flag, int on) {
-    if (*flag == on) return;
-    note_change(flag, DY_INT(*flag));
-    __atomic_store_n(flag, (unsigned char)on, __ATOMIC_RELEASE);
+void dy_set_method_flag(_Atomic unsigned char *flag, int on) {
+    unsigned char old = atomic_load_explicit(flag, memory_order_relaxed);
+    if (old == on) return;
+    note_change((const void *)flag, DY_INT(old));
+    atomic_store_explicit(flag, (unsigned char)on, memory_order_release);
 }
 
-void dy_set_method_closure(D *variable, D closure) {
-    if (*variable == closure) return;
-    note_change(variable, *variable);
-    __atomic_store_n(variable, closure, __ATOMIC_RELEASE);
+void dy_set_method_closure(_Atomic(D) *variable, D closure) {
+    D old = atomic_load_explicit(variable, memory_order_relaxed);
+    if (old == closure) return;
+    note_change((const void *)variable, old);
+    atomic_store_explicit(variable, closure, memory_order_release);
 }
 
 /* What was at ADDRESS, which holds NOW, when AT was current: the old value
@@ -358,8 +360,8 @@ static D value_at(const void *address, D now, D at) {
 
 static int attached_at(const DyNextStep *s, D at) {
     if (!s->flag) return 1;
-    D now = DY_INT(__atomic_load_n(s->flag, __ATOMIC_ACQUIRE));
-    return value_at(s->flag, now, at) != DY_INT(0);
+    D now = DY_INT(atomic_load_explicit(s->flag, memory_order_acquire));
+    return value_at((const void *)s->flag, now, at) != DY_INT(0);
 }
 
 /* env[0] is a compiled next method, env[1] the place it runs as of */
@@ -372,7 +374,8 @@ static D next_as_of_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
         if (!attached_at(s, at)) continue;
         D object = s->object;
         if (s->closure)
-            object = value_at(s->closure, __atomic_load_n(s->closure, __ATOMIC_ACQUIRE), at);
+            object = value_at((const void *)s->closure,
+                              atomic_load_explicit(s->closure, memory_order_acquire), at);
         D next = DY_FALSE;
         if (s->next) {
             const DyNextIndex *r = next_steps(DY_OBJ(s->next));
@@ -391,7 +394,7 @@ static D next_as_of_entry(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
 }
 
 D dy_next_as_of(D next, D at) {
-    if (next == DY_FALSE || at == __atomic_load_n(&dy_methods_now, __ATOMIC_ACQUIRE)
+    if (next == DY_FALSE || at == atomic_load_explicit(&dy_methods_now, memory_order_acquire)
         || !next_steps(next))
         return next;
     D c = dy_make_closure(next_as_of_entry, 2);

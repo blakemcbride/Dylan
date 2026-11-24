@@ -258,7 +258,7 @@ PRIMITIVE(make_read_only) {
 
 PRIMITIVE(generic_function_methods) {
     need(self, argc, 1, 1);
-    return list_of_vector(as_generic(a0)->methods);
+    return list_of_vector(dy_generic_methods(DY_OBJ(as_generic(a0))));
 }
 
 /* The specializers of the method M, one for each required argument
@@ -282,7 +282,7 @@ PRIMITIVE(method_specializers) {
  * to the N arguments ARGS? */
 static bool applicable(D method, const D *args, intptr_t n) {
     if (dy_kind_p(method, DY_KIND_GENERIC)) {
-        DyVector *methods = DY_PTR(((DyGeneric *)DY_PTR(method))->methods);
+        DyVector *methods = DY_PTR(dy_generic_methods(method));
         for (intptr_t i = 0; i < DY_INT_VALUE(methods->size); i++)
             if (applicable(methods->data[i], args, n)) return true;
         return false;
@@ -346,7 +346,7 @@ PRIMITIVE(sorted_applicable_methods) {
     need(self, argc, 1, -1);
     intptr_t n;
     D *args = arguments_after(1, argc, a0, a1, a2, a3, &n);
-    DyVector *methods = DY_PTR(as_generic(a0)->methods);
+    DyVector *methods = DY_PTR(dy_generic_methods(DY_OBJ(as_generic(a0))));
     intptr_t count = DY_INT_VALUE(methods->size), k = 0;
     D *found = dy_alloc_words(count + 1);
     for (intptr_t i = 0; i < count; i++)
@@ -418,7 +418,7 @@ static D made_dispatch(D self, D a0, D a1, D a2, D a3, intptr_t argc) {
     D *args = dy_alloc_words(r + 1);
     for (intptr_t i = 0; i < r; i++)
         args[i] = i == 0 ? a0 : i == 1 ? a1 : i == 2 ? a2 : i == 3 ? a3 : *dy_argument_slot(i);
-    DyVector *methods = DY_PTR(g->methods);
+    DyVector *methods = DY_PTR(dy_generic_methods(self));
     intptr_t count = DY_INT_VALUE(methods->size), k = 0;
     D *found = dy_alloc_words(count + 1);
     for (intptr_t i = 0; i < count; i++)
@@ -487,13 +487,14 @@ static D method_copy(D method) {
  * KEEP, is one object each time its define-method runs: run for a second
  * generic function, it gives that one a copy, so that each has a method of
  * its own.  A closure is made afresh each time. */
-void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
+void dy_add_method_when_run(D generic, D method, const char *name, _Atomic(D) *keep) {
     if (!dy_kind_p(generic, DY_KIND_GENERIC))
         dy_error_naming("", name, dy_kind_p(generic, DY_KIND_CLASS)
                         ? " is defined both as a class and otherwise"
                         : " is defined both as a variable and as a generic function", 0);
     DyGeneric *g = DY_PTR(generic);
-    if (g->entry != no_methods_entry && g->entry != made_dispatch)
+    DyEntry entry = __atomic_load_n(&g->entry, __ATOMIC_ACQUIRE);
+    if (entry != no_methods_entry && entry != made_dispatch)
         dy_error_naming("", name, " holds another generic function, which a compiled program cannot add a method to", 0);
     dy_check_addable(generic);
     const char *gname = g->name == DY_FALSE ? "an anonymous generic function" : dy_symbol_utf8(g->name);
@@ -549,14 +550,14 @@ void dy_add_method_when_run(D generic, D method, const char *name, D *keep) {
     }
     ((DyFunction *)DY_PTR(method))->owner = generic;
     dy_add_method(generic, method, replaced, n);
-    g->entry = made_dispatch;
-    if (keep) *keep = method;
+    __atomic_store_n(&g->entry, made_dispatch, __ATOMIC_RELEASE);
+    if (keep) atomic_store_explicit(keep, method, memory_order_release);
     dy_unlock_methods();
 }
 
 PRIMITIVE(find_method) {
     need(self, argc, 2, 2);
-    DyVector *methods = DY_PTR(as_generic(a0)->methods);
+    DyVector *methods = DY_PTR(dy_generic_methods(DY_OBJ(as_generic(a0))));
     if (a1 != DY_EMPTY && !dy_kind_p(a1, DY_KIND_PAIR)) dy_error("not a list", a1);
     for (intptr_t i = 0; i < DY_INT_VALUE(methods->size); i++) {
         D specs = ((DyFunction *)DY_PTR(methods->data[i]))->specializers;

@@ -75,6 +75,7 @@ void dy_gc_stress(void);
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 
 #if UINTPTR_MAX != 0xFFFFFFFFFFFFFFFFu
@@ -875,6 +876,12 @@ typedef struct DyGeneric {         /* <generic-function>                */
                                       (chapter 10)                       */
 } DyGeneric;
 
+/* A generic function's methods, which another thread may replace
+ * meanwhile (dy_add_method, with the methods' lock held) */
+static inline D dy_generic_methods(D generic) {
+    return __atomic_load_n(&((DyGeneric *)DY_PTR(generic))->methods, __ATOMIC_ACQUIRE);
+}
+
 /* A slot descriptor (chapter 11), one for each slot definition, made by
  * the compiler.  Its type, init_value and init_function are stored when
  * its define-class runs. */
@@ -922,10 +929,10 @@ typedef struct DyProgramClass {
     bool any_keys;
     const D *storage;              /* for a virtual slot, the slot it    */
     intptr_t storage_count;        /*   keeps, by getter                 */
-    const unsigned char *const *init_key_flags;  /* for each init key,
+    const _Atomic unsigned char *const *init_key_flags;  /* for each init key,
                                       its method's flag, or NULL if it
                                       is always attached; NULL if all are */
-    const unsigned char *const *any_flags;  /* methods that take any key, */
+    const _Atomic unsigned char *const *any_flags;  /* methods that take any key, */
     intptr_t any_flag_count;       /*   while their flag is set          */
 } DyProgramClass;
 
@@ -1172,7 +1179,10 @@ static inline bool dy_function_p(D f) {
 /* Both DyFunction and DyGeneric have the entry second. */
 static inline DyEntry dy_entry(D f) {
     if (!dy_function_p(f)) dy_not_a_function(f);
-    return ((DyFunction *)DY_PTR(f))->entry;
+    /* A generic function made when the program runs changes its entry when
+     * its first method is added, maybe in another thread
+     * (dy_add_method_when_run) */
+    return __atomic_load_n(&((DyFunction *)DY_PTR(f))->entry, __ATOMIC_ACQUIRE);
 }
 
 D dy_make_closure(DyEntry entry, size_t env_size);
@@ -1361,7 +1371,7 @@ void dy_check_generic_variable(D value, D generic, const char *name);
 /* A define-method of the variable NAME, which holds GENERIC, a generic
  * function the program made: METHOD is attached to it, and if KEEP is not
  * NULL, stored there, with the methods' lock held. */
-void dy_add_method_when_run(D generic, D method, const char *name, D *keep);
+void dy_add_method_when_run(D generic, D method, const char *name, _Atomic(D) *keep);
 void dy_redeclare_generic(D value, const char *name, intptr_t required, bool rest, D keys);
 _Noreturn void dy_unbound_slot(const char *getter);
 _Noreturn void dy_not_a_slot(const char *getter, D instance);
@@ -1401,8 +1411,8 @@ typedef struct DyNextStep {
     DyEntry entry;                 /* the method's, or NULL for its
                                       object's own                       */
     D object;                      /* its <method> object, or 0         */
-    D *closure;                    /* or the variable holding it         */
-    unsigned char *flag;           /* set while it is attached, or NULL
+    _Atomic(D) *closure;           /* or the variable holding it         */
+    _Atomic unsigned char *flag;   /* set while it is attached, or NULL
                                       if it always is                    */
     DyFunction *next;              /* the next method after it, or NULL  */
 } DyNextStep;
@@ -1412,17 +1422,19 @@ typedef struct DyNextIndex {
     intptr_t count;
     D generic;
 } DyNextIndex;
-extern D dy_methods_now;
+/* Program methods' flags and closure variables, and the changes, are
+ * atomic: another thread may change them while one dispatches. */
+extern _Atomic(D) dy_methods_now;
 /* The compiled next methods, which the program's main gives */
 void dy_set_next_index(DyNextIndex *index);
 /* Attach or detach a method by setting its FLAG, or set the VARIABLE
  * holding a method's closure, with the methods' lock held */
-void dy_set_method_flag(unsigned char *flag, int on);
-void dy_set_method_closure(D *variable, D closure);
+void dy_set_method_flag(_Atomic unsigned char *flag, int on);
+void dy_set_method_closure(_Atomic(D) *variable, D closure);
 /* NEXT as it was when the method's place in the changes was AT */
 D dy_next_as_of(D next, D at);
 #define DY_NEXT_AS_OF(next, at) \
-    (DY_UNLIKELY(__atomic_load_n(&dy_methods_now, __ATOMIC_ACQUIRE) != (at)) \
+    (DY_UNLIKELY(atomic_load_explicit(&dy_methods_now, memory_order_acquire) != (at)) \
      ? dy_next_as_of((next), (at)) : (next))
 /* NEXT, kept with the method's place AT, to be called later */
 D dy_keep_next(D next, D at);

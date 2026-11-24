@@ -937,10 +937,10 @@ is set, a method takes any."
       (emit-object "static const D ~a[] = { ~{~a~^, ~} };"
                    stores (mapcar (lambda (sd) (address (sdef-descriptor-c sd))) storage)))
     (when key-flags
-      (emit-object "static const unsigned char *const ~a[] = { ~{~a~^, ~} };"
+      (emit-object "static const _Atomic unsigned char *const ~a[] = { ~{~a~^, ~} };"
                    key-flags (mapcar (lambda (k) (if (cdr k) (format nil "&~a" (cdr k)) "NULL")) init-keywords)))
     (when anys
-      (emit-object "static const unsigned char *const ~a[] = { ~{&~a~^, ~} };" anys any-flags))
+      (emit-object "static const _Atomic unsigned char *const ~a[] = { ~{&~a~^, ~} };" anys any-flags))
     (emit-object "static DyProgramClass ~a = { ~a, &~a, &~a, &~a, &~a, ~a, ~d, ~a, ~d, ~:[false~;true~], ~a, ~d, ~a, ~a, ~d };"
                  (program-class-c info) (address (class-c-name info))
                  (if g (gclass-ready-c g) "dy_ready_always")
@@ -1871,7 +1871,7 @@ congruent with that one, the error then."
           (let ((name (format nil "~a_on~d" (gfun-c-name g) (position m methods))))
             (setf (gmethod-flag-c m) name)
             ;; The library's are attached from the start.
-            (declare-object "static unsigned char ~a~:[~; = 1~];" name
+            (declare-object "static _Atomic unsigned char ~a~:[~; = 1~];" name
                             (not (added-when-run-p m)))))
         ;; A method that refers to local variables is a closure, made
         ;; anew each time its define-method runs (chapter 6), as method
@@ -1879,14 +1879,14 @@ congruent with that one, the error then."
         (when (and (eq (gmethod-kind m) :ir) (ir-fn-free-vars (gmethod-fn m)))
           (let ((name (format nil "~a_mc~d" (gfun-c-name g) (position m methods))))
             (setf (gmethod-closure-c m) name)
-            (declare-object "static D ~a = DY_FALSE;" name))))
+            (declare-object "static _Atomic(D) ~a = DY_FALSE;" name))))
       (setf (gfun-methods g) methods))
     ;; A program's generic function has no value until one of its
     ;; definitions has run (chapter 6).
     (unless (eq (module-var-module var) (dylan-module))
       (let ((name (format nil "~a_defined" (gfun-c-name g))))
         (setf (gfun-defined-c g) name)
-        (declare-object "static int ~a;" name))
+        (declare-object "static _Atomic int ~a;" name))
       ;; Its variable is read-only once its define-generic-function has
       ;; run (chapter 5), not before; and the keys it names are accepted
       ;; from then (LEAF-KEYWORD-CHECK).
@@ -1895,7 +1895,7 @@ congruent with that one, the error then."
                      (not (eq (gfun-declared-keys g) :none))))
         (let ((name (format nil "~a_declared" (gfun-c-name g))))
           (setf (gfun-declared-c g) name)
-          (declare-object "static int ~a;" name))))
+          (declare-object "static _Atomic int ~a;" name))))
     ;; The parameter lists must be congruent (chapter 6).
     (dolist (m (gfun-methods g))
       (multiple-value-bind (required variable) (method-shape m)

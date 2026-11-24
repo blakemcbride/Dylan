@@ -1245,7 +1245,7 @@ specialized entry, made with *SPEC* SPEC."
              (emit "~a = dy_thread->next_method;" temp)
              ;; It runs as it was when this method was entered, though
              ;; another method be attached or detached since (chapter 10).
-             (emit "~a = dy_methods_now;" at)
+             (emit "~a = atomic_load_explicit(&dy_methods_now, memory_order_acquire);" at)
              (cond ((not (needs-captured-next-p var fn))
                     (if (ivar-captured-p var)
                         (emit "if (~a != DY_FALSE) ~a = dy_keep_next(~a, ~a);" temp temp temp at)

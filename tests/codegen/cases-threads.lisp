@@ -204,4 +204,27 @@ alive
 (200 200 10100)
 "
   :compiler-only t)
+ ;; A define-method run while another thread calls its generic function,
+ ;; one made by make or a define-method's: the call sees the methods
+ ;; whole, before or after (Bugs07 C14; with --sanitize thread, no race).
+ (define-method-while-called
+  "(define g (make <generic-function> debug-name: 'g required: 1))
+(define-method add-int () (define-method g ((x <integer>)) (* x 2)))
+(define-method add-str () (define-method g ((x <string>)) (size x)))
+(add-int)
+(define caller (make-thread (method () (dotimes (i 200000) (g i)) 'called)))
+(define adder (make-thread (method () (dotimes (i 2000) (add-int) (add-str)) 'added)))
+(print (list (join-thread caller) (join-thread adder)))
+(define-method sg ((x <character>)) 'char)
+(define-method sdefs-int (n) (define-method sg ((x <integer>)) (list 'int n)))
+(define-method sdefs-str (n) (define-method sg ((x <string>)) (list 'str n)))
+(define-method sdefs-clo (n) (define-method sg ((x <symbol>)) (list 'sym n)))
+(sdefs-int -1) (sdefs-str -1) (sdefs-clo -1)
+(define caller2 (make-thread (method () (dotimes (i 200000) (sg 1) (sg #\\a) (sg 'a)) 'called)))
+(define adder2 (make-thread (method () (dotimes (i 2000) (sdefs-int i) (sdefs-str i) (sdefs-clo i)) 'added)))
+(print (list (join-thread caller2) (join-thread adder2) (sg 1) (sg 'a)))"
+  "(called added)
+(called added (int 1999) (sym 1999))
+"
+  :compiler-only t)
 )

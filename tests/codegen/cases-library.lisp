@@ -4364,6 +4364,34 @@ y
 {range 6 by -2 size 4}
 {range 5 by 1 size 0}
 ")
+ ;; An instance of a program's subclass of <range> is bounded if its size
+ ;; method says so, and is walked by its iteration protocol (chapter 12,
+ ;; "Defining a New Collection Class"; Bugs07 B8).
+ (range-subclass-by-protocol
+  "(define-method try (f) (handler-case (f) ((<error> condition: c) (format #f \"ERR: ~a\" c))))
+(define-class <r2> (<range>))
+(define-method size ((r <r2>)) 3)
+(define-method initial-state ((r <r2>)) 0)
+(define-method next-state ((r <r2>) s) (if (< s 2) (+ s 1) #f))
+(define-method current-element ((r <r2>) s) (* s 10))
+(define x (make <r2>))
+(print (try (method () (as <list> x))))
+(print (try (method () (add-new x 5))))
+(print (try (method () (id? (add-new x 10) x))))
+(print (try (method () (sort x test: >))))
+(print (try (method () (apply list x))))
+(print (try (method () (last x))))
+(print (try (method () (add x 5))))
+(print (try (method () (concatenate x '(1)))))"
+  "(0 10 20)
+(5 0 10 20)
+#t
+(20 10 0)
+(0 10 20)
+20
+(5 0 10 20)
+(0 10 20 1)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

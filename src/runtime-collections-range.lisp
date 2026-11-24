@@ -486,8 +486,13 @@ there are: the library's own, which reverse! uses, not a program's reverse
   (lambda (multiple-values next-method range &rest rest)
     (declare (ignore multiple-values))
     (dylan%keyword-validate next-method rest '(:default))
-    (let ((end (dylan-call dylan/get-range-end range)))
-      (cond ((not end)
+    (let ((end (and (eq (get-type range) <range>)
+                    (dylan-call dylan/get-range-end range))))
+      (cond ((not (eq (get-type range) <range>))
+             ;; Of an instance of a program's subclass, by the iteration
+             ;; protocol, as for any sequence
+             (apply next-method nil nil range rest))
+            ((not end)
              (dylan-call dylan/error "last: the sequence is unbounded"))
             ((zerop (collection-size range))
              (dylan%find-keyword

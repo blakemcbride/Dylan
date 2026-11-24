@@ -129,16 +129,18 @@ module: dylan
 
 ;;; add and concatenate answer a list, the class-for-copy, as for any
 ;;; sequence (chapter 12); an unbounded range has no end to stop at.
+;;; Whether a range is bounded is asked of the library's size, which for
+;;; an instance of a program's subclass is its size method's answer.
 (define-method add ((r <range>) new-element)
-  (unless (%size r) (error "add: the range is unbounded"))
+  (unless (%library-size r) (error "add: the range is unbounded"))
   (next-method))
 
 (define-method add! ((r <range>) new-element)
-  (unless (%size r) (error "add!: the range is unbounded"))
+  (unless (%library-size r) (error "add!: the range is unbounded"))
   (next-method))
 
 (define-method concatenate ((r <range>) #rest more)
-  (unless (%size r) (error "concatenate: the range is unbounded"))
+  (unless (%library-size r) (error "concatenate: the range is unbounded"))
   (next-method))
 
 ;;; add-new and add-new! of an unbounded range: the range itself if the
@@ -151,24 +153,24 @@ module: dylan
         (error "add: the range is unbounded"))))
 
 (define-method add-new ((r <range>) new-element #key (test id?))
-  (if (%size r) (next-method) (%add-new-unbounded r new-element test)))
+  (if (%library-size r) (next-method) (%add-new-unbounded r new-element test)))
 
 (define-method add-new! ((r <range>) new-element #key (test id?))
-  (if (%size r) (next-method) (%add-new-unbounded r new-element test)))
+  (if (%library-size r) (next-method) (%add-new-unbounded r new-element test)))
 
 ;;; sort and sort! of an unbounded range: as the range as a sequence
 (define-method sort ((r <range>) #key (test <) stable)
-  (unless (%size r) (error "as: the range is unbounded"))
+  (unless (%library-size r) (error "as: the range is unbounded"))
   (next-method))
 
 (define-method sort! ((r <range>) #key (test <) stable)
-  (unless (%size r) (error "as: the range is unbounded"))
+  (unless (%library-size r) (error "as: the range is unbounded"))
   (next-method))
 
 ;;; An unbounded range as another collection would have no end.  As a
 ;;; class that is no collection, it cannot be converted, bounded or not.
 (define-method as ((class <class>) (r <range>))
-  (if (or (%size r) (%instance? r class) (not (%subclass? class <collection>)))
+  (if (or (%library-size r) (%instance? r class) (not (%subclass? class <collection>)))
       (next-method)
       (error "as: the range is unbounded")))
 
@@ -209,8 +211,11 @@ module: dylan
 (define-method %library-element ((r <range>) key default)
   (if (id? (%object-class r) <range>) (%range-ref r key default) (next-method)))
 
+;;; Of an instance of a program's subclass, by the iteration protocol, as
+;;; for any sequence
 (define-method last ((r <range>) #key (default %no-default))
-  (cond ((not (%size r)) (error "last: the sequence is unbounded"))
+  (cond ((not (id? (%object-class r) <range>)) (next-method))
+        ((not (%size r)) (error "last: the sequence is unbounded"))
         ((zero? (%size r))
          (if (id? default %no-default) (error "last: the sequence is empty") default))
         (else: (%range-element r (binary- (%size r) 1)))))

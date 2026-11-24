@@ -250,7 +250,9 @@ symbol) -- refers to in the current module."
               (unless (or (member old exclude) (assoc old renames))
                 (add old (prefixed old))))
             (dolist (spec import)
-              (cond ((symbolp spec)
+              ;; A keyword is no name: car: is a bad rename, as the
+              ;; compiler to C has it
+              (cond ((and (symbolp spec) spec (not (keywordp spec)))
                      (unless (assoc spec renames)
                        (add spec (prefixed spec))))
                     (t (let ((pair (rename-pair spec)))

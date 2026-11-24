@@ -147,7 +147,10 @@ ALLOWED and given at most once."
       (cons (car spec) (caddr spec))
       (compile-error "define-module: bad rename ~a" spec)))
 
-(defun all-p (x) (and (symbolp x) (string-equal (symbol-name x) "ALL")))
+(defun all-p (x)
+  "Whether X is the name all, which import: and export: take -- not the
+keyword all:, which the interactive implementation refuses too."
+  (and (module-name-p x) (string-equal (symbol-name x) "ALL")))
 
 (defun option-list (value)
   "VALUE, the list a use clause's option gives, if it is a proper list;

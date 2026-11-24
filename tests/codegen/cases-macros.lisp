@@ -321,6 +321,20 @@ FreSh
   "(define-module m5 (use dylan import: (nosuch)))"
   ""
   :compile-error "define-module: nosuch is not exported from dylan")
+ ;; import: and export: take the name all, not the keyword all:, and a
+ ;; keyword in an import list is no name (Bugs07 B14)
+ (define-module-import-all-keyword
+  "(define-module m5 (use dylan import: all:))"
+  ""
+  :compile-error "define-module: bad import: all:")
+ (define-module-export-all-keyword
+  "(define-module m5 (use dylan export: all:))"
+  ""
+  :compile-error "define-module: bad export: all:")
+ (define-module-import-keyword
+  "(define-module m5 (use dylan import: (car: cdr)))"
+  ""
+  :compile-error "define-module: bad rename car:")
  (define-module-prefix-not-a-string
   "(define-module m5 (use dylan prefix: 5))"
   ""

@@ -4470,6 +4470,22 @@ y
 (1 2 1 2 1)
 (11 22 31)
 ")
+ ;; A program's method on a vector class that only calls next-method
+ ;; does not change add's or concatenate's result (Bugs07 L4).
+ (vector-methods-calling-next-method
+  "(define-method add ((v <simple-object-vector>) e) (next-method))
+(define-method add ((v <stretchy-vector>) e) (next-method))
+(define-method add ((s <byte-string>) e) (next-method))
+(define-method concatenate ((v <simple-object-vector>) #rest more) (next-method))
+(print (add (vector 1 2) 0))
+(print (add (as <stretchy-vector> '(1 2)) 0))
+(print (add \"ab\" #\\c))
+(print (concatenate (vector 1) (vector 2) '(3)))"
+  "#(0 1 2)
+{<stretchy-vector> 0 1 2}
+\"cab\"
+#(1 2 3)
+")
  ;; Aligning by keys with a table looks each key up by its hash, matching
  ;; with = as before, in the order of the first's keys (Bugs07 B22).
  (table-alignment-by-lookup

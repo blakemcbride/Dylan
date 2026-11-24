@@ -195,18 +195,11 @@
 ;;;
 ;;; Functions for sequences
 ;;;
-(add-method
- dylan/add
- (dylan%function->method
-  one-vector-and-an-object
-  (lambda (vector new-element)
-    (let ((new-vector (dylan-call dylan/make <vector>))
-          (size (car (dylan-call dylan/get-array-dimensions vector))))
-      (dylan-call dylan/set-array-value! new-vector
-                  (coerce (cons new-element (coerce vector 'list))
-                          'simple-vector))
-      (dylan-call dylan/set-array-dimensions! new-vector (list (+ size 1)))
-      new-vector))))
+;;; Any other vector, or one whose method a program's replaces and calls
+;;; next-method from, is added to and concatenated as any sequence is, by
+;;; the default methods.  (Thomas's methods on <vector> stored into a
+;;; simple vector, which signals, and concatenated by calling concatenate
+;;; again, which came back to the program's method.)
 
 (add-method
  dylan/add
@@ -269,20 +262,6 @@
                  (coerce result 'simple-vector))
         (setf result (append result (coerce v 'list))))))))
 
-(add-method
- dylan/concatenate
- (dylan%function->method
-  (make-param-list `((vector ,<vector>)) nil 'rest nil)
-  ;; Concatenate as simple vectors, then convert to the first argument's
-  ;; class-for-copy.  (The Scheme re-applied CONCATENATE to the same
-  ;; arguments, which dispatched straight back here.)
-  (lambda (vector-1 &rest rest)
-    (check-bounded "concatenate" rest)
-    (dylan-call dylan/as (dylan-call dylan/class-for-copy vector-1)
-                (dylan-call dylan/apply dylan/concatenate
-                            (dylan-call dylan/as <simple-object-vector>
-                                        vector-1)
-                            rest)))))
 
 (add-method
  dylan/remove!
